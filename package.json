@@ -1,0 +1,110 @@
+{
+  "name": "@bao/court",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./crypto": {
+      "types": "./crypto.ts",
+      "default": "./crypto.ts"
+    },
+    "./court-session": {
+      "types": "./courtSession.ts",
+      "default": "./courtSession.ts"
+    },
+    "./court-protocol-events": {
+      "types": "./courtProtocolEvents.ts",
+      "default": "./courtProtocolEvents.ts"
+    },
+    "./court-dkg-machine": {
+      "types": "./courtDkgMachine.ts",
+      "default": "./courtDkgMachine.ts"
+    },
+    "./court-vote-machine": {
+      "types": "./courtVoteMachine.ts",
+      "default": "./courtVoteMachine.ts"
+    },
+    "./court-signing-machine": {
+      "types": "./courtSigningMachine.ts",
+      "default": "./courtSigningMachine.ts"
+    },
+    "./court-signer": {
+      "types": "./courtSigner.ts",
+      "default": "./courtSigner.ts"
+    },
+    "./court-nip46": {
+      "types": "./courtNip46.ts",
+      "default": "./courtNip46.ts"
+    },
+    "./court-outbox": {
+      "types": "./courtOutbox.ts",
+      "default": "./courtOutbox.ts"
+    },
+    "./court-keeper": {
+      "types": "./courtKeeper.ts",
+      "default": "./courtKeeper.ts"
+    },
+    "./court-inbox": {
+      "types": "./courtInbox.ts",
+      "default": "./courtInbox.ts"
+    },
+    "./court-host-key": {
+      "types": "./courtHostKey.ts",
+      "default": "./courtHostKey.ts"
+    },
+    "./court-recovery": {
+      "types": "./courtRecovery.ts",
+      "default": "./courtRecovery.ts"
+    },
+    "./dkg": {
+      "types": "./dkg.ts",
+      "default": "./dkg.ts"
+    },
+    "./dispute": {
+      "types": "./dispute.ts",
+      "default": "./dispute.ts"
+    },
+    "./events": {
+      "types": "./events.ts",
+      "default": "./events.ts"
+    },
+    "./selection": {
+      "types": "./selection.ts",
+      "default": "./selection.ts"
+    },
+    "./signing": {
+      "types": "./signing.ts",
+      "default": "./signing.ts"
+    },
+    "./validator": {
+      "types": "./validator.ts",
+      "default": "./validator.ts"
+    }
+  },
+  "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@vbyte/frost": "^1.1.5",
+    "nostr-tools": "^2.13.0"
+  },
+  "license": "AGPL-3.0",
+  "author": "baocommunity",
+  "homepage": "https://github.com/baocommunity/bao-court",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/baocommunity/bao-court.git"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2",
+    "typescript": "^6.0.2",
+    "@types/node": "^25.5.2"
+  }
+}
