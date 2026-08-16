@@ -11,7 +11,7 @@
 
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import * as frost from '@vbyte/frost';
-import { randomScalar, scalarToHex, createProofOfKnowledge, verifyProofOfKnowledge, deriveXOnlyPubkey } from './crypto';
+import { randomScalar, scalarToHex, createProofOfKnowledge, verifyProofOfKnowledge } from './crypto';
 import { buildDkgCommitmentEvent } from './events';
 import { Nip44SeckeyCrypto, type Nip44Crypto } from './nip44Crypto';
 import {
@@ -109,6 +109,10 @@ export class IndependentDkgSession {
   /** Expected phase nonce for each peer, learned from their commitment event. */
   private readonly phaseNonces = new Map<number, string>();
   private readonly complaints: DkgComplaint[] = [];
+  /** Resolution status per admitted complaint key `${victimIdx}:${accusedIdx}`. */
+  private readonly complaintResolution = new Map<string, 'pending' | 'false' | 'upheld' | 'void'>();
+  /** Complaints whose own evidence exonerated the accused — slashing evidence (2026-08-15). */
+  private readonly falseComplaints: DkgComplaint[] = [];
   private readonly disqualified = new Set<number>();
   /** Private blame evidence; the decrypted share is never stored or published. */
   private readonly verificationFailures: DkgVerificationFailure[] = [];
@@ -361,34 +365,123 @@ export class IndependentDkgSession {
   }
 
   /**
-   * Register a public complaint.
+   * Register a public complaint with full attribution gating (2026-08-15
+   * hardening — see docs/COMPLAINT-PROTOCOL.md).
+   *
+   * Returns false (complaint not admitted) unless ALL of:
+   *   - the dispute id matches;
+   *   - victim and accused are distinct certified roster members and the
+   *     carried pubkeys match the roster entries;
+   *   - the possession anchor (kind 39003 share event id, 64-hex) is present;
+   *   - the complaint is not a duplicate of an already-admitted complaint for
+   *     the same (victim, accused) pair (first wins);
+   *   - the complainer (victim) is not already disqualified (a disqualified
+   *     complainer's complaint is void), and the per-roster complaint budget
+   *     is not exhausted (spam bound);
+   *   - when this session IS the victim, the accused actually delivered an
+   *     encrypted share to this session (local possession proof).
+   *
+   * Complaints from anyone other than the victim cannot enter arbitration at
+   * all: the kind 38032 event boundary (`parseDkgComplaintEvent`) requires the
+   * signed author to be the victim pubkey, and this gate re-checks the roster
+   * claim. Callers MUST dispatch only signature-verified events into this
+   * method (same boundary contract as every other Court reducer); a complaint
+   * object for a victim other than this session that has not been verified at
+   * the event boundary is indistinguishable from a forge and is rejected by
+   * hosts that follow the documented pipeline.
    */
-  addComplaint(complaint: DkgComplaint): void {
-    if (complaint.disputeId !== this.disputeId) return;
+  addComplaint(complaint: DkgComplaint): boolean {
+    if (!complaint) return false;
+    if (complaint.disputeId !== this.disputeId) return false;
+    // A disqualified COMPLAINER's complaint is void; the accused being already
+    // disqualified does not block the complaint record (in the genuine flow the
+    // local victim disqualifies the accused in verifyShares BEFORE filing the
+    // public complaint that lets every other session converge).
+    if (this.disqualified.has(complaint.victimIdx)) {
+      return false;
+    }
+    if (!Number.isInteger(complaint.victimIdx) || !Number.isInteger(complaint.accusedIdx)) {
+      return false;
+    }
+    if (complaint.victimIdx === complaint.accusedIdx) return false;
+    if (!/^[0-9a-f]{64}$/.test(complaint.encryptedShareEventId)) return false;
+    if (typeof complaint.revealedShare !== 'string' || !complaint.revealedShare) return false;
+    const victim = this.getJuror(complaint.victimIdx);
+    if (!victim) return false;
+    const accused = this.getJuror(complaint.accusedIdx);
+    if (!accused) return false;
+    if (victim.nostrPubkey !== complaint.victimPubkey) return false;
+    if (accused.nostrPubkey !== complaint.accusedPubkey) return false;
+
+    // Local possession proof: when this session is the victim, the accused
+    // must have actually delivered an encrypted share to this session.
+    if (complaint.victimIdx === this.myIdx && !this.encryptedShares.has(complaint.accusedIdx)) {
+      return false;
+    }
+
+    const key = `${complaint.victimIdx}:${complaint.accusedIdx}`;
+    if (this.complaintResolution.has(key)) return false; // first complaint wins
+    // Spam bound: at most one directed complaint per roster pair.
+    const budget = Math.max(this.jurors.length * (this.jurors.length - 1), 8);
+    if (this.complaints.length >= budget) return false;
+
     this.complaints.push(complaint);
+    this.complaintResolution.set(key, 'pending');
+    return true;
   }
 
   /**
-   * Resolve registered complaints: any accused whose revealed share fails
-   * verification against their public commitments is disqualified.
-   * False complaints are not handled here; they are adjudicated by the accused
-   * publishing a defense or by the slashing backend.
+   * Resolve admitted complaints. Each (victim, accused) pair settles exactly
+   * once:
+   *
+   *   - defense verifies against the accused's commitments: the complaint is
+   *     FALSE — the accused is NOT disqualified and the complaint is exposed
+   *     via {@link getFalseComplaints} as slashing evidence against the
+   *     complainer;
+   *   - defense present but does not verify: the accused published a bogus
+   *     defense — disqualified;
+   *   - no defense and the revealed share does not match the commitments:
+   *     accused disqualified;
+   *   - no defense and the revealed share verifies: the accuser's own
+   *     evidence exonerates the accused — complaint FALSE, accused NOT
+   *     disqualified;
+   *   - complaints by an already-disqualified party are void.
+   *
+   * Complaints stay pending while the accused's commitments are unknown.
    */
   resolveComplaints(): void {
-    for (const complaint of this.complaints) {
-      if (complaint.defense) {
-        // If the accused defended with a valid share, the complaint is false.
-        const peer = this.commitments.get(complaint.accusedIdx);
-        if (peer && verifyVssShare(complaint.victimIdx, complaint.defense.validShare, peer.commitHexes)) {
-          // Complaint is false; the complainer could be slashed by the backend.
-          continue;
-        }
-      }
-      const peer = this.commitments.get(complaint.accusedIdx);
-      if (!peer) {
-        this.disqualified.add(complaint.accusedIdx);
+    for (const complaint of [...this.complaints]) {
+      const key = `${complaint.victimIdx}:${complaint.accusedIdx}`;
+      const status = this.complaintResolution.get(key);
+      if (status !== 'pending') continue;
+      if (this.disqualified.has(complaint.victimIdx)) {
+        // A disqualified complainer's complaint is void.
+        this.complaintResolution.set(key, 'void');
         continue;
       }
+      if (this.disqualified.has(complaint.accusedIdx)) {
+        // Already disqualified (e.g. the local victim in verifyShares); the
+        // public complaint adds nothing.
+        this.complaintResolution.set(key, 'void');
+        continue;
+      }
+      const peer = this.commitments.get(complaint.accusedIdx);
+      if (!peer) continue; // cannot adjudicate before the accused's commitments arrive
+
+      if (complaint.defense) {
+        if (verifyVssShare(complaint.victimIdx, complaint.defense.validShare, peer.commitHexes)) {
+          // Valid defense: the complaint is false; the accused is NOT
+          // disqualified. The complainer may be slashed by the backend.
+          this.complaintResolution.set(key, 'false');
+          this.falseComplaints.push(complaint);
+          continue;
+        }
+        // A defense that does not verify is an admission of guilt.
+        this.disqualified.add(complaint.accusedIdx);
+        this.complaintResolution.set(key, 'upheld');
+        continue;
+      }
+
       const valid = verifyVssShare(
         complaint.victimIdx,
         complaint.revealedShare,
@@ -396,8 +489,41 @@ export class IndependentDkgSession {
       );
       if (!valid) {
         this.disqualified.add(complaint.accusedIdx);
+        this.complaintResolution.set(key, 'upheld');
+        continue;
       }
+      // The accuser's own revealed share verifies: the complaint is false and
+      // the accused is exonerated.
+      this.complaintResolution.set(key, 'false');
+      this.falseComplaints.push(complaint);
     }
+  }
+
+  /** Admitted (attribution-bound) complaints that enter arbitration. */
+  getComplaints(): readonly DkgComplaint[] {
+    return this.complaints.map((c) => ({
+      ...c,
+      defense: c.defense ? { ...c.defense } : undefined,
+    }));
+  }
+
+  /**
+   * Complaints whose own evidence exonerated the accused — slashing evidence
+   * for the bond backend. Never includes plaintext shares of innocent
+   * parties beyond what the accuser itself published.
+   */
+  getFalseComplaints(): readonly DkgComplaint[] {
+    return this.falseComplaints.map((c) => ({
+      ...c,
+      defense: c.defense ? { ...c.defense } : undefined,
+    }));
+  }
+
+  private hasPendingComplaints(): boolean {
+    for (const status of this.complaintResolution.values()) {
+      if (status === 'pending') return true;
+    }
+    return false;
   }
 
   /**
@@ -552,8 +678,15 @@ export class IndependentDkgSession {
   /**
    * Restore this juror's share from a Kind 39100 self-backup.
    *
-   * Validates the decrypted share against the backup's verification shares and,
-   * if valid, populates the computed share/record so the session can sign.
+   * FULL RECOMPUTATION BATTERY (2026-08-15 hardening — see
+   * docs/COMPLAINT-PROTOCOL.md intro and courtRecovery.ts): nothing in the
+   * backup is trusted. Self-decryption is necessary but never sufficient:
+   * any party that once invoked `nip44_encrypt` on this signer can mint
+   * validly self-decrypting ciphertexts, so this method re-derives the group
+   * key, every verification share, and the local share from the supplied VSS
+   * commitments with the same curve functions the live DKG uses — and
+   * rejects a self-consistent backup under a DIFFERENT group key or a
+   * negated share (x-only comparisons would certify n - s).
    */
   async restoreFromBackup(backup: EncryptedShareBackup): Promise<boolean> {
     if (backup.disputeId !== this.disputeId) return false;
@@ -564,32 +697,85 @@ export class IndependentDkgSession {
     try {
       const shareHex = await this.nip44.decrypt(backup.encryptedShare, this.myPubkey);
 
-      const expected = backup.verificationShares.find((v) => v.idx === this.myIdx);
-      if (!expected) return false;
-      if (deriveXOnlyPubkey(shareHex) !== expected.pubkey) {
-        return false;
+      // Structural gates: consistent array lengths, ordered 1..n indices,
+      // per-participant commitment counts equal to the session threshold,
+      // well-formed pubkeys.
+      const vs = backup.verificationShares;
+      const vss = backup.vssCommitments;
+      const n = vs.length;
+      const threshold = this.threshold;
+      if (n < threshold) return false;
+      if (vss.length !== n) return false;
+      if (vss.some((v) => v.commits.length !== threshold)) return false;
+      const ordered = (list: readonly { idx: number }[]): boolean =>
+        list.length === n && list.every((entry, i) => entry.idx === i + 1);
+      if (!ordered(vs) || !ordered(vss)) return false;
+      if (vss.some((v) => !/^[0-9a-f]{64}$/.test(v.pubkey))) return false;
+
+      const commitments: CurvePoint[][] = vss.map((entry) =>
+        entry.commits.map((hex) => Point.fromHex(hex)),
+      );
+
+      // Group key recomputed from the constant commitments: must match the
+      // backup's claim exactly (compressed full-point comparison).
+      const groupPoint = commitments.reduce(
+        (sum, commits) => sum.add(commits[0]),
+        Point.ZERO,
+      );
+      if (groupPoint.equals(Point.ZERO)) return false;
+      if (groupPoint.toHex(true) !== backup.groupPubkey) return false;
+
+      // Every verification share recomputed from the commitments; each must
+      // match the claimed x-only share.
+      for (let i = 0; i < n; i++) {
+        const index = BigInt(i + 1);
+        const point = commitments.reduce(
+          (sum, commits) => sum.add(evaluateCommitments(commits, index)),
+          Point.ZERO,
+        );
+        if (point.equals(Point.ZERO)) return false;
+        if (pointToXOnlyHex(point) !== vs[i]!.pubkey) return false;
       }
 
-      const threshold = backup.vssCommitments[0]?.commits.length ?? 0;
-      // Basic structural validation of the restored record.
-      if (threshold < 2) return false;
-      Point.fromHex(backup.groupPubkey); // throws on a non-curve-point
+      // The encrypted share is the exact scalar whose full point (parity
+      // exact) is the recomputed verification point for this juror.
+      const scalar = BigInt('0x' + shareHex);
+      if (scalar <= 0n || scalar >= secp256k1.Point.Fn.ORDER) return false;
+      const myPoint = commitments.reduce(
+        (sum, commits) => sum.add(evaluateCommitments(commits, BigInt(this.myIdx))),
+        Point.ZERO,
+      );
+      if (!Point.BASE.multiply(scalar).equals(myPoint)) return false;
+
+      const groupPubkey = groupPoint.toHex(true);
+      const groupPubkeyXOnly = pointToXOnlyHex(groupPoint);
+      const verificationShares = vs.map((entry, i) => ({
+        idx: i + 1,
+        pubkey: pointToXOnlyHex(
+          commitments.reduce(
+            (sum, commits) => sum.add(evaluateCommitments(commits, BigInt(i + 1))),
+            Point.ZERO,
+          ),
+        ),
+      }));
+
       this.computedShare = { idx: this.myIdx, seckey: shareHex };
       this.computedRecord = {
         marketId: this.marketId,
         disputeId: this.disputeId,
         threshold,
-        participants: backup.verificationShares.length,
-        groupPubkey: backup.groupPubkey,
-        groupPubkeyXOnly: backup.groupPubkey.slice(2),
-        verificationShares: backup.verificationShares,
-        jurorPubkeys: backup.vssCommitments.map((c) => c.pubkey),
-        vssCommitments: backup.vssCommitments,
+        participants: n,
+        groupPubkey,
+        groupPubkeyXOnly,
+        verificationShares,
+        jurorPubkeys: vss.map((v) => v.pubkey),
+        vssCommitments: vss.map((v) => ({
+          idx: v.idx,
+          pubkey: v.pubkey,
+          commits: [...v.commits],
+        })),
       };
-      this.computedGroupKey = {
-        compressed: backup.groupPubkey,
-        xOnly: backup.groupPubkey.slice(2),
-      };
+      this.computedGroupKey = { compressed: groupPubkey, xOnly: groupPubkeyXOnly };
       return true;
     } catch {
       return false;
@@ -955,7 +1141,9 @@ export class IndependentDkgSession {
   getPhase(): 'awaiting_commitments' | 'awaiting_shares' | 'complaint' | 'complete' | 'failed' {
     if (this.disqualified.size > 0) return 'failed';
     if (this.computedRecord) return 'complete';
-    if (this.complaints.length > 0) return 'complaint';
+    // Only UNRESOLVED (pending) complaints hold the ceremony in the complaint
+    // phase; a resolved false complaint no longer stalls progress reporting.
+    if (this.hasPendingComplaints()) return 'complaint';
     const haveAllPeerCommits = this.jurors
       .filter((j) => j.idx !== this.myIdx)
       .every((j) => this.commitments.has(j.idx));

@@ -37,11 +37,16 @@ export function randomHex32(): string {
 export function seededScalar(seed: Uint8Array, info: Uint8Array): bigint {
   let counter = 0;
   while (counter < 65536) {
+    // Counter serialized big-endian as a full uint16 so it cannot collide
+    // with a lower counter after truncation (a single-byte counter would
+    // wrap at 256 and starve the rejection loop).
+    const counterBytes = new Uint8Array(2);
+    new DataView(counterBytes.buffer).setUint16(0, counter, false);
     const okm = hkdf(
       sha256,
       seed,
       new Uint8Array(0),
-      new Uint8Array([...info, counter]),
+      new Uint8Array([...info, ...counterBytes]),
       64,
     );
     const s = modN(bytesToNumberBE(okm));
