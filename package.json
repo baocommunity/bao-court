@@ -1,6 +1,6 @@
 {
   "name": "@bao/court",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
   "exports": {

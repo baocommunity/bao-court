@@ -1,6 +1,6 @@
 # BAO Court — Escrow Lifecycle & Slashing
 
-**Version:** 0.2.2 (2026-08-16)
+**Version:** 0.2.3 (2026-08-16)
 **Status:** Implemented in `escrow.ts` (this package); rail execution remains
 host-side per ADR-001 (hybrid dual-panel escrow).
 **Scope:** Bond ownership proofs, deterministic escrow ledger, slashing and
@@ -127,14 +127,16 @@ rounding tolerance).
 ## 6. Integration contract for hosts
 
 1. **Pledge intake:** host records pledges with `EscrowLedger.record({purpose:
-   'juror_stake', ...})` when a Kind 38034 pledge event is seen.
+   'juror_stake', ...})` when a pledge event is seen (bao.markets uses Kind
+   38034).
 2. **Lock:** host runs `verifyBond` + `verifyBondOwnershipProof` (rail adapter
    derives the UTXO x-only pubkey from `scriptPubKey`), then
    `ledger.lock(id, ok)`.
 3. **Resolution:** run `tallyVotes` → classify reveals into coherent /
    incoherent / non-reveal / double-vote → `computeRedistributionPlan(params)`
-   → persist the plan (Kind 38036 slash-evidence event) →
-   `ledger.applyPlan(plan)`.
+   → persist the plan (slash-evidence event; kind owned by the host protocol
+   layer — do not reuse the standing-oracle range 38035–38038 from
+   `FROST_THRESHOLD_ORACLE_PLAN.md`) → `ledger.applyPlan(plan)`.
 4. **Execution:** host moves sats on its rail per plan records and marks
    `redistribute(id)` / `returnDeposit(id)` as funds clear. Treasury records
    go to the platform treasury.
