@@ -6,14 +6,11 @@
  * The Court is rail-agnostic: it VERIFIES bond evidence and COMPUTES the
  * deterministic escrow ledger and slashing plan; hosts move actual sats on
  * their chosen rail (Spark, Lightning, Liquid — see ADR-001 hybrid dual-panel
- * escrow). This module contains no networking and no ledger writes; every
+ * escrow). This module contains no networking and no event emission; every
  * function is pure and deterministic so any observer derives the same result.
- *
- * Protocol kinds used here:
- *   - 38030 — juror registration (optional; identity + eligibility claims)
- *   - 38034 — juror pledge (per-dispute stake commitment + bond evidence)
- *   - 38035 — escrow lock proof (ownership + rail receipt binding)
- *   - 38036 — slash evidence (deterministic redistribution plan for a dispute)
+ * Event kinds for pledges/slash evidence are owned by the host protocol layer
+ * (bao.markets uses Kind 38034 for pledging; see
+ * FROST_THRESHOLD_ORACLE_PLAN.md for the kind space).
  *
  * @see docs/ESCROW-SLASHING.md
  */
