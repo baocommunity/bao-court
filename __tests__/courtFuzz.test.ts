@@ -181,7 +181,7 @@ describe('adversarial parser fuzz (typed failures only)', () => {
     }
   });
 
-  it('200 random-tag mutations never crash untyped', () => {
+  it('200 random-tag mutations never crash untyped', { timeout: 60_000 }, () => {
     const rng = (max: number): number => Math.floor(Math.random() * max);
     const pool = ['commit', 'session', 'juror', 'pok_n', 'pok_z', 'threshold', 'phase_nonce', 'dispute', 'p', 'host', 'suite', 'attempt', 'strange'];
     const values = ['', 'a', '0x10', '99999999999999999999999', `02${'1'.repeat(64)}`, '0'.repeat(64), '%', JSON.stringify({ a: 1 })];

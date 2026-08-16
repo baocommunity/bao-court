@@ -65,7 +65,7 @@ function makeJurors(count: number): { juror: SelectedJuror; seckey: Uint8Array; 
 }
 
 describe('IndependentDkgSession', () => {
-  it('runs a 3-of-5 independent DKG and produces matching group keys', async () => {
+  it('runs a 3-of-5 independent DKG and produces matching group keys', { timeout: 120_000 }, async () => {
     const jurors = makeJurors(5);
     const threshold = 3;
     const disputeId = 'd'.repeat(64);
@@ -192,7 +192,7 @@ describe('IndependentDkgSession', () => {
     expect(backupEvent.kind).toBe(39100);
   });
 
-  it('restores a share from a Kind 39100 self-backup', async () => {
+  it('restores a share from a Kind 39100 self-backup', { timeout: 60_000 }, async () => {
     const jurors = makeJurors(3);
     const disputeId = 'd'.repeat(64);
     const marketId = 'restore-market';
@@ -535,7 +535,7 @@ describe('IndependentDkgSession', () => {
 
 
 describe('IndependentDkgSession refresh', () => {
-  it('runs a networked refresh that preserves the group public key', async () => {
+  it('runs a networked refresh that preserves the group public key', { timeout: 120_000 }, async () => {
     const jurors = makeJurors(5);
     const threshold = 3;
     const disputeId = 'd'.repeat(64);

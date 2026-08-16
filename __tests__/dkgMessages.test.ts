@@ -45,6 +45,7 @@ describe('DKG message builders', () => {
       accusedPubkey: 'a'.repeat(64),
       victimIdx: 2,
       victimPubkey: 'b'.repeat(64),
+      encryptedShareEventId: 'f'.repeat(64),
       revealedShare: 'deadbeef',
       commitmentEventId: 'e'.repeat(64),
     };
@@ -55,10 +56,60 @@ describe('DKG message builders', () => {
     expect(event.tags).toContainEqual(['accused', '1', 'a'.repeat(64)]);
     expect(event.tags).toContainEqual(['victim', '2', 'b'.repeat(64)]);
     expect(event.tags).toContainEqual(['commitment', 'e'.repeat(64)]);
+    expect(event.tags).toContainEqual(['share', 'f'.repeat(64)]);
 
-    const parsed = parseDkgComplaintEvent(event);
+    // The boundary requires the signed author to be the victim (complainer ===
+    // victim); parsing a template as if carried by the victim's signed event.
+    const parsed = parseDkgComplaintEvent({ ...event, pubkey: complaint.victimPubkey });
     expect(parsed).toMatchObject(complaint);
     expect(parsed?.defense).toBeUndefined();
+  });
+
+  it('rejects a complaint NOT authored by the victim (possession binding)', () => {
+    const complaint = {
+      disputeId,
+      accusedIdx: 1,
+      accusedPubkey: 'a'.repeat(64),
+      victimIdx: 2,
+      victimPubkey: 'b'.repeat(64),
+      encryptedShareEventId: 'f'.repeat(64),
+      revealedShare: 'deadbeef',
+      commitmentEventId: 'e'.repeat(64),
+    };
+    const event = buildDkgComplaintEvent(complaint);
+    // Signed by the accused (or anyone else) instead of the victim.
+    expect(parseDkgComplaintEvent({ ...event, pubkey: complaint.accusedPubkey })).toBeNull();
+    expect(parseDkgComplaintEvent({ ...event, pubkey: 'c'.repeat(64) })).toBeNull();
+    expect(parseDkgComplaintEvent({ ...event, pubkey: undefined })).toBeNull();
+  });
+
+  it('rejects complaints without the possession anchor or with self-accusation', () => {
+    const complaint = {
+      disputeId,
+      accusedIdx: 1,
+      accusedPubkey: 'a'.repeat(64),
+      victimIdx: 2,
+      victimPubkey: 'b'.repeat(64),
+      encryptedShareEventId: 'f'.repeat(64),
+      revealedShare: 'deadbeef',
+      commitmentEventId: 'e'.repeat(64),
+    };
+    const event = buildDkgComplaintEvent(complaint);
+    const tags = event.tags.filter((t) => t[0] !== 'share');
+    const content = JSON.parse(event.content) as Record<string, unknown>;
+    delete content.encryptedShareEventId;
+    expect(
+      parseDkgComplaintEvent({ ...event, tags, content: JSON.stringify(content), pubkey: complaint.victimPubkey }),
+    ).toBeNull();
+
+    // victim === accused is structurally invalid.
+    const self = {
+      ...complaint,
+      accusedIdx: complaint.victimIdx,
+      accusedPubkey: complaint.victimPubkey,
+    };
+    const selfEvent = buildDkgComplaintEvent(self);
+    expect(parseDkgComplaintEvent({ ...selfEvent, pubkey: self.victimPubkey })).toBeNull();
   });
 
   it('builds and parses a DKG complaint with defense', () => {
@@ -73,13 +124,14 @@ describe('DKG message builders', () => {
       accusedPubkey: 'a'.repeat(64),
       victimIdx: 2,
       victimPubkey: 'b'.repeat(64),
+      encryptedShareEventId: 'f'.repeat(64),
       revealedShare: 'deadbeef',
       commitmentEventId: 'e'.repeat(64),
       defense,
     };
 
     const event = buildDkgComplaintEvent(complaint);
-    const parsed = parseDkgComplaintEvent(event);
+    const parsed = parseDkgComplaintEvent({ ...event, pubkey: complaint.victimPubkey });
     expect(parsed?.defense).toEqual(defense);
   });
 

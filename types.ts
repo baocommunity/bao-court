@@ -172,13 +172,34 @@ export interface EncryptedVssShare {
   readonly phaseNonce: string;
 }
 
-/** Public DKG complaint with a revealed share and proof (kind 38032). */
+/**
+ * Public DKG complaint with a revealed share and proof (kind 38032).
+ *
+ * Possession binding (mandatory since the 2026-08-15 hardening): a complaint
+ * is only valid when the COMPLAINER IS THE VICTIM — the party who actually
+ * received (and failed to verify) the disputed share. Enforced structurally:
+ * `parseDkgComplaintEvent` rejects any event whose signed author is not the
+ * victim pubkey, and `IndependentDkgSession.addComplaint` re-checks the
+ * author/roster binding plus (for local-victim complaints) that the accused
+ * really delivered a share to this session. Without this binding, an attacker
+ * could file complaints on behalf of any victim, force t public defenses that
+ * each reveal one evaluation point of an honest juror's polynomial, and
+ * reconstruct the group secret; forged complaints could also permanently
+ * disqualify honest jurors. See `docs/COMPLAINT-PROTOCOL.md`.
+ */
 export interface DkgComplaint {
   readonly disputeId: string;
   readonly accusedIdx: number;
   readonly accusedPubkey: string;
   readonly victimIdx: number;
+  /** Must equal the kind 38032 event author (the complainer). */
   readonly victimPubkey: string;
+  /**
+   * Event id of the kind 39003 encrypted-share event the victim received
+   * from the accused — the possession anchor that makes the complaint
+   * attributable. Required; a complaint without it is structurally invalid.
+   */
+  readonly encryptedShareEventId: string;
   /** The decrypted share that the victim received, which fails verification. */
   readonly revealedShare: string;
   /** Event id of the accused juror's kind 38031 commitment. */

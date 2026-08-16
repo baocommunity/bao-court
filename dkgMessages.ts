@@ -118,8 +118,14 @@ export function parseEncryptedShareEvent(
 
 /**
  * Build a kind 38032 DKG complaint event.
+ *
  * The complaint is public and includes the revealed invalid share plus the
- * accused juror's commitment event id.
+ * accused juror's commitment event id and the victim's share-event id.
+ *
+ * Possession binding: the kind 38032 event MUST be signed by the victim
+ * (complainer === victim). `parseDkgComplaintEvent` rejects any event whose
+ * author is not the victim pubkey, so a forged complaint that was never the
+ * victim's own cannot enter the protocol arbitration path.
  */
 export function buildDkgComplaintEvent(
   complaint: DkgComplaint,
@@ -132,6 +138,9 @@ export function buildDkgComplaintEvent(
     ['accused', String(complaint.accusedIdx), complaint.accusedPubkey],
     ['victim', String(complaint.victimIdx), complaint.victimPubkey],
     ['commitment', complaint.commitmentEventId],
+    // Possession anchor: the kind 39003 encrypted-share event the victim
+    // received from the accused. Without it the claim is unattributable.
+    ['share', complaint.encryptedShareEventId],
   ];
 
   const content: Record<string, unknown> = {
@@ -140,6 +149,7 @@ export function buildDkgComplaintEvent(
     accusedPubkey: complaint.accusedPubkey,
     victimIdx: complaint.victimIdx,
     victimPubkey: complaint.victimPubkey,
+    encryptedShareEventId: complaint.encryptedShareEventId,
     revealedShare: complaint.revealedShare,
     commitmentEventId: complaint.commitmentEventId,
   };
@@ -156,26 +166,57 @@ export function buildDkgComplaintEvent(
   };
 }
 
+/**
+ * Strictly parse a signed kind 38032 complaint event.
+ *
+ * Rejects (returns null) without ever throwing when:
+ * - the event is not a kind 38032 or has no signed author,
+ * - the signed author is NOT the victim pubkey (complainer === victim rule),
+ * - the victim equals the accused,
+ * - the possession anchor (`share` tag / `encryptedShareEventId` content) is
+ *   missing or not 64-hex,
+ * - required numeric/hex fields are malformed.
+ *
+ * The parsed complaint is STILL untrusted: possession is anchored to a share
+ * event id, and `IndependentDkgSession.addComplaint` re-checks roster
+ * membership and (for local-victim complaints) actual receipt.
+ */
 export function parseDkgComplaintEvent(
   event: NostrEventLike,
 ): DkgComplaint | null {
-  if (event.kind !== BAO_COURT_DKG_COMPLAINT_KIND) return null;
+  if (event.kind !== BAO_COURT_DKG_COMPLAINT_KIND || !event.pubkey) return null;
   try {
     const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
     const disputeTag = event.tags.find((t) => t[0] === 'dispute');
     const accusedTag = event.tags.find((t) => t[0] === 'accused');
     const victimTag = event.tags.find((t) => t[0] === 'victim');
     const commitmentTag = event.tags.find((t) => t[0] === 'commitment');
+    const shareTag = event.tags.find((t) => t[0] === 'share');
 
     const accusedIdx = parsePositiveInt(accusedTag?.[1] ?? content.accusedIdx);
     const victimIdx = parsePositiveInt(victimTag?.[1] ?? content.victimIdx);
     if (accusedIdx === null || victimIdx === null) return null;
+    if (accusedIdx === victimIdx) return null;
+
+    const accusedPubkey = accusedTag?.[2] ?? String(content.accusedPubkey ?? '');
+    const victimPubkey = victimTag?.[2] ?? String(content.victimPubkey ?? '');
+    if (!/^[0-9a-f]{64}$/.test(accusedPubkey) || !/^[0-9a-f]{64}$/.test(victimPubkey)) {
+      return null;
+    }
+    // Possession binding: the complaint must be authored by the victim. Any
+    // other author (accused, unrelated third party, relay) is structurally
+    // invalid and cannot enter arbitration.
+    if (event.pubkey !== victimPubkey) return null;
+
     const revealedShare = typeof content.revealedShare === 'string'
       ? content.revealedShare
       : '';
     const commitmentEventId = commitmentTag?.[1]
       ?? (typeof content.commitmentEventId === 'string' ? content.commitmentEventId : '');
+    const encryptedShareEventId = shareTag?.[1]
+      ?? (typeof content.encryptedShareEventId === 'string' ? content.encryptedShareEventId : '');
     if (!revealedShare || !commitmentEventId) return null;
+    if (!/^[0-9a-f]{64}$/.test(encryptedShareEventId)) return null;
 
     let defense: DkgComplaintDefense | undefined;
     const defenseRaw = content.defense;
@@ -191,9 +232,10 @@ export function parseDkgComplaintEvent(
     return {
       disputeId: disputeTag?.[1] ?? String(content.disputeId ?? ''),
       accusedIdx,
-      accusedPubkey: accusedTag?.[2] ?? String(content.accusedPubkey ?? ''),
+      accusedPubkey,
       victimIdx,
-      victimPubkey: victimTag?.[2] ?? String(content.victimPubkey ?? ''),
+      victimPubkey,
+      encryptedShareEventId,
       revealedShare,
       commitmentEventId,
       defense,

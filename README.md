@@ -290,6 +290,76 @@ including authenticated multi-relay transport, host keys, ChillDKG adapter,
 and bonds/production integration — is tracked in the
 `baocommunity/bao.markets` reference repository.
 
+## 13. Security hardening (2026-08-15)
+
+A full adversarial review found and fixed four substantive weaknesses. The
+fix memo is `docs/FIXES-2026-08-15.md`; the complaint protocol contract is
+specified in `docs/COMPLAINT-PROTOCOL.md`.
+
+### DKG complaint possession binding (breaking change)
+
+Kind 38032 complaints are now **possession-bound and victim-authored**:
+
+- `DkgComplaint` gained a required `encryptedShareEventId` field — the kind
+  39003 share event the victim received from the accused. Complaint events
+  without it are structurally invalid.
+- `parseDkgComplaintEvent` **rejects any complaint whose signed author is not
+  the victim pubkey** (complainer === victim). A complaint for a victim that
+  never was the author cannot enter arbitration at all.
+- `IndependentDkgSession.addComplaint` now **returns boolean** and admits a
+  complaint only when victim/accused are distinct certified roster members,
+  the carried pubkeys match the roster, the possession anchor is a valid
+  share-event id, the complainer is not disqualified, the pair has no prior
+  complaint (first wins), the per-roster budget holds, and (when this session
+  IS the victim) the accused actually delivered an encrypted share to this
+  session.
+- `resolveComplaints` settles each (victim, accused) pair once, exonerates
+  the accused when the revealed share (or a valid defense) verifies against
+  the public commitments — surfacing the complainer via `getFalseComplaints`
+  for slashing — and only disqualifies on genuine invalid shares or bogus
+  defenses. Complaints from disqualified complainers are void.
+
+**Why this matters:** without the binding, an attacker could file complaints
+on behalf of any victim, force t public defenses that each reveal one
+polynomial evaluation point of an honest juror, and reconstruct the group
+secret, or simply permanently disqualify honest jurors. With the binding,
+an honest juror reveals at most one point per actually-misbehaving peer, so
+polynomial recovery stays impossible under an honest majority.
+
+**Migrating consumers:** `addComplaint` returns `boolean`; complaint events
+must carry `['share', <kind-39003-event-id>]` and be signed by the victim.
+
+### Legacy NIP-59 unwrap is now strict
+
+The seckey-backed `unwrapProtocolEvent`/`unwrapProtocolEvents` previously
+performed two plain NIP-44 decrypts (stock nostr-tools `nip59.unwrapEvent`),
+returning attacker-crafted rumors as if they were legitimate mail. They now
+run the same gate as the signer path (`courtSigner.ts`): recipient `p` tag,
+seal Schnorr signature, seal-author === rumor-author, and rumor-id
+recomputation. Anything failing any check returns `null`.
+
+### `restoreFromBackup` recomputes everything
+
+`IndependentDkgSession.restoreFromBackup` previously trusted the backup's
+group key and verification shares after a single x-only share check. It now
+runs the full recomputation battery (same gates as `courtRecovery.ts`):
+1..n ordered indices, per-participant commitment counts equal to the
+threshold, group key recomputed from the constant commitments, every
+verification share recomputed from the commitments, and the local share
+checked by **full point** (parity-exact — an x-only check would certify the
+negated share `n − s`). A self-consistent backup under a different group
+key — mintable by any party that once invoked `nip44_encrypt` on the
+signer — is rejected.
+
+### Other fixes
+
+- `seededScalar` counter encoded as a full uint16 (no truncation collision).
+- Test-timeout hardening for the heavy crypto/fuzz suites (load-dependent
+  flakes).
+
+See `docs/COMPLAINT-PROTOCOL.md` and `docs/FIXES-2026-08-15.md` for the full
+analysis, reproduction evidence, and each check's rationale.
+
 ## License
 
 **Copyright © 2026 baocommunity.**
