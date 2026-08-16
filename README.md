@@ -197,6 +197,24 @@ against Bitcoin/Liquid backends (the BAO Markets custom signet Mempool in
 practice). Demo rooms may stake on other rails (e.g. Spark) without any
 change to Court code.
 
+**Escrow lifecycle and slashing** live in `escrow.ts` (see
+[`docs/ESCROW-SLASHING.md`](docs/ESCROW-SLASHING.md)):
+
+- **Bond ownership proof** — `createBondOwnershipChallenge` / `signBondOwnershipProof` /
+  `verifyBondOwnershipProof` let a depositor prove control of the bond UTXO
+  (BIP-340 signature over a deterministic challenge binding
+  `txid|vout|dispute|juror|nonce`), closing the coordinator's former
+  ownership-verification gap.
+- **EscrowLedger** — a deterministic, serializable state machine
+  (`pending → locked → returned | slashed_50 | slashed_100 | redistributed |
+  failed`) that hosts persist and apply to their rail. No sats move inside it.
+- **Slashing math** — `calculateBondAmount`, `calculateJurorStake`,
+  `calculateTotalAtStake`, `computeRedistributionPlan` and
+  `verifyRedistributionIntegrity` implement the Kleros-style rules
+  (coherent keep + share, incoherent −50%, non-reveal −100%, double-vote
+  −100%, bond returned/forfeited by outcome, treasury fallback when no
+  coherent juror). Deterministic and integer-exact.
+
 There are **no HTLCs in the Court path**. Lightning contracts, invoices,
 and settlement state machines belong to the settlement layer (see §9). The
 Court's only economic acts are attestations and authorizations.
@@ -261,6 +279,7 @@ winning_secret_commitment`.
 | `courtRecovery.ts` | versioned legacy recovery envelope with full curve recomputation on restore (migration support, not ChillDKG recovery) |
 | `selection.ts` | seed derivation, verifiable jury/backup selection |
 | `bondVerification.ts` | juror bond evidence verification (Mempool/Esplora) |
+| `escrow.ts` | bond ownership proofs, escrow lifecycle ledger, slashing/redistribution plan |
 | `validator.ts` | consumer-side attestation validation |
 
 ## 11. Testing and gates

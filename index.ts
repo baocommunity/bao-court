@@ -417,6 +417,31 @@ export {
 } from './bondVerification';
 
 export {
+  ALPHA_INCOHERENT,
+  ALPHA_NON_REVEAL,
+  ALPHA_DOUBLE_VOTE,
+  calculateBondAmount,
+  calculateJurorStake,
+  calculateTotalAtStake,
+  computeRedistributionPlan,
+  verifyRedistributionIntegrity,
+  createBondOwnershipChallenge,
+  signBondOwnershipProof,
+  verifyBondOwnershipProof,
+  EscrowLedger,
+  BOND_OWNERSHIP_DOMAIN,
+  type EscrowStatus,
+  type EscrowPurpose,
+  type EscrowReason,
+  type EscrowDeposit,
+  type StakeRedistribution,
+  type RedistributionPlan,
+  type RedistributionParams,
+  type BondOwnershipChallengeInput,
+  type EscrowLedgerSnapshot,
+} from './escrow';
+
+export {
   deriveSelectionSeed,
   jurorRandomValue,
   quadraticPriority,
