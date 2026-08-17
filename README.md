@@ -60,8 +60,8 @@ rather than degrading it — see §4.
 
 **Compatibility gates (hard rules):**
 
-- The FROST dependency is pinned at `@vbyte/frost@1.1.5`; bumping it
-  requires re-running the full vector suite.
+- The FROST dependency is held at `@vbyte/frost` **1.1.5** (range `^1.1.5`,
+  lockfile-pinned); any bump requires re-running the full vector suite.
 - The legacy Pedersen/PedPop DKG must never be *labelled* ChillDKG.
 - ChillDKG shares must never be fed into `@vbyte/frost` signing until
   BIP-445 test vectors pass and cross-implementation parity is demonstrated.
@@ -305,7 +305,15 @@ winning_secret_commitment`.
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
 npm test           # vitest suite
 npm run typecheck  # tsc --noEmit
+npm run simulate:court  # one-shot end-to-end court simulation (selection →
+                        # DKG → vote → FROST sign → validate → escrow/slashing
+                        # → LN hold decisions → Liquid escrow), hermetic,
+                        # deterministic per seed
 ```
+
+The same pipeline the simulation drives is asserted in
+`__tests__/simulateCourt.test.ts` (all steps green, same-seed
+reproducibility, time budget).
 
 Import as a source package (Vite/TS resolver):
 
