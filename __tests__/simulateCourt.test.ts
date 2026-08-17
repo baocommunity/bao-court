@@ -5,7 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { runCourtSimulation } from '../scripts/simulateCourt';
 
 describe('full court simulation (single script, hermetic)', () => {
-  it('runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid', async () => {
+  // DKG + FROST rounds are CPU-heavy; under a fully parallel suite run the
+  // default 5s timeout is load-dependent (same class of flake as
+  // docs/FIXES-2026-08-15.md #6). Give the sim an explicit budget.
+  const SIM_TIMEOUT = 60_000;
+
+  it('runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid', { timeout: SIM_TIMEOUT }, async () => {
     const r = await runCourtSimulation({ poolSize: 12, jurySize: 5, backups: 2, seed: 'test' });
 
     // Every step passed.
@@ -33,7 +38,7 @@ describe('full court simulation (single script, hermetic)', () => {
     expect(r.broadcastTxid).toMatch(/^fake-txid-/);
   });
 
-  it('is reproducible: same seed → same pipeline result (no cross-run drift)', async () => {
+  it('is reproducible: same seed → same pipeline result (no cross-run drift)', { timeout: SIM_TIMEOUT }, async () => {
     const a = await runCourtSimulation({ seed: 'repro' });
     const b = await runCourtSimulation({ seed: 'repro' });
     expect(a.groupPubkeyXOnly).toBe(b.groupPubkeyXOnly);
@@ -42,7 +47,7 @@ describe('full court simulation (single script, hermetic)', () => {
     expect(a.ok && b.ok).toBe(true);
   });
 
-  it('fast: completes the full pipeline well under the default 5s budget', async () => {
+  it('fast: completes the full pipeline well under the default 5s budget', { timeout: SIM_TIMEOUT }, async () => {
     const start = Date.now();
     const r = await runCourtSimulation({ poolSize: 20, jurySize: 7, backups: 3 });
     const elapsed = Date.now() - start;

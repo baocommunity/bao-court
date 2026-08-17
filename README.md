@@ -16,6 +16,10 @@ no persistence — hosts inject clocks, storage, and transport.
 package. It is developed alongside the `baocommunity/bao.markets`
 reference implementation and published here under the AGPL-3.0.
 
+**Paper.** The protocol paper — architecture, math, security analysis, and
+production gates — is
+[`docs/FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md).
+
 
 ---
 
@@ -297,6 +301,9 @@ winning_secret_commitment`.
 | `escrow.ts` | bond ownership proofs, escrow lifecycle ledger, slashing/redistribution plan |
 | `lnSettlement.ts` / `lnRail.ts` | Panel A: hold-invoice protocol + host LnRail contract |
 | `liquidEscrow.ts` / `liquidRail.ts` | Panel B: P2WSH/Taproot scripts, addresses, skeletons + host LiquidRail contract |
+| `appealTiming.ts` | JIT appeal phase timings (defaults + boundary helpers) |
+| `appealCoordinator.ts` | event-driven JIT appeal pipeline (dispute → candidacy → selection → DKG → vote → signing → attestation); relay transport host-injected |
+| `appealWatcher.ts` | kind-39007 attestation watcher: validate under the group key, route override outcomes; pool host-injected |
 | `validator.ts` | consumer-side attestation validation |
 
 ## 11. Testing and gates
@@ -329,9 +336,14 @@ import { ... } from '@bao/court';
 
 ## 12. Status
 
-Active suite: `pedpop-v1-experimental`. The phased hardening/upgrade plan —
-including authenticated multi-relay transport, host keys, ChillDKG adapter,
-and bonds/production integration — is tracked in the
+Active suite: `pedpop-v1-experimental`. Protocol layers (selection, DKG,
+vote, signing, attestation, escrow/slashing, settlement rails, appeal
+coordinator/watcher) are implemented and test-covered in this package; rail
+execution, cross-client ceremonies, and contract-enforced phase deadlines
+are the remaining production gates — see the honest list in the paper
+(`docs/FROST_COURT_ORACLE_PAPER.md` §10). The phased hardening/upgrade plan
+— including authenticated multi-relay transport, host keys, ChillDKG
+adapter, and bonds/production integration — is tracked in the
 `baocommunity/bao.markets` reference repository.
 
 ## 13. Security hardening (2026-08-15)
