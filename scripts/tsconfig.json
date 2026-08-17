@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2022"],
+    "noEmit": true
+  },
+  "include": ["simulateCourt.ts"],
+  "exclude": ["node_modules", "__tests__"]
+}

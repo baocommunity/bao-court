@@ -154,4 +154,5 @@ input safety), and the ledger state machine (record/lock/fail/lock-guard,
 return/slash/forfeit/redistribute transitions, double-transition rejection,
 snapshot round-trip, `applyPlan` end-to-end for upheld and rejected disputes).
 
-Suite at release: **520/520** in-package tests pass, `tsc --noEmit` clean.
+Suite at v0.2.3 release: **520/520** in-package tests pass, `tsc --noEmit`
+clean. Current suite (v0.3.0 + simulation harness): **572/572**.

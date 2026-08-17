@@ -120,11 +120,14 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
+    "simulate:court": "tsx scripts/simulateCourt.ts"
   },
   "devDependencies": {
-    "vitest": "^4.1.2",
+    "@types/node": "^25.5.2",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.2",
-    "@types/node": "^25.5.2"
+    "vitest": "^4.1.2"
   }
 }
