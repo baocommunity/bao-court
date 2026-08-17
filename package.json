@@ -1,6 +1,6 @@
 {
   "name": "@bao/court",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "type": "module",
   "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
   "exports": {
@@ -87,6 +87,22 @@
     "./escrow": {
       "types": "./escrow.ts",
       "default": "./escrow.ts"
+    },
+    "./ln-settlement": {
+      "types": "./lnSettlement.ts",
+      "default": "./lnSettlement.ts"
+    },
+    "./ln-rail": {
+      "types": "./lnRail.ts",
+      "default": "./lnRail.ts"
+    },
+    "./liquid-escrow": {
+      "types": "./liquidEscrow.ts",
+      "default": "./liquidEscrow.ts"
+    },
+    "./liquid-rail": {
+      "types": "./liquidRail.ts",
+      "default": "./liquidRail.ts"
     }
   },
   "dependencies": {
