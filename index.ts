@@ -442,6 +442,69 @@ export {
 } from './escrow';
 
 export {
+  deriveLnPreimage,
+  paymentHash,
+  deriveHoldInvoicePair,
+  constructHoldOffer,
+  LnHoldLedger,
+  planDecisionsForHolds,
+  buildLnAuditEvent,
+  LN_PREIMAGE_DOMAIN,
+  LN_AUDIT_DOMAIN,
+  type LnRole,
+  type LnPreimageWitness,
+  type LnHoldStatus,
+  type LnDecision,
+  type LnHoldRecord,
+  type LnHoldConstruction,
+  type LnLedgerSnapshot,
+  type LnDecisionPlan,
+  type LnAuditEventTemplate,
+} from './lnSettlement';
+
+export {
+  buildMultisigScript,
+  buildTaprootLeaves,
+  p2wshProgram,
+  p2wshAddress,
+  taprootProgram,
+  taprootAddress,
+  tapMerkleRoot,
+  buildReleaseSkeleton,
+  assembleMultisigWitness,
+  assertScriptSane,
+  LIQUID_MAINNET,
+  LIQUID_TESTNET,
+  BAO_SIGNET,
+  pushHex,
+  type MultiSigParams,
+  type TaprootEscrowParams,
+  type LiquidNetworkParams,
+  type LiquidUtxo,
+  type LiquidRecipient,
+  type ReleaseSkeleton,
+} from './liquidEscrow';
+
+export {
+  applyLnDecision,
+  type LnRail,
+  type LnRailCreateInvoiceParams,
+  type LnRailCreateInvoiceResult,
+  type LnRailStatus,
+  type FakeLnRailState,
+  type FakeLnRailOptions,
+  createFakeLnRail,
+} from './lnRail';
+
+export {
+  chooseSpendBranch,
+  createFakeLiquidRail,
+  type LiquidRail,
+  type SpendBranch,
+  type FakeLiquidRailState,
+} from './liquidRail';
+
+export {
   deriveSelectionSeed,
   jurorRandomValue,
   quadraticPriority,

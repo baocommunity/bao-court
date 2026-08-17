@@ -219,6 +219,21 @@ There are **no HTLCs in the Court path**. Lightning contracts, invoices,
 and settlement state machines belong to the settlement layer (see §9). The
 Court's only economic acts are attestations and authorizations.
 
+**Settlement rails (v0.3.0)** — see
+[`docs/SETTLEMENT-RAILS.md`](docs/SETTLEMENT-RAILS.md):
+
+- **Panel A (Lightning hold invoices)** — `lnSettlement.ts` / `lnRail.ts`:
+  deterministic preimage/payment-hash derivation (BOLT semantics), hold
+  lifecycle state machine, settle/cancel decisions from the
+  `RedistributionPlan`, audit-event templates, and a host `LnRail` contract.
+- **Panel B (Liquid P2WSH/Taproot escrow)** — `liquidEscrow.ts` /
+  `liquidRail.ts`: M-of-N CHECKMULTISIG and judge/refund Taproot script
+  trees, BIP-173/BIP-350 addresses, release-skeleton builder, M-of-N witness
+  assembly, and a host `LiquidRail` contract.
+
+Both rails are protocol-side: hosts implement the adapters privately against
+BAO signet nodes and broadcast. No keys or credentials live in this package.
+
 ## 9. Seam interface — Court × BANOS direct settlement
 
 Agreed 2026-08-10 with the parallel bao.markets settlement session
@@ -280,6 +295,8 @@ winning_secret_commitment`.
 | `selection.ts` | seed derivation, verifiable jury/backup selection |
 | `bondVerification.ts` | juror bond evidence verification (Mempool/Esplora) |
 | `escrow.ts` | bond ownership proofs, escrow lifecycle ledger, slashing/redistribution plan |
+| `lnSettlement.ts` / `lnRail.ts` | Panel A: hold-invoice protocol + host LnRail contract |
+| `liquidEscrow.ts` / `liquidRail.ts` | Panel B: P2WSH/Taproot scripts, addresses, skeletons + host LiquidRail contract |
 | `validator.ts` | consumer-side attestation validation |
 
 ## 11. Testing and gates
