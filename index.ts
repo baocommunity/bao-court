@@ -521,3 +521,30 @@ export {
   verifyRawSignature,
   type ValidationResult,
 } from './validator';
+
+export {
+  DEFAULT_APPEAL_TIMINGS,
+  TEST_APPEAL_TIMINGS,
+  computePhaseBounds,
+  getActivePhase,
+  isAppealActive,
+} from './appealTiming';
+
+export {
+  createFrostAppealCoordinator,
+  type FrostAppealCoordinator,
+  type FrostAppealCoordinatorConfig,
+  type FrostAppealCoordinatorEvent,
+  type FrostAppealPhase,
+  type FrostAppealState,
+  type FrostEnvironment,
+  type FrostRelayPool,
+  type NostrEventSigner,
+} from './appealCoordinator';
+
+export {
+  FrostAppealWatcher,
+  type FrostAppealWatcherConfig,
+  type FrostAppealWatcherCallbacks,
+  type FrostAppealResolution,
+} from './appealWatcher';

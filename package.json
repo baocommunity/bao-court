@@ -1,6 +1,6 @@
 {
   "name": "@bao/court",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
   "exports": {
@@ -103,6 +103,18 @@
     "./liquid-rail": {
       "types": "./liquidRail.ts",
       "default": "./liquidRail.ts"
+    },
+    "./appeal-timing": {
+      "types": "./appealTiming.ts",
+      "default": "./appealTiming.ts"
+    },
+    "./appeal-coordinator": {
+      "types": "./appealCoordinator.ts",
+      "default": "./appealCoordinator.ts"
+    },
+    "./appeal-watcher": {
+      "types": "./appealWatcher.ts",
+      "default": "./appealWatcher.ts"
     }
   },
   "dependencies": {
