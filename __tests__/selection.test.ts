@@ -95,6 +95,26 @@ describe('jury selection', () => {
     expect(verifyJurySelection(pool, selected, params)).toBe(true);
   });
 
+  it('excludes a juror whose registeredAt is in the future (fail-closed age)', () => {
+    // Regression: `nowSec - registeredAt` is negative for a future-dated
+    // registration, which passed the age threshold and made the candidate
+    // appear arbitrarily old. A future registration is self-attested and
+    // must be excluded.
+    const futureJuror = makeJuror('9');
+    futureJuror.registeredAt = 2_000_000_000; // far in the future
+    const params = {
+      disputeEventId: 'a'.repeat(64),
+      blockHash: 'b'.repeat(64),
+      marketCategory: 'world',
+      marketVolumeSats: 1_000_000,
+      jurySize: 3,
+      referenceTimeSec: 1_700_000_000,
+    };
+    const selected = selectJury([...pool, futureJuror], params);
+    expect(selected.some((j) => j.nostrPubkey === futureJuror.nostrPubkey)).toBe(false);
+    expect(verifyJurySelection([...pool, futureJuror], selected, params)).toBe(true);
+  });
+
   it('selectJury throws when the pool is too small', () => {
     expect(() =>
       selectJury(pool.slice(0, 2), {

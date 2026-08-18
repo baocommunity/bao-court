@@ -2,7 +2,7 @@
 
 **Version:** 0.4.0 (tracks `@bao/court` v0.4.0 — this repository)
 **Status:** Cryptographic, escrow, and settlement-rail protocol layers complete
-and test-covered (594/594 in-package, `tsc` clean); adversarially reviewed
+and test-covered (600/600 in-package, `tsc` clean); adversarially reviewed
 (v0.2.1 hardening; 2026-08-18 hardening); rail
 *execution*, cross-client ceremonies, and on-chain phase enforcement remain
 host-side / pre-production.
@@ -556,7 +556,7 @@ TypeScript (browser and Node), no UI, no networking of its own, no
 persistence — hosts inject clocks, storage, signers, relay pools, and rail
 adapters. Module map: `README.md` §10.
 
-- **Suite:** 594/594 tests green, `tsc --noEmit` clean (vitest).
+- **Suite:** 600/600 tests green, `tsc --noEmit` clean (vitest).
   Coverage includes: BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
   complaints rejected, genuine grievances disqualify, false complaints

@@ -510,8 +510,16 @@ export function createFrostAppealCoordinator(
           const nonceGuard = createDefaultNonceGuard(`bao-frost-used-nonces|${appeal.disputeId}`);
           // The court attests the TALLY WINNER — never the challenger's
           // proposed outcome. `verdictOutcome` is set when the tally runs;
-          // the fallback is defensive only.
-          const outcome = appeal.verdictOutcome ?? appeal.disputeCase.proposedOutcome;
+          // a missing or empty verdict (e.g. every reveal invalid) aborts
+          // signing rather than attesting a claim or an empty outcome.
+          const outcome = appeal.verdictOutcome;
+          if (!outcome) {
+            // Same fail-closed path as any other signing failure: reselect
+            // from backups or refund — never attest a claim or an empty
+            // outcome.
+            maybeReselect(appeal, 'signing_failed', new Error('no_verdict: cannot sign without a tally winner'));
+            break;
+          }
           const commitments = createCommitments(signingShares);
           const reveals = createRevealsAndPartialSigs(
             {

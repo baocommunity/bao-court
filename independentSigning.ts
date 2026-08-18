@@ -100,6 +100,8 @@ export class IndependentSigningSession {
   readonly outcome: string;
   readonly round: number | string;
   readonly disputeEventId?: string;
+  /** Dispute verdict commitment bound into the signed message (kind 39007). */
+  readonly verdictHash?: string;
   readonly message: string;
 
   private readonly commitments = new Map<number, StoredCommitment>();
@@ -114,12 +116,13 @@ export class IndependentSigningSession {
     this.outcome = options.outcome;
     this.round = options.round ?? 1;
     this.disputeEventId = options.disputeEventId;
+    this.verdictHash = options.verdictHash;
     this.message = buildAttestationMessage(
       this.dkg.marketId,
       this.outcome,
       this.round,
       this.disputeEventId,
-      options.verdictHash,
+      this.verdictHash,
     );
     this.nonceGuard = options.nonceGuard ?? createDefaultNonceGuard(`bao-frost-used-nonces|${this.disputeId}`);
 
@@ -309,6 +312,11 @@ export class IndependentSigningSession {
         outcome: this.outcome,
         round: this.round,
         disputeEventId: this.disputeEventId,
+        // Bind the frozen verdict commitment into the message every juror
+        // signs — without it the partial signature (and the aggregate it
+        // feeds) would NOT certify the tally, and a kind-39007 attestation
+        // would fail validation for missing the verdict binding.
+        verdictHash: this.verdictHash,
         dkg: this.dkg,
         shares: [share],
         nonceGuard: this.nonceGuard,
@@ -438,6 +446,7 @@ export class IndependentSigningSession {
         outcome: this.outcome,
         round: this.round,
         disputeEventId: this.disputeEventId,
+        verdictHash: this.verdictHash,
         dkg: this.dkg,
         shares: [], // not needed for aggregation
       },

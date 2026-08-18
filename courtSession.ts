@@ -390,16 +390,36 @@ export class CanonicalWriter {
   private readonly chunks: Uint8Array[] = [];
 
   u8(value: number): void {
+    if (!Number.isInteger(value) || value < 0 || value > 0xff) {
+      throw new CourtSessionValidationError(
+        'invalid_number',
+        'u8 field must be an integer in [0, 255]',
+      );
+    }
     this.chunks.push(Uint8Array.of(value));
   }
 
   u32(value: number): void {
+    if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
+      throw new CourtSessionValidationError(
+        'invalid_number',
+        'u32 field must be an integer in [0, 4294967295]',
+      );
+    }
     const bytes = new Uint8Array(4);
     new DataView(bytes.buffer).setUint32(0, value, false);
     this.chunks.push(bytes);
   }
 
   u64(value: number): void {
+    // Safe integers are bounded by 2^53-1 < 2^64, so a safe non-negative
+    // integer is always representable and cannot wrap in setBigUint64.
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new CourtSessionValidationError(
+        'invalid_number',
+        'u64 field must be a safe non-negative integer',
+      );
+    }
     const bytes = new Uint8Array(8);
     new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false);
     this.chunks.push(bytes);

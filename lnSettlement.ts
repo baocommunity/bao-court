@@ -168,7 +168,14 @@ export class LnHoldLedger {
   private readonly byId = new Map<string, LnHoldRecord>();
 
   constructor(initial: readonly LnHoldRecord[] = []) {
-    for (const h of initial) this.byId.set(h.id, h);
+    const seen = new Set<string>();
+    for (const h of initial) {
+      if (seen.has(h.id)) {
+        throw new Error(`LnHoldLedger: duplicate hold id ${h.id} in snapshot`);
+      }
+      seen.add(h.id);
+      this.byId.set(h.id, h);
+    }
   }
 
   static fromSnapshot(s: LnLedgerSnapshot): LnHoldLedger {
@@ -200,8 +207,12 @@ export class LnHoldLedger {
   /**
    * Mark the hold as held (host confirms payment pending).
    * Guards: only from `offer`; `now` must be before `expiresAt`.
+   *
+   * `now` is unix SECONDS (matching `expiresAt`); the default is the wall
+   * clock in seconds — `Date.now()` alone is milliseconds and would make
+   * every default-clock hold look already expired.
    */
-  hold(id: string, now = Date.now()): LnHoldRecord {
+  hold(id: string, now = Math.floor(Date.now() / 1000)): LnHoldRecord {
     const r = this.require(id);
     if (r.status !== 'offer') throw new Error(`LnHoldLedger: cannot hold ${r.status} ${id}`);
     if (now > r.expiresAt) throw new Error(`LnHoldLedger: hold ${id} already expired at ${r.expiresAt}`);
@@ -211,7 +222,7 @@ export class LnHoldLedger {
   }
 
   /** Decision path: settle (release preimage) or cancel. */
-  decide(id: string, decision: LnDecision, now = Date.now()): LnHoldRecord {
+  decide(id: string, decision: LnDecision, now = Math.floor(Date.now() / 1000)): LnHoldRecord {
     const r = this.require(id);
     if (r.status !== 'held') throw new Error(`LnHoldLedger: cannot decide ${r.status} ${id}`);
     if (now > r.expiresAt) throw new Error(`LnHoldLedger: hold ${id} expired; refund path, not ${decision}`);
@@ -222,7 +233,7 @@ export class LnHoldLedger {
   }
 
   /** Expire a held hold past its deadline (refund path). */
-  expire(id: string, now = Date.now()): LnHoldRecord {
+  expire(id: string, now = Math.floor(Date.now() / 1000)): LnHoldRecord {
     const r = this.require(id);
     if (r.status !== 'held' && r.status !== 'offer') {
       throw new Error(`LnHoldLedger: cannot expire ${r.status} ${id}`);
@@ -335,7 +346,10 @@ export function buildLnAuditEvent(
   return {
     kind,
     tags: [
-      ['d', LN_AUDIT_DOMAIN],
+      // Key the d-tag by the hold id: a constant d-tag would make later
+      // audit events overwrite earlier ones on replaceable kinds, silently
+      // losing the audit trail.
+      ['d', `${LN_AUDIT_DOMAIN}|${hold.id}`],
       ['e', hold.witness.disputeId, '', 'root'],
       ['p', hold.witness.pubkey],
       ['status', hold.status],

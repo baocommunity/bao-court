@@ -84,13 +84,33 @@ export const ALPHA_DOUBLE_VOTE = 1.0;
 // ── Amount calculations ──────────────────────────────────────────────────────
 
 /**
+ * Normalize an appeal round for amount math. Round 0 is treated as round 1
+ * (the historical clamp); negative or non-integer rounds are rejected, and
+ * overflow is fail-closed by the callers.
+ */
+function normalizeRound(round: number): number {
+  if (!Number.isSafeInteger(round) || round < 0) {
+    throw new Error('round must be a non-negative integer');
+  }
+  return Math.max(1, round);
+}
+
+/**
  * Dispute bond amount from market volume and appeal round.
  * Bond = max(5% of volume, 10,000 sats); rounds double it (1x, 2x, 4x).
  */
 export function calculateBondAmount(marketVolumeSats: number, round: number): number {
+  const r = normalizeRound(round);
+  if (!Number.isSafeInteger(marketVolumeSats) || marketVolumeSats < 0) {
+    throw new Error('marketVolumeSats must be a non-negative integer');
+  }
   const baseBond = Math.max(Math.floor(marketVolumeSats * 0.05), 10_000);
-  const multiplier = Math.pow(2, Math.max(0, round - 1));
-  return baseBond * multiplier;
+  const multiplier = Math.pow(2, r - 1);
+  const amount = baseBond * multiplier;
+  if (!Number.isSafeInteger(amount)) {
+    throw new Error(`bond amount overflows for round ${round}`);
+  }
+  return amount;
 }
 
 /**
@@ -98,9 +118,17 @@ export function calculateBondAmount(marketVolumeSats: number, round: number): nu
  * Stake = max(2% of volume, 5,000 sats); rounds double it.
  */
 export function calculateJurorStake(marketVolumeSats: number, round: number): number {
+  const r = normalizeRound(round);
+  if (!Number.isSafeInteger(marketVolumeSats) || marketVolumeSats < 0) {
+    throw new Error('marketVolumeSats must be a non-negative integer');
+  }
   const baseStake = Math.max(Math.floor(marketVolumeSats * 0.02), 5_000);
-  const multiplier = Math.pow(2, Math.max(0, round - 1));
-  return baseStake * multiplier;
+  const multiplier = Math.pow(2, r - 1);
+  const amount = baseStake * multiplier;
+  if (!Number.isSafeInteger(amount)) {
+    throw new Error(`stake amount overflows for round ${round}`);
+  }
+  return amount;
 }
 
 /** Total sats at stake: all juror stakes plus the challenger bond. */
@@ -346,7 +374,14 @@ export class EscrowLedger {
   private readonly depositsByKey = new Map<string, EscrowDeposit>();
 
   constructor(initial: readonly EscrowDeposit[] = []) {
-    for (const d of initial) this.depositsByKey.set(d.id, d);
+    const seen = new Set<string>();
+    for (const d of initial) {
+      if (seen.has(d.id)) {
+        throw new Error(`EscrowLedger: duplicate deposit id ${d.id} in snapshot`);
+      }
+      seen.add(d.id);
+      this.depositsByKey.set(d.id, d);
+    }
   }
 
   get(id: string): EscrowDeposit | undefined {
@@ -386,32 +421,35 @@ export class EscrowLedger {
    * Lock a pending deposit once ownership + rail proof are accepted.
    * `proofOk` is the host's verdict (verifyBond + verifyBondOwnershipProof +
    * rail receipt); the ledger only records terminal truth.
+   *
+   * `now` (unix seconds) is host-injected for deterministic snapshots;
+   * defaults to the wall clock for backward compatibility.
    */
-  lock(id: string, proofOk: boolean, resolvedAt = Date.now()): EscrowDeposit {
+  lock(id: string, proofOk: boolean, now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
     if (d.status !== 'pending') throw new Error(`EscrowLedger: cannot lock ${d.status} deposit ${id}`);
     const next: EscrowDeposit = proofOk
       ? { ...d, status: 'locked' }
-      : { ...d, status: 'failed', resolvedAt };
+      : { ...d, status: 'failed', resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
   }
 
   /** Return a locked deposit in full (coherent juror / upheld bond). */
-  returnDeposit(id: string, reason: EscrowReason = 'coherent'): EscrowDeposit {
+  returnDeposit(id: string, reason: EscrowReason = 'coherent', now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
     if (d.status !== 'locked') throw new Error(`EscrowLedger: cannot return ${d.status} deposit ${id}`);
-    const next: EscrowDeposit = { ...d, status: 'returned', reason, resolvedAt: Date.now() };
+    const next: EscrowDeposit = { ...d, status: 'returned', reason, resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
   }
 
   /** Slash a locked deposit (incoherent 50%, non-reveal/double-vote 100%). */
-  slash(id: string, reason: 'incoherent' | 'non_reveal' | 'double_vote'): EscrowDeposit {
+  slash(id: string, reason: 'incoherent' | 'non_reveal' | 'double_vote', now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
     if (d.status !== 'locked') throw new Error(`EscrowLedger: cannot slash ${d.status} deposit ${id}`);
     const status: EscrowStatus = reason === 'incoherent' ? 'slashed_50' : 'slashed_100';
-    const next: EscrowDeposit = { ...d, status, reason, resolvedAt: Date.now() };
+    const next: EscrowDeposit = { ...d, status, reason, resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
   }
@@ -421,21 +459,21 @@ export class EscrowLedger {
    * to the slashed pool). Semantic status is `slashed_100` with reason
    * `bond_lost`, distinct from a juror's non-reveal slash.
    */
-  forfeitBond(id: string): EscrowDeposit {
+  forfeitBond(id: string, now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
     if (d.status !== 'locked') throw new Error(`EscrowLedger: cannot forfeit ${d.status} bond ${id}`);
-    const next: EscrowDeposit = { ...d, status: 'slashed_100', reason: 'bond_lost', resolvedAt: Date.now() };
+    const next: EscrowDeposit = { ...d, status: 'slashed_100', reason: 'bond_lost', resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
   }
 
   /** Mark a slashed deposit as redistributed (funds moved to coherent pool). */
-  redistribute(id: string): EscrowDeposit {
+  redistribute(id: string, now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
     if (d.status !== 'slashed_50' && d.status !== 'slashed_100') {
       throw new Error(`EscrowLedger: cannot redistribute ${d.status} deposit ${id}`);
     }
-    const next: EscrowDeposit = { ...d, status: 'redistributed', resolvedAt: Date.now() };
+    const next: EscrowDeposit = { ...d, status: 'redistributed', resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
   }

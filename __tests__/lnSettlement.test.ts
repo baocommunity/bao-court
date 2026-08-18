@@ -88,6 +88,22 @@ describe('LnHoldLedger', () => {
     expect(held.heldAt).toBe(1_900_000_000);
   });
 
+  it('works with the default wall clock (unix seconds, not milliseconds)', () => {
+    // Regression: the defaults used Date.now() (ms) against expiresAt
+    // (unix seconds), so a default-clock hold always looked already expired
+    // and a default-clock decide always threw. The ledger must use seconds.
+    const ledger = new LnHoldLedger();
+    const rec = ledger.offer(construction({
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    }));
+    const held = ledger.hold(rec.id);
+    expect(held.status).toBe('held');
+    expect(held.heldAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+    const settled = ledger.decide(rec.id, 'settle');
+    expect(settled.status).toBe('settled');
+    expect(settled.resolvedAt).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+  });
+
   it('rejects holding after expiry', () => {
     const ledger = new LnHoldLedger();
     const rec = ledger.offer(construction());
