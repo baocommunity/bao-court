@@ -134,10 +134,12 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
-    "simulate:court": "tsx scripts/simulateCourt.ts"
+    "simulate:court": "tsx scripts/simulateCourt.ts",
+    "preview": "vitest --ui --api.host 0.0.0.0 --api.port ${PORT:-4173} --open false"
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
+    "@vitest/ui": "^4.1.2",
     "tsx": "^4.23.12",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"

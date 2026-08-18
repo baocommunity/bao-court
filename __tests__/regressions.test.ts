@@ -33,7 +33,11 @@ import {
   parseFrostRevealEvent,
 } from '../events';
 import { parseEncryptedShareEvent } from '../dkgMessages';
+import { hashDisputeVerdict } from '../courtVoteMachine';
+import { deriveSimulatedRevealEventId } from '../dispute';
 import { selectJury, verifyJurySelection } from '../selection';
+import { createBondOwnershipChallenge } from '../escrow';
+import { deriveLnPreimage } from '../lnSettlement';
 import { IndependentDkgSession } from '../independentDkg';
 import type { FrostAttestation, JurorProfile, SelectedJuror } from '../types';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
@@ -269,11 +273,21 @@ describe('regression: attestation validator consistency', () => {
       threshold: 2,
       jurors: [makeJuror(1), makeJuror(2)],
     });
+    // Dispute attestations must bind the verdict commitment (the tally).
+    const supportingEventIds = [1, 2].map((idx) =>
+      deriveSimulatedRevealEventId(idx, 'YES', 'salt-' + idx),
+    );
+    const verdictHash = hashDisputeVerdict({
+      disputeId: 'a'.repeat(64),
+      outcome: 'YES',
+      supportingEventIds,
+    });
     const attestation: FrostAttestation = runNormalSigningRound({
       marketId: 'val-market',
       outcome: 'YES',
       round: 1,
       disputeEventId: 'a'.repeat(64),
+      verdictHash,
       dkg: record,
       shares,
       nonceGuard: new InMemoryNonceGuard(),
@@ -574,5 +588,46 @@ describe('regression: IndependentDkgSession roster binding', () => {
           jurors,
         }),
     ).toThrow('myIdx');
+  });
+});
+
+// ── Canonical hashing: delimiter-free field encoding (2026-08-18 audit) ─────
+// Under the old delimiter-joined encoding, a field value containing the
+// delimiter aliased the next field: two DISTINCT tuples hashed to the same
+// digest. The canonical length-prefixed encoding (CanonicalWriter) must
+// separate every tuple. Each test below pins a pair that previously
+// collided.
+
+describe('canonical hashing ambiguity regressions', () => {
+  it('buildAttestationMessage separates marketId/outcome that alias under |', () => {
+    // Old: 'm|YES|1|1' === 'm|YES|1|1' — marketId 'm|YES' + outcome '1'
+    // aliased marketId 'm' + outcome 'YES|1'.
+    const a = buildAttestationMessage('m|YES', '1', 1);
+    const b = buildAttestationMessage('m', 'YES|1', 1);
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('createBondOwnershipChallenge separates disputeId/jurorPubkey that alias under |', () => {
+    const base = { bondTxid: 'aa'.repeat(32), bondVout: 0, challengeNonce: 'n' };
+    // Old: disputeId 'd|j' + pubkey 'n' aliased disputeId 'd' + pubkey 'j|n'.
+    const a = createBondOwnershipChallenge({ ...base, disputeId: 'd|j', jurorPubkey: 'n' });
+    const b = createBondOwnershipChallenge({ ...base, disputeId: 'd', jurorPubkey: 'j|n' });
+    expect(a).not.toBe(b);
+  });
+
+  it('deriveLnPreimage separates disputeId/role that alias under |', () => {
+    const w = {
+      disputeId: 'd',
+      role: 'juror',
+      pubkey: 'j1',
+      outcome: 'YES',
+      attestationDigest: 'cc'.repeat(32),
+      round: 1,
+    };
+    // Old: disputeId 'd|j' + role 'r' aliased disputeId 'd' + role 'j|r'.
+    const a = deriveLnPreimage({ ...w, disputeId: 'd|j', role: 'r' });
+    const b = deriveLnPreimage({ ...w, disputeId: 'd', role: 'j|r' });
+    expect(a).not.toBe(b);
   });
 });

@@ -6,8 +6,32 @@ import { describe, it, expect, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { finalizeEvent } from 'nostr-tools/pure';
 import { FrostAppealWatcher } from '../appealWatcher';
-import { generateFrostKeys, runDisputeOverrideSigning, buildDisputeAttestationEvent } from '../index';
+import {
+  generateFrostKeys,
+  runDisputeOverrideSigning,
+  buildDisputeAttestationEvent,
+  hashDisputeVerdict,
+  deriveSimulatedRevealEventId,
+} from '../index';
 import type { SelectedJuror, StakeCommitment } from '../types';
+
+/**
+ * Derive the verdict commitment exactly like the coordinator does at tally
+ * time (synthetic reveal event ids for the in-process ceremony), so these
+ * tests exercise the real evidence-based flow end to end.
+ */
+function makeVerdictCommitment(disputeId: string, outcome: string): {
+  verdictHash: string;
+  supportingEventIds: string[];
+} {
+  const supportingEventIds = [1, 2, 3].map((idx) =>
+    deriveSimulatedRevealEventId(idx, outcome, `salt-${idx}`),
+  );
+  return {
+    verdictHash: hashDisputeVerdict({ disputeId, outcome, supportingEventIds }),
+    supportingEventIds,
+  };
+}
 
 function makeStakeCommitment(override?: Partial<StakeCommitment>): StakeCommitment {
   return {
@@ -51,7 +75,14 @@ describe('FrostAppealWatcher', () => {
       proposedOutcome: 'NO',
     };
 
-    const attestation = runDisputeOverrideSigning({ dispute, dkg: record, shares: shares.slice(0, 3) });
+    const { verdictHash, supportingEventIds } = makeVerdictCommitment(dispute.disputeId, dispute.proposedOutcome);
+    const attestation = runDisputeOverrideSigning({
+      dispute,
+      dkg: record,
+      shares: shares.slice(0, 3),
+      verdictHash,
+      supportingEventIds,
+    });
     const template = buildDisputeAttestationEvent({ attestation, marketEventId: marketId });
     const event = finalizeEvent(template, randomBytes(32));
 
@@ -88,7 +119,14 @@ describe('FrostAppealWatcher', () => {
       proposedOutcome: 'YES',
     };
 
-    const attestation = runDisputeOverrideSigning({ dispute, dkg: record, shares: shares.slice(0, 3) });
+    const { verdictHash, supportingEventIds } = makeVerdictCommitment(dispute.disputeId, dispute.proposedOutcome);
+    const attestation = runDisputeOverrideSigning({
+      dispute,
+      dkg: record,
+      shares: shares.slice(0, 3),
+      verdictHash,
+      supportingEventIds,
+    });
     const template = buildDisputeAttestationEvent({ attestation, marketEventId: marketId });
     const event = finalizeEvent(template, randomBytes(32));
 
@@ -120,7 +158,14 @@ describe('FrostAppealWatcher', () => {
       proposedOutcome: 'NO',
     };
 
-    const attestation = runDisputeOverrideSigning({ dispute, dkg: record, shares: shares.slice(0, 3) });
+    const { verdictHash, supportingEventIds } = makeVerdictCommitment(dispute.disputeId, dispute.proposedOutcome);
+    const attestation = runDisputeOverrideSigning({
+      dispute,
+      dkg: record,
+      shares: shares.slice(0, 3),
+      verdictHash,
+      supportingEventIds,
+    });
     const template = buildDisputeAttestationEvent({ attestation, marketEventId: marketId });
     const event = finalizeEvent(template, randomBytes(32));
 
@@ -154,7 +199,14 @@ describe('FrostAppealWatcher', () => {
       proposedOutcome: 'NO',
     };
 
-    const attestation = runDisputeOverrideSigning({ dispute, dkg: record, shares: shares.slice(0, 3) });
+    const { verdictHash, supportingEventIds } = makeVerdictCommitment(dispute.disputeId, dispute.proposedOutcome);
+    const attestation = runDisputeOverrideSigning({
+      dispute,
+      dkg: record,
+      shares: shares.slice(0, 3),
+      verdictHash,
+      supportingEventIds,
+    });
     const template = buildDisputeAttestationEvent({ attestation, marketEventId: marketId });
     const event = finalizeEvent(template, randomBytes(32));
 
@@ -184,7 +236,14 @@ describe('FrostAppealWatcher', () => {
       proposedOutcome: 'YES',
     };
 
-    const attestation = runDisputeOverrideSigning({ dispute, dkg: record, shares: shares.slice(0, 3) });
+    const { verdictHash, supportingEventIds } = makeVerdictCommitment(dispute.disputeId, dispute.proposedOutcome);
+    const attestation = runDisputeOverrideSigning({
+      dispute,
+      dkg: record,
+      shares: shares.slice(0, 3),
+      verdictHash,
+      supportingEventIds,
+    });
     const template = buildDisputeAttestationEvent({ attestation, marketEventId: marketId });
     const event = finalizeEvent(template, randomBytes(32));
 

@@ -168,3 +168,30 @@ describe('assertScriptSane', () => {
     expect(() => assertScriptSane('00'.repeat(10_001))).toThrow(/sane/);
   });
 });
+
+// ── Locktime push encoding ──────────────────────────────────────────────────
+
+describe('locktime push encoding', () => {
+  it('encodes time-based locktimes (>= 0x80000000) as a positive 5-byte push', () => {
+    // Script numbers are SIGNED little-endian: a 4-byte push of 0x80000001
+    // would be negative and OP_CHECKLOCKTIMEVERIFY would always fail. The
+    // 5-byte form (leading 0x00) keeps the 32-bit value positive.
+    const { refundLeaf } = buildTaprootLeaves({
+      winnerXOnly: X_A,
+      oracleXOnly: X_B,
+      refundLocktime: 0x80000001,
+    });
+    // 0x05 <5-byte LE 00 01 00 00 80> OP_CLTV OP_DROP ...
+    expect(refundLeaf.slice(0, 16)).toBe('050001000080b175');
+  });
+
+  it('keeps 4-byte encoding for block-height locktimes', () => {
+    const { refundLeaf } = buildTaprootLeaves({
+      winnerXOnly: X_A,
+      oracleXOnly: X_B,
+      refundLocktime: 1_000_000,
+    });
+    // 0x04 <4-byte LE 40 42 0f 00> OP_CLTV OP_DROP ...
+    expect(refundLeaf.slice(0, 14)).toBe('0440420f00b175');
+  });
+});

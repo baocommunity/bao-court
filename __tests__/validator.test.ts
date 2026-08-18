@@ -40,15 +40,20 @@ describe('validateAttestationEvent', () => {
     jurors,
   });
 
+  // Dispute attestations must certify the TALLY that produced the outcome.
+  const VERDICT_HASH = '11'.repeat(32);
+
   function buildValidEvent() {
     const attestation = runNormalSigningRound({
       marketId: 'demo-market',
       outcome: 'YES',
       round: 1,
       disputeEventId: 'd'.repeat(64),
+      verdictHash: VERDICT_HASH,
       dkg: record,
       shares,
     });
+    expect(attestation.verdictHash).toBe(VERDICT_HASH);
 
     return finalizeEvent({
       kind: BAO_COURT_ATTESTATION_KIND,
@@ -63,6 +68,7 @@ describe('validateAttestationEvent', () => {
         ['sig', attestation.signature],
         ['ver', 'FROST-BIP340-v1'],
         ['dispute', 'd'.repeat(64)],
+        ['verdict', attestation.verdictHash!],
       ],
       content: JSON.stringify({
         marketId: 'demo-market',
@@ -70,6 +76,7 @@ describe('validateAttestationEvent', () => {
         round: '1',
         message: attestation.message,
         disputeEventId: 'd'.repeat(64),
+        verdictHash: attestation.verdictHash,
       }),
     }, publisherSecret);
   }
@@ -173,6 +180,67 @@ describe('validateAttestationEvent', () => {
 
     expect(validateAttestationEvent(event, attestation.groupPubkey).valid).toBe(true);
     expect(validateAttestationEvent(event, '0'.repeat(64)).valid).toBe(false);
+  });
+
+  it('rejects a dispute attestation that does not bind the verdict', () => {
+    // A kind-39007 attestation WITHOUT a verdict commitment certifies an
+    // outcome but not the tally that produced it — structurally invalid.
+    const attestation = runNormalSigningRound({
+      marketId: 'demo-market',
+      outcome: 'YES',
+      round: 1,
+      disputeEventId: 'd'.repeat(64),
+      dkg: record,
+      shares,
+    });
+    const event = finalizeEvent({
+      kind: BAO_COURT_ATTESTATION_KIND,
+      created_at: 1,
+      tags: [
+        ['e', 'm'.repeat(64), '', 'root'],
+        ['m', 'demo-market'],
+        ['p', attestation.groupPubkey],
+        ['outcome', attestation.outcome],
+        ['round', '1'],
+        ['nonce', attestation.pubNonce],
+        ['sig', attestation.signature],
+        ['ver', 'FROST-BIP340-v1'],
+        ['dispute', 'd'.repeat(64)],
+      ],
+      content: JSON.stringify({
+        marketId: 'demo-market',
+        outcome: 'YES',
+        round: '1',
+        message: attestation.message,
+        disputeEventId: 'd'.repeat(64),
+      }),
+    }, publisherSecret);
+
+    const result = validateAttestationEvent(event);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/verdict hash/i);
+  });
+
+  it('rejects a verdict hash substituted after signing without a new FROST signature', () => {
+    // The court signs one verdict commitment; relabeling the event to a
+    // different commitment must fail the message-binding check.
+    const original = buildValidEvent();
+    const otherVerdict = '22'.repeat(32);
+    const tags = original.tags.map((tag) =>
+      tag[0] === 'verdict' ? ['verdict', otherVerdict] : [...tag],
+    );
+    const content = JSON.stringify({
+      ...JSON.parse(original.content),
+      verdictHash: otherVerdict,
+    });
+    const tampered = finalizeEvent(
+      { kind: original.kind, created_at: original.created_at, tags, content },
+      publisherSecret,
+    );
+
+    const result = validateAttestationEvent(tampered);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/verdict/i);
   });
 
   it('verifyRawSignature verifies a plain schnorr signature', () => {

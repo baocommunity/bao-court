@@ -35,6 +35,11 @@ export interface IndependentSigningOptions {
   readonly round?: number | string;
   readonly disputeEventId?: string;
   /**
+   * Dispute verdict commitment bound into the signed message (kind-39007
+   * attestations) — see {@link buildAttestationMessage}.
+   */
+  readonly verdictHash?: string;
+  /**
    * Optional persistent nonce-use guard. If omitted, an in-memory guard is
    * used, which prevents nonce reuse for the lifetime of this session.
    */
@@ -114,6 +119,7 @@ export class IndependentSigningSession {
       this.outcome,
       this.round,
       this.disputeEventId,
+      options.verdictHash,
     );
     this.nonceGuard = options.nonceGuard ?? createDefaultNonceGuard(`bao-frost-used-nonces|${this.disputeId}`);
 

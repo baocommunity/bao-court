@@ -18,6 +18,7 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { schnorr } from '@noble/curves/secp256k1.js';
+import { CanonicalWriter } from './courtSession';
 
 // ── Escrow lifecycle ─────────────────────────────────────────────────────────
 
@@ -282,17 +283,21 @@ export interface BondOwnershipChallengeInput {
  * Deterministic challenge message the depositor must sign with the private
  * key of the bond UTXO. Binding txid, vout, dispute, and juror prevents
  * replay of a proof across disputes or candidates.
+ *
+ * Uses the Court's canonical length-prefixed encoding (see
+ * {@link CanonicalWriter}) under the {@link BOND_OWNERSHIP_DOMAIN} tag.
+ * Delimiter-joined concatenation would let a host-supplied `challengeNonce`
+ * (or dispute id) containing the delimiter alias another field.
  */
 export function createBondOwnershipChallenge(input: BondOwnershipChallengeInput): string {
-  const payload = [
-    BOND_OWNERSHIP_DOMAIN,
-    input.bondTxid.toLowerCase(),
-    String(input.bondVout),
-    input.disputeId,
-    input.jurorPubkey,
-    input.challengeNonce,
-  ].join('|');
-  return bytesToHex(sha256(new TextEncoder().encode(payload)));
+  const writer = new CanonicalWriter();
+  writer.text(BOND_OWNERSHIP_DOMAIN);
+  writer.text(input.bondTxid.toLowerCase());
+  writer.text(String(input.bondVout));
+  writer.text(input.disputeId);
+  writer.text(input.jurorPubkey);
+  writer.text(input.challengeNonce);
+  return bytesToHex(sha256(writer.finish()));
 }
 
 /**
