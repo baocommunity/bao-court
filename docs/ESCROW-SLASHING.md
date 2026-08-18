@@ -1,6 +1,6 @@
 # BAO Court — Escrow Lifecycle & Slashing
 
-**Version:** 0.4.0 (tracks `@bao/court` v0.4.0 — this repository; module introduced in v0.2.3)
+**Version:** 0.5.2 (tracks `@bao/court` v0.5.2 — this repository; module introduced in v0.2.3)
 **Status:** Implemented in `escrow.ts` (this package); rail execution remains
 host-side per ADR-001 (hybrid dual-panel escrow).
 **Scope:** Bond ownership proofs, deterministic escrow ledger, slashing and
@@ -160,6 +160,6 @@ return/slash/forfeit/redistribute transitions, double-transition rejection,
 snapshot round-trip, `applyPlan` end-to-end for upheld and rejected disputes).
 
 Suite at v0.2.3 release: **520/520** in-package tests pass, `tsc --noEmit`
-clean. Current suite (v0.4.0, with settlement rails, simulation harness, and
+clean. Current suite (v0.5.x, with settlement rails, simulation harness, and
 the appeal coordinator/watcher port): **600/600** (582 + 18 regressions from
 the 2026-08-18 review, see `docs/FIXES-2026-08-18.md`).

@@ -1,6 +1,6 @@
 # BAO Court: A Just-in-Time FROST Threshold Oracle for Prediction-Market Disputes
 
-**Version:** 0.4.0 (tracks `@bao/court` v0.4.0 — this repository)
+**Version:** 0.5.2 (tracks `@bao/court` v0.5.2 — this repository)
 **Status:** Cryptographic, escrow, and settlement-rail protocol layers complete
 and test-covered (600/600 in-package, `tsc` clean); adversarially reviewed
 (v0.2.1 hardening; 2026-08-18 hardening); rail
