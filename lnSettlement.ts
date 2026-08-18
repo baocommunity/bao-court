@@ -23,7 +23,8 @@
  */
 
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils.js';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { CanonicalWriter } from './courtSession';
 
 // ── Preimage / payment-hash derivation ───────────────────────────────────────
 
@@ -56,16 +57,18 @@ export interface LnPreimageWitness {
  * downstream (host verifies the attestation before releasing).
  */
 export function deriveLnPreimage(w: LnPreimageWitness): string {
-  const payload = [
-    LN_PREIMAGE_DOMAIN,
-    w.disputeId,
-    w.role,
-    w.pubkey,
-    w.outcome,
-    w.attestationDigest,
-    String(w.round),
-  ].join('|');
-  return bytesToHex(sha256(utf8ToBytes(payload)));
+  // Canonical length-prefixed encoding (see CanonicalWriter): an attacker-
+  // controlled dispute id / role / outcome containing the delimiter must not
+  // be able to alias another field and mint a colliding preimage.
+  const writer = new CanonicalWriter();
+  writer.text(LN_PREIMAGE_DOMAIN);
+  writer.text(w.disputeId);
+  writer.text(w.role);
+  writer.text(w.pubkey);
+  writer.text(w.outcome);
+  writer.text(w.attestationDigest);
+  writer.text(String(w.round));
+  return bytesToHex(sha256(writer.finish()));
 }
 
 /** Payment hash = SHA-256 of the RAW preimage bytes (BOLT-11 semantics). */

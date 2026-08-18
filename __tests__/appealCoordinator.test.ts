@@ -11,6 +11,8 @@ import {
   buildDisputeEvent,
   generateFrostKeys,
   runNormalSigningRound,
+  hashDisputeVerdict,
+  deriveSimulatedRevealEventId,
   type FrostAppealState,
   type JurorProfile,
   type StakeCommitment,
@@ -312,11 +314,18 @@ describe('FrostAppealCoordinator', () => {
         { ...makeJuror(), idx: 2, priority: 2 },
       ],
     });
+    // The attestation must certify the TALLY that produced the outcome —
+    // settleAppeal rejects dispute attestations without a verdict commitment.
+    const supportingEventIds = [1, 2].map((idx) =>
+      deriveSimulatedRevealEventId(idx, 'NO', 'salt-' + idx),
+    );
+    const verdictHash = hashDisputeVerdict({ disputeId, outcome: 'NO', supportingEventIds });
     const attestation = runNormalSigningRound({
       marketId,
       outcome: 'NO',
       round: 1,
       disputeEventId: disputeId,
+      verdictHash,
       dkg: record,
       shares,
     });
@@ -435,6 +444,65 @@ describe('FrostAppealCoordinator', () => {
     expect(releaseEvent).toBeDefined();
     expect(Array.isArray(releaseEvent!.data.backupPubkeys)).toBe(true);
     expect(releaseEvent!.data.backupPubkeys).toHaveLength(2);
+
+    coordinator.stop();
+    off();
+  });
+
+  // Regression (2026-08-18 flow review): the signing round must attest the
+  // TALLY WINNER, never the challenger's proposed outcome. The demo's uniform
+  // vote simulation masks this, so the test injects an appeal already in the
+  // signing phase whose verdictOutcome differs from proposedOutcome.
+  it('signs the tally verdict, not the challenger proposed outcome', async () => {
+    const signerPrivkey = randomBytes(32);
+    const coordinator = createFrostAppealCoordinator({
+      relayUrls: [],
+      environment: 'test',
+      timings: TEST_APPEAL_TIMINGS,
+      signer: async (event) => finalizeEvent(event, signerPrivkey) as unknown as ReturnType<typeof finalizeEvent>,
+    });
+
+    const marketId = randomBytes(32).toString('hex');
+    const disputeId = randomBytes(32).toString('hex');
+    const selected = [0, 1, 2].map((i) => ({ ...makeJuror(), idx: i + 1, priority: i + 1 }));
+    const keygen = generateFrostKeys({ marketId, threshold: 2, jurors: selected });
+
+    const appeal: FrostAppealState = {
+      disputeId,
+      marketId,
+      disputeCase: {
+        disputeId,
+        marketId,
+        challengerPubkey: randomBytes(32).toString('hex'),
+        respondentPubkey: randomBytes(32).toString('hex'),
+        evidenceHashes: [],
+        proposedOutcome: 'YES', // the challenger's claim
+      },
+      resolutionTimestamp: Math.floor(Date.now() / 1000) - 10_000,
+      phase: 'signing',
+      candidacies: new Map(),
+      voteCommits: new Map(),
+      voteReveals: new Map(),
+      selectionAttempts: 0,
+      excludedSelectedPubkeys: [],
+      reselectionDeadline: Math.floor(Date.now() / 1000) + 10_000,
+      dkgRecord: keygen.record,
+      shares: keygen.shares.map((s: { idx: number; seckey: string }) => ({ idx: s.idx, seckey: s.seckey })),
+      verdictOutcome: 'NO', // the tally winner — differs from proposedOutcome
+    };
+
+    coordinator.addAppeal(appeal);
+
+    const events: string[] = [];
+    const off = coordinator.onEvent((ev) => events.push(ev.type));
+    await coordinator.tick(); // signing -> attestation_published
+    await coordinator.tick(); // attestation_published -> settled
+
+    const active = coordinator.getActiveAppeals();
+    expect(active).toHaveLength(1);
+    expect(active[0].attestation?.outcome).toBe('NO');
+    expect(active[0].phase).toBe('settled');
+    expect(events).toContain('attestation_published');
 
     coordinator.stop();
     off();

@@ -51,7 +51,7 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
 ## Verify before tagging
 
 ```bash
-npm test                 # vitest — 582/582 green at v0.4.0
+npm test                 # vitest — 594/594 green (v0.4.0 + 2026-08-18 hardening)
 npm run typecheck        # tsc --noEmit
 npm run typecheck:scripts
 npm run simulate:court   # end-to-end whole-court deterministic sim (needs tsx)

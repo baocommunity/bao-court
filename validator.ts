@@ -66,6 +66,7 @@ export function validateAttestationEvent(
   const disputeEventId = uniqueTag(event, 'dispute');
   const marketId = uniqueTag(event, 'm');
   const round = uniqueTag(event, 'round');
+  const verdictHash = uniqueTag(event, 'verdict');
 
   if (!pubkey || !signature || !nonce || !outcome || !marketId || !round) {
     return { valid: false, pubkey: '', error: 'Missing required tags' };
@@ -87,6 +88,13 @@ export function validateAttestationEvent(
   // Kind 39007 attestations are dispute-scoped and must carry a dispute tag.
   if (event.kind === BAO_COURT_ATTESTATION_KIND && !disputeEventId) {
     return { valid: false, pubkey, error: 'Missing dispute tag on dispute attestation' };
+  }
+  // Kind 39007 attestations must bind the dispute verdict (the tally): the
+  // FROST signature certifies the outcome WON the vote, not just the outcome.
+  if (event.kind === BAO_COURT_ATTESTATION_KIND) {
+    if (!verdictHash || !isHex64(verdictHash)) {
+      return { valid: false, pubkey, error: 'Missing or invalid verdict hash on dispute attestation' };
+    }
   }
 
   if (context.expectedGroupPubkey && pubkey !== context.expectedGroupPubkey) {
@@ -111,6 +119,7 @@ export function validateAttestationEvent(
     const message = String(content.message || '');
     const contentOutcome = String(content.outcome ?? '');
     const contentDisputeId = typeof content.disputeEventId === 'string' ? content.disputeEventId : undefined;
+    const contentVerdictHash = typeof content.verdictHash === 'string' ? content.verdictHash : undefined;
     const contentMarketId = String(content.marketId ?? '');
     const contentRound = String(content.round ?? '');
 
@@ -138,7 +147,16 @@ export function validateAttestationEvent(
     if (marketId !== contentMarketId || round !== contentRound) {
       return { valid: false, pubkey, error: 'Market or round tag does not match content' };
     }
-    const expectedMessage = buildAttestationMessage(marketId, outcome, round, disputeEventId ?? undefined);
+    if ((verdictHash ?? undefined) !== contentVerdictHash) {
+      return { valid: false, pubkey, error: 'Verdict tag does not match content verdict hash' };
+    }
+    const expectedMessage = buildAttestationMessage(
+      marketId,
+      outcome,
+      round,
+      disputeEventId ?? undefined,
+      verdictHash ?? undefined,
+    );
     if (message !== expectedMessage) {
       return { valid: false, pubkey, error: 'Attestation message does not bind verdict fields' };
     }

@@ -10,6 +10,7 @@ import {
   p2wshProgram,
   p2wshAddress,
   taprootAddress,
+  taprootProgram,
   tapMerkleRoot,
   BAO_SIGNET,
 } from '../liquidEscrow';
@@ -161,3 +162,27 @@ describe('court → spend branch integration', () => {
 
 // keep sha256/hexToBytes imports honest (avoid unused warnings)
 void sha256; void hexToBytes; void bytesToHex;
+
+// ── Official BIP-341 wallet vectors (bitcoin core bip341_wallet_vectors.json) ─
+// Pins the tagged-hash tweak and merkle tree: the old untagged SHA-256
+// construction produced output keys/roots that consensus validation would not
+// recompute from the control block — every script-path spend would fail.
+
+describe('BIP-341 official wallet vectors', () => {
+  it('matches vector 0 — key-only taproot (no script tree)', () => {
+    const internal = 'd6889cb081036e0faefa3a35157ad71086b123b2b144b649798b494c300a961d';
+    const program = taprootProgram(internal, undefined);
+    expect(bytesToHex(program)).toBe('53a1f6e454df1aa2776a2814a721372d6258050de330b3c6d10ee8f4e0dda343');
+    // The output key must NOT be the raw internal key (BIP-341 always tweaks).
+    expect(bytesToHex(program)).not.toBe(internal);
+  });
+
+  it('matches vector 1 — single script leaf (version 0xc0)', () => {
+    const internal = '187791b6f712a8ea41c8ecdd0ee77fab3e85263b37e1ec18a3651926b3a6cf27';
+    const script = '20d85a959b0290bf19bb89ed43c916be835475d013da4b362117393e25a48229b8ac';
+    const root = tapMerkleRoot([script]);
+    expect(root).toBe('5b75adecf53548f3ec6ad7d78383bf84cc57b55a3127c72b9a2481752dd88b21');
+    const program = taprootProgram(internal, root);
+    expect(bytesToHex(program)).toBe('147c9c57132f6e7ecddba9800bb0c4449251c92a1e60371ee77557b6620f3ea3');
+  });
+});

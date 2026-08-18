@@ -199,4 +199,24 @@ describe('Court vote state machine', () => {
       }),
     ).toThrow(/outside the certified roster/);
   });
+
+  // Regression (2026-08-18 review): after close_reveals runs at/after the
+  // reveal deadline, the machine is one step from finalization — a clock tick
+  // must NOT expire it (the old tick handler expired every non-terminal phase
+  // once the deadline passed, bricking the ceremony before finalize_tally).
+  it('does not expire reveal_closed by tick before finalization', () => {
+    let state = initial();
+    state = reduceCourtVoteMachine(state, commitFor(1, 'yes'));
+    state = toRevealOpen(state);
+    state = reduceCourtVoteMachine(state, revealFor(1, 'yes'));
+    state = reduceCourtVoteMachine(state, { type: 'close_reveals', now: REVEAL_DEADLINE });
+    expect(state.phase).toBe('reveal_closed');
+
+    state = reduceCourtVoteMachine(state, { type: 'tick', now: REVEAL_DEADLINE + 1 });
+    expect(state.phase).toBe('reveal_closed');
+
+    state = reduceCourtVoteMachine(state, { type: 'finalize_tally', now: REVEAL_DEADLINE + 1 });
+    expect(state.phase).toBe('tally_final');
+    expect(state.verdict?.outcome).toBe('yes');
+  });
 });

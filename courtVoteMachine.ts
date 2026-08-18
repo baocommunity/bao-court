@@ -20,6 +20,7 @@ import { CanonicalWriter } from './courtSession';
 
 export const COURT_VOTE_COMMIT_DOMAIN = 'BAO-Court/VoteCommit/v1';
 export const COURT_VERDICT_DOMAIN = 'BAO-Court/Verdict/v1';
+export const COURT_DISPUTE_VERDICT_DOMAIN = 'BAO-Court/DisputeVerdict/v1';
 
 export type CourtVotePhase =
   | 'commit_open'
@@ -151,6 +152,33 @@ function digestDomain(domain: string, encoded: Uint8Array): string {
   return bytesToHex(sha256(input));
 }
 
+/**
+ * Canonical dispute verdict commitment — the statement a kind-39007
+ * attestation binds into its signed message.
+ *
+ * `H(DisputeVerdict/v1, disputeId, outcome, count, sorted reveal event ids)`
+ * over canonical length-prefixed fields. Order-independent (event ids are
+ * sorted before hashing) and unambiguous, so every juror, coordinator, and
+ * observer derives the same commitment from the same public vote ledger. Any
+ * observer can recompute it from the attestation's supporting `e` tags and
+ * verify the court really attested the tally winner.
+ */
+export function hashDisputeVerdict(params: {
+  readonly disputeId: string;
+  readonly outcome: string;
+  readonly supportingEventIds: readonly string[];
+}): string {
+  const writer = new CanonicalWriter();
+  writer.hex(params.disputeId);
+  writer.text(params.outcome);
+  const sorted = [...params.supportingEventIds].sort();
+  writer.u32(sorted.length);
+  for (const id of sorted) {
+    writer.hex(id);
+  }
+  return digestDomain(COURT_DISPUTE_VERDICT_DOMAIN, writer.finish());
+}
+
 function assertNow(now: number): void {
   if (!Number.isSafeInteger(now) || now < 0) {
     throw new CourtVoteTransitionError('now must be a non-negative Unix timestamp');
@@ -238,7 +266,17 @@ export function reduceCourtVoteMachine(
 ): CourtVoteMachineState {
   if (event.type === 'tick') {
     assertNow(event.now);
-    if (TERMINAL_PHASES.has(state.phase) || event.now < state.revealDeadline) return state;
+    // `reveal_closed` means close_reveals already ran at/after the deadline and
+    // finalize_tally remains legal afterwards — a clock tick must not expire a
+    // ceremony that is one step from finalization (mirrors the DKG machine's
+    // exemption of its post-deadline `certified` phase).
+    if (
+      TERMINAL_PHASES.has(state.phase)
+      || state.phase === 'reveal_closed'
+      || event.now < state.revealDeadline
+    ) {
+      return state;
+    }
     return {
       ...state,
       phase: 'expired',

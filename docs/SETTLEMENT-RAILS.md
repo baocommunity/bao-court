@@ -1,6 +1,6 @@
 # BAO Court — Settlement Rails (Panel A: Lightning, Panel B: Liquid)
 
-**Version:** 0.3.0 (implemented; signet execution by hosts)
+**Version:** 0.4.0 (implemented; signet execution by hosts)
 **Status:** Protocol-side settlement implemented and test-covered. Rail
 execution (node access, keys, broadcasting) is HOST-INJECTED per the secrecy
 boundary — this package contains no keys, no node URLs, no credentials.
@@ -28,10 +28,12 @@ ADR-001 Panel A is **social slashing**: Lightning cannot script-enforce a
 penalty, so "slashing" = denial of reward + reputation damage.
 
 - `deriveLnPreimage(witness)` — deterministic 32-byte preimage binding
-  `disputeId | role | pubkey | outcome | attestationDigest | round` under the
-  domain tag `BAO-Court/LnPreimage/v1`. The `attestationDigest` binds the
-  preimage to the court's FROST-signed verdict: a holder cannot claim without
-  a valid attestation.
+  `disputeId ‖ role ‖ pubkey ‖ outcome ‖ attestationDigest ‖ round` under the
+  domain tag `BAO-Court/LnPreimage/v1`, where `‖` is the Court's canonical
+  UTF-8 **length-prefixed** concatenation (`CanonicalWriter`) — no field can
+  alias another even if it contains a delimiter. The `attestationDigest`
+  binds the preimage to the court's FROST-signed verdict: a holder cannot
+  claim without a valid attestation.
 - `paymentHash(preimage)` — **SHA-256 of the raw preimage bytes** (BOLT
   semantics), NOT of its hex string.
 - `LnHoldLedger` — deterministic, serializable state machine:
