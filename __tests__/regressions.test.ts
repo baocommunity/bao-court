@@ -38,7 +38,7 @@ import { deriveSimulatedRevealEventId } from '../dispute';
 import { selectJury, verifyJurySelection } from '../selection';
 import { createBondOwnershipChallenge } from '../escrow';
 import { CanonicalWriter, CourtSessionValidationError } from '../courtSession';
-import { deriveLnPreimage } from '../lnSettlement';
+import { deriveLnPreimage, type LnPreimageWitness } from '../lnSettlement';
 import { IndependentDkgSession } from '../independentDkg';
 import type { FrostAttestation, JurorProfile, SelectedJuror } from '../types';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
@@ -618,7 +618,7 @@ describe('canonical hashing ambiguity regressions', () => {
   });
 
   it('deriveLnPreimage separates disputeId/role that alias under |', () => {
-    const w = {
+    const w: LnPreimageWitness = {
       disputeId: 'd',
       role: 'juror',
       pubkey: 'j1',
@@ -627,8 +627,11 @@ describe('canonical hashing ambiguity regressions', () => {
       round: 1,
     };
     // Old: disputeId 'd|j' + role 'r' aliased disputeId 'd' + role 'j|r'.
-    const a = deriveLnPreimage({ ...w, disputeId: 'd|j', role: 'r' });
-    const b = deriveLnPreimage({ ...w, disputeId: 'd', role: 'j|r' });
+    // The adversarial roles are intentionally outside the LnRole union — the
+    // point is that canonical encoding keeps even type-violating witnesses
+    // unambiguous.
+    const a = deriveLnPreimage({ ...w, disputeId: 'd|j', role: 'r' as LnPreimageWitness['role'] });
+    const b = deriveLnPreimage({ ...w, disputeId: 'd', role: 'j|r' as LnPreimageWitness['role'] });
     expect(a).not.toBe(b);
   });
 });
