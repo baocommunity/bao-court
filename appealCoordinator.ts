@@ -37,7 +37,8 @@ import {
 import { selectJuryWithBackups, deriveSelectionSeed } from './selection';
 import { generateFrostKeys, type KeygenResult, type KeygenParams } from './dkg';
 import { createCommitments, createRevealsAndPartialSigs, aggregateAttestation, createDefaultNonceGuard } from './signing';
-import { hashCommit, tallyVotes } from './dispute';
+import { hashCommit, tallyVotes, deriveSimulatedRevealEventId } from './dispute';
+import { hashDisputeVerdict } from './courtVoteMachine';
 import { verifyBond, type BondVerifier } from './bondVerification';
 import { buildAttestationMessage } from './crypto';
 import { verifyRawSignature } from './validator';
@@ -72,6 +73,20 @@ export interface FrostAppealState {
   shares?: { idx: number; seckey: string }[];
   voteCommits: Map<number, { outcome: string; salt: string }>;
   voteReveals: Map<number, { outcome: string; salt: string }>;
+  /**
+   * The tally winner (the Court's verdict) — the ONLY outcome the signing
+   * round may attest. The challenger's `proposedOutcome` is a claim, not a
+   * decision; signing it instead of the verdict would let the court attest
+   * an outcome that lost the vote.
+   */
+  verdictOutcome?: string;
+  /**
+   * Dispute verdict commitment bound into the signed attestation message
+   * (kind 39007). Computed at tally time and frozen before signing.
+   */
+  verdictHash?: string;
+  /** Supporting reveal event ids of the attested verdict. */
+  verdictSupportingEventIds?: readonly string[];
   attestation?: FrostAttestation;
   /** Number of selection attempts made for this appeal (initial selection = 1). */
   selectionAttempts: number;
@@ -466,6 +481,20 @@ export function createFrostAppealCoordinator(
           };
         });
         const verdict = tallyVotes(votes);
+        appeal.verdictOutcome = verdict.outcome;
+        // Freeze the dispute verdict commitment BEFORE signing. This demo runs
+        // the vote in-process, so supporting reveals have no Nostr event ids;
+        // derive deterministic synthetic ones (production uses the real
+        // kind-39014 reveal event ids — same commitment structure).
+        const supportingEventIds = verdict.supportingVotes.map((v) =>
+          deriveSimulatedRevealEventId(v.idx, v.reveal!.outcome, v.reveal!.salt),
+        );
+        appeal.verdictHash = hashDisputeVerdict({
+          disputeId: appeal.disputeId,
+          outcome: verdict.outcome,
+          supportingEventIds,
+        });
+        appeal.verdictSupportingEventIds = supportingEventIds;
         appeal.phase = 'signing';
         emit('vote_reveals_collected', appeal, {
           verdict: verdict.outcome,
@@ -479,13 +508,18 @@ export function createFrostAppealCoordinator(
         try {
           const signingShares = appeal.shares.slice(0, appeal.dkgRecord.threshold);
           const nonceGuard = createDefaultNonceGuard(`bao-frost-used-nonces|${appeal.disputeId}`);
+          // The court attests the TALLY WINNER — never the challenger's
+          // proposed outcome. `verdictOutcome` is set when the tally runs;
+          // the fallback is defensive only.
+          const outcome = appeal.verdictOutcome ?? appeal.disputeCase.proposedOutcome;
           const commitments = createCommitments(signingShares);
           const reveals = createRevealsAndPartialSigs(
             {
               marketId: appeal.marketId,
-              outcome: appeal.disputeCase.proposedOutcome,
+              outcome,
               round: 1,
               disputeEventId: appeal.disputeId,
+              verdictHash: appeal.verdictHash,
               dkg: appeal.dkgRecord,
               shares: signingShares,
               nonceGuard,
@@ -495,9 +529,10 @@ export function createFrostAppealCoordinator(
           const attestation = aggregateAttestation(
             {
               marketId: appeal.marketId,
-              outcome: appeal.disputeCase.proposedOutcome,
+              outcome,
               round: 1,
               disputeEventId: appeal.disputeId,
+              verdictHash: appeal.verdictHash,
               dkg: appeal.dkgRecord,
               shares: signingShares,
               nonceGuard,
@@ -509,6 +544,8 @@ export function createFrostAppealCoordinator(
             ...attestation,
             kind: 39007,
             disputeEventId: appeal.disputeId,
+            verdictHash: appeal.verdictHash,
+            supportingEventIds: appeal.verdictSupportingEventIds,
           };
           appeal.attestation = disputeAttestation;
 
@@ -683,6 +720,12 @@ export function createFrostAppealCoordinator(
       // dispute/market/outcome would sign. Pre-#799 attestations do not carry
       // `round` (the codebase convention is round 1); post-#799 they do. Try
       // the carried round first, then the legacy constant.
+      // Dispute attestations MUST bind the dispute verdict commitment — the
+      // signature certifies the tally, not just an outcome.
+      if (!attestation.verdictHash || !/^[0-9a-f]{64}$/.test(attestation.verdictHash)) {
+        emit('settlement_rejected', appeal, { reason: 'missing_verdict_hash' });
+        return false;
+      }
       const carriedRound = (attestation as { round?: number | string }).round;
       const roundsToTry =
         carriedRound !== undefined && carriedRound !== null
@@ -691,7 +734,13 @@ export function createFrostAppealCoordinator(
       const messageMatches = roundsToTry.some(
         (r) =>
           attestation.message ===
-          buildAttestationMessage(attestation.marketId, attestation.outcome, r, disputeId),
+          buildAttestationMessage(
+            attestation.marketId,
+            attestation.outcome,
+            r,
+            disputeId,
+            attestation.verdictHash,
+          ),
       );
       if (!messageMatches) {
         emit('settlement_rejected', appeal, { reason: 'message_does_not_bind_verdict' });

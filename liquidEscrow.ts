@@ -26,6 +26,8 @@ const Point = secp256k1.Point;
 
 // ── Micro helpers: pushdata + bech32 (no external deps) ─────────────────────
 
+const textEncoder = new TextEncoder();
+
 /** Minimal script opcodes used here. */
 const OP = {
   FALSE: 0x00,
@@ -173,7 +175,13 @@ function locktimeToPush(locktime: number): Uint8Array {
     throw new Error(`liquidEscrow: invalid locktime ${locktime}`);
   }
   let bytes: Uint8Array;
-  if (locktime > 0) {
+  if (locktime >= 0x80000000) {
+    // Time-based locktimes carry the high bit; script numbers are SIGNED
+    // little-endian, so a 4-byte push with the bit set would be negative and
+    // OP_CHECKLOCKTIMEVERIFY would always fail. Emit a positive 5-byte form.
+    bytes = new Uint8Array(5);
+    new DataView(bytes.buffer).setUint32(1, locktime, true);
+  } else if (locktime > 0) {
     bytes = new Uint8Array(4);
     const dv = new DataView(bytes.buffer);
     dv.setUint32(0, locktime, true); // little-endian
@@ -273,52 +281,89 @@ export function p2wshAddress(scriptHex: string, net: LiquidNetworkParams): strin
   return encodeBech32(net.p2wshHrp, words, 84, false);
 }
 
+/** BIP-341 tagged hash: SHA256(SHA256(tag) || SHA256(tag) || parts). */
+function taggedHash(tag: string, ...parts: Uint8Array[]): Uint8Array {
+  const tagHash = sha256(textEncoder.encode(tag));
+  const length = parts.reduce((n, p) => n + p.length, 0);
+  const input = new Uint8Array(64 + length);
+  input.set(tagHash, 0);
+  input.set(tagHash, 32);
+  let offset = 64;
+  for (const part of parts) {
+    input.set(part, offset);
+    offset += part.length;
+  }
+  return sha256(input);
+}
+
+/** Bitcoin CompactSize length prefix (1/3/5 bytes — scripts here are < 2^32). */
+function compactSize(length: number): Uint8Array {
+  if (length < 253) return Uint8Array.of(length);
+  if (length < 0x10000) {
+    return Uint8Array.of(253, length & 0xff, length >> 8);
+  }
+  return Uint8Array.of(254, length & 0xff, (length >> 8) & 0xff, (length >> 16) & 0xff, (length >> 24) & 0xff);
+}
+
+/**
+ * BIP-341 Taproot merkle root of leaf scripts (leaf version 0xc0 / BIP-342).
+ *
+ * Leaf hashes are `hash_TapLeaf(0xc0 || compact_size(len) || script)` and
+ * inner nodes are `hash_TapBranch(l || r)` over lexicographically sorted
+ * children — the exact construction consensus validation recomputes from the
+ * control block. Untagged double-SHA256 leaves would commit to a different
+ * tree and every script-path spend would fail.
+ */
+export function tapMerkleRoot(leaves: readonly string[]): string {
+  const hashes = leaves.map((scriptHex) => {
+    const script = hexToBytes(scriptHex);
+    return taggedHash('TapLeaf', Uint8Array.of(0xc0), compactSize(script.length), script);
+  });
+  let layer = hashes;
+  while (layer.length > 1) {
+    const next: Uint8Array[] = [];
+    for (let i = 0; i < layer.length; i += 2) {
+      const a = layer[i];
+      const b = layer[i + 1] ?? a;
+      const [l, r] = [a, b].sort((x, y) => bytesToScalar(x) <= bytesToScalar(y) ? -1 : 1);
+      next.push(taggedHash('TapBranch', l, r));
+    }
+    layer = next;
+  }
+  return bytesToHex(layer[0]);
+}
+
 /** Taproot v1 program from the internal key (x-only) — script path via merkle root. */
 export function taprootProgram(internalKeyXOnly: string, merkleRootHex?: string): Uint8Array {
   const key = hexToBytes(internalKeyXOnly);
   if (key.length !== 32) throw new Error('liquidEscrow: taproot internal key must be 32-byte x-only');
-  if (merkleRootHex) {
-    const root = hexToBytes(merkleRootHex);
-    if (root.length !== 32) throw new Error('liquidEscrow: merkle root must be 32 bytes');
-    const tweakInput = concatBytes(key, root);
-    const tweakHash = sha256(tweakInput);
-    if (tweakHash[31] & 0x80) tweakHash[31] &= 0x7f; // BIP-341: clear top bit
-    const P = pointFromXOnly(key);
-    let tweakScalar = bytesToScalar(tweakHash);
-    let tweaked = P.add(Point.BASE.multiply(tweakScalar));
-    // BIP-341: the output key must have even Y; detect via compressed prefix
-    // (02 = even, 03 = odd) and retweak with n - t when odd.
-    if (tweaked.toHex(true).startsWith('03')) {
-      tweakScalar = Point.Fn.ORDER - tweakScalar;
-      tweaked = P.add(Point.BASE.multiply(tweakScalar));
-    }
-    const xOnlyHex = tweaked.toHex(true).slice(2); // strip 02/03 prefix
-    return hexToBytes(xOnlyHex); // 32-byte x-only output key
+  const merkle = merkleRootHex === undefined ? new Uint8Array(0) : hexToBytes(merkleRootHex);
+  if (merkleRootHex !== undefined && merkle.length !== 32) {
+    throw new Error('liquidEscrow: merkle root must be 32 bytes');
   }
-  return key;
+  const P = pointFromXOnly(key);
+  // BIP-341: t = int(hash_TapTweak(P || h)); h is empty when there is no
+  // script tree — the output key is ALWAYS tweaked (a raw internal key would
+  // not be the output key consensus recomputes from the control block).
+  const tweakHash = taggedHash('TapTweak', key, merkle);
+  const t = bytesToScalar(tweakHash);
+  if (t >= Point.Fn.ORDER) {
+    throw new Error('liquidEscrow: taproot tweak exceeds the curve order');
+  }
+  // Q = P + t*G, x-only. BIP-341 does NOT force even Y on Q: the parity of Q
+  // is carried in the script-path control block (and for key-path spending
+  // taproot_tweak_seckey negates the INTERNAL secret iff P is odd, never Q).
+  // The old even-Y retweak produced x(P - t*G) whenever Q had odd Y, which
+  // diverges from the official vectors and every standard wallet.
+  const tweaked = P.add(Point.BASE.multiply(t));
+  const xOnlyHex = tweaked.toHex(true).slice(2); // strip 02/03 prefix
+  return hexToBytes(xOnlyHex); // 32-byte x-only output key
 }
 
 function bytesToScalar(bytes: Uint8Array): bigint {
   let v = 0n;
   for (const b of bytes) v = (v << 8n) | BigInt(b);
   return v;
-}
-
-/** Simple merkle-root of leaf scripts (BIP-341 taproot tree, sorted pairs). */
-export function tapMerkleRoot(leaves: readonly string[]): string {
-  const hashes = leaves.map((l) => sha256(sha256(hexToBytes(l))));
-  let layer: ReturnType<typeof sha256>[] = hashes;
-  while (layer.length > 1) {
-    const next: ReturnType<typeof sha256>[] = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      const a = layer[i];
-      const b = layer[i + 1] ?? a;
-      const [l, r] = [a, b].sort((x, y) => bytesToScalar(x) <= bytesToScalar(y) ? -1 : 1);
-      next.push(sha256(concatBytes(new Uint8Array(l), new Uint8Array(r))));
-    }
-    layer = next;
-  }
-  return bytesToHex(layer[0]);
 }
 
 /** Taproot v1 address (bech32m). `program` is the 32-byte output key. */

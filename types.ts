@@ -72,6 +72,14 @@ export interface FrostAttestation {
   readonly kind: 89 | 39007;
   /** Dispute event id if this is an override attestation. */
   readonly disputeEventId?: string;
+  /**
+   * Dispute verdict commitment ({@link hashDisputeVerdict}) bound into the
+   * signed message of kind-39007 attestations. Certifies the TALLY that
+   * produced the outcome, not just the outcome.
+   */
+  readonly verdictHash?: string;
+  /** Supporting reveal event ids of the attested verdict (kind 39007). */
+  readonly supportingEventIds?: readonly string[];
 }
 
 export interface DkgRecord {
