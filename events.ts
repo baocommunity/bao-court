@@ -689,6 +689,7 @@ export function parseAttestationEvent(
   const roundTag = event.tags.find((t) => t[0] === 'round');
   const disputeTag = event.tags.find((t) => t[0] === 'dispute');
   const marketTag = event.tags.find((t) => t[0] === 'm');
+  const verdictTag = event.tags.find((t) => t[0] === 'verdict');
 
   if (!pTag || !sigTag || !nonceTag) return null;
 
@@ -712,6 +713,10 @@ export function parseAttestationEvent(
   const marketId = marketTag?.[1] ?? String(content.marketId ?? '');
   const message = String(content.message ?? '');
   const disputeEventId = disputeTag?.[1] ?? (typeof content.disputeEventId === 'string' ? content.disputeEventId : undefined);
+  const verdictHash = verdictTag?.[1] ?? (typeof content.verdictHash === 'string' ? content.verdictHash : undefined);
+  const supportingEventIds = event.tags
+    .filter((t) => t[0] === 'e' && t[3] === 'mention')
+    .map((t) => t[1]);
 
   if (!marketId || !message || !round) return null;
 
@@ -725,6 +730,8 @@ export function parseAttestationEvent(
     message,
     kind: event.kind as 89 | 39007,
     disputeEventId,
+    verdictHash,
+    supportingEventIds: supportingEventIds.length > 0 ? supportingEventIds : undefined,
   };
 }
 
@@ -750,6 +757,15 @@ export function buildDisputeAttestationEvent(
   if (attestation.disputeEventId) {
     tags.push(['dispute', attestation.disputeEventId]);
   }
+  if (attestation.verdictHash) {
+    tags.push(['verdict', attestation.verdictHash]);
+  }
+  // Supporting reveal event ids — the evidence the verdict commitment pins.
+  // Observers recompute the tally from these and check it against the
+  // `verdict` tag; the Nostr event id commits to both (tags are signed).
+  for (const id of attestation.supportingEventIds ?? []) {
+    tags.push(['e', id, '', 'mention']);
+  }
   return {
     kind: attestation.kind,
     created_at: nowSeconds(),
@@ -760,6 +776,8 @@ export function buildDisputeAttestationEvent(
       round: String(attestation.round),
       message: attestation.message,
       disputeEventId: attestation.disputeEventId,
+      verdictHash: attestation.verdictHash,
+      supportingEventIds: attestation.supportingEventIds ?? [],
     }),
   };
 }

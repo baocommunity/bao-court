@@ -15,6 +15,7 @@ import { hkdf } from '@noble/hashes/hkdf.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import * as frost from '@vbyte/frost';
 import type { PublicNonce } from '@vbyte/frost';
+import { CanonicalWriter } from './courtSession';
 
 const SCALAR_ORDER = secp256k1.Point.Fn.ORDER;
 
@@ -80,17 +81,41 @@ export function deriveXOnlyPubkey(seckeyHex: string): string {
 }
 
 /**
+ * Domain tag for the attestation message. Keeps the signed digest distinct
+ * from every other Court hash domain (preimage, bond challenge, session…).
+ */
+export const ATTESTATION_MESSAGE_DOMAIN = 'BAO-Court/AttestationMessage/v1';
+
+/**
  * Build the canonical attestation message that all jurors sign.
+ *
+ * Uses the Court's canonical length-prefixed encoding (see
+ * {@link CanonicalWriter}) with a domain tag. Delimiter-joined concatenation
+ * would be ambiguous: an attacker-controlled `marketId` or `outcome` could
+ * embed the delimiter and alias another field (or the dispute id), so two
+ * distinct verdicts would hash to the same signed message. Length-prefixing
+ * makes every tuple of fields unambiguous.
+ *
+ * `verdictHash` (kind-39007 only) is the dispute verdict commitment
+ * ({@link hashDisputeVerdict}): the FROST signature then certifies the
+ * TALLY that produced the outcome — an attestation for an outcome that lost
+ * the vote is structurally invalid, not merely suspicious.
  */
 export function buildAttestationMessage(
   marketId: string,
   outcome: string,
   round: number | string,
   disputeEventId?: string,
+  verdictHash?: string,
 ): string {
-  const parts = [marketId, outcome, String(round)];
-  if (disputeEventId) parts.push(disputeEventId);
-  return bytesToHex(sha256(new TextEncoder().encode(parts.join('|'))));
+  const writer = new CanonicalWriter();
+  writer.text(ATTESTATION_MESSAGE_DOMAIN);
+  writer.text(marketId);
+  writer.text(outcome);
+  writer.text(String(round));
+  if (disputeEventId) writer.text(disputeEventId);
+  if (verdictHash) writer.hex(verdictHash);
+  return bytesToHex(sha256(writer.finish()));
 }
 
 /**

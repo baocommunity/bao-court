@@ -27,6 +27,12 @@ export interface SigningRoundParams {
   readonly outcome: string;
   readonly round: number | string;
   readonly disputeEventId?: string;
+  /**
+   * Dispute verdict commitment bound into the signed message (kind-39007
+   * attestations). REQUIRED for dispute attestations: without it the FROST
+   * signature certifies an outcome without certifying that it won the vote.
+   */
+  readonly verdictHash?: string;
   readonly dkg: DkgRecord;
   readonly shares: readonly frost.SecretShare[];
   /**
@@ -188,6 +194,7 @@ export function createRevealAndPartialSig(
     params.outcome,
     params.round,
     params.disputeEventId,
+    params.verdictHash,
   );
 
   const ctx = frost.Lib.get_group_signing_ctx(
@@ -246,6 +253,7 @@ export function aggregateAttestation(
     params.outcome,
     params.round,
     params.disputeEventId,
+    params.verdictHash,
   );
 
   const ctx = frost.Lib.get_group_signing_ctx(
@@ -308,6 +316,7 @@ export function aggregateAttestation(
     message,
     kind: params.disputeEventId ? 39007 : 89,
     disputeEventId: params.disputeEventId,
+    verdictHash: params.verdictHash,
   };
 }
 

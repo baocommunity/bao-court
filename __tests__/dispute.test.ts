@@ -6,6 +6,15 @@ import { hashCommit, tallyVotes, deriveDisputeGroupPubkey } from '../dispute';
 import type { JurorVote } from '../types';
 
 describe('dispute helpers', () => {
+  it('hashCommit separates outcome/salt that alias under | (2026-08-18 review)', () => {
+    // Old encoding: sha256(`${outcome}|${salt}`) — 'YES|s' + 'alt' and
+    // 'YES' + 's|alt' both produced 'YES|s|alt'. Length-prefixing must
+    // separate every pair.
+    const a = hashCommit('YES|s', 'alt');
+    const b = hashCommit('YES', 's|alt');
+    expect(a).not.toBe(b);
+  });
+
   it('hashCommit is deterministic and sensitive to salt', () => {
     const h1 = hashCommit('YES', 'salt-a');
     const h2 = hashCommit('YES', 'salt-b');

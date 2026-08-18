@@ -9,11 +9,29 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToNumberBE, numberToBytesBE } from '@noble/curves/utils.js';
 import * as frost from '@vbyte/frost';
+import { CanonicalWriter } from './courtSession';
 import { runNormalSigningRound } from './signing';
 import type { DkgRecord, DisputeCase, FrostAttestation, JurorVote } from './types';
 
+/** Same domain tag as the machine-path vote commit (courtVoteMachine). */
+const VOTE_COMMIT_DOMAIN = 'BAO-Court/VoteCommit/v1';
+
+/**
+ * Commit hash for the imperative vote path: H(domain, outcome, salt) with
+ * canonical length-prefixed encoding. The old `${outcome}|${salt}` join was
+ * ambiguous — an outcome containing `|` could alias the salt and let two
+ * distinct ballots commit to the same digest.
+ */
 export function hashCommit(outcome: string, salt: string): string {
-  return bytesToHex(sha256(new TextEncoder().encode(`${outcome}|${salt}`)));
+  const writer = new CanonicalWriter();
+  writer.text(outcome);
+  writer.text(salt);
+  const encoded = writer.finish();
+  const domain = new TextEncoder().encode(VOTE_COMMIT_DOMAIN);
+  const input = new Uint8Array(domain.length + encoded.length);
+  input.set(domain, 0);
+  input.set(encoded, domain.length);
+  return bytesToHex(sha256(input));
 }
 
 export interface TallyResult {
@@ -97,6 +115,13 @@ export interface DisputeSigningParams {
   readonly shares: readonly frost.SecretShare[];
   /** Outcome to attest. Defaults to the dispute's proposed outcome. */
   readonly outcome?: string;
+  /**
+   * Dispute verdict commitment bound into the signed message. REQUIRED for
+   * real dispute attestations — see {@link buildAttestationMessage}.
+   */
+  readonly verdictHash?: string;
+  /** Supporting reveal event ids of the attested verdict. */
+  readonly supportingEventIds?: readonly string[];
 }
 
 export function runDisputeOverrideSigning(
@@ -107,6 +132,7 @@ export function runDisputeOverrideSigning(
     outcome: params.outcome ?? params.dispute.proposedOutcome,
     round: 1,
     disputeEventId: params.dispute.disputeId,
+    verdictHash: params.verdictHash,
     dkg: params.dkg,
     shares: params.shares,
   });
@@ -115,5 +141,27 @@ export function runDisputeOverrideSigning(
     ...attestation,
     kind: 39007,
     disputeEventId: params.dispute.disputeId,
+    verdictHash: params.verdictHash,
+    supportingEventIds: params.supportingEventIds,
   };
+}
+
+/**
+ * Canonical synthetic reveal event id for SIMULATED ceremonies (the demo
+ * coordinator and the end-to-end simulator run the vote in-process, so no
+ * Nostr reveal events exist to reference). Production ceremonies MUST use the
+ * real kind-39014 reveal event ids — the commitment is over the same field,
+ * so swapping in real ids changes nothing structurally.
+ */
+export function deriveSimulatedRevealEventId(idx: number, outcome: string, salt: string): string {
+  const writer = new CanonicalWriter();
+  writer.u32(idx);
+  writer.text(outcome);
+  writer.text(salt);
+  const encoded = writer.finish();
+  const domain = new TextEncoder().encode('BAO-Court/SimRevealEvent/v1');
+  const input = new Uint8Array(domain.length + encoded.length);
+  input.set(domain, 0);
+  input.set(encoded, domain.length);
+  return bytesToHex(sha256(input));
 }

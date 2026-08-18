@@ -20,7 +20,8 @@
 
 import { selectJuryWithBackups } from '../selection';
 import { PedersenDkgAdapter } from '../dkg';
-import { hashCommit, tallyVotes } from '../dispute';
+import { hashCommit, tallyVotes, deriveSimulatedRevealEventId } from '../dispute';
+import { hashDisputeVerdict } from '../courtVoteMachine';
 import type { JurorVote } from '../types';
 import { createCommitments, createRevealsAndPartialSigs, aggregateAttestation, InMemoryNonceGuard } from '../signing';
 import { validateAttestationEvent } from '../validator';
@@ -162,15 +163,22 @@ export async function runCourtSimulation(
     push('vote', `winner=${tally.outcome}, supporting=${tally.supportingVotes.length}, invalid=${tally.invalidReveals.length}`, tally.outcome === outcome);
 
     // 4. FROST signing by the coherent (majority) jurors — dispute-bound,
-    // so the attestation is a Kind 39007 dispute override (not Kind 89).
+    // so the attestation is a Kind 39007 dispute override (not Kind 89). The
+    // signed message binds the dispute verdict commitment: the court certifies
+    // the TALLY winner, not just an outcome.
     const coherent = votes.filter((v) => v.reveal?.outcome === tally.outcome);
     const coherentShares = keygen.shares.filter((s) => coherent.some((v) => v.idx === s.idx));
     if (coherentShares.length < threshold) throw new Error('not enough coherent signers');
-    const signingParams = { marketId, outcome: tally.outcome, round: 1, disputeEventId: disputeId, dkg: keygen.record, shares: coherentShares };
+    const supportingEventIds = tally.supportingVotes.map((v) =>
+      deriveSimulatedRevealEventId(v.idx, v.reveal!.outcome, v.reveal!.salt),
+    );
+    const verdictHash = hashDisputeVerdict({ disputeId, outcome: tally.outcome, supportingEventIds });
+    const signingParams = { marketId, outcome: tally.outcome, round: 1, disputeEventId: disputeId, verdictHash, dkg: keygen.record, shares: coherentShares };
     const nonceGuard = new InMemoryNonceGuard();
     const commitments = createCommitments(coherentShares);
     const reveals = createRevealsAndPartialSigs({ ...signingParams, nonceGuard }, commitments);
     const attestation = aggregateAttestation({ ...signingParams, nonceGuard }, commitments, reveals);
+    const disputeAttestation = { ...attestation, verdictHash, supportingEventIds };
     push('sign', `attestation sig ${attestation.signature.slice(0, 16)}… (kind ${attestation.kind})`, attestation.kind === BAO_COURT_ATTESTATION_KIND);
 
     // 5. Attestation validation: publish a REAL, well-formed Nostr event
@@ -192,6 +200,8 @@ export async function runCourtSimulation(
         ['sig', attestation.signature],
         ['ver', 'FROST-BIP340-v1'],
         ['dispute', disputeId],
+        ['verdict', verdictHash],
+        ...supportingEventIds.map((id) => ['e', id, '', 'mention'] as [string, string, string, string]),
       ],
       content: JSON.stringify({
         marketId,
@@ -199,6 +209,8 @@ export async function runCourtSimulation(
         round: String(attestation.round),
         message: attestation.message,
         disputeEventId: disputeId,
+        verdictHash,
+        supportingEventIds,
       }),
     }, publisherSeckey);
     const validation = validateAttestationEvent(event, {

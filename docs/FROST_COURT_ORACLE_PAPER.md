@@ -2,9 +2,10 @@
 
 **Version:** 0.4.0 (tracks `@bao/court` v0.4.0 — this repository)
 **Status:** Cryptographic, escrow, and settlement-rail protocol layers complete
-and test-covered (582/582 in-package, `tsc` clean); adversarially reviewed
-(v0.2.1 hardening); rail *execution*, cross-client ceremonies, and on-chain
-phase enforcement remain host-side / pre-production.
+and test-covered (594/594 in-package, `tsc` clean); adversarially reviewed
+(v0.2.1 hardening; 2026-08-18 hardening); rail
+*execution*, cross-client ceremonies, and on-chain phase enforcement remain
+host-side / pre-production.
 **Audience:** cryptographers, protocol engineers, researchers. We assume
 familiarity with Schnorr signatures, Shamir secret sharing, and Nostr.
 
@@ -29,7 +30,7 @@ is specified for two rails — Lightning hold invoices (social slashing) and
 Liquid P2WSH/Taproot escrow (script-enforced) — as pure, host-executed
 protocol math. The jury forms only when a dispute exists, so juror capital is
 never locked for the lifetime of a market. The reference implementation is
-this repository: platform-neutral TypeScript, 582-property/test-strong suite,
+this repository: platform-neutral TypeScript, 592-property/test-strong suite,
 plus a deterministic end-to-end simulation harness that runs the entire
 pipeline — selection, DKG, voting, threshold signing, attestation validation,
 slashing, and both settlement rails — in one process with no network.
@@ -210,24 +211,45 @@ FROST signature and whose `p` tag carries $P_{\mathrm{dispute}}$:
     ["nonce", "<x-only aggregate nonce R>"],
     ["sig", "<BIP-340 signature R || z>"],
     ["dispute", "<dispute event id>"],
+    ["verdict", "<verdict commitment H(DisputeVerdict/v1, …)>"],
+    ["e", "<supporting reveal event id>", "", "mention"],
     ["ver", "FROST-BIP340-v1"]
   ],
-  "content": "{\"marketId\":\"…\",\"outcome\":\"YES\",\"round\":\"1\",\"message\":\"<signed digest>\",\"disputeEventId\":\"…\"}"
+  "content": "{\"marketId\":\"…\",\"outcome\":\"YES\",\"round\":\"1\",\"message\":\"<signed digest>\",\"disputeEventId\":\"…\",\"verdictHash\":\"…\",\"supportingEventIds\":[\"…\"]}"
 }
 ```
 
 The signed message is exactly
 
-$$m \;=\; H(\texttt{marketId} \;\|\; \texttt{outcome} \;\|\; \texttt{round} \;\|\; \texttt{disputeEventId})$$
+$$m \;=\; H(\texttt{BAO-Court/AttestationMessage/v1} \;\|\; \texttt{marketId} \;\|\; \texttt{outcome} \;\|\; \texttt{round} \;\|\; \texttt{disputeEventId} \;\|\; \texttt{verdictHash})$$
 
-(fields joined with `|` over UTF-8; `buildAttestationMessage`). The dispute
-event id binds the signature to one appeal, defeating cross-dispute and
-cross-market replay. The wrapper event is itself a valid, signed Nostr event
-from a publisher key; the FROST signature rides inside, and the consumer-side
-validator (`validateAttestationEvent`) checks: event validity, required
-singleton tags, `nonce == sig[0:64]` (the embedded $R$), expected group key /
-dispute / market, outcome whitelist, and the Schnorr signature over $m$ under
-$P_{\mathrm{dispute}}$.
+where each field is UTF-8 **length-prefixed** under a domain tag
+(`CanonicalWriter`; `buildAttestationMessage`). Delimiter-joined
+concatenation is deliberately rejected: an attacker-controlled `marketId` or
+`outcome` could embed the delimiter and alias another field or the dispute
+id, so two distinct verdicts would hash to the same signed message. The
+dispute event id binds the signature to one appeal, defeating cross-dispute
+and cross-market replay.
+
+The `verdict` tag is the **verdict commitment**
+
+$$\texttt{verdictHash} \;=\; H(\texttt{BAO-Court/DisputeVerdict/v1} \;\|\; \texttt{disputeId} \;\|\; \texttt{outcome} \;\|\; \texttt{count} \;\|\; \texttt{sorted supporting reveal event ids})$$
+
+(`hashDisputeVerdict`, canonical length-prefixed, order-independent). It is
+computed at tally time — before any nonce is committed — and bound into the
+signed message, so the FROST signature certifies **the tally that produced
+the outcome**, not just the outcome: an attestation for an outcome that lost
+the vote is *structurally invalid*, not merely suspicious. The supporting
+reveal event ids ride as `e`-mention tags, so any observer can recompute the
+tally from the public vote ledger and check it against the attested
+commitment — selection-and-voting as a proof, not a claim. The wrapper event
+is itself a valid, signed Nostr event from a publisher key; the FROST
+signature rides inside, and the consumer-side validator
+(`validateAttestationEvent`) checks: event validity, required singleton
+tags (including a 64-hex `verdict` tag on kind-39007), `nonce == sig[0:64]`
+(the embedded $R$), expected group key / dispute / market, outcome
+whitelist, tag↔content agreement, message recomputation against the carried
+verdict hash, and the Schnorr signature over $m$ under $P_{\mathrm{dispute}}$.
 
 ### 3.4 No DKG before disputes
 
@@ -300,7 +322,7 @@ selected set (reselection hygiene).
    only over a roster whose *every* member's commitment and share verified —
    a threshold-sized subset would derive a *different* group key and split
    the Court.
-5. **Vote.** Jurors commit (`H(outcome \| salt)`) then reveal (kind 39004).
+5. **Vote.** Jurors commit (kind 39004; `H(outcome \| salt)`) then reveal (kind 39014).
    Exactly one commitment per roster index; a reveal counts only against the
    juror's own earlier session-bound commitment; ties break deterministically
    (lexicographic); the tally reports `invalidReveals` as slashing evidence
@@ -534,7 +556,7 @@ TypeScript (browser and Node), no UI, no networking of its own, no
 persistence — hosts inject clocks, storage, signers, relay pools, and rail
 adapters. Module map: `README.md` §10.
 
-- **Suite:** 582/582 tests green, `tsc --noEmit` clean (vitest).
+- **Suite:** 594/594 tests green, `tsc --noEmit` clean (vitest).
   Coverage includes: BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
   complaints rejected, genuine grievances disqualify, false complaints
@@ -551,7 +573,8 @@ adapters. Module map: `README.md` §10.
   same decisions. This is the "code and math backing" for every claim above:
   each section maps to executable, tested behavior.
 - **Adversarial-review record:** `docs/FIXES-2026-08-15.md` (4 substantive
-  findings fixed with regression tests), `docs/COMPLAINT-PROTOCOL.md`.
+  findings fixed with regression tests), `docs/FIXES-2026-08-18.md`
+  (canonical-hashing hardening), `docs/COMPLAINT-PROTOCOL.md`.
 
 ---
 
