@@ -313,24 +313,41 @@ function compactSize(length: number): Uint8Array {
  * children — the exact construction consensus validation recomputes from the
  * control block. Untagged double-SHA256 leaves would commit to a different
  * tree and every script-path spend would fail.
+ *
+ * The tree follows Bitcoin Core's reference `taproot_tree_helper` (the
+ * generator of the official bip341_wallet_vectors.json): a leaf list is
+ * split at `len // 2` and each side recurses. For three leaves this yields
+ * `TapBranch(h0, TapBranch(h1, h2))` — the shape pinned by the official
+ * 3-leaf vector, where leaf 0 is a direct child of the root with a single
+ * sibling. The naive pair-up-with-self algorithm AND the largest-power-of-two
+ * split both produce different roots for 3+ leaves, so any script-path spend
+ * under such a tree would fail consensus validation.
  */
 export function tapMerkleRoot(leaves: readonly string[]): string {
   const hashes = leaves.map((scriptHex) => {
     const script = hexToBytes(scriptHex);
     return taggedHash('TapLeaf', Uint8Array.of(0xc0), compactSize(script.length), script);
   });
-  let layer = hashes;
-  while (layer.length > 1) {
-    const next: Uint8Array[] = [];
-    for (let i = 0; i < layer.length; i += 2) {
-      const a = layer[i];
-      const b = layer[i + 1] ?? a;
-      const [l, r] = [a, b].sort((x, y) => bytesToScalar(x) <= bytesToScalar(y) ? -1 : 1);
-      next.push(taggedHash('TapBranch', l, r));
-    }
-    layer = next;
+
+  function branch(l: Uint8Array, r: Uint8Array): Uint8Array {
+    const [a, b] = [l, r].sort((x, y) => (bytesToScalar(x) <= bytesToScalar(y) ? -1 : 1));
+    return taggedHash('TapBranch', a, b);
   }
-  return bytesToHex(layer[0]);
+
+  function merkle(list: Uint8Array[]): Uint8Array {
+    if (list.length === 0) {
+      throw new Error('liquidEscrow: cannot compute merkle root of an empty leaf list');
+    }
+    if (list.length === 1) return list[0];
+    // Bitcoin Core's taproot_tree_helper splits at len // 2, NOT at the
+    // largest power of two. For three leaves: TapBranch(h0, TapBranch(h1, h2))
+    // (id 0 is a direct child of the root), which the official
+    // bip341_wallet_vectors.json case pins via its control blocks.
+    const mid = list.length >> 1;
+    return branch(merkle(list.slice(0, mid)), merkle(list.slice(mid)));
+  }
+
+  return bytesToHex(merkle(hashes));
 }
 
 /** Taproot v1 program from the internal key (x-only) — script path via merkle root. */

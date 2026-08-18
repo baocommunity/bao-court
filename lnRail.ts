@@ -125,7 +125,10 @@ export function createFakeLnRail(options: FakeLnRailOptions = {}): { rail: LnRai
     async getStatus(invoiceId) {
       const inv = state.invoices.get(invoiceId);
       if (!inv) return { paid: false, settled: false, cancelled: false, expired: false };
-      return { invoiceId, paid: inv.paid, settled: inv.settled, cancelled: inv.cancelled, expired: !inv.paid && Date.now() > inv.expiry };
+      // `expiry` is unix seconds (matching LnHoldRecord.expiresAt); compare
+      // with the clock in the same unit, not Date.now() milliseconds.
+      const nowSec = Math.floor(Date.now() / 1000);
+      return { invoiceId, paid: inv.paid, settled: inv.settled, cancelled: inv.cancelled, expired: !inv.paid && nowSec > inv.expiry };
     },
     async waitForPayment(invoiceId) {
       state.calls.push(`wait:${invoiceId}`);

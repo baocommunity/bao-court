@@ -161,5 +161,5 @@ snapshot round-trip, `applyPlan` end-to-end for upheld and rejected disputes).
 
 Suite at v0.2.3 release: **520/520** in-package tests pass, `tsc --noEmit`
 clean. Current suite (v0.4.0, with settlement rails, simulation harness, and
-the appeal coordinator/watcher port): **594/594** (582 + 12 regressions from
+the appeal coordinator/watcher port): **600/600** (582 + 18 regressions from
 the 2026-08-18 review, see `docs/FIXES-2026-08-18.md`).

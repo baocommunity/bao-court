@@ -114,6 +114,10 @@ export function filterEligibleJurors(
   return pool.filter((j) => {
     if (j.wotScore < params.minWotScore) return false;
     if (j.stakeCapacitySats < params.minStakeSats) return false;
+    // A future registration timestamp is self-attested and cannot be
+    // trusted to prove age — fail-closed rather than treating it as
+    // arbitrarily old (a negative age would pass the threshold below).
+    if (j.registeredAt > nowSec) return false;
     if (nowSec - j.registeredAt < minAgeSec) return false;
     if (!j.categories.includes(params.marketCategory)) return false;
     if (j.stakeCapacitySats < params.marketVolumeSats * 0.01) return false;
