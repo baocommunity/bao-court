@@ -37,6 +37,7 @@ import { hashDisputeVerdict } from '../courtVoteMachine';
 import { deriveSimulatedRevealEventId } from '../dispute';
 import { selectJury, verifyJurySelection } from '../selection';
 import { createBondOwnershipChallenge } from '../escrow';
+import { CanonicalWriter, CourtSessionValidationError } from '../courtSession';
 import { deriveLnPreimage } from '../lnSettlement';
 import { IndependentDkgSession } from '../independentDkg';
 import type { FrostAttestation, JurorProfile, SelectedJuror } from '../types';
@@ -629,5 +630,38 @@ describe('canonical hashing ambiguity regressions', () => {
     const a = deriveLnPreimage({ ...w, disputeId: 'd|j', role: 'r' });
     const b = deriveLnPreimage({ ...w, disputeId: 'd', role: 'j|r' });
     expect(a).not.toBe(b);
+  });
+});
+
+describe('regression: CanonicalWriter rejects out-of-range integers', () => {
+  it('u8/u32/u64 fail closed instead of silently wrapping', () => {
+    // DataView.setUint32 / setBigUint64 wrap out-of-range values mod 2^n
+    // (e.g. -1 -> 0xFFFFFFFF, 2^32 -> 0). A wrapped length/count would make
+    // two distinct tuples share a canonical encoding — the exact ambiguity
+    // the length-prefixed writer exists to prevent.
+    const writer = new CanonicalWriter();
+    for (const value of [-1, 256, 1.5, NaN]) {
+      expect(() => writer.u8(value)).toThrow(CourtSessionValidationError);
+    }
+    for (const value of [-1, 0x1_0000_0000, 1.5, NaN]) {
+      expect(() => writer.u32(value)).toThrow(CourtSessionValidationError);
+    }
+    for (const value of [-1, 2 ** 53, 1.5, NaN]) {
+      expect(() => writer.u64(value)).toThrow(CourtSessionValidationError);
+    }
+  });
+
+  it('u8/u32/u64 accept boundary values without corruption', () => {
+    const writer = new CanonicalWriter();
+    writer.u8(0xff);
+    writer.u32(0xffff_ffff);
+    writer.u64(Number.MAX_SAFE_INTEGER);
+    const bytes = writer.finish();
+    expect(bytes.length).toBe(1 + 4 + 8);
+    expect(bytes[0]).toBe(0xff);
+    // u32 big-endian 0xFFFFFFFF
+    expect(Array.from(bytes.slice(1, 5))).toEqual([0xff, 0xff, 0xff, 0xff]);
+    // u64 big-endian MAX_SAFE_INTEGER = 0x001FFFFFFFFFFFFF
+    expect(Array.from(bytes.slice(5))).toEqual([0x00, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
   });
 });

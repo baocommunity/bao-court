@@ -114,6 +114,22 @@ describe('taproot helpers (merkle root + address)', () => {
     // 33-byte program (v1 + 32) → 53 words → hrp(2) + '1' + 53 + 6
     expect(addr.length).toBe(2 + 1 + 53 + 6);
   });
+
+  it('matches the official BIP-341 3-leaf vector (bitcoin-core split-at-mid)', () => {
+    // bip341_wallet_vectors.json — internalPubkey e0dfe2…, scriptTree
+    // [id0, [id1, id2]], merkleRoot ccbd66c6…. This pins the TREE SHAPE:
+    // Bitcoin Core's taproot_tree_helper splits at len // 2, so the root is
+    // TapBranch(h0, TapBranch(h1, h2)) — leaf 0 is a direct child of the
+    // root (its control block carries one sibling). A largest-power-of-two
+    // split produces TapBranch(TapBranch(h0, h1), h2) — a different root
+    // whose script-path spends would fail consensus validation.
+    const leaf0 = '2072ea6adcf1d371dea8fba1035a09f3d24ed5a059799bae114084130ee5898e69ac';
+    const leaf1 = '202352d137f2f3ab38d1eaa976758873377fa5ebb817372c71e2c542313d4abda8ac';
+    const leaf2 = '207337c0dd4253cb86f2c43a2351aadd82cccb12a172cd120452b9bb8324f2186aac';
+    expect(tapMerkleRoot([leaf0, leaf1, leaf2])).toBe(
+      'ccbd66c6f7e8fdab47b3a486f59d28262be857f30d4773f2d5ea47f7761ce0e2',
+    );
+  });
 });
 
 // ── Release skeleton ────────────────────────────────────────────────────────
