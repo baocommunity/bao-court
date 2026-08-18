@@ -7,7 +7,7 @@ import { IndependentDkgSession } from '../independentDkg';
 import { IndependentSigningSession } from '../independentSigning';
 import { parseDkgCommitmentEvent } from '../events';
 import { parseEncryptedShareEvent } from '../dkgMessages';
-import { verifyFinalSignature } from '../crypto';
+import { buildAttestationMessage, verifyFinalSignature } from '../crypto';
 import { createCommitment } from '../signing';
 import type { SelectedJuror } from '../types';
 
@@ -183,6 +183,70 @@ describe('IndependentSigningSession', () => {
     expect(attestation.kind).toBe(39007);
     expect(attestation.outcome).toBe('YES');
     expect(verifyFinalSignature(dkgRecord.groupPubkey, attestation.message, attestation.signature)).toBe(true);
+  });
+
+  it('binds the dispute verdict commitment into the signed message', async () => {
+    const jurors = makeJurors(3);
+    const disputeId = 'v'.repeat(64);
+    const marketId = 'verdict-market';
+    const verdictHash = 'f'.repeat(64);
+
+    const { dkgRecord, shares } = await runSigningSetup(jurors, disputeId, marketId);
+    const expectedMessage = buildAttestationMessage(marketId, 'YES', 1, disputeId, verdictHash);
+
+    const signingSessions = jurors.map((j) => new IndependentSigningSession({
+      disputeId,
+      myIdx: j.juror.idx,
+      myPubkey: j.pubkey,
+      dkg: dkgRecord,
+      outcome: 'YES',
+      round: 1,
+      disputeEventId: disputeId,
+      verdictHash,
+    }));
+    for (const session of signingSessions) {
+      expect(session.message).toBe(expectedMessage);
+    }
+
+    for (const [i, session] of signingSessions.entries()) {
+      const { event } = session.createMyCommitment(shares[i]);
+      for (const other of signingSessions) {
+        if (other === session) continue;
+        other.addCommitment({
+          idx: session.myIdx,
+          pubkey: session.myPubkey,
+          commitmentPackage: {
+            idx: session.myIdx,
+            binder_pn: event.tags.find((t) => t[0] === 'binder_pn')![1],
+            hidden_pn: event.tags.find((t) => t[0] === 'hidden_pn')![1],
+          },
+        });
+      }
+    }
+    for (const [i, session] of signingSessions.entries()) {
+      const { event } = session.createMyReveal(shares[i]);
+      for (const other of signingSessions) {
+        if (other === session) continue;
+        other.addReveal({
+          idx: session.myIdx,
+          pubkey: event.tags.find((t) => t[0] === 'pk')![1],
+          publicNonce: {
+            idx: session.myIdx,
+            binder_pn: event.tags.find((t) => t[0] === 'nonce_binder')![1],
+            hidden_pn: event.tags.find((t) => t[0] === 'nonce_hidden')![1],
+          },
+          partialSig: event.tags.find((t) => t[0] === 'psig')![1],
+        });
+      }
+    }
+
+    const attestation = signingSessions[0].aggregate('e'.repeat(64));
+    // The aggregate must carry the verdict commitment AND sign the verdict-
+    // bound message (not the verdict-less variant) — otherwise the kind-39007
+    // attestation fails the validator's verdict-binding requirement.
+    expect(attestation.verdictHash).toBe(verdictHash);
+    expect(attestation.message).toBe(expectedMessage);
+    expect(verifyFinalSignature(dkgRecord.groupPubkey, expectedMessage, attestation.signature)).toBe(true);
   });
 
   it('prevents double reveal with the same nonce commitment', async () => {
