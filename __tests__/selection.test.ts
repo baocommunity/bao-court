@@ -100,8 +100,9 @@ describe('jury selection', () => {
     // registration, which passed the age threshold and made the candidate
     // appear arbitrarily old. A future registration is self-attested and
     // must be excluded.
-    const futureJuror = makeJuror('9');
-    futureJuror.registeredAt = 2_000_000_000; // far in the future
+    // Spread drops the readonly modifier so the future-dated override is
+    // a plain mutable JurorProfile.
+    const futureJuror: JurorProfile = { ...makeJuror('9'), registeredAt: 2_000_000_000 };
     const params = {
       disputeEventId: 'a'.repeat(64),
       blockHash: 'b'.repeat(64),
