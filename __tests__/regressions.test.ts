@@ -283,16 +283,21 @@ describe('regression: attestation validator consistency', () => {
       outcome: 'YES',
       supportingEventIds,
     });
-    const attestation: FrostAttestation = runNormalSigningRound({
-      marketId: 'val-market',
-      outcome: 'YES',
-      round: 1,
-      disputeEventId: 'a'.repeat(64),
-      verdictHash,
-      dkg: record,
-      shares,
-      nonceGuard: new InMemoryNonceGuard(),
-    });
+    const attestation: FrostAttestation = {
+      ...runNormalSigningRound({
+        marketId: 'val-market',
+        outcome: 'YES',
+        round: 1,
+        disputeEventId: 'a'.repeat(64),
+        verdictHash,
+        dkg: record,
+        shares,
+        nonceGuard: new InMemoryNonceGuard(),
+      }),
+      // The validator now recomputes the verdict commitment from the event's
+      // supporting reveal ids, so the fixture must publish them.
+      supportingEventIds,
+    };
     const template = buildAttestationEvent({ attestation, marketEventId: 'e'.repeat(64) });
     return { event: finalizeEvent(template, publisherSeckey), attestation };
   }

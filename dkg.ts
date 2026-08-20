@@ -39,6 +39,7 @@ const Point = secp256k1.Point;
 // secp256k1 curve order (scalar field).
 const N = secp256k1.Point.Fn.ORDER;
 type CurvePoint = InstanceType<typeof Point>;
+const MAX_DKG_PARTICIPANTS = 10_000;
 
 export function modN(x: bigint): bigint {
   const r = x % N;
@@ -420,17 +421,26 @@ export class PedersenDkgAdapter implements DkgAdapter {
   }
 
   private validateRefreshParams(params: RefreshParams): void {
+    if (!Number.isSafeInteger(params.record.participants) || params.record.participants < 1) {
+      throw new Error('Record must specify a positive participant count');
+    }
     if (params.shares.length !== params.record.participants) {
       throw new Error('Share count does not match record participants');
     }
-    if (params.record.threshold < 2) {
-      throw new Error('Threshold must be at least 2');
+    if (!Number.isSafeInteger(params.record.threshold) || params.record.threshold < 2) {
+      throw new Error('Threshold must be a safe integer of at least 2');
+    }
+    if (params.record.threshold > MAX_DKG_PARTICIPANTS) {
+      throw new Error(`Threshold must be at most ${MAX_DKG_PARTICIPANTS}`);
     }
     const indices = new Set(params.shares.map((s) => s.idx));
     if (indices.size !== params.shares.length) {
       throw new Error('Duplicate share indices');
     }
     for (const share of params.shares) {
+      if (!Number.isSafeInteger(share.idx) || share.idx < 1) {
+        throw new Error(`Share index ${share.idx} is not a valid positive integer`);
+      }
       const vss = params.record.vssCommitments.find((c) => c.idx === share.idx);
       if (!vss) {
         throw new Error(`No commitment found for share index ${share.idx}`);
@@ -439,8 +449,14 @@ export class PedersenDkgAdapter implements DkgAdapter {
   }
 
   private validateParams(params: KeygenParams): void {
-    if (params.threshold < 2) {
-      throw new Error('Threshold must be at least 2');
+    if (!Number.isSafeInteger(params.threshold) || params.threshold < 2) {
+      throw new Error('Threshold must be a safe integer of at least 2');
+    }
+    if (params.threshold > MAX_DKG_PARTICIPANTS) {
+      throw new Error(`Threshold must be at most ${MAX_DKG_PARTICIPANTS}`);
+    }
+    if (params.jurors.length > MAX_DKG_PARTICIPANTS) {
+      throw new Error(`Participants must be at most ${MAX_DKG_PARTICIPANTS}`);
     }
     if (params.jurors.length < params.threshold) {
       throw new Error('Participants cannot be less than threshold');
@@ -449,8 +465,19 @@ export class PedersenDkgAdapter implements DkgAdapter {
     if (indices.size !== params.jurors.length) {
       throw new Error('Duplicate juror indices');
     }
-    if (params.jurors.some((j) => j.idx < 1)) {
-      throw new Error('Juror indices must be positive');
+    // Reject duplicate public keys: two jurors with the same pubkey could
+    // split the threshold and control multiple shares.
+    const pubkeys = new Set(params.jurors.map((j) => j.nostrPubkey));
+    if (pubkeys.size !== params.jurors.length) {
+      throw new Error('Duplicate juror public keys');
+    }
+    for (const juror of params.jurors) {
+      if (!/^[0-9a-f]{64}$/.test(juror.nostrPubkey)) {
+        throw new Error('Juror public keys must be canonical 32-byte lowercase hex');
+      }
+    }
+    if (!Number.isSafeInteger(params.jurors[0]?.idx) || params.jurors.some((j) => j.idx < 1)) {
+      throw new Error('Juror indices must be positive safe integers');
     }
   }
 

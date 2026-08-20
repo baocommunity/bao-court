@@ -10,28 +10,41 @@ import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToNumberBE, numberToBytesBE } from '@noble/curves/utils.js';
 import * as frost from '@vbyte/frost';
 import { CanonicalWriter } from './courtSession';
+import { compareOutcomeUtf8 } from './courtVoteMachine';
 import { runNormalSigningRound } from './signing';
 import type { DkgRecord, DisputeCase, FrostAttestation, JurorVote } from './types';
 
-/** Same domain tag as the machine-path vote commit (courtVoteMachine). */
-const VOTE_COMMIT_DOMAIN = 'BAO-Court/VoteCommit/v1';
+/** Distinct domain for the legacy, sessionless imperative vote path. */
+const LEGACY_VOTE_COMMIT_DOMAIN = 'BAO-Court/LegacyVoteCommit/v1';
+const LEGACY_COMMIT_VERSION_MASK = 0x7;
 
 /**
- * Commit hash for the imperative vote path: H(domain, outcome, salt) with
- * canonical length-prefixed encoding. The old `${outcome}|${salt}` join was
- * ambiguous — an outcome containing `|` could alias the salt and let two
- * distinct ballots commit to the same digest.
+ * Commit hash for the legacy imperative vote path. The high bit of the first
+ * nibble is cleared as an explicit format discriminator, so a court vote
+ * machine can reject this sessionless format when the commit is received.
  */
 export function hashCommit(outcome: string, salt: string): string {
+  // Bound and type-check before encoding so a caller cannot allocate an
+  // unbounded preimage or commit to coercible (non-primitive) values. The
+  // legacy imperative path keeps salt intentionally free-form (unlike the
+  // machine path's 32-byte hex salt) so pre-existing integrations keep working.
+  const outcomeBytes = new TextEncoder().encode(String(outcome));
+  if (typeof outcome !== 'string' || outcome.length === 0 || outcomeBytes.length > 256) {
+    throw new Error('outcome must be a non-empty string of at most 256 bytes');
+  }
+  if (typeof salt !== 'string' || salt.length === 0) {
+    throw new Error('salt must be a non-empty string');
+  }
   const writer = new CanonicalWriter();
   writer.text(outcome);
   writer.text(salt);
   const encoded = writer.finish();
-  const domain = new TextEncoder().encode(VOTE_COMMIT_DOMAIN);
+  const domain = new TextEncoder().encode(LEGACY_VOTE_COMMIT_DOMAIN);
   const input = new Uint8Array(domain.length + encoded.length);
   input.set(domain, 0);
   input.set(encoded, domain.length);
-  return bytesToHex(sha256(input));
+  const digest = bytesToHex(sha256(input));
+  return (Number.parseInt(digest[0], 16) & LEGACY_COMMIT_VERSION_MASK).toString(16) + digest.slice(1);
 }
 
 export interface TallyResult {
@@ -64,12 +77,12 @@ export function tallyVotes(
 
   let winner = '';
   let max = -1;
-  // Deterministic, order-independent tie-break: on equal counts the
-  // lexicographically smallest outcome wins. This MUST match
+  // Deterministic, order-independent tie-break: on equal counts the smallest
+  // outcome wins under canonical unsigned UTF-8 byte order. This MUST match
   // courtVoteMachine.finalize_tally so every observer derives the same
   // verdict regardless of reveal arrival order.
   for (const [outcome, list] of counts.entries()) {
-    if (list.length > max || (list.length === max && outcome < winner)) {
+    if (list.length > max || (list.length === max && compareOutcomeUtf8(outcome, winner) < 0)) {
       max = list.length;
       winner = outcome;
     }

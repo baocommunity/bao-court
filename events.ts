@@ -140,7 +140,18 @@ function dTag(disputeId: string, suffix?: string | number): [string, string] {
   return ['d', suffix !== undefined ? `${disputeId}:${suffix}` : disputeId];
 }
 
+/** Maximum number of evidence hashes per dispute event. */
+const MAX_EVIDENCE_HASHES = 64;
+
+/** Maximum number of supporting event IDs per attestation. */
+const MAX_SUPPORTING_IDS = 10_000;
+
 export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
+  if (params.evidenceHashes.length > MAX_EVIDENCE_HASHES) {
+    throw new Error(
+      `evidenceHashes length ${params.evidenceHashes.length} exceeds maximum of ${MAX_EVIDENCE_HASHES}`,
+    );
+  }
   const tags: string[][] = [
     dTag(params.disputeId),
     ['e', params.marketEventId ?? params.marketId, '', 'root'],
@@ -150,7 +161,9 @@ export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
     ['proposed', params.proposedOutcome],
     ['deadline', String(params.disputeDeadline)],
     ['appeal_type', 'frost'],
-    ...params.evidenceHashes.map((h): [string, string] => ['evidence', h]),
+    // Canonicalize evidence hashes: convert to tags, lowercase, sort so the
+    // event is deterministic and independent of insertion order.
+    ...[...params.evidenceHashes.map((h): [string, string] => ['evidence', h.toLowerCase()])].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)),
     ['alt', `BAO Court dispute ${params.disputeId.slice(0, 12)}`],
   ];
   if (params.publisherPubkey) {
@@ -763,7 +776,13 @@ export function buildDisputeAttestationEvent(
   // Supporting reveal event ids — the evidence the verdict commitment pins.
   // Observers recompute the tally from these and check it against the
   // `verdict` tag; the Nostr event id commits to both (tags are signed).
-  for (const id of attestation.supportingEventIds ?? []) {
+  const supportIds = attestation.supportingEventIds ?? [];
+  if (supportIds.length > MAX_SUPPORTING_IDS) {
+    throw new Error(
+      `supportingEventIds length ${supportIds.length} exceeds maximum of ${MAX_SUPPORTING_IDS}`,
+    );
+  }
+  for (const id of supportIds) {
     tags.push(['e', id, '', 'mention']);
   }
   return {
