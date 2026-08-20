@@ -9,7 +9,7 @@
  */
 
 import * as frost from '@vbyte/frost';
-import { buildAttestationMessage } from './crypto';
+import { buildAttestationMessage, isValidSecp256k1Point } from './crypto';
 import {
   buildFrostCommitEvent,
   buildFrostRevealEvent,
@@ -143,8 +143,16 @@ export class IndependentSigningSession {
       );
     }
 
-    // Restore commitments, deduplicating by juror index.
+    // Restore commitments, deduplicating by juror index. Every nonce point is
+    // re-validated on-curve so a tampered snapshot cannot inject malformed
+    // nonces into the binding-factor computation at aggregation.
     for (const c of snapshot.commitments) {
+      if (
+        !isValidSecp256k1Point(c.binder_pn)
+        || !isValidSecp256k1Point(c.hidden_pn)
+      ) {
+        throw new Error('Signing snapshot contains a malformed nonce commitment');
+      }
       this.commitments.set(c.idx, {
         idx: c.idx,
         pubkey: c.pubkey,
@@ -158,9 +166,16 @@ export class IndependentSigningSession {
       });
     }
 
-    // Only restore reveals when the matching commitment is present.
+    // Only restore reveals when the matching commitment is present, and only
+    // when the reveal's own nonce points are canonical curve points.
     for (const r of snapshot.reveals) {
       if (!this.commitments.has(r.idx)) continue;
+      if (
+        !isValidSecp256k1Point(r.binder_pn)
+        || !isValidSecp256k1Point(r.hidden_pn)
+      ) {
+        throw new Error('Signing snapshot contains a malformed reveal nonce');
+      }
       this.reveals.set(r.idx, {
         idx: r.idx,
         pubkey: r.pubkey,
@@ -215,7 +230,14 @@ export class IndependentSigningSession {
     if (!this.dkg.verificationShares.some((v) => v.idx === payload.idx)) return false;
     const vss = this.dkg.vssCommitments.find((c) => c.idx === payload.idx);
     if (vss && payload.pubkey !== vss.pubkey) return false;
-    if (!payload.commitmentPackage.binder_pn || !payload.commitmentPackage.hidden_pn) return false;
+    // Shape + curve membership: a hex string that is not an actual secp256k1
+    // point would otherwise poison the FROST binding-factor computation.
+    if (
+      !isValidSecp256k1Point(payload.commitmentPackage.binder_pn)
+      || !isValidSecp256k1Point(payload.commitmentPackage.hidden_pn)
+    ) {
+      return false;
+    }
     try {
       const existing = this.commitments.get(payload.idx);
       if (existing) {

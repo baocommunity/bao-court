@@ -449,13 +449,17 @@ describe('bound Court protocol events', () => {
 
   it('strictly parses FROST commitment and reveal payloads', () => {
     const params = parameters();
+    // Nonce points must decode to real secp256k1 curve points, so derive them
+    // from valid compressed public keys instead of arbitrary hex.
+    const binder = hostPubkey(21);
+    const hidden = hostPubkey(22);
     const commitmentTemplate = bindCourtProtocolEvent(buildFrostCommitEvent({
       disputeId: params.disputeId,
       jurorIdx: 1,
       commitmentPackage: {
         idx: 1,
-        binder_pn: '99'.repeat(32),
-        hidden_pn: 'aa'.repeat(32),
+        binder_pn: binder,
+        hidden_pn: hidden,
       },
     }), params, 1);
     const revealTemplate = bindCourtProtocolEvent(buildFrostRevealEvent({
@@ -463,19 +467,19 @@ describe('bound Court protocol events', () => {
       jurorIdx: 1,
       publicNonce: {
         idx: 1,
-        binder_pn: '99'.repeat(32),
-        hidden_pn: 'aa'.repeat(32),
+        binder_pn: binder,
+        hidden_pn: hidden,
       },
       partialSig: 'bb'.repeat(64),
       frostPubkey: hostPubkey(24),
     }), params, 1);
 
     expect(parseBoundFrostCommitEvent(sign(commitmentTemplate), params).commitmentPackage)
-      .toEqual({ idx: 1, binder_pn: '99'.repeat(32), hidden_pn: 'aa'.repeat(32) });
+      .toEqual({ idx: 1, binder_pn: binder, hidden_pn: hidden });
     expect(parseBoundFrostRevealEvent(sign(revealTemplate), params)).toMatchObject({
       frostPubkey: hostPubkey(24),
       partialSig: 'bb'.repeat(64),
-      publicNonce: { idx: 1, binder_pn: '99'.repeat(32), hidden_pn: 'aa'.repeat(32) },
+      publicNonce: { idx: 1, binder_pn: binder, hidden_pn: hidden },
     });
 
     const content = JSON.parse(commitmentTemplate.content) as Record<string, unknown>;

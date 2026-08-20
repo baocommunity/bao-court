@@ -1,10 +1,11 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { generateFrostKeys } from '../dkg';
 import { runNormalSigningRound, createCommitments, createRevealsAndPartialSigs, aggregateAttestation, InMemoryNonceGuard, LocalStorageNonceGuard } from '../signing';
-import { buildAttestationMessage, verifyFinalSignature } from '../crypto';
+import { buildAttestationMessage, isValidSecp256k1Point, verifyFinalSignature } from '../crypto';
 import type { SelectedJuror } from '../types';
 
 function makeJuror(idx: number): SelectedJuror {
@@ -138,5 +139,25 @@ describe('FROST signing', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  // V12 audit: nonce points must be real secp256k1 curve points, not merely
+  // 64-char hex strings, before they enter FROST binding-factor computation.
+  it('isValidSecp256k1Point accepts on-curve points and rejects arbitrary hex', () => {
+    // The generator has even y, so both its compressed and x-only encodings
+    // are valid points regardless of parity.
+    const generatorCompressed = secp256k1.Point.BASE.toHex(true);
+    expect(generatorCompressed.startsWith('02')).toBe(true);
+    expect(isValidSecp256k1Point(generatorCompressed)).toBe(true);
+    expect(isValidSecp256k1Point(generatorCompressed.slice(2))).toBe(true);
+
+    const [commitment] = createCommitments([shares[0]]);
+    expect(isValidSecp256k1Point(commitment.commit.binder_pn)).toBe(true);
+    expect(isValidSecp256k1Point(commitment.commit.hidden_pn)).toBe(true);
+
+    expect(isValidSecp256k1Point('11'.repeat(32))).toBe(false);
+    expect(isValidSecp256k1Point('ff'.repeat(32))).toBe(false);
+    expect(isValidSecp256k1Point(`02${'11'.repeat(32)}`)).toBe(false);
+    expect(isValidSecp256k1Point('not-hex')).toBe(false);
   });
 });
