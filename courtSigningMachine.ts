@@ -20,6 +20,7 @@
 
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import { isValidSecp256k1Point } from './crypto';
 import { CanonicalWriter } from './courtSession';
 
 export const COURT_SIGNING_SESSION_DOMAIN = 'BAO-Court/SigningSession/v1';
@@ -112,9 +113,15 @@ export class CourtSigningTransitionError extends Error {
 
 const textEncoder = new TextEncoder();
 const HEX_32 = /^[0-9a-f]{64}$/;
-const HEX_POINT = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
 const SCHNORR_SIGNATURE = /^[0-9a-f]{128}$/;
+const MAX_PARTIAL_SIGNATURES = 10_000;
 const MAX_OUTCOME_BYTES = 256;
+
+const ABORT_PHASES = new Set<CourtSigningPhase>([
+  'aborted_peer',
+  'aborted_coordinator',
+  'aborted_network',
+]);
 
 const TERMINAL_PHASES = new Set<CourtSigningPhase>([
   'attestation_published',
@@ -166,6 +173,79 @@ function assertParticipant(state: CourtSigningMachineState, idx: number): void {
   }
 }
 
+/**
+ * Validate every persisted signing record at reducer entry so a restored or
+ * tampered snapshot cannot bypass the distinct-signer thresholds: commitment
+ * records must be canonical points from distinct roster signers, the finalized
+ * signer set must exactly match the distinct sorted commitment indices, and
+ * partial records must belong to that set with well-formed signatures. This
+ * also fails closed (CourtSigningTransitionError) instead of crashing with a
+ * TypeError on malformed array/record shapes.
+ */
+function assertSigningRecordInvariants(state: CourtSigningMachineState): void {
+  if (!Array.isArray(state.commitments) || !Array.isArray(state.partials)) {
+    throw new CourtSigningTransitionError('signing state ledgers must be arrays');
+  }
+  const commitmentIndices = new Set<number>();
+  for (const commitment of state.commitments) {
+    if (typeof commitment !== 'object' || commitment === null) {
+      throw new CourtSigningTransitionError('signing state contains a malformed nonce commitment');
+    }
+    if (
+      typeof commitment.idx !== 'number'
+      || !Number.isSafeInteger(commitment.idx)
+      || typeof commitment.binderPn !== 'string'
+      || typeof commitment.hiddenPn !== 'string'
+      || !isValidSecp256k1Point(commitment.binderPn)
+      || !isValidSecp256k1Point(commitment.hiddenPn)
+    ) {
+      throw new CourtSigningTransitionError('signing state contains a malformed nonce commitment');
+    }
+    assertParticipant(state, commitment.idx);
+    if (commitmentIndices.has(commitment.idx)) {
+      throw new CourtSigningTransitionError(`duplicate stored nonce commitment for signer ${commitment.idx}`);
+    }
+    commitmentIndices.add(commitment.idx);
+  }
+
+  if (state.finalizedSignerSet !== undefined) {
+    if (!Array.isArray(state.finalizedSignerSet)) {
+      throw new CourtSigningTransitionError('finalized signer set must be an array');
+    }
+    const expected = [...commitmentIndices].sort((a, b) => a - b);
+    if (
+      state.finalizedSignerSet.length !== expected.length ||
+      state.finalizedSignerSet.some((idx, offset) => idx !== expected[offset])
+    ) {
+      throw new CourtSigningTransitionError('finalized signer set does not match stored commitments');
+    }
+  }
+
+  const partialIndices = new Set<number>();
+  for (const partial of state.partials) {
+    if (typeof partial !== 'object' || partial === null) {
+      throw new CourtSigningTransitionError('signing state contains a malformed partial signature');
+    }
+    if (
+      typeof partial.idx !== 'number'
+      || !Number.isSafeInteger(partial.idx)
+      || typeof partial.psig !== 'string'
+      || !HEX_32.test(partial.psig)
+    ) {
+      throw new CourtSigningTransitionError('signing state contains a malformed partial signature');
+    }
+    if (!state.finalizedSignerSet?.includes(partial.idx)) {
+      throw new CourtSigningTransitionError(
+        `stored partial signer ${partial.idx} is not in the finalized commitment set`,
+      );
+    }
+    if (partialIndices.has(partial.idx)) {
+      throw new CourtSigningTransitionError(`duplicate stored partial signature for signer ${partial.idx}`);
+    }
+    partialIndices.add(partial.idx);
+  }
+}
+
 function assertBeforeDeadline(state: CourtSigningMachineState, now: number): void {
   assertNow(now);
   if (now >= state.deadline) {
@@ -208,11 +288,20 @@ export function createCourtSigningMachine(params: {
   ) {
     throw new CourtSigningTransitionError('threshold must be between 1 and the signer count');
   }
+  if (params.threshold > MAX_PARTIAL_SIGNATURES) {
+    throw new CourtSigningTransitionError(
+      'threshold must be at most ' + MAX_PARTIAL_SIGNATURES,
+    );
+  }
   if (!Number.isSafeInteger(params.attempt) || params.attempt < 0) {
     throw new CourtSigningTransitionError('attempt must be a non-negative integer');
   }
   if (!Number.isSafeInteger(params.deadline) || params.deadline < 1) {
     throw new CourtSigningTransitionError('deadline must be a positive Unix timestamp');
+  }
+  // Bound the outcome length to prevent memory exhaustion from unbounded strings.
+  if (params.outcome.length > 4096) {
+    throw new CourtSigningTransitionError('outcome must be at most 4096 bytes');
   }
   return {
     signingSessionHash: hashCourtSigningSession({
@@ -240,7 +329,16 @@ export function reduceCourtSigningMachine(
   state: CourtSigningMachineState,
   event: CourtSigningMachineEvent,
 ): CourtSigningMachineState {
+  assertSigningRecordInvariants(state);
+
   if (event.type === 'tick') {
+    // Validate the deadline hasn't been tampered with — if state is restored
+    // from an unsafe spread of a corrupted snapshot, catch it here.
+    if (!Number.isSafeInteger(state.deadline) || state.deadline < 1) {
+      throw new CourtSigningTransitionError(
+        'signing state has a corrupted deadline',
+      );
+    }
     assertNow(event.now);
     if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) return state;
     return {
@@ -253,7 +351,19 @@ export function reduceCourtSigningMachine(
     if (TERMINAL_PHASES.has(state.phase)) {
       throw new CourtSigningTransitionError(`cannot abort signing from ${state.phase}`);
     }
-    if (event.blamedIdx !== undefined) assertParticipant(state, event.blamedIdx);
+    // Only reducer-defined failure phases may be injected as aborts — a
+    // caller cannot cast an arbitrary phase (e.g. 'aggregate') into state.
+    if (!ABORT_PHASES.has(event.phase)) {
+      throw new CourtSigningTransitionError(`invalid signing abort phase: ${String(event.phase)}`);
+    }
+    // Ensure the caller cannot forge a peer-blame by supplying an unverified
+    // blamedIdx — the index must be a valid roster participant.
+    if (event.blamedIdx !== undefined) {
+      if (!Number.isSafeInteger(event.blamedIdx) || event.blamedIdx < 1) {
+        throw new CourtSigningTransitionError('blamedIdx must be a positive integer');
+      }
+      assertParticipant(state, event.blamedIdx);
+    }
     return {
       ...state,
       phase: event.phase,
@@ -280,8 +390,10 @@ export function reduceCourtSigningMachine(
     }
     // Nonce points may arrive x-only (64 hex) or compressed (02/03 prefix);
     // the protocol boundary (parseBoundFrostCommitEvent) accepts both, so the
-    // machine must not reject the x-only form.
-    if (!HEX_POINT.test(event.binderPn) || !HEX_POINT.test(event.hiddenPn)) {
+    // machine must not reject the x-only form. Beyond shape, the bytes must
+    // decode to a real curve point so malformed nonces cannot poison the
+    // binding-factor computation downstream.
+    if (!isValidSecp256k1Point(event.binderPn) || !isValidSecp256k1Point(event.hiddenPn)) {
       throw new CourtSigningTransitionError('nonce commitments must be canonical secp256k1 points (x-only or compressed)');
     }
     const existing = state.commitments.find((c) => c.idx === event.idx);
@@ -332,6 +444,12 @@ export function reduceCourtSigningMachine(
         `signer ${event.idx} is not in the finalized commitment set`,
       );
     }
+    // Reject malformed state — the partial signature must be well-formed hex.
+    if (!/^[0-9a-fA-F]{64}$/.test(event.psig)) {
+      throw new CourtSigningTransitionError(
+        'partial signature must be 64-char lowercase hex',
+      );
+    }
     if (!HEX_32.test(event.psig)) {
       throw new CourtSigningTransitionError('partial signature must be 32-byte lowercase hex');
     }
@@ -347,6 +465,14 @@ export function reduceCourtSigningMachine(
           reason: 'A signer published conflicting partial signatures for this signing attempt.',
         },
       };
+    }
+    // Verify that the partial signature index is unique — duplicates would
+    // bypass the distinct-signer threshold check and inflate the partial count.
+    const seenIdxs = new Set(state.partials.map((p) => p.idx));
+    if (seenIdxs.has(event.idx)) {
+      throw new CourtSigningTransitionError(
+        `duplicate partial signature from signer ${event.idx}`,
+      );
     }
     return {
       ...state,
