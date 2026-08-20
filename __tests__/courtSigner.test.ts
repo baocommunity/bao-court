@@ -214,6 +214,16 @@ describe('signer-backed private transport', () => {
       wrapProtocolEventWithSigner(TEMPLATE, alice, 'not-a-pubkey'),
     ).rejects.toThrow(/hex/);
   });
+
+  // V12 audit: an explicitly supplied empty dispute filter must match nothing
+  // instead of broadening the result set to every unwrapped rumor.
+  it('an explicitly supplied empty dispute filter matches nothing', async () => {
+    const wrap = await wrapProtocolEventWithSigner(TEMPLATE, alice, BOB_PUB);
+    const filtered = await unwrapProtocolEventsWithSigner([wrap], bob, { disputeId: '' });
+    expect(filtered).toHaveLength(0);
+    const unfiltered = await unwrapProtocolEventsWithSigner([wrap], bob);
+    expect(unfiltered).toHaveLength(1);
+  });
 });
 
 describe('secret-key boundary copies', () => {
