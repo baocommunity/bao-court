@@ -164,7 +164,9 @@ export function unwrapProtocolEvents(
     seen.add(rumor.id);
 
     if (options?.kinds && !options.kinds.includes(rumor.kind)) continue;
-    if (options?.disputeId) {
+    // An explicitly supplied filter is always active — an empty-string
+    // disputeId must match nothing instead of broadening the result set.
+    if (options?.disputeId !== undefined) {
       const disputeTag = rumor.tags.find((t) => t[0] === 'dispute');
       if (disputeTag?.[1] !== options.disputeId) continue;
     }
