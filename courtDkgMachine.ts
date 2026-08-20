@@ -81,6 +81,16 @@ export class CourtDkgTransitionError extends Error {
 
 const HEX_32 = /^[0-9a-f]{64}$/;
 const GROUP_KEY = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
+const MAX_DKG_PARTICIPANTS = 10_000;
+
+/** Phases that may only enter state through a validated `abort` event. */
+const ABORT_PHASES = new Set<CourtDkgPhase>([
+  'delivery_failed',
+  'aborted_peer',
+  'aborted_coordinator',
+  'aborted_network',
+  'incompatible_suite',
+]);
 
 const TERMINAL_PHASES = new Set<CourtDkgPhase>([
   'backed_up',
@@ -132,7 +142,7 @@ export function createCourtDkgMachine(params: {
   readonly participantIndices: readonly number[];
   readonly deadline: number;
 }): CourtDkgMachineState {
-  if (!HEX_32.test(params.sessionHash)) {
+  if (typeof params.sessionHash !== 'string' || !HEX_32.test(params.sessionHash)) {
     throw new CourtDkgTransitionError('sessionHash must be 32-byte lowercase hex');
   }
   if (!Number.isSafeInteger(params.deadline) || params.deadline < 1) {
@@ -140,6 +150,11 @@ export function createCourtDkgMachine(params: {
   }
   if (params.participantIndices.length === 0) {
     throw new CourtDkgTransitionError('DKG requires at least one participant');
+  }
+  if (params.participantIndices.length > 10_000) {
+    throw new CourtDkgTransitionError(
+      'participantIndices length exceeds maximum of 10000',
+    );
   }
   const participants = [...params.participantIndices];
   participants.forEach((idx, offset) => {
@@ -168,7 +183,19 @@ export function reduceCourtDkgMachine(
     if (TERMINAL_PHASES.has(state.phase) || state.phase === 'certified') {
       throw new CourtDkgTransitionError(`cannot abort DKG from ${state.phase}`);
     }
-    if (event.blamedIdx !== undefined) assertParticipant(state, event.blamedIdx);
+    // Only reducer-defined failure phases may be injected as aborts — a
+    // caller cannot cast an arbitrary phase (e.g. 'certified') into state.
+    if (!ABORT_PHASES.has(event.phase)) {
+      throw new CourtDkgTransitionError(`invalid DKG abort phase: ${String(event.phase)}`);
+    }
+    // Ensure the caller cannot forge a peer-blame by supplying an unverified
+    // blamedIdx — the index must be a valid roster participant.
+    if (event.blamedIdx !== undefined) {
+      if (!Number.isSafeInteger(event.blamedIdx) || event.blamedIdx < 1) {
+        throw new CourtDkgTransitionError('blamedIdx must be a positive integer');
+      }
+      assertParticipant(state, event.blamedIdx);
+    }
     return {
       ...state,
       phase: event.phase,
@@ -218,7 +245,12 @@ export function reduceCourtDkgMachine(
     ) {
       throw new CourtDkgTransitionError('cannot finalize before every participant completes round 2');
     }
-    if (!HEX_32.test(event.transcriptHash) || !GROUP_KEY.test(event.candidateGroupPubkey)) {
+    if (
+      typeof event.transcriptHash !== 'string'
+      || typeof event.candidateGroupPubkey !== 'string'
+      || !HEX_32.test(event.transcriptHash)
+      || !GROUP_KEY.test(event.candidateGroupPubkey)
+    ) {
       throw new CourtDkgTransitionError('transcript hash or candidate group key has invalid encoding');
     }
     return {
