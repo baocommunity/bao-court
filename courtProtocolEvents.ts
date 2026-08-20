@@ -26,7 +26,7 @@ import {
   BAO_COURT_VOTE_COMMIT_KIND,
   BAO_COURT_VOTE_REVEAL_KIND,
 } from './events';
-import type { DkgProofOfKnowledge } from './crypto';
+import { isValidSecp256k1Point, type DkgProofOfKnowledge } from './crypto';
 
 export type CourtProtocolEventClassification = 'bound-v1' | 'legacy' | 'invalid';
 
@@ -558,7 +558,9 @@ export function parseBoundFrostCommitEvent(
   const parsed = parseCourtProtocolEvent(event, params, [BAO_COURT_FROST_COMMIT_KIND]);
   const binder = uniqueTag(event, 'binder_pn')[1];
   const hidden = uniqueTag(event, 'hidden_pn')[1];
-  if (!HEX_POINT.test(binder) || !HEX_POINT.test(hidden)) {
+  // Shape + curve membership: a hex string that is not an actual secp256k1
+  // point would otherwise poison the FROST binding-factor computation.
+  if (!isValidSecp256k1Point(binder) || !isValidSecp256k1Point(hidden)) {
     throw new CourtProtocolEventError('invalid_tag', 'FROST nonce commitments have invalid encoding');
   }
   assertExactPayloadKeys(parsed.payload, ['disputeId', 'jurorIdx', 'commitmentPackage']);
@@ -587,9 +589,9 @@ export function parseBoundFrostRevealEvent(
   const hidden = uniqueTag(event, 'nonce_hidden')[1];
   const partialSig = uniqueTag(event, 'psig')[1];
   if (
-    !HEX_POINT.test(frostPubkey)
-    || !HEX_POINT.test(binder)
-    || !HEX_POINT.test(hidden)
+    !isValidSecp256k1Point(frostPubkey)
+    || !isValidSecp256k1Point(binder)
+    || !isValidSecp256k1Point(hidden)
     || !HEX_BYTES.test(partialSig)
     || partialSig.length > 512
   ) {
