@@ -734,6 +734,21 @@ export function createFrostAppealCoordinator(
         emit('settlement_rejected', appeal, { reason: 'missing_verdict_hash' });
         return false;
       }
+      // For internal attestations (where the coordinator produced the tally),
+      // verify that the verdictHash matches our computed tally. External
+      // attestations may carry supporting IDs we don't know about, so we only
+      // enforce the hash when we have a known verdict.
+      if (appeal.verdictHash && appeal.verdictSupportingEventIds) {
+        const expectedVerdictHash = hashDisputeVerdict({
+          disputeId: appeal.disputeId,
+          outcome: attestation.outcome,
+          supportingEventIds: appeal.verdictSupportingEventIds,
+        });
+        if (expectedVerdictHash !== attestation.verdictHash) {
+          emit('settlement_rejected', appeal, { reason: 'verdict_hash_mismatch' });
+          return false;
+        }
+      }
       const carriedRound = (attestation as { round?: number | string }).round;
       const roundsToTry =
         carriedRound !== undefined && carriedRound !== null

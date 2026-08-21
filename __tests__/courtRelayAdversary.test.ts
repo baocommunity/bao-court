@@ -1196,18 +1196,18 @@ describe('store tamper: inbox snapshot restore re-validates everything', () => {
     await expect(restored.drain(new SeckeyCourtSigner(secret(MY_BYTE)))).resolves.toEqual([]);
   });
 
-  it('a restored wrap is re-verified at drain: content tampering drops it, sig tampering is not load-bearing', async () => {
+  it('a restored wrap is re-verified at drain: outer sig and content tampering both drop it', async () => {
     const { inbox, wrap } = await populatedInbox();
     const good = inbox.snapshot();
 
-    // The wrap-layer sig is the ephemeral NIP-59 outer signature, which the
-    // unwrap path deliberately never verifies; restore is structural, so the
-    // tampered sig restores fine and the rumor still verifies at drain.
+    // The outer gift-wrap event is reconstructed and cryptographically
+    // verified at unwrap (its id/sig are load-bearing provenance for wrap
+    // deduplication), so a tampered outer signature drops the record at drain.
     const sigTampered = jsonRoundTrip(good) as MutableInboxSnapshot;
     (sigTampered.records[0] as { wrap: Record<string, unknown> }).wrap.sig = '00'.repeat(64);
     const restoredSig = CourtInbox.fromSnapshot(jsonRoundTrip(sigTampered), MY_PUBKEY);
-    const messages = await restoredSig.drain(new SeckeyCourtSigner(secret(MY_BYTE)));
-    expect(messages).toHaveLength(1);
+    await expect(restoredSig.drain(new SeckeyCourtSigner(secret(MY_BYTE)))).resolves.toEqual([]);
+    expect(restoredSig.getRecord(wrap.id)?.drained).toBe(true);
 
     // The load-bearing layers (address tag, encrypted content, seal, rumor
     // commitment) are verified at drain: a tampered content drops the record.

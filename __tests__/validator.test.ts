@@ -10,6 +10,7 @@ import { validateAttestationEvent, verifyRawSignature } from '../validator';
 import { BAO_COURT_ATTESTATION_KIND } from '../events';
 import { generateFrostKeys } from '../dkg';
 import { runNormalSigningRound } from '../signing';
+import { hashDisputeVerdict } from '../courtVoteMachine';
 import type { SelectedJuror } from '../types';
 
 function makeJuror(idx: number): SelectedJuror {
@@ -41,7 +42,15 @@ describe('validateAttestationEvent', () => {
   });
 
   // Dispute attestations must certify the TALLY that produced the outcome.
-  const VERDICT_HASH = '11'.repeat(32);
+  // The verdict commitment must recompute from the event's own dispute,
+  // outcome, and supporting reveal ids, so the fixture uses a real derived
+  // hash and publishes the supporting ids as mention tags.
+  const SUPPORT_IDS = ['e1'.repeat(32), 'e2'.repeat(32)];
+  const VERDICT_HASH = hashDisputeVerdict({
+    disputeId: 'd'.repeat(64),
+    outcome: 'YES',
+    supportingEventIds: SUPPORT_IDS,
+  });
 
   function buildValidEvent() {
     const attestation = runNormalSigningRound({
@@ -69,6 +78,7 @@ describe('validateAttestationEvent', () => {
         ['ver', 'FROST-BIP340-v1'],
         ['dispute', 'd'.repeat(64)],
         ['verdict', attestation.verdictHash!],
+        ...SUPPORT_IDS.map((id) => ['e', id, '', 'mention']),
       ],
       content: JSON.stringify({
         marketId: 'demo-market',

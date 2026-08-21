@@ -11,6 +11,13 @@
 import type { EventTemplate, Event as NostrEvent } from 'nostr-tools/pure';
 import type { FrostAttestation, JurorProfile, StakeCommitment } from './types';
 import type { DkgProofOfKnowledge } from './crypto';
+import {
+  findTag,
+  findTagValue,
+  isHex64,
+  parseContentObject,
+  parsePositiveInt,
+} from './courtEventParseCore';
 
 interface NostrEventLike {
   kind: number;
@@ -122,25 +129,26 @@ function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-function isHex64(value: string): boolean {
-  return /^[0-9a-fA-F]{64}$/.test(value);
-}
-
 function isNostrId(value: string): boolean {
   return isHex64(value);
-}
-
-/** Parse a positive integer (valid FROST/juror index); null when invalid. */
-function parsePositiveInt(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isInteger(n) && n >= 1 ? n : null;
 }
 
 function dTag(disputeId: string, suffix?: string | number): [string, string] {
   return ['d', suffix !== undefined ? `${disputeId}:${suffix}` : disputeId];
 }
 
+/** Maximum number of evidence hashes per dispute event. */
+const MAX_EVIDENCE_HASHES = 64;
+
+/** Maximum number of supporting event IDs per attestation. */
+const MAX_SUPPORTING_IDS = 10_000;
+
 export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
+  if (params.evidenceHashes.length > MAX_EVIDENCE_HASHES) {
+    throw new Error(
+      `evidenceHashes length ${params.evidenceHashes.length} exceeds maximum of ${MAX_EVIDENCE_HASHES}`,
+    );
+  }
   const tags: string[][] = [
     dTag(params.disputeId),
     ['e', params.marketEventId ?? params.marketId, '', 'root'],
@@ -150,7 +158,9 @@ export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
     ['proposed', params.proposedOutcome],
     ['deadline', String(params.disputeDeadline)],
     ['appeal_type', 'frost'],
-    ...params.evidenceHashes.map((h): [string, string] => ['evidence', h]),
+    // Canonicalize evidence hashes: convert to tags, lowercase, sort so the
+    // event is deterministic and independent of insertion order.
+    ...[...params.evidenceHashes.map((h): [string, string] => ['evidence', h.toLowerCase()])].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)),
     ['alt', `BAO Court dispute ${params.disputeId.slice(0, 12)}`],
   ];
   if (params.publisherPubkey) {
@@ -234,13 +244,14 @@ export function parseJurorCandidacyEvent(
   }
 
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const bondTag = event.tags.find((t) => t[0] === 'bond');
-    const addressTag = event.tags.find((t) => t[0] === 'address');
-    const txidTag = event.tags.find((t) => t[0] === 'bondTxid');
-    const voutTag = event.tags.find((t) => t[0] === 'bondVout');
-    const scriptTag = event.tags.find((t) => t[0] === 'bondScript');
-    const deadlineTag = event.tags.find((t) => t[0] === 'deadline');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const bondTag = findTag(event.tags, 'bond');
+    const addressTag = findTag(event.tags, 'address');
+    const txidTag = findTag(event.tags, 'bondTxid');
+    const voutTag = findTag(event.tags, 'bondVout');
+    const scriptTag = findTag(event.tags, 'bondScript');
+    const deadlineTag = findTag(event.tags, 'deadline');
     const categoryTags = event.tags.filter((t) => t[0] === 't').map((t) => t[1]);
 
     const amountSats = Number(bondTag?.[1] ?? content.bondAmountSats ?? 0);
@@ -351,11 +362,12 @@ export function parseSelectionEvent(
 ): { disputeId: string; marketId: string; selected: SelectedJurorEntry[]; backups: SelectedJurorEntry[]; seed: string; blockHash: string } | null {
   if (event.kind !== BAO_COURT_SELECTION_KIND) return null;
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-    const marketTag = event.tags.find((t) => t[0] === 'market');
-    const seedTag = event.tags.find((t) => t[0] === 'seed');
-    const blockTag = event.tags.find((t) => t[0] === 'block');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const disputeTag = findTag(event.tags, 'dispute');
+    const marketTag = findTag(event.tags, 'market');
+    const seedTag = findTag(event.tags, 'seed');
+    const blockTag = findTag(event.tags, 'block');
 
     const selected = event.tags
       .filter((t) => t[0] === 'selected')
@@ -416,13 +428,14 @@ export function parseDkgCommitmentEvent(
 ): { disputeId: string; jurorIdx: number; jurorPubkey: string; threshold: number; pok: DkgProofOfKnowledge; vssCommits: string[]; phaseNonce: string } | null {
   if (event.kind !== BAO_COURT_DKG_COMMITMENT_KIND || !event.pubkey || !isNostrId(event.pubkey)) return null;
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-    const jurorTag = event.tags.find((t) => t[0] === 'juror');
-    const thresholdTag = event.tags.find((t) => t[0] === 'threshold');
-    const pokNTag = event.tags.find((t) => t[0] === 'pok_n');
-    const pokZTag = event.tags.find((t) => t[0] === 'pok_z');
-    const phaseNonceTag = event.tags.find((t) => t[0] === 'phase_nonce');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const disputeTag = findTag(event.tags, 'dispute');
+    const jurorTag = findTag(event.tags, 'juror');
+    const thresholdTag = findTag(event.tags, 'threshold');
+    const pokNTag = findTag(event.tags, 'pok_n');
+    const pokZTag = findTag(event.tags, 'pok_z');
+    const phaseNonceTag = findTag(event.tags, 'phase_nonce');
     const commits = event.tags.filter((t) => t[0] === 'commit').map((t) => t[1]);
 
     const contentPok = content.pok && typeof content.pok === 'object'
@@ -508,10 +521,11 @@ export function parseVoteCommitEvent(
 ): { disputeId: string; jurorIdx: number; pubkey: string; commitHash: string } | null {
   if (event.kind !== BAO_COURT_VOTE_COMMIT_KIND || !event.pubkey || !isNostrId(event.pubkey)) return null;
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-    const jurorTag = event.tags.find((t) => t[0] === 'juror');
-    const commitTag = event.tags.find((t) => t[0] === 'commit');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const disputeTag = findTag(event.tags, 'dispute');
+    const jurorTag = findTag(event.tags, 'juror');
+    const commitTag = findTag(event.tags, 'commit');
     const jurorIdx = parsePositiveInt(jurorTag?.[1] ?? content.jurorIdx);
     if (jurorIdx === null) return null;
     return {
@@ -530,11 +544,12 @@ export function parseVoteRevealEvent(
 ): { disputeId: string; jurorIdx: number; pubkey: string; outcome: string; salt: string } | null {
   if (event.kind !== BAO_COURT_VOTE_REVEAL_KIND || !event.pubkey || !isNostrId(event.pubkey)) return null;
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-    const jurorTag = event.tags.find((t) => t[0] === 'juror');
-    const outcomeTag = event.tags.find((t) => t[0] === 'outcome');
-    const saltTag = event.tags.find((t) => t[0] === 'salt');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const disputeTag = findTag(event.tags, 'dispute');
+    const jurorTag = findTag(event.tags, 'juror');
+    const outcomeTag = findTag(event.tags, 'outcome');
+    const saltTag = findTag(event.tags, 'salt');
     const jurorIdx = parsePositiveInt(jurorTag?.[1] ?? content.jurorIdx);
     if (jurorIdx === null) return null;
     return {
@@ -610,11 +625,12 @@ export function parseFrostCommitEvent(
 ): { disputeId: string; jurorIdx: number; pubkey: string; commitmentPackage: { idx: number; binder_pn: string; hidden_pn: string } } | null {
   if (event.kind !== BAO_COURT_FROST_COMMIT_KIND || !event.pubkey || !isNostrId(event.pubkey)) return null;
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-    const jurorTag = event.tags.find((t) => t[0] === 'juror');
-    const binderTag = event.tags.find((t) => t[0] === 'binder_pn');
-    const hiddenTag = event.tags.find((t) => t[0] === 'hidden_pn');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const disputeTag = findTag(event.tags, 'dispute');
+    const jurorTag = findTag(event.tags, 'juror');
+    const binderTag = findTag(event.tags, 'binder_pn');
+    const hiddenTag = findTag(event.tags, 'hidden_pn');
 
     const jurorIdx = parsePositiveInt(jurorTag?.[1] ?? content.jurorIdx);
     if (jurorIdx === null) return null;
@@ -642,13 +658,14 @@ export function parseFrostRevealEvent(
 ): { disputeId: string; jurorIdx: number; pubkey: string; publicNonce: { idx: number; binder_pn: string; hidden_pn: string }; partialSig: string; frostPubkey: string } | null {
   if (event.kind !== BAO_COURT_FROST_REVEAL_KIND || !event.pubkey || !isNostrId(event.pubkey)) return null;
   try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-    const jurorTag = event.tags.find((t) => t[0] === 'juror');
-    const pkTag = event.tags.find((t) => t[0] === 'pk');
-    const binderTag = event.tags.find((t) => t[0] === 'nonce_binder');
-    const hiddenTag = event.tags.find((t) => t[0] === 'nonce_hidden');
-    const psigTag = event.tags.find((t) => t[0] === 'psig');
+    const content = parseContentObject(event.content);
+    if (!content) return null;
+    const disputeTag = findTag(event.tags, 'dispute');
+    const jurorTag = findTag(event.tags, 'juror');
+    const pkTag = findTag(event.tags, 'pk');
+    const binderTag = findTag(event.tags, 'nonce_binder');
+    const hiddenTag = findTag(event.tags, 'nonce_hidden');
+    const psigTag = findTag(event.tags, 'psig');
 
     const jurorIdx = parsePositiveInt(jurorTag?.[1] ?? content.jurorIdx);
     if (jurorIdx === null) return null;
@@ -682,14 +699,14 @@ export function parseAttestationEvent(
     return null;
   }
 
-  const pTag = event.tags.find((t) => t[0] === 'p');
-  const sigTag = event.tags.find((t) => t[0] === 'sig');
-  const nonceTag = event.tags.find((t) => t[0] === 'nonce');
-  const outcomeTag = event.tags.find((t) => t[0] === 'outcome');
-  const roundTag = event.tags.find((t) => t[0] === 'round');
-  const disputeTag = event.tags.find((t) => t[0] === 'dispute');
-  const marketTag = event.tags.find((t) => t[0] === 'm');
-  const verdictTag = event.tags.find((t) => t[0] === 'verdict');
+  const pTag = findTag(event.tags, 'p');
+  const sigTag = findTag(event.tags, 'sig');
+  const nonceTag = findTag(event.tags, 'nonce');
+  const outcomeTag = findTag(event.tags, 'outcome');
+  const roundTag = findTag(event.tags, 'round');
+  const disputeTag = findTag(event.tags, 'dispute');
+  const marketTag = findTag(event.tags, 'm');
+  const verdictTag = findTag(event.tags, 'verdict');
 
   if (!pTag || !sigTag || !nonceTag) return null;
 
@@ -703,12 +720,8 @@ export function parseAttestationEvent(
   if (!signature || !/^[0-9a-fA-F]{128}$/.test(signature)) return null;
   if (!pubNonce || !isHex64(pubNonce)) return null;
 
-  let content: Record<string, unknown> = {};
-  try {
-    content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+  const content = parseContentObject(event.content);
+  if (!content) return null;
 
   const marketId = marketTag?.[1] ?? String(content.marketId ?? '');
   const message = String(content.message ?? '');
@@ -763,7 +776,13 @@ export function buildDisputeAttestationEvent(
   // Supporting reveal event ids — the evidence the verdict commitment pins.
   // Observers recompute the tally from these and check it against the
   // `verdict` tag; the Nostr event id commits to both (tags are signed).
-  for (const id of attestation.supportingEventIds ?? []) {
+  const supportIds = attestation.supportingEventIds ?? [];
+  if (supportIds.length > MAX_SUPPORTING_IDS) {
+    throw new Error(
+      `supportingEventIds length ${supportIds.length} exceeds maximum of ${MAX_SUPPORTING_IDS}`,
+    );
+  }
+  for (const id of supportIds) {
     tags.push(['e', id, '', 'mention']);
   }
   return {
@@ -861,13 +880,12 @@ export function validateSelectionEvent(
     return { valid: false, error: 'Duplicate juror indices' };
   }
 
-  try {
-    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
-    if (!content.seed || !content.blockHash) {
-      return { valid: false, error: 'Missing seed or block hash in content' };
-    }
-  } catch {
+  const content = parseContentObject(event.content);
+  if (!content) {
     return { valid: false, error: 'Invalid JSON content' };
+  }
+  if (!content.seed || !content.blockHash) {
+    return { valid: false, error: 'Missing seed or block hash in content' };
   }
 
   return { valid: true, selected, backups };

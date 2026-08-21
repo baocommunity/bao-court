@@ -7,6 +7,7 @@ import {
   createCourtVoteMachine,
   hashCourtVerdict,
   hashCourtVoteCommit,
+  hashDisputeVerdict,
   reduceCourtVoteMachine,
   type CourtVoteMachineState,
 } from '../courtVoteMachine';
@@ -218,5 +219,104 @@ describe('Court vote state machine', () => {
     state = reduceCourtVoteMachine(state, { type: 'finalize_tally', now: REVEAL_DEADLINE + 1 });
     expect(state.phase).toBe('tally_final');
     expect(state.verdict?.outcome).toBe('yes');
+  });
+
+  // V12 audit: a caller must not be able to roll the clock back to re-admit
+  // reveals after a later close, or hold the ceremony open past a deadline a
+  // later event already observed.
+  it('rejects timestamp rollback on any time-bearing event', () => {
+    let state = initial();
+    state = reduceCourtVoteMachine(state, commitFor(1, 'yes')); // now 100
+    expect(() => reduceCourtVoteMachine(state, commitFor(2, 'yes'))).not.toThrow();
+    expect(() =>
+      reduceCourtVoteMachine(state, { type: 'close_commits', now: 50 }),
+    ).toThrow(/must not precede/);
+    expect(() => reduceCourtVoteMachine(state, { type: 'tick', now: 99 })).toThrow(/must not precede/);
+  });
+
+  // V12 audit: returned state must be immutable so a holder cannot expand the
+  // frozen ballot or roster between transitions.
+  it('freezes configuration and ledger state against caller mutation', () => {
+    const state = initial();
+    expect(Object.isFrozen(state)).toBe(true);
+    expect(Object.isFrozen(state.participantIndices)).toBe(true);
+    expect(Object.isFrozen(state.allowedOutcomes)).toBe(true);
+    expect(() => (state.allowedOutcomes as string[]).push('maybe')).toThrow(TypeError);
+    expect(() => (state.participantIndices as number[]).push(4)).toThrow(TypeError);
+
+    const tallied = reduceCourtVoteMachine(
+      reduceCourtVoteMachine(reduceCourtVoteMachine(initial(), commitFor(1, 'yes')), {
+        type: 'accept_commit',
+        idx: 2,
+        commitHash: hashCourtVoteCommit({ sessionHash: SESSION, outcome: 'no', salt: SALTS[1] }),
+        eventId: COMMIT_EVENTS[1],
+        now: 101,
+      }),
+      { type: 'close_commits', now: COMMIT_DEADLINE },
+    );
+    expect(Object.isFrozen(tallied.commits)).toBe(true);
+    expect(Object.isFrozen(tallied.commits[0])).toBe(true);
+  });
+
+  // V12 audit: the protocol tie-break must be canonical unsigned UTF-8 byte
+  // order, which differs from JavaScript's UTF-16 `<` for supplementary-plane
+  // characters (U+1F4A9 vs U+E000: UTF-16 orders 💩 first, UTF-8 orders the
+  // 3-byte U+E000 first).
+  it('breaks ties by canonical UTF-8 byte order, not UTF-16 code units', () => {
+    const emoji = '\u{1F4A9}';
+    const privateUse = '\uE000';
+    const machine = createCourtVoteMachine({
+      sessionHash: SESSION,
+      participantIndices: [1, 2],
+      allowedOutcomes: [emoji, privateUse],
+      commitDeadline: COMMIT_DEADLINE,
+      revealDeadline: REVEAL_DEADLINE,
+    });
+    let state = reduceCourtVoteMachine(machine, {
+      type: 'accept_commit', idx: 1, commitHash: hashCourtVoteCommit({ sessionHash: SESSION, outcome: emoji, salt: SALTS[0] }), eventId: COMMIT_EVENTS[0], now: 100,
+    });
+    state = reduceCourtVoteMachine(state, {
+      type: 'accept_commit', idx: 2, commitHash: hashCourtVoteCommit({ sessionHash: SESSION, outcome: privateUse, salt: SALTS[1] }), eventId: COMMIT_EVENTS[1], now: 101,
+    });
+    state = toRevealOpen(state);
+    state = reduceCourtVoteMachine(state, { type: 'accept_reveal', idx: 1, outcome: emoji, salt: SALTS[0], eventId: REVEAL_EVENTS[0], now: 300 });
+    state = reduceCourtVoteMachine(state, { type: 'accept_reveal', idx: 2, outcome: privateUse, salt: SALTS[1], eventId: REVEAL_EVENTS[1], now: 301 });
+    state = reduceCourtVoteMachine(state, { type: 'close_reveals', now: REVEAL_DEADLINE });
+    state = reduceCourtVoteMachine(state, { type: 'finalize_tally', now: REVEAL_DEADLINE + 1 });
+    // \uE000 (3-byte UTF-8, EE 80 80) sorts before 💩 (4-byte UTF-8, F0 ...)
+    expect(state.verdict?.outcome).toBe(privateUse);
+  });
+
+  // V12 audit: opening reveals at or after the reveal deadline must fail — a
+  // late-open path could otherwise hold an empty ledger open forever.
+  it('rejects opening vote reveals at or after the reveal deadline', () => {
+    let state = initial();
+    state = reduceCourtVoteMachine(state, { type: 'close_commits', now: COMMIT_DEADLINE });
+    expect(() =>
+      reduceCourtVoteMachine(state, { type: 'open_reveals', now: REVEAL_DEADLINE }),
+    ).toThrow(/at or after the reveal deadline/);
+  });
+
+  // V12 audit: the exported hash helpers must reject malformed or unbounded
+  // inputs instead of hashing coercible or oversized preimages.
+  it('validates vote-commit and verdict hash inputs before hashing', () => {
+    expect(() =>
+      hashCourtVoteCommit({ sessionHash: 'not-hex', outcome: 'yes', salt: SALTS[0] }),
+    ).toThrow(CourtVoteTransitionError);
+    expect(() =>
+      hashCourtVoteCommit({ sessionHash: SESSION, outcome: 'x'.repeat(300), salt: SALTS[0] }),
+    ).toThrow(CourtVoteTransitionError);
+    expect(() =>
+      hashCourtVoteCommit({ sessionHash: SESSION, outcome: 'yes', salt: 'short' }),
+    ).toThrow(CourtVoteTransitionError);
+    expect(() =>
+      hashDisputeVerdict({ disputeId: 'short', outcome: 'yes', supportingEventIds: ['a'.repeat(64)] }),
+    ).toThrow(CourtVoteTransitionError);
+    expect(() =>
+      hashDisputeVerdict({ disputeId: 'a'.repeat(64), outcome: 'yes', supportingEventIds: [] }),
+    ).toThrow(CourtVoteTransitionError);
+    expect(() =>
+      hashDisputeVerdict({ disputeId: 'a'.repeat(64), outcome: 'yes', supportingEventIds: ['ZZ'] }),
+    ).toThrow(CourtVoteTransitionError);
   });
 });

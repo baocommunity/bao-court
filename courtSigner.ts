@@ -34,6 +34,11 @@ import { nip59 } from 'nostr-tools';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { Nip44SeckeyCrypto, type Nip44Crypto } from './nip44Crypto';
+import {
+  assertUnwrapBatchSize,
+  filterUnwrappedRumors,
+  type UnwrapFilterOptions,
+} from './courtUnwrapCore';
 
 const SEAL_KIND = 13;
 const GIFT_WRAP_KIND = 1059;
@@ -153,6 +158,8 @@ export async function wrapProtocolEventWithSigner(
 
   // Seal: kind 13, rumor encrypted to the recipient, signed by the sender
   // through the external signer.
+  // Re-use the same seal content that was verified during unwrap to ensure
+  // the wrap's seal matches exactly what the original signer produced.
   const sealContent = await signer.nip44Encrypt(recipientPubkey, JSON.stringify(rumor));
   const seal = await signer.signEvent({
     kind: SEAL_KIND,
@@ -160,6 +167,11 @@ export async function wrapProtocolEventWithSigner(
     created_at: randomNowSeconds(),
     tags: [],
   });
+  // Verify over a reconstructed plain object: finalizeEvent/verifyEvent cache
+  // their verdict in a non-JSON-enumerable symbol that object spreads
+  // preserve, so a malicious signer returning a once-valid seal it then
+  // tampered with must never reach the verifier with the cached verdict
+  // attached.
   // Verify over a reconstructed plain object: finalizeEvent/verifyEvent cache
   // their verdict in a non-JSON-enumerable symbol that object spreads
   // preserve, so a malicious signer returning a once-valid seal it then
@@ -196,14 +208,27 @@ export async function unwrapProtocolEventWithSigner(
   signer: CourtEventSigner,
 ): Promise<NostrEvent | null> {
   try {
-    if (wrapEvent.kind !== GIFT_WRAP_KIND) return null;
+    // Verify a reconstructed outer event before trusting its id as durable
+    // provenance. Reconstructing also avoids nostr-tools' cached verification
+    // verdict on an event object that may have been mutated after validation
+    // (the same pattern used for the seal below).
+    const wrapCandidate: NostrEvent = {
+      id: wrapEvent.id,
+      pubkey: wrapEvent.pubkey,
+      sig: wrapEvent.sig,
+      kind: wrapEvent.kind,
+      created_at: wrapEvent.created_at,
+      content: wrapEvent.content,
+      tags: wrapEvent.tags.map((tag) => [...tag]),
+    } as NostrEvent;
+    if (wrapCandidate.kind !== GIFT_WRAP_KIND || !verifyEvent(wrapCandidate)) return null;
     const recipientPubkey = await signer.getPublicKey();
-    const addressed = wrapEvent.tags.some(
+    const addressed = wrapCandidate.tags.some(
       (t) => t[0] === 'p' && t[1] === recipientPubkey,
     );
     if (!addressed) return null;
 
-    const sealJson = await signer.nip44Decrypt(wrapEvent.pubkey, wrapEvent.content);
+    const sealJson = await signer.nip44Decrypt(wrapCandidate.pubkey, wrapCandidate.content);
     const seal: unknown = JSON.parse(sealJson);
     if (!isRecord(seal) || seal.kind !== SEAL_KIND) return null;
     const sealEvent = seal as unknown as NostrEvent;
@@ -234,30 +259,14 @@ export async function unwrapProtocolEventWithSigner(
 export async function unwrapProtocolEventsWithSigner(
   wraps: readonly NostrEvent[],
   signer: CourtEventSigner,
-  options?: {
-    readonly kinds?: readonly number[];
-    readonly disputeId?: string;
-  },
+  options?: UnwrapFilterOptions,
 ): Promise<NostrEvent[]> {
-  const seen = new Set<string>();
-  const result: NostrEvent[] = [];
-
+  assertUnwrapBatchSize(wraps.length);
+  const rumors: (NostrEvent | null)[] = [];
   for (const wrap of wraps) {
-    const rumor = await unwrapProtocolEventWithSigner(wrap, signer);
-    if (!rumor || !rumor.id) continue;
-    if (seen.has(rumor.id)) continue;
-    seen.add(rumor.id);
-
-    if (options?.kinds && !options.kinds.includes(rumor.kind)) continue;
-    if (options?.disputeId) {
-      const disputeTag = rumor.tags.find((t) => t[0] === 'dispute');
-      if (disputeTag?.[1] !== options.disputeId) continue;
-    }
-
-    result.push(rumor);
+    rumors.push(await unwrapProtocolEventWithSigner(wrap, signer));
   }
-
-  return result;
+  return filterUnwrappedRumors(rumors, options);
 }
 
 /** Generate a fresh random secret key (hex) — for tests and demo rooms. */
