@@ -1,6 +1,6 @@
 # BAO Court — Escrow Lifecycle & Slashing
 
-**Version:** 0.5.2 (tracks `@bao/court` v0.5.2 — this repository; module introduced in v0.2.3)
+**Version:** 0.5.3 (tracks `@bao/court` v0.5.3 — this repository; module introduced in v0.2.3)
 **Status:** Implemented in `escrow.ts` (this package); rail execution remains
 host-side per ADR-001 (hybrid dual-panel escrow).
 **Scope:** Bond ownership proofs, deterministic escrow ledger, slashing and
