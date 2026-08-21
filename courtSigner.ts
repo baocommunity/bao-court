@@ -34,6 +34,11 @@ import { nip59 } from 'nostr-tools';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { Nip44SeckeyCrypto, type Nip44Crypto } from './nip44Crypto';
+import {
+  assertUnwrapBatchSize,
+  filterUnwrappedRumors,
+  type UnwrapFilterOptions,
+} from './courtUnwrapCore';
 
 const SEAL_KIND = 13;
 const GIFT_WRAP_KIND = 1059;
@@ -251,51 +256,17 @@ export async function unwrapProtocolEventWithSigner(
  * and dispute. Duplicate rumor ids are deduplicated. Matches the semantics
  * of the seckey-backed `unwrapProtocolEvents` in `nip59.ts`.
  */
-/** Maximum wraps processed in one batch to prevent resource exhaustion. */
-const MAX_UNWRAP_BATCH = 10_000;
-
 export async function unwrapProtocolEventsWithSigner(
   wraps: readonly NostrEvent[],
   signer: CourtEventSigner,
-  options?: {
-    readonly kinds?: readonly number[];
-    readonly disputeId?: string;
-  },
+  options?: UnwrapFilterOptions,
 ): Promise<NostrEvent[]> {
-  if (wraps.length > MAX_UNWRAP_BATCH) {
-    throw new Error(
-      `unwrap batch size ${wraps.length} exceeds maximum of ${MAX_UNWRAP_BATCH}`,
-    );
-  }
-  const seen = new Set<string>();
-  const result: NostrEvent[] = [];
-
+  assertUnwrapBatchSize(wraps.length);
+  const rumors: (NostrEvent | null)[] = [];
   for (const wrap of wraps) {
-    const rumor = await unwrapProtocolEventWithSigner(wrap, signer);
-    if (!rumor || !rumor.id) continue;
-    if (seen.has(rumor.id)) continue;
-    seen.add(rumor.id);
-
-    // Validate kind filter - Nostr kinds are 0-65535
-    if (options?.kinds) {
-      for (const kind of options.kinds) {
-        if (!Number.isSafeInteger(kind) || kind < 0 || kind > 65535) {
-          throw new Error(`Invalid kind in filter: ${kind}`);
-        }
-      }
-      if (!options.kinds.includes(rumor.kind)) continue;
-    }
-    // An explicitly supplied filter is always active — an empty-string
-    // disputeId must match nothing instead of broadening the result set.
-    if (options?.disputeId !== undefined) {
-      const disputeTag = rumor.tags.find((t) => t[0] === 'dispute');
-      if (disputeTag?.[1] !== options.disputeId) continue;
-    }
-
-    result.push(rumor);
+    rumors.push(await unwrapProtocolEventWithSigner(wrap, signer));
   }
-
-  return result;
+  return filterUnwrappedRumors(rumors, options);
 }
 
 /** Generate a fresh random secret key (hex) — for tests and demo rooms. */

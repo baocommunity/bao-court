@@ -22,6 +22,11 @@ import { nip44, nip59, getPublicKey } from 'nostr-tools';
 import { verifyEvent, getEventHash } from 'nostr-tools/pure';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
 import { hexToBytes } from '@noble/hashes/utils.js';
+import {
+  assertUnwrapBatchSize,
+  filterUnwrappedRumors,
+  type UnwrapFilterOptions,
+} from './courtUnwrapCore';
 
 const SEAL_KIND = 13;
 const GIFT_WRAP_KIND = 1059;
@@ -149,32 +154,11 @@ export function unwrapProtocolEvent(
 export function unwrapProtocolEvents(
   wraps: readonly NostrEvent[],
   recipientSeckey: Uint8Array | string,
-  options?: {
-    readonly kinds?: readonly number[];
-    readonly disputeId?: string;
-  },
+  options?: UnwrapFilterOptions,
 ): NostrEvent[] {
-  const seen = new Set<string>();
-  const result: NostrEvent[] = [];
-
-  for (const wrap of wraps) {
-    const rumor = unwrapProtocolEvent(wrap, recipientSeckey);
-    if (!rumor || !rumor.id) continue;
-    if (seen.has(rumor.id)) continue;
-    seen.add(rumor.id);
-
-    if (options?.kinds && !options.kinds.includes(rumor.kind)) continue;
-    // An explicitly supplied filter is always active — an empty-string
-    // disputeId must match nothing instead of broadening the result set.
-    if (options?.disputeId !== undefined) {
-      const disputeTag = rumor.tags.find((t) => t[0] === 'dispute');
-      if (disputeTag?.[1] !== options.disputeId) continue;
-    }
-
-    result.push(rumor);
-  }
-
-  return result;
+  assertUnwrapBatchSize(wraps.length);
+  const rumors = wraps.map((wrap) => unwrapProtocolEvent(wrap, recipientSeckey));
+  return filterUnwrappedRumors(rumors, options);
 }
 
 /**
