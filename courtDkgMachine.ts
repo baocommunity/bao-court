@@ -2,6 +2,16 @@
 
 /** Pure fail-closed state machine for one BAO Court DKG attempt. */
 
+import {
+  HEX_32,
+  assertBeforeDeadline as assertBeforeDeadlineCore,
+  assertBlamedIdx,
+  assertNow,
+  assertPositiveDeadline,
+  assertRosterMember,
+  normalizeCeremonyRoster,
+} from './courtCeremonyCore';
+
 export type CourtDkgPhase =
   | 'parameters_confirmed'
   | 'dkg_round_1'
@@ -79,9 +89,7 @@ export class CourtDkgTransitionError extends Error {
   }
 }
 
-const HEX_32 = /^[0-9a-f]{64}$/;
 const GROUP_KEY = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
-const MAX_DKG_PARTICIPANTS = 10_000;
 
 /** Phases that may only enter state through a validated `abort` event. */
 const ABORT_PHASES = new Set<CourtDkgPhase>([
@@ -102,32 +110,26 @@ const TERMINAL_PHASES = new Set<CourtDkgPhase>([
   'incompatible_suite',
 ]);
 
-function assertNow(now: number): void {
-  if (!Number.isSafeInteger(now) || now < 0) {
-    throw new CourtDkgTransitionError('now must be a non-negative Unix timestamp');
-  }
-}
-
 function addSorted(values: readonly number[], idx: number): readonly number[] {
   if (values.includes(idx)) return values;
   return [...values, idx].sort((a, b) => a - b);
 }
 
 function assertParticipant(state: CourtDkgMachineState, idx: number): void {
-  if (!state.participantIndices.includes(idx)) {
-    throw new CourtDkgTransitionError(`participant ${idx} is outside the certified roster`);
-  }
+  assertRosterMember(state.participantIndices, idx, 'participant', CourtDkgTransitionError);
 }
 
 function assertBeforeDeadline(state: CourtDkgMachineState, now: number): void {
-  assertNow(now);
-  if (now >= state.deadline) {
-    throw new CourtDkgTransitionError('DKG message arrived at or after the ceremony deadline');
-  }
+  assertBeforeDeadlineCore(
+    now,
+    state.deadline,
+    'DKG message arrived at or after the ceremony deadline',
+    CourtDkgTransitionError,
+  );
 }
 
 function expire(state: CourtDkgMachineState, now: number): CourtDkgMachineState {
-  assertNow(now);
+  assertNow(now, CourtDkgTransitionError);
   if (TERMINAL_PHASES.has(state.phase) || state.phase === 'certified') return state;
   if (now < state.deadline) return state;
   return {
@@ -145,23 +147,12 @@ export function createCourtDkgMachine(params: {
   if (typeof params.sessionHash !== 'string' || !HEX_32.test(params.sessionHash)) {
     throw new CourtDkgTransitionError('sessionHash must be 32-byte lowercase hex');
   }
-  if (!Number.isSafeInteger(params.deadline) || params.deadline < 1) {
-    throw new CourtDkgTransitionError('deadline must be a positive Unix timestamp');
-  }
-  if (params.participantIndices.length === 0) {
-    throw new CourtDkgTransitionError('DKG requires at least one participant');
-  }
-  if (params.participantIndices.length > 10_000) {
-    throw new CourtDkgTransitionError(
-      'participantIndices length exceeds maximum of 10000',
-    );
-  }
-  const participants = [...params.participantIndices];
-  participants.forEach((idx, offset) => {
-    if (!Number.isSafeInteger(idx) || idx !== offset + 1) {
-      throw new CourtDkgTransitionError('participant indices must be ordered and sequential');
-    }
-  });
+  assertPositiveDeadline(params.deadline, 'deadline', CourtDkgTransitionError);
+  const participants = normalizeCeremonyRoster(
+    params.participantIndices,
+    'DKG',
+    CourtDkgTransitionError,
+  );
   return {
     sessionHash: params.sessionHash,
     participantIndices: participants,
@@ -190,12 +181,7 @@ export function reduceCourtDkgMachine(
     }
     // Ensure the caller cannot forge a peer-blame by supplying an unverified
     // blamedIdx — the index must be a valid roster participant.
-    if (event.blamedIdx !== undefined) {
-      if (!Number.isSafeInteger(event.blamedIdx) || event.blamedIdx < 1) {
-        throw new CourtDkgTransitionError('blamedIdx must be a positive integer');
-      }
-      assertParticipant(state, event.blamedIdx);
-    }
+    assertBlamedIdx(event.blamedIdx, state.participantIndices, 'participant', CourtDkgTransitionError);
     return {
       ...state,
       phase: event.phase,
@@ -296,7 +282,7 @@ export function reduceCourtDkgMachine(
     // ceremony deadline. A certified machine must never be stranded: without
     // this, a certification at the deadline could never reach `backed_up`
     // and was frozen in `certified` forever.
-    assertNow(event.now);
+    assertNow(event.now, CourtDkgTransitionError);
     if (state.phase !== 'certified' || !state.certifiedGroupPubkey) {
       throw new CourtDkgTransitionError('cannot confirm recovery data before DKG certification');
     }

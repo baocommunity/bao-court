@@ -1,5 +1,14 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import {
+  HEX_32,
+  assertBeforeDeadline as assertBeforeDeadlineCore,
+  assertNow,
+  assertPositiveDeadline,
+  assertRosterMember,
+  normalizeCeremonyRoster,
+} from './courtCeremonyCore';
+
 /**
  * Pure fail-closed state machine for one BAO Court voting ceremony.
  *
@@ -102,11 +111,9 @@ export class CourtVoteTransitionError extends Error {
 }
 
 const textEncoder = new TextEncoder();
-const HEX_32 = /^[0-9a-f]{64}$/;
 const COURT_COMMIT_VERSION_BIT = 0x8;
 const LEGACY_COMMIT_VERSION_MASK = 0x7;
 const MAX_OUTCOMES = 256;
-const MAX_PARTICIPANTS = 10_000;
 const MAX_OUTCOME_BYTES = 256;
 const MAX_REVEALS = 10_000;
 
@@ -281,23 +288,12 @@ export function hashDisputeVerdict(params: {
   return digestDomain(COURT_DISPUTE_VERDICT_DOMAIN, writer.finish());
 }
 
-function assertNow(now: number): void {
-  if (!Number.isSafeInteger(now) || now < 0) {
-    throw new CourtVoteTransitionError('now must be a non-negative Unix timestamp');
-  }
-}
-
 function assertParticipant(state: CourtVoteMachineState, idx: number): void {
-  if (!state.participantIndices.includes(idx)) {
-    throw new CourtVoteTransitionError(`voter ${idx} is outside the certified roster`);
-  }
+  assertRosterMember(state.participantIndices, idx, 'voter', CourtVoteTransitionError);
 }
 
 function assertBeforeDeadline(now: number, deadline: number, message: string): void {
-  assertNow(now);
-  if (now >= deadline) {
-    throw new CourtVoteTransitionError(message);
-  }
+  assertBeforeDeadlineCore(now, deadline, message, CourtVoteTransitionError);
 }
 
 /**
@@ -394,20 +390,11 @@ export function createCourtVoteMachine(params: {
   if (typeof params.sessionHash !== 'string' || !HEX_32.test(params.sessionHash)) {
     throw new CourtVoteTransitionError('sessionHash must be 32-byte lowercase hex');
   }
-  if (params.participantIndices.length === 0) {
-    throw new CourtVoteTransitionError('voting requires at least one participant');
-  }
-  if (params.participantIndices.length > MAX_PARTICIPANTS) {
-    throw new CourtVoteTransitionError(
-      'participantIndices length exceeds maximum of ' + MAX_PARTICIPANTS,
-    );
-  }
-  const participants = [...params.participantIndices];
-  participants.forEach((idx, offset) => {
-    if (!Number.isSafeInteger(idx) || idx !== offset + 1) {
-      throw new CourtVoteTransitionError('participant indices must be ordered and sequential');
-    }
-  });
+  const participants = normalizeCeremonyRoster(
+    params.participantIndices,
+    'voting',
+    CourtVoteTransitionError,
+  );
   if (
     !Array.isArray(params.allowedOutcomes) ||
     params.allowedOutcomes.length < 2
@@ -445,9 +432,7 @@ export function createCourtVoteMachine(params: {
     }
     seen.add(outcome);
   }
-  if (!Number.isSafeInteger(params.commitDeadline) || params.commitDeadline < 1) {
-    throw new CourtVoteTransitionError('commitDeadline must be a positive Unix timestamp');
-  }
+  assertPositiveDeadline(params.commitDeadline, 'commitDeadline', CourtVoteTransitionError);
   if (
     !Number.isSafeInteger(params.revealDeadline) ||
     params.revealDeadline <= params.commitDeadline
@@ -476,7 +461,7 @@ export function reduceCourtVoteMachine(
   // reveals after a later close, or hold the ceremony open past a deadline
   // that a later event already observed. `abort` carries no clock.
   if (event.type !== 'abort') {
-    assertNow(event.now);
+    assertNow(event.now, CourtVoteTransitionError);
     if (event.now < state.latestTimestamp) {
       throw new CourtVoteTransitionError('now must not precede a previously observed timestamp');
     }

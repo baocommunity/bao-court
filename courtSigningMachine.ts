@@ -1,5 +1,15 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import {
+  HEX_32,
+  assertBeforeDeadline as assertBeforeDeadlineCore,
+  assertBlamedIdx,
+  assertNow,
+  assertPositiveDeadline,
+  assertRosterMember,
+  normalizeCeremonyRoster,
+} from './courtCeremonyCore';
+
 /**
  * Pure fail-closed state machine for one BAO Court FROST signing attempt.
  *
@@ -112,7 +122,6 @@ export class CourtSigningTransitionError extends Error {
 }
 
 const textEncoder = new TextEncoder();
-const HEX_32 = /^[0-9a-f]{64}$/;
 const SCHNORR_SIGNATURE = /^[0-9a-f]{128}$/;
 const MAX_PARTIAL_SIGNATURES = 10_000;
 const MAX_OUTCOME_BYTES = 256;
@@ -161,16 +170,8 @@ export function hashCourtSigningSession(params: {
   return bytesToHex(sha256(input));
 }
 
-function assertNow(now: number): void {
-  if (!Number.isSafeInteger(now) || now < 0) {
-    throw new CourtSigningTransitionError('now must be a non-negative Unix timestamp');
-  }
-}
-
 function assertParticipant(state: CourtSigningMachineState, idx: number): void {
-  if (!state.participantIndices.includes(idx)) {
-    throw new CourtSigningTransitionError(`signer ${idx} is outside the certified roster`);
-  }
+  assertRosterMember(state.participantIndices, idx, 'signer', CourtSigningTransitionError);
 }
 
 /**
@@ -247,10 +248,12 @@ function assertSigningRecordInvariants(state: CourtSigningMachineState): void {
 }
 
 function assertBeforeDeadline(state: CourtSigningMachineState, now: number): void {
-  assertNow(now);
-  if (now >= state.deadline) {
-    throw new CourtSigningTransitionError('signing message arrived at or after the attempt deadline');
-  }
+  assertBeforeDeadlineCore(
+    now,
+    state.deadline,
+    'signing message arrived at or after the attempt deadline',
+    CourtSigningTransitionError,
+  );
 }
 
 export function createCourtSigningMachine(params: {
@@ -272,15 +275,11 @@ export function createCourtSigningMachine(params: {
   ) {
     throw new CourtSigningTransitionError('outcome must be a non-empty bounded string');
   }
-  if (params.participantIndices.length === 0) {
-    throw new CourtSigningTransitionError('signing requires at least one participant');
-  }
-  const participants = [...params.participantIndices];
-  participants.forEach((idx, offset) => {
-    if (!Number.isSafeInteger(idx) || idx !== offset + 1) {
-      throw new CourtSigningTransitionError('participant indices must be ordered and sequential');
-    }
-  });
+  const participants = normalizeCeremonyRoster(
+    params.participantIndices,
+    'signing',
+    CourtSigningTransitionError,
+  );
   if (
     !Number.isSafeInteger(params.threshold) ||
     params.threshold < 1 ||
@@ -296,9 +295,7 @@ export function createCourtSigningMachine(params: {
   if (!Number.isSafeInteger(params.attempt) || params.attempt < 0) {
     throw new CourtSigningTransitionError('attempt must be a non-negative integer');
   }
-  if (!Number.isSafeInteger(params.deadline) || params.deadline < 1) {
-    throw new CourtSigningTransitionError('deadline must be a positive Unix timestamp');
-  }
+  assertPositiveDeadline(params.deadline, 'deadline', CourtSigningTransitionError);
   // Bound the outcome length to prevent memory exhaustion from unbounded strings.
   if (params.outcome.length > 4096) {
     throw new CourtSigningTransitionError('outcome must be at most 4096 bytes');
@@ -339,7 +336,7 @@ export function reduceCourtSigningMachine(
         'signing state has a corrupted deadline',
       );
     }
-    assertNow(event.now);
+    assertNow(event.now, CourtSigningTransitionError);
     if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) return state;
     return {
       ...state,
@@ -358,12 +355,7 @@ export function reduceCourtSigningMachine(
     }
     // Ensure the caller cannot forge a peer-blame by supplying an unverified
     // blamedIdx — the index must be a valid roster participant.
-    if (event.blamedIdx !== undefined) {
-      if (!Number.isSafeInteger(event.blamedIdx) || event.blamedIdx < 1) {
-        throw new CourtSigningTransitionError('blamedIdx must be a positive integer');
-      }
-      assertParticipant(state, event.blamedIdx);
-    }
+    assertBlamedIdx(event.blamedIdx, state.participantIndices, 'signer', CourtSigningTransitionError);
     return {
       ...state,
       phase: event.phase,
