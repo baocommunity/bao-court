@@ -27,6 +27,7 @@ import {
   BAO_COURT_VOTE_REVEAL_KIND,
 } from './events';
 import { isValidSecp256k1Point, type DkgProofOfKnowledge } from './crypto';
+import { HEX_32, isRecord } from './courtEventParseCore';
 
 export type CourtProtocolEventClassification = 'bound-v1' | 'legacy' | 'invalid';
 
@@ -124,14 +125,9 @@ const REQUIRED_TAGS = [
 const UPGRADE_MARKER_TAGS = ['session', 'suite', 'attempt', 'host'] as const;
 const RESERVED_CONTENT_KEY = 'court';
 const CANONICAL_UINT = /^(0|[1-9][0-9]*)$/;
-const HEX_32 = /^[0-9a-f]{64}$/;
 const HEX_POINT = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
 const HEX_BYTES = /^(?:[0-9a-f]{2})+$/;
 const MAX_U32 = 0xffff_ffff;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isVerifiedEvent(event: Event): event is VerifiedEvent {
   try {
