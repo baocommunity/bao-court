@@ -9,6 +9,9 @@ CLA** assigning copyright to baocommunity.
 2. Ensure your contribution is your own work and contains no third-party
    code without compatible provenance.
 3. Keep license headers and the NOTICE intact.
+4. Update `CHANGELOG.md` (add an entry under the relevant version — or
+   `[Unreleased]` if the fix is in between releases) and note any
+   consumer-visible break under "Migrating consumers".
 
 Un-CLA'd contributions cannot be accepted — the copyright of all merged
 code is held by baocommunity.

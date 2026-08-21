@@ -23,6 +23,95 @@ production gates — is
 
 ---
 
+## Quick start
+
+`@bao/court` ships as **raw TypeScript source** (no build step, no `.js`
+artifacts). Consume it with a TS-aware resolver — **tsx**, **Vite**, or any
+bundler with TypeScript support. Plain `node` cannot resolve the package's
+extensionless internal imports; for a quick Node smoke test use `npx tsx`.
+
+```bash
+npm install @bao/court
+npx tsx your-script.ts
+```
+
+A complete, runnable vote ceremony (3 jurors, 2 outcomes, commit/reveal,
+frozen verdict):
+
+```ts
+import {
+  createCourtVoteMachine,
+  reduceCourtVoteMachine,
+  hashCourtVoteCommit,
+  hashCourtVerdict,
+  type CourtVoteMachineState,
+} from '@bao/court';
+
+const sessionHash = 'a'.repeat(64);
+const salt = 'b'.repeat(64);
+
+// 1. Open the ceremony: 3 jurors, two outcomes, commit by t=1000, reveal by t=2000.
+let s: CourtVoteMachineState = createCourtVoteMachine({
+  sessionHash,
+  participantIndices: [1, 2, 3],
+  allowedOutcomes: ['YES', 'NO'],
+  commitDeadline: 1000,
+  revealDeadline: 2000,
+});
+
+// 2. Each juror commits a salted hash of their vote.
+for (const idx of [1, 2, 3]) {
+  s = reduceCourtVoteMachine(s, {
+    type: 'accept_commit',
+    idx,
+    commitHash: hashCourtVoteCommit({ sessionHash, outcome: 'YES', salt }),
+    eventId: String(idx).padStart(64, '0'),
+    now: 100,
+  });
+}
+s = reduceCourtVoteMachine(s, { type: 'close_commits', now: 1001 });
+s = reduceCourtVoteMachine(s, { type: 'open_reveals', now: 1002 });
+console.log('after commits: phase =', s.phase, '| commits =', s.commits.length);
+
+// 3. Jurors reveal (outcome + salt) — each must match their own commit.
+for (const idx of [1, 2, 3]) {
+  s = reduceCourtVoteMachine(s, {
+    type: 'accept_reveal',
+    idx,
+    outcome: 'YES',
+    salt,
+    eventId: String(idx + 3).padStart(64, '0'),
+    now: 1500,
+  });
+}
+s = reduceCourtVoteMachine(s, { type: 'close_reveals', now: 2001 });
+console.log('after reveals: phase =', s.phase, '| reveals =', s.reveals.length);
+
+// 4. Finalize: exactly one frozen verdict with a canonical hash.
+const verdict = reduceCourtVoteMachine(s, { type: 'finalize_tally', now: 2002 }).verdict!;
+console.log('verdict =', verdict.outcome, '| supporting =', verdict.supportingEventIds.length);
+console.log(
+  'verdict hash matches hashCourtVerdict:',
+  hashCourtVerdict({ sessionHash, outcome: verdict.outcome, supportingEventIds: verdict.supportingEventIds })
+    === verdict.verdictHash,
+);
+```
+
+Output:
+
+```
+after commits: phase = reveal_open | commits = 3
+after reveals: phase = reveal_closed | reveals = 3
+verdict = YES | supporting = 3
+verdict hash matches hashCourtVerdict: true
+```
+
+The ceremony pipeline below explains the full flow (selection → DKG → vote →
+signing → attestation) this example is the middle of.
+
+
+---
+
 ## 1. Ceremony pipeline
 
 One dispute resolution proceeds through four certified stages:
@@ -322,10 +411,16 @@ The same pipeline the simulation drives is asserted in
 `__tests__/simulateCourt.test.ts` (all steps green, same-seed
 reproducibility, time budget).
 
-Import as a source package (Vite/TS resolver):
+Consumption: this is a **source package** — the `exports` map points
+straight at `.ts` files, and the runtime is expected to be a TS-aware
+resolver (**tsx**, **Vite**, bundlers). The package's internal imports are
+extensionless, so plain `node` (CJS or ESM) will fail to resolve them
+without a loader. Use `npx tsx your-script.ts` for a Node smoke test; the
+Quick start section has a complete runnable example.
 
 ```ts
-import { ... } from '@bao/court';
+import { ... } from '@bao/court';       // root: state machines, hashing
+import { ... } from '@bao/court/events'; // event builders/parsers
 ```
 
 - Regression tests cover, among others: threshold-subset finalization
