@@ -170,6 +170,25 @@ export function verifySchnorr(
   }
 }
 
+const SECP256K1_POINT = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
+
+/**
+ * Validate an x-only or compressed secp256k1 point encoding.
+ *
+ * A regex alone accepts any 64-char hex string; this additionally verifies
+ * the bytes decode to a point on the curve, so malformed nonce commitments
+ * cannot poison FROST binding-factor computation downstream.
+ */
+export function isValidSecp256k1Point(value: string): boolean {
+  if (!SECP256K1_POINT.test(value)) return false;
+  try {
+    Point.fromHex(value.length === 64 ? `02${value}` : value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface DkgProofOfKnowledge {
   /** Public nonce R = r*G in hex (compressed). */
   readonly nonce: string;

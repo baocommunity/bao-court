@@ -124,4 +124,36 @@ describe('Court DKG state machine', () => {
       type: 'confirm_backup', now: 130,
     })).toThrow(/before DKG certification/);
   });
+
+  // V12 audit: an abort event may only inject reducer-defined failure phases —
+  // a caller cannot cast an arbitrary phase into state via a forged event.
+  it('rejects abort events with a non-failure phase', () => {
+    const started = reduceCourtDkgMachine(initial(), { type: 'start', now: 100 });
+    expect(() => reduceCourtDkgMachine(started, {
+      type: 'abort', phase: 'certified' as never, reason: 'forged',
+    })).toThrow(/invalid DKG abort phase/);
+    expect(() => reduceCourtDkgMachine(started, {
+      type: 'abort', phase: 'dkg_round_1' as never, reason: 'forged',
+    })).toThrow(/invalid DKG abort phase/);
+    // Valid failure phases still work.
+    expect(reduceCourtDkgMachine(started, {
+      type: 'abort', phase: 'aborted_network', reason: 'partition',
+    }).phase).toBe('aborted_network');
+  });
+
+  // V12 audit: regex validation must not coerce non-primitive values into
+  // acceptable session hashes.
+  it('rejects coercible non-string session hashes', () => {
+    expect(() => createCourtDkgMachine({
+      sessionHash: new String(SESSION) as unknown as string,
+      participantIndices: [1, 2, 3],
+      deadline: 200,
+    })).toThrow(CourtDkgTransitionError);
+    expect(() => reduceCourtDkgMachine(initial(), {
+      type: 'finalize_transcript',
+      transcriptHash: new String(TRANSCRIPT) as unknown as string,
+      candidateGroupPubkey: GROUP_KEY,
+      now: 130,
+    })).toThrow(CourtDkgTransitionError);
+  });
 });

@@ -693,8 +693,17 @@ export class CourtInbox {
       let rumor: NostrEvent | null = null;
       try {
         rumor = await unwrapProtocolEventWithSigner(record.wrap as unknown as NostrEvent, signer);
-      } catch {
-        rumor = null;
+      } catch (err) {
+        // If the signer fails transiently, do NOT mark the wrap as drained —
+        // it should be retried on the next drain call once the signer recovers.
+        // Only wraps that either unwrap cleanly or explicitly return null
+        // (invalid structure) are permanently dropped.
+        this.records.set(record.wrapId, { ...record, drained: false });
+        return Array.from(byRumorId.values()).map((entry): CourtInboxMessage => ({
+          rumor: entry.rumor,
+          wrapIds: entry.wrapIds,
+          relays: [...entry.relays].sort(),
+        }));
       }
       this.records.set(record.wrapId, { ...record, drained: true });
       if (!rumor || typeof rumor.id !== 'string') continue;

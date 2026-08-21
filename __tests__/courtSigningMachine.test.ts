@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -14,8 +15,11 @@ const SESSION = '11'.repeat(32);
 const VERDICT = '22'.repeat(32);
 const DEADLINE = 500;
 
-const BINDER = (n: string) => `02${n.repeat(32)}`;
-const HIDDEN = (n: string) => `03${n.repeat(32)}`;
+// Nonce points must decode to real secp256k1 curve points (the machine now
+// validates on-curve membership), so derive distinct compressed points from
+// the generator instead of using arbitrary hex.
+const BINDER = (n: string) => secp256k1.Point.BASE.multiply(BigInt(`0x${n}`)).toHex(true);
+const HIDDEN = (n: string) => secp256k1.Point.BASE.multiply(BigInt(`0x${n}`) + 100n).toHex(true);
 const PSIG = (n: string) => n.repeat(32);
 const SIGNATURE = 'ab'.repeat(64);
 const ATTESTATION_EVENT = '99'.repeat(32);
@@ -160,5 +164,40 @@ describe('Court signing state machine', () => {
     expect(() =>
       reduceCourtSigningMachine(expired, { type: 'aggregate', signature: SIGNATURE, now: DEADLINE + 1 }),
     ).toThrow(CourtSigningTransitionError);
+  });
+
+  // V12 audit: an abort event may only inject reducer-defined failure phases.
+  it('rejects abort events with a non-failure phase', () => {
+    const state = started();
+    expect(() => reduceCourtSigningMachine(state, {
+      type: 'abort', phase: 'aggregate' as never, reason: 'forged',
+    })).toThrow(/invalid signing abort phase/);
+    expect(() => reduceCourtSigningMachine(state, {
+      type: 'abort', phase: 'intent' as never, reason: 'forged',
+    })).toThrow(/invalid signing abort phase/);
+  });
+
+  // V12 audit: restored or hand-crafted state with duplicate or off-curve
+  // commitment records must fail closed instead of inflating the threshold.
+  it('rejects restored state with duplicate or malformed commitment records', () => {
+    const base = started();
+    const duplicated = {
+      ...base,
+      commitments: [
+        { idx: 1, binderPn: BINDER('a1'), hiddenPn: HIDDEN('a1') },
+        { idx: 1, binderPn: BINDER('a1'), hiddenPn: HIDDEN('a1') },
+      ],
+    };
+    expect(() => reduceCourtSigningMachine(duplicated, { type: 'tick', now: 60 })).toThrow(
+      /duplicate stored nonce commitment/,
+    );
+
+    const offCurve = {
+      ...base,
+      commitments: [{ idx: 1, binderPn: `02${'11'.repeat(32)}`, hiddenPn: HIDDEN('a1') }],
+    };
+    expect(() => reduceCourtSigningMachine(offCurve, { type: 'tick', now: 60 })).toThrow(
+      /malformed nonce commitment/,
+    );
   });
 });

@@ -10,6 +10,7 @@ import type { Event as NostrEvent } from 'nostr-tools/pure';
 import { verifyEvent } from 'nostr-tools/pure';
 import { BAO_COURT_ATTESTATION_KIND } from './events';
 import { buildAttestationMessage } from './crypto';
+import { hashDisputeVerdict } from './courtVoteMachine';
 
 export interface ValidationResult {
   readonly valid: boolean;
@@ -92,8 +93,43 @@ export function validateAttestationEvent(
   // Kind 39007 attestations must bind the dispute verdict (the tally): the
   // FROST signature certifies the outcome WON the vote, not just the outcome.
   if (event.kind === BAO_COURT_ATTESTATION_KIND) {
+    if (!disputeEventId) {
+      return { valid: false, pubkey, error: 'Missing dispute tag on dispute attestation' };
+    }
     if (!verdictHash || !isHex64(verdictHash)) {
       return { valid: false, pubkey, error: 'Missing or invalid verdict hash on dispute attestation' };
+    }
+    // Validate that the supporting event IDs are well-formed and bounded.
+    const supportingIds = event.tags
+      .filter((t) => t[0] === 'e' && t[3] === 'mention')
+      .map((t) => t[1]);
+    if (supportingIds.length === 0 || supportingIds.length > 10_000) {
+      return { valid: false, pubkey, error: 'Dispute attestation must carry 1..10000 supporting event IDs' };
+    }
+    if (supportingIds.some((id) => !isHex64(id))) {
+      return { valid: false, pubkey, error: 'Supporting event IDs must be 32-byte hex' };
+    }
+    if (new Set(supportingIds).size !== supportingIds.length) {
+      return { valid: false, pubkey, error: 'Duplicate supporting event IDs' };
+    }
+    // The verdict commitment must recompute from the event's own dispute,
+    // outcome, and supporting reveal ids — the FROST signature certifies the
+    // tally, not just an outcome. Canonical ids are lowercase, so normalize
+    // before recomputing (the vote machine lowercases at finalization). A
+    // malformed field throws from the canonical helper; treat any failure as
+    // an invalid commitment rather than propagating an exception.
+    let expectedVerdictHash: string;
+    try {
+      expectedVerdictHash = hashDisputeVerdict({
+        disputeId: disputeEventId.toLowerCase(),
+        outcome,
+        supportingEventIds: supportingIds.map((id) => id.toLowerCase()),
+      });
+    } catch {
+      return { valid: false, pubkey, error: 'Verdict hash does not match the dispute verdict inputs' };
+    }
+    if (verdictHash.toLowerCase() !== expectedVerdictHash) {
+      return { valid: false, pubkey, error: 'Verdict hash does not match the dispute verdict inputs' };
     }
   }
 
