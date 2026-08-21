@@ -1,6 +1,6 @@
 # BAO Court — Settlement Rails (Panel A: Lightning, Panel B: Liquid)
 
-**Version:** 0.5.3 (implemented; signet execution by hosts)
+**Version:** 0.5.4 (implemented; signet execution by hosts)
 **Status:** Protocol-side settlement implemented and test-covered. Rail
 execution (node access, keys, broadcasting) is HOST-INJECTED per the secrecy
 boundary — this package contains no keys, no node URLs, no credentials.
