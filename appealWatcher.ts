@@ -14,17 +14,33 @@
  * (`handleEvent`/`handleEvents`) works without any pool.
  */
 
-import type { Event as NostrEvent, Filter, SimplePool } from 'nostr-tools';
+import type { Event as NostrEvent, Filter } from 'nostr-tools';
 import { validateAttestationEvent } from './validator';
+
+/**
+ * Narrow structural contract for the host-injected relay pool. nostr-tools'
+ * `SimplePool` satisfies it structurally, so hosts can pass a real pool
+ * unchanged — but tests and alternative transports only need to provide
+ * `subscribeMany`, not the full SimplePool surface.
+ */
+export interface FrostWatcherRelayPool {
+  subscribeMany(
+    relays: readonly string[],
+    filter: Filter,
+    handlers: { onevent(event: NostrEvent): void },
+  ): { close(): void };
+}
 
 export interface FrostAppealWatcherConfig {
   readonly relays: string[];
   /**
-   * Host-injected nostr-tools `SimplePool` (or compatible). Required for
-   * live relay subscriptions (`start`, resubscription on `watchMarket`);
-   * optional for direct event handling (`handleEvent`/`handleEvents`).
+   * Host-injected relay pool — any object satisfying
+   * {@link FrostWatcherRelayPool} (nostr-tools' `SimplePool` does).
+   * Required for live relay subscriptions (`start`, resubscription on
+   * `watchMarket`); optional for direct event handling
+   * (`handleEvent`/`handleEvents`).
    */
-  readonly pool?: SimplePool;
+  readonly pool?: FrostWatcherRelayPool;
   /** Optional resolver for the FROST group pubkey of a market. When provided,
    *  the watcher can validate Kind 39007 events for markets it has not been
    *  explicitly told to watch (e.g. by reading from IndexedDB). */
@@ -50,9 +66,14 @@ export interface FrostAppealWatcherCallbacks {
 
 export class FrostAppealWatcher {
   private readonly relays: string[];
-  private readonly pool?: SimplePool;
+  private readonly pool?: FrostWatcherRelayPool;
   private readonly marketGroupPubkeys = new Map<string, string>();
   private readonly processedEventIds = new Set<string>();
+  /** Ids mid-validation — closes the concurrent-redelivery window (dedup is
+   *  recorded only after validation succeeds, so duplicate relay callbacks
+   *  arriving while an async group-pubkey resolution is pending could both
+   *  pass the processedEventIds check and double-fire onResolution). */
+  private readonly inFlightEventIds = new Set<string>();
   private callbacks: FrostAppealWatcherCallbacks = {};
   private subscriptionCloser: (() => void) | null = null;
   private active = false;
@@ -174,45 +195,58 @@ export class FrostAppealWatcher {
    */
   async handleEvent(event: NostrEvent): Promise<FrostAppealResolution | null> {
     if (event.kind !== 39007) return null;
-    if (event.id && this.processedEventIds.has(event.id)) return null;
-
-    const marketId =
-      event.tags.find((t) => t[0] === 'm' || t[0] === 'market')?.[1] ??
-      event.tags.find((t) => t[0] === 'e' && t[3] === 'root')?.[1];
-    if (!marketId) return null;
-
-    let groupPubkey = this.marketGroupPubkeys.get(marketId);
-    if (!groupPubkey && this.getGroupPubkey) {
-      const resolved = await this.getGroupPubkey(marketId);
-      if (resolved) groupPubkey = resolved;
-    }
-    if (!groupPubkey) return null;
-
-    const validation = validateAttestationEvent(event, groupPubkey);
-    if (!validation.valid) {
-      this.callbacks.onError?.(
-        new Error(validation.error ?? 'Invalid FROST attestation'),
-        event,
-      );
-      return null;
-    }
-
-    const outcome = event.tags.find((t) => t[0] === 'o' || t[0] === 'outcome')?.[1];
-    if (!outcome) return null;
-
-    const disputeEventId = event.tags.find((t) => t[0] === 'dispute')?.[1] ?? '';
-
     if (event.id) {
-      this._recordProcessed(event.id);
+      if (this.processedEventIds.has(event.id)) return null;
+      // Reserve synchronously, before any await: duplicate deliveries can race
+      // while the group-pubkey resolver is pending, and both would otherwise
+      // pass the processedEventIds check above.
+      if (this.inFlightEventIds.has(event.id)) return null;
+      this.inFlightEventIds.add(event.id);
     }
+    try {
+      const marketId =
+        event.tags.find((t) => t[0] === 'm' || t[0] === 'market')?.[1] ??
+        event.tags.find((t) => t[0] === 'e' && t[3] === 'root')?.[1];
+      if (!marketId) return null;
 
-    return {
-      marketId,
-      outcome,
-      disputeEventId,
-      groupPubkey,
-      eventId: event.id,
-    };
+      let groupPubkey = this.marketGroupPubkeys.get(marketId);
+      if (!groupPubkey && this.getGroupPubkey) {
+        const resolved = await this.getGroupPubkey(marketId);
+        if (resolved) groupPubkey = resolved;
+      }
+      if (!groupPubkey) return null;
+
+      const validation = validateAttestationEvent(event, groupPubkey);
+      if (!validation.valid) {
+        this.callbacks.onError?.(
+          new Error(validation.error ?? 'Invalid FROST attestation'),
+          event,
+        );
+        return null;
+      }
+
+      const outcome = event.tags.find((t) => t[0] === 'o' || t[0] === 'outcome')?.[1];
+      if (!outcome) return null;
+
+      const disputeEventId = event.tags.find((t) => t[0] === 'dispute')?.[1] ?? '';
+
+      if (event.id) {
+        this._recordProcessed(event.id);
+      }
+
+      return {
+        marketId,
+        outcome,
+        disputeEventId,
+        groupPubkey,
+        eventId: event.id,
+      };
+    } finally {
+      // Release the reservation whether validation succeeded, failed, or threw:
+      // only genuinely processed events stay in processedEventIds, so a failed
+      // delivery remains retryable exactly as before.
+      if (event.id) this.inFlightEventIds.delete(event.id);
+    }
   }
 
   private _resubscribe(): void {

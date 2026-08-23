@@ -1,5 +1,8 @@
 # @bao/court — BAO Court threshold oracle
 
+[![CI](https://github.com/baocommunity/bao-court/actions/workflows/ci.yml/badge.svg)](https://github.com/baocommunity/bao-court/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE.txt)
+
 BAO Court is a **FROST threshold oracle** for dispute resolution. A randomly
 selected jury runs distributed key generation (DKG), votes under
 commit/reveal, and produces a **threshold Schnorr attestation** over the
@@ -26,12 +29,14 @@ production gates — is
 ## Quick start
 
 `@bao/court` ships as **raw TypeScript source** (no build step, no `.js`
-artifacts). Consume it with a TS-aware resolver — **tsx**, **Vite**, or any
-bundler with TypeScript support. Plain `node` cannot resolve the package's
-extensionless internal imports; for a quick Node smoke test use `npx tsx`.
+artifacts) and is **not published to npm** — it ships by git tag. Install
+from this repo at the tag you want, and consume it with a TS-aware resolver
+(**tsx**, **Vite**, or any bundler with TypeScript support). Plain `node`
+cannot resolve the package's extensionless internal imports; see
+[§11](#11-testing-and-gates) for details.
 
 ```bash
-npm install @bao/court
+npm install github:baocommunity/bao-court#v0.5.4
 npx tsx your-script.ts
 ```
 
