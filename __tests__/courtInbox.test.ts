@@ -424,6 +424,10 @@ describe('wrong-recipient wraps never reach decryption', () => {
   class ExplodingDecryptSigner implements CourtEventSigner {
     private readonly inner = new SeckeyCourtSigner(secret(MY_BYTE));
 
+    /** Counting, not just throwing: downstream layers swallow per-record
+     *  errors, so a throw alone cannot prove the guard held. */
+    decryptCalls = 0;
+
     getPublicKey(): string {
       return this.inner.getPublicKey();
     }
@@ -439,6 +443,7 @@ describe('wrong-recipient wraps never reach decryption', () => {
     }
 
     nip44Decrypt(): Promise<string> {
+      this.decryptCalls += 1;
       throw new Error('decrypt must never be called for foreign wraps');
     }
   }
@@ -450,11 +455,13 @@ describe('wrong-recipient wraps never reach decryption', () => {
 
     const signer = new ExplodingDecryptSigner();
     await expect(inbox.drain(signer)).resolves.toEqual([]);
+    expect(signer.decryptCalls).toBe(0);
 
     // Even if a foreign wrap were forced past ingest, the signer-backed unwrap
     // itself refuses to decrypt wraps without a matching p tag.
     const unwrapSigner = new ExplodingDecryptSigner();
     await expect(unwrapProtocolEventWithSigner(foreign, unwrapSigner)).resolves.toBeNull();
+    expect(unwrapSigner.decryptCalls).toBe(0);
   });
 });
 

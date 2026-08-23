@@ -126,12 +126,9 @@ describe('adversarial parser fuzz (typed failures only)', () => {
       parameters(),
       1,
     );
-    try {
-      parseBoundVoteRevealEvent(signed(template), parameters());
-      throw new CourtProtocolEventError('invalid_tag', 'expected rejection');
-    } catch (err) {
-      expect(err).toBeInstanceOf(CourtProtocolEventError);
-    }
+    expect(() => parseBoundVoteRevealEvent(signed(template), parameters())).toThrow(
+      CourtProtocolEventError,
+    );
   });
 
   it('frost-reveal with oversized psig fails typed', () => {
@@ -146,12 +143,9 @@ describe('adversarial parser fuzz (typed failures only)', () => {
       parameters(),
       1,
     );
-    try {
-      parseBoundFrostRevealEvent(signed(template), parameters());
-      throw new CourtProtocolEventError('invalid_tag', 'expected rejection');
-    } catch (err) {
-      expect(err).toBeInstanceOf(CourtProtocolEventError);
-    }
+    expect(() => parseBoundFrostRevealEvent(signed(template), parameters())).toThrow(
+      CourtProtocolEventError,
+    );
   });
 
   it('cross-kind events are rejected typed (dkg body as frost-commit kind)', () => {
@@ -163,22 +157,16 @@ describe('adversarial parser fuzz (typed failures only)', () => {
     const event = signed(template);
     // misuse the dkg-commit parset against a frost-commit event — wrong kind is a
     // protocol error, not a crash.
-    try {
-      parseBoundDkgCommitmentEvent(event, parameters());
-      throw new CourtProtocolEventError('unexpected_kind', 'expected rejection');
-    } catch (err) {
-      expect(err).toBeInstanceOf(CourtProtocolEventError);
-    }
+    expect(() => parseBoundDkgCommitmentEvent(event, parameters())).toThrow(
+      CourtProtocolEventError,
+    );
   });
 
   it('unsigned / wrong-author events fail typed', () => {
     const event = signed(dkgTemplate(), secret(2)); // juror 2 signs juror 1's payload
-    try {
-      parseBoundDkgCommitmentEvent(event, parameters());
-      throw new CourtProtocolEventError('participant_binding_mismatch', 'expected rejection');
-    } catch (err) {
-      expect(err).toBeInstanceOf(CourtProtocolEventError);
-    }
+    expect(() => parseBoundDkgCommitmentEvent(event, parameters())).toThrow(
+      CourtProtocolEventError,
+    );
   });
 
   it('200 random-tag mutations never crash untyped', { timeout: 60_000 }, () => {

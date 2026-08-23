@@ -56,3 +56,15 @@ npm run typecheck        # tsc --noEmit
 npm run typecheck:scripts
 npm run simulate:court   # end-to-end whole-court deterministic sim (needs tsx)
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`baocommunity/bao-court`, `gh` CLI). See
+`docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the root + `docs/adr/`. See
+`docs/agents/domain.md`.

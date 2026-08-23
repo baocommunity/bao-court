@@ -1,6 +1,6 @@
 {
   "name": "@bao/court",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "type": "module",
   "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
   "exports": {
@@ -134,6 +134,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "simulate:court": "tsx scripts/simulateCourt.ts",
     "preview": "vitest --ui --api.host 0.0.0.0 --api.port ${PORT:-4173} --open false"
   },
