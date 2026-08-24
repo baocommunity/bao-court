@@ -170,7 +170,7 @@ export function buildTaprootLeaves(params: TaprootEscrowParams): {
 }
 
 /** Encode a locktime as a minimal push (>= 0x80000000 → 5-byte little-endian, else 4-byte). */
-function locktimeToPush(locktime: number): Uint8Array {
+export function locktimeToPush(locktime: number): Uint8Array {
   if (!Number.isInteger(locktime) || locktime < 0 || locktime > 0xffffffff) {
     throw new Error(`liquidEscrow: invalid locktime ${locktime}`);
   }

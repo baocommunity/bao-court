@@ -9,6 +9,44 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.6.0] — 2026-08-24
+
+New module — WS-A Taproot script-path spend finalization for Liquid/Elements
+(`./taproot-spend`). Pure math, no new runtime deps, consumer-visible surface
+additive only (one new export in `liquidEscrow.ts`).
+
+### Added
+- `taprootSpend.ts` — `controlBlock` / `scriptPathControlBlock` (BIP-341
+  control-block construction over the same split-at-half tree
+  `tapMerkleRoot` commits), `taprootMerklePath`, `merkleRootFromLeafAndPath`,
+  `tapleafHash`, and the WS-A leaf builders `buildWsACoopLeaf` /
+  `buildWsARefundLeaf` (owner-key-only leaves, D1-no).
+- `taprootSighashElements` — faithful port of Elements Core
+  `SignatureHashSchnorr` (TAPSCRIPT): tag `"TapSighash/elements"` with the
+  chain-genesis prefix, outpoint flags, confidential asset/value/nonce
+  serializations, issuance + issuance-rangeproof commitments, output-witness
+  (rangeproof/surjection) commitments; SIGHASH_DEFAULT/ALL/NONE/SINGLE + ACP
+  branches; no annex support (WS-A leaves never use one).
+- `finalizeTaproot` — computes the sighash and assembles the
+  `[sig, ...stack, leafScript, controlBlock]` witness, with optional
+  leaf+control-block→output-key verification.
+- `serializeExplicitValue` / `serializeExplicitAsset` / `reverseHex`
+  (Elements confidential-field wire forms) and network genesis constants
+  `LIQUID_MAINNET_GENESIS` / `LIQUID_TESTNET_GENESIS`.
+- `liquidEscrow.ts` now exports `locktimeToPush` (was module-private).
+- `__tests__/taprootSpend.test.ts` — the WS-A spec §8.1 frozen vectors
+  (leaves, merkle roots, output keys, signet addresses, control blocks), an
+  independently hand-built sighash known-answer, determinism/sensitivity
+  checks, `finalizeTaproot` verification, and the D1-no property test.
+
+### Vector correction (spec §8.1, v2.1)
+- The frozen v2 REFUND-leaf hex emitted `b1 00` where spec §3 defines
+  `<locktime> OP_CLTV OP_DROP <pk> OP_CHECKSIG` — `0x00` in place of
+  `OP_DROP` (`0x75`), a bug in the deleted vector generator. The corrected
+  leaves regenerate MERKLE/Q/ADDR and the COOP-leaf control blocks; COOP
+  leaves and REFUND-leaf control-block paths are unchanged. See the spec's
+  correction note.
+
 ## [0.5.5] — 2026-08-23
 
 Test-hardening and developer-docs pass. No protocol or wire-format changes —
