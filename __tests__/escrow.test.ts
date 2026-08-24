@@ -229,7 +229,10 @@ describe('bond ownership proof', () => {
   };
 
   it('derives a deterministic x-only pubkey matching the signer', () => {
-    expect(utxoPubkeyHex).toMatch(/^[0-9a-f]{64}$/);
+    // Pinned to the known x-only pubkey for the fixed seckey above, so an
+    // accidental derivation change fails loudly instead of silently matching
+    // itself (re-calling the same pure function would always be "deterministic").
+    expect(utxoPubkeyHex).toBe('98c0635d11c0f4f7d8803899cdb3a373c8bb27f4140a04771c01554f0b1d2e9b');
   });
 
   it('produces a deterministic challenge that binds all fields', () => {

@@ -9,7 +9,31 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
-## [Unreleased]
+## [0.5.5] — 2026-08-23
+
+Test-hardening and developer-docs pass. No protocol or wire-format changes —
+nothing consumer-visible beyond docs.
+
+### Changed
+- Appeal coordinator/watcher tests drive the genuine fetch → detect → emit
+  pipeline through host-injected relay fakes instead of manual state injection,
+  and pin relay-filter shape, subscription cleanup, and the jury-selection seed.
+- Adversarial fuzz assertions rewritten from false-positive-prone try/catch
+  sentinels to typed `.toThrow(CourtProtocolEventError)` checks.
+
+### Added
+- `FrostWatcherRelayPool` — narrow structural type for
+  `FrostAppealWatcherConfig.pool` (nostr-tools' `SimplePool` still satisfies it;
+  hosts and tests no longer need casts against the full SimplePool surface).
+- Decrypt-guard invocation counting in inbox tests; bond-pubkey derivation pin.
+- `npm run typecheck:tests` — `__tests__/` is now typechecked (CI included);
+  it was previously excluded from every gate.
+
+### Fixed
+- `FrostAppealWatcher.handleEvent` dedup race: concurrent duplicate deliveries
+  racing through the async group-pubkey resolver could both pass the
+  processed-event check and double-fire `onResolution`. Ids are now reserved
+  synchronously on entry (failed validations remain retryable as before).
 
 ## [0.5.4] — 2026-08-21
 

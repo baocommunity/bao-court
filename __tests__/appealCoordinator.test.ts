@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { finalizeEvent } from 'nostr-tools/pure';
 import {
+  BAO_COURT_DISPUTE_KIND,
   createFrostAppealCoordinator,
   TEST_APPEAL_TIMINGS,
   buildDisputeEvent,
@@ -14,6 +15,7 @@ import {
   hashDisputeVerdict,
   deriveSimulatedRevealEventId,
   type FrostAppealState,
+  type FrostRelayPool,
   type JurorProfile,
   type StakeCommitment,
   type DkgAdapter,
@@ -137,45 +139,47 @@ describe('FrostAppealCoordinator', () => {
 
     const disputeEvent = finalizeEvent(disputeTemplate, challengerPrivkey);
 
+    // Host-injected relay transport serving exactly one dispute event, so
+    // tick() drives the genuine fetch → detect → emit pipeline (the same
+    // seam a nostr-tools SimplePool satisfies in production).
+    const fakeRelayPool: FrostRelayPool = {
+      publish: () => [Promise.resolve()],
+      querySync: async (_relayUrls, filter) =>
+        // Mirror production's full dispute-fetch filter (kind AND appeal_type
+        // tag): a regression dropping either clause must fail here.
+        filter.kinds?.includes(BAO_COURT_DISPUTE_KIND) &&
+        filter['#appeal_type']?.includes('frost')
+          ? [disputeEvent]
+          : [],
+    };
+
     const coordinator = createFrostAppealCoordinator({
-      relayUrls: [],
+      relayUrls: ['wss://fake.example'],
+      relayPool: fakeRelayPool,
       environment: 'test',
       timings: TEST_APPEAL_TIMINGS,
       signer: async (event) => finalizeEvent(event, randomBytes(32)) as unknown as ReturnType<typeof finalizeEvent>,
     });
 
-    // Monkey-patch fetchRelayEvents to return our synthetic dispute.
-    let detected = false;
+    const detectedEvents: FrostAppealCoordinatorEvent[] = [];
     coordinator.onEvent((ev) => {
-      if (ev.type === 'appeal_detected') detected = true;
+      if (ev.type === 'appeal_detected') detectedEvents.push(ev);
     });
 
-    // The relay fetch path is internal; we exercise it by tick(), but with no
-    // relays connected it won't see the event. Instead we manually add the
-    // appeal derived from the event to prove detection format is consistent.
-    const appeal: FrostAppealState = {
-      disputeId: disputeEvent.id,
-      marketId,
-      disputeCase: {
-        disputeId: disputeEvent.id,
-        marketId,
-        challengerPubkey: disputeEvent.pubkey,
-        respondentPubkey: randomBytes(32).toString('hex'),
-        evidenceHashes: disputeEvent.tags.filter((t) => t[0] === 'evidence').map((t) => t[1]),
-        proposedOutcome: 'NO',
-      },
-      resolutionTimestamp: nowSec,
-      phase: 'pending',
-      candidacies: new Map(),
-      voteCommits: new Map(),
-      voteReveals: new Map(),
-      selectionAttempts: 0,
-      excludedSelectedPubkeys: [],
-      reselectionDeadline: nowSec + 10_000,
-    };
-    coordinator.addAppeal(appeal);
-
     await coordinator.tick();
+
+    expect(detectedEvents).toHaveLength(1);
+    expect(detectedEvents[0]?.disputeId).toBe(disputeEvent.id);
+    expect(detectedEvents[0]?.marketId).toBe(marketId);
+
+    const active = coordinator.getActiveAppeals();
+    expect(active).toHaveLength(1);
+    expect(active[0]?.disputeId).toBe(disputeEvent.id);
+    expect(active[0]?.marketId).toBe(marketId);
+
+    // Dedup: a second cycle seeing the same event must not re-detect it.
+    await coordinator.tick();
+    expect(detectedEvents).toHaveLength(1);
     expect(coordinator.getActiveAppeals()).toHaveLength(1);
 
     coordinator.stop();

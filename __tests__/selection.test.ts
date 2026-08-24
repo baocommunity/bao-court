@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   deriveSelectionSeed,
+  filterEligibleJurors,
   jurorRandomValue,
   selectJury,
   selectJuryWithBackups,
@@ -100,17 +101,28 @@ describe('jury selection', () => {
     // registration, which passed the age threshold and made the candidate
     // appear arbitrarily old. A future registration is self-attested and
     // must be excluded.
-    // Spread drops the readonly modifier so the future-dated override is
-    // a plain mutable JurorProfile.
+    // The seed below is load-bearing: with disputeEventId 0…0 the
+    // future-dated juror WOULD win a slot if the guard regressed (valid-dated
+    // order is 3, 1, 9), so the exclusion assertions genuinely pin the guard.
     const futureJuror: JurorProfile = { ...makeJuror('9'), registeredAt: 2_000_000_000 };
     const params = {
-      disputeEventId: 'a'.repeat(64),
+      disputeEventId: '0'.repeat(64),
       blockHash: 'b'.repeat(64),
       marketCategory: 'world',
       marketVolumeSats: 1_000_000,
       jurySize: 3,
       referenceTimeSec: 1_700_000_000,
     };
+    expect(
+      filterEligibleJurors([...pool, futureJuror], {
+        ...params,
+        backupCount: 2,
+        minWotScore: 80,
+        minAccountAgeDays: 7,
+        minStakeSats: 10_000,
+        excludedPubkeys: [],
+      }).map((j) => j.nostrPubkey),
+    ).not.toContain(futureJuror.nostrPubkey);
     const selected = selectJury([...pool, futureJuror], params);
     expect(selected.some((j) => j.nostrPubkey === futureJuror.nostrPubkey)).toBe(false);
     expect(verifyJurySelection([...pool, futureJuror], selected, params)).toBe(true);
