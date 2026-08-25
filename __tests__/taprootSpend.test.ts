@@ -441,9 +441,7 @@ describe('finalizeTaproot', () => {
   it('appends the hash_type byte for non-default sighash (65-byte witness element)', () => {
     const base = finalizeTaproot(finalizeParams());
     expect(base.witness[0]).toBe(SIG); // SIGHASH_DEFAULT keeps the bare 64-byte form
-    const p = finalizeParams();
-    p.hashType = SIGHASH_ALL;
-    const res = finalizeTaproot(p);
+    const res = finalizeTaproot({ ...finalizeParams(), hashType: SIGHASH_ALL });
     expect(hexToBytes(res.witness[0]).length).toBe(65);
     expect(res.witness[0]).toBe(SIG + '01');
     // …and the digest commits the non-default type too.
