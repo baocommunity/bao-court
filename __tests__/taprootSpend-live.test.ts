@@ -36,10 +36,15 @@ import {
 } from '../taprootSpend.js';
 
 // ---------------------------------------------------------------------------
-// Config
+// Config — live infra is injected via env (public repo: no hosts/IPs in code).
+// Set BAO_LIVE_TAPROOT=true plus the two targets to run; otherwise skipped.
+//   BAO_LIVE_TAPROOT=true \
+//   BAO_ELEMENTS_ESPLORA=http://<host>:5001/liquidregtest/api \
+//   BAO_ELEMENTS_SSH="ssh -o StrictHostKeyChecking=no root@<host>" npm run test:live
 // ---------------------------------------------------------------------------
-const ESPLORA = 'http://142.132.167.103:5001/liquidregtest/api';
-const VPS_SSH = 'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@142.132.167.103';
+const ESPLORA = process.env.BAO_ELEMENTS_ESPLORA ?? '';
+const VPS_SSH = process.env.BAO_ELEMENTS_SSH ?? '';
+const LIVE_ENABLED = process.env.BAO_LIVE_TAPROOT === 'true' && Boolean(ESPLORA) && Boolean(VPS_SSH);
 const FAUCET_CLI = 'docker exec bao-elements elements-cli -rpcwallet=faucet';
 const L_BTC_ASSET = '6f0279e9ed041c3d710a9f57d0c0414b54ef8aa18321b0f0b3f6a3c1c04e7c4f';
 const FUND_AMOUNT_BTC = 0.001;
@@ -103,7 +108,7 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 // Test
 // ---------------------------------------------------------------------------
-describe('WS-A taproot spend — live elementsregtest', () => {
+describe.skipIf(!LIVE_ENABLED)('WS-A taproot spend — live elementsregtest', () => {
   it('builds WS-A tree, computes sighash, signs, broadcasts, and verifies', async () => {
     // ── 1. Build WS-A taproot output tree ──────────────────────────────
     const sender = randomKeypair();

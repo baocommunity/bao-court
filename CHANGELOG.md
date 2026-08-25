@@ -50,6 +50,10 @@ BIP-341/Elements bugs fixed. **Consumer-visible signature changes** in
   `scriptPathControlBlock(internalKeyXOnly, leaves, leafIndex)`: path, root
   and parity are all derived internally.
 - New export `outputKeyParity(internalKeyXOnly, merkleRoot): 0 | 1`.
+- **Live test infra is now env-injected (CI-safe, no IPs in code).**
+  `__tests__/taprootSpend-live.test.ts` is skipped unless
+  `BAO_LIVE_TAPROOT=true` with `BAO_ELEMENTS_ESPLORA` + `BAO_ELEMENTS_SSH`
+  set (`npm run test:live`). GitHub CI no longer needs VPS SSH access.
 
 ### Vector regeneration (spec §8.1, v2.2)
 - `CB_T0` / `CB_T1` re-pinned with prefix `0xc1` (Q_T has odd Y); paths and
