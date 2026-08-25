@@ -1,6 +1,6 @@
 {
   "name": "@bao/court",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "type": "module",
   "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
   "exports": {
@@ -136,6 +136,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:live": "env BAO_LIVE_TAPROOT=true vitest run __tests__/taprootSpend-live.test.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",

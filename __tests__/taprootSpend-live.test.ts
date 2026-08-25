@@ -36,10 +36,15 @@ import {
 } from '../taprootSpend.js';
 
 // ---------------------------------------------------------------------------
-// Config
+// Config — live infra is injected via env (public repo: no hosts/IPs in code).
+// Set BAO_LIVE_TAPROOT=true plus the two targets to run; otherwise skipped.
+//   BAO_LIVE_TAPROOT=true \
+//   BAO_ELEMENTS_ESPLORA=http://<host>:5001/liquidregtest/api \
+//   BAO_ELEMENTS_SSH="ssh -o StrictHostKeyChecking=no root@<host>" npm run test:live
 // ---------------------------------------------------------------------------
-const ESPLORA = 'http://142.132.167.103:5001/liquidregtest/api';
-const VPS_SSH = 'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@142.132.167.103';
+const ESPLORA = process.env.BAO_ELEMENTS_ESPLORA ?? '';
+const VPS_SSH = process.env.BAO_ELEMENTS_SSH ?? '';
+const LIVE_ENABLED = process.env.BAO_LIVE_TAPROOT === 'true' && Boolean(ESPLORA) && Boolean(VPS_SSH);
 const FAUCET_CLI = 'docker exec bao-elements elements-cli -rpcwallet=faucet';
 const L_BTC_ASSET = '6f0279e9ed041c3d710a9f57d0c0414b54ef8aa18321b0f0b3f6a3c1c04e7c4f';
 const FUND_AMOUNT_BTC = 0.001;
@@ -103,7 +108,7 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 // Test
 // ---------------------------------------------------------------------------
-describe('WS-A taproot spend — live elementsregtest', () => {
+describe.skipIf(!LIVE_ENABLED)('WS-A taproot spend — live elementsregtest', () => {
   it('builds WS-A tree, computes sighash, signs, broadcasts, and verifies', async () => {
     // ── 1. Build WS-A taproot output tree ──────────────────────────────
     const sender = randomKeypair();
@@ -119,7 +124,9 @@ describe('WS-A taproot spend — live elementsregtest', () => {
 
     const NUMS = 'ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4';
     const outputProgram = Buffer.from(taprootProgram(NUMS, merkleRoot)).toString('hex');
-    const cbCoop = controlBlock(NUMS, taprootMerklePath([hashCoop, hashRefund], 0));
+    // v0.6.2: controlBlock derives the BIP-341 parity bit from the output key
+    // Q, so it needs the merkle root the output commits to.
+    const cbCoop = controlBlock(NUMS, taprootMerklePath([hashCoop, hashRefund], 0), merkleRoot);
 
     console.log(`\n── WS-A taproot tree ──`);
     console.log(`  Merkle root:   ${merkleRoot}`);
