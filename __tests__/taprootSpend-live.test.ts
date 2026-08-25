@@ -163,15 +163,10 @@ describe('WS-A taproot spend — live elementsregtest', () => {
     console.log(`  Value: ${utxoValueSats} sats (${utxoAmountBtc} BTC)`);
     console.log(`  Spend: ${spendSats} sats, fee: ${feeSats} sats`);
 
-    // ── 4. Get the previous tx hex (for sighash) ────────────────────────
-    const prevTxHex = await esploraGet<string>(`/tx/${utxo.txid}/hex`);
-    expect(typeof prevTxHex).toBe('string');
-    expect(prevTxHex.length).toBeGreaterThan(100);
-    console.log(`  Prev tx hex: ${prevTxHex.length / 2} bytes`);
+    // ── 4. Ready for sighash computation ──────────────────────────────
 
     // ── 5. Compute WS-A taproot sighash ─────────────────────────────────
     const sighash = taprootSighashElements({
-      transaction: prevTxHex,
       inputIndex: 0,
       genesisBlockHash: LIQUID_TESTNET_GENESIS,
       inputs: [
