@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 
 import {
   BAO_SIGNET,
@@ -17,9 +18,12 @@ import {
   controlBlockInternalKey,
   controlBlockMerklePath,
   finalizeTaproot,
+  LIQUID_MAINNET_GENESIS,
   LIQUID_TESTNET_GENESIS,
   merkleRootFromLeafAndPath,
+  outputKeyParity,
   reverseHex,
+  SIGHASH_ALL,
   scriptPathControlBlock,
   serializeExplicitAsset,
   serializeExplicitValue,
@@ -39,11 +43,16 @@ const REFUND_HEIGHT = CLOSE + DELTA; // 2_000_144
 
 // Pinned §8.1 values (regenerated under the NUMS internal key).
 //
-// NOTE: the REFUND leaves carry a v2.1 vector CORRECTION: the frozen v2 block
-// emitted `b1 00` where spec §3 defines `<locktime> OP_CLTV OP_DROP <pk> OP_CHECKSIG`
-// (0x00 in place of OP_DROP 0x75 — a bug in the deleted vector generator). The
-// corrected leaves regenerate MERKLE/Q/ADDR and the COOP-leaf control blocks;
-// COOP leaves and REFUND-leaf control-block paths are unchanged.
+// NOTE (v2.1 vector CORRECTION): the frozen v2 block emitted `b1 00` where
+// spec §3 defines `<locktime> OP_CLTV OP_DROP <pk> OP_CHECKSIG` (0x00 in place
+// of OP_DROP 0x75 — a bug in the deleted vector generator). The corrected
+// leaves regenerate MERKLE/Q/ADDR and the COOP-leaf control blocks; COOP
+// leaves and REFUND-leaf control-block paths are unchanged.
+//
+// NOTE (v2.2 parity REGENERATION, v0.6.2): BIP-341 control-block low bit =
+// Y-parity of the OUTPUT key Q, not the internal key. Q_T has odd Y → the
+// T-tree control blocks carry 0xc1; Q_C has even Y → the C-tree ones stay
+// 0xc0. The v2.1 CB_T* vectors (0xc0) were consensus-invalid.
 const VECTORS = {
   COOP_T: '201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
   REFUND_T: '0410851e00b175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
@@ -55,8 +64,8 @@ const VECTORS = {
   Q_C: 'f4b210abc99416a3f1de913a56e5502979596c61e4437fabaacb2f3806ba35e6',
   ADDR_T: 'tq1ph5nr6vnt7pcpy3a6ct507y36xr6qdfty7sfgttp8lfkqemuqprhqfuzeej',
   ADDR_C: 'tq1p7jepp27fjst28uw7jya9de2s99u4jmrpu3phl2a2evhnsp46xhnqvjdtl6',
-  CB_T0: 'c0ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4b731bfbf2f8a9197ba64efcdbb993faa98ece93ef680a0946f2d1d4fc01720b9',
-  CB_T1: 'c0ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f41b7fbc0309ba606310a6d0641ca390b06fa91b482e9e958f51618e6da8fff476',
+  CB_T0: 'c1ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4b731bfbf2f8a9197ba64efcdbb993faa98ece93ef680a0946f2d1d4fc01720b9',
+  CB_T1: 'c1ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f41b7fbc0309ba606310a6d0641ca390b06fa91b482e9e958f51618e6da8fff476',
   CB_C0: 'c0ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f43c0a96fbd33a47c6cc50a83179e0d97e1f22730d534f5dfa3677361160d3382e',
   CB_C1: 'c0ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f428e4495a42d97a058b35d64a3271e6103037a5dee4f2a9d6a2e7691608dba5b8',
 };
@@ -116,26 +125,80 @@ describe('WS-A §8.1 frozen vectors', () => {
   });
 });
 
+// ── BIP-341 output-key parity (numeric, independent of module helpers) ──────
+
+/** Independent Q-parity: lift_x + TapTweak with @noble/curves directly. */
+function qParityIndependent(internalXOnlyHex: string, merkleRootHex: string): 0 | 1 {
+  const Pt = secp256k1.Point;
+  const key = hexToBytes(internalXOnlyHex);
+  let P;
+  for (const prefix of [2, 3]) {
+    const c = new Uint8Array(33);
+    c[0] = prefix;
+    c.set(key, 1);
+    try { P = Pt.fromHex(bytesToHex(c)); break; } catch { /* try odd */ }
+  }
+  if (!P) throw new Error('lift failed');
+  const tagHash = sha256(new TextEncoder().encode('TapTweak'));
+  const pre = new Uint8Array(64 + 64);
+  pre.set(tagHash, 0);
+  pre.set(tagHash, 32);
+  pre.set(key, 64);
+  pre.set(hexToBytes(merkleRootHex), 96);
+  const tHash = sha256(pre);
+  let t = 0n;
+  for (const b of tHash) t = (t << 8n) | BigInt(b);
+  const Q = P.add(Pt.BASE.multiply(t));
+  return Q.toHex(true).startsWith('03') ? 1 : 0; // compressed 03 = odd Y
+}
+
+describe('BIP-341 output-key parity', () => {
+  it('derives the control-block parity bit from the OUTPUT key Q — numerically', () => {
+    // The pinned NUMS internal key + both §8.1 trees:
+    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T)).toBe(1); // Q_T odd-Y
+    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C)).toBe(0); // Q_C even-Y
+    // …so the regenerated control blocks carry exactly those bits.
+    expect(parseInt(VECTORS.CB_T0.slice(0, 2), 16) & 1).toBe(1);
+    expect(parseInt(VECTORS.CB_T1.slice(0, 2), 16) & 1).toBe(1);
+    expect(parseInt(VECTORS.CB_C0.slice(0, 2), 16) & 1).toBe(0);
+    expect(parseInt(VECTORS.CB_C1.slice(0, 2), 16) & 1).toBe(0);
+    // …and the module's own derivation agrees with the independent computation.
+    expect(outputKeyParity(INTERNAL_X, VECTORS.MERKLE_T)).toBe(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T));
+    expect(outputKeyParity(INTERNAL_X, VECTORS.MERKLE_C)).toBe(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C));
+    // The builders stamp the derived bit into the first byte.
+    const leavesT = [VECTORS.COOP_T, VECTORS.REFUND_T];
+    const leavesC = [VECTORS.COOP_C, VECTORS.REFUND_C];
+    expect(scriptPathControlBlock(INTERNAL_X, leavesT, 0).slice(0, 2)).toBe('c1');
+    expect(scriptPathControlBlock(INTERNAL_X, leavesC, 0).slice(0, 2)).toBe('c0');
+  });
+
+  it('rejects bad internal keys and bad merkle roots', () => {
+    expect(() => outputKeyParity('aa'.repeat(31), VECTORS.MERKLE_T)).toThrow(/internal key/);
+    expect(() => outputKeyParity(INTERNAL_X, 'aa'.repeat(31))).toThrow(/merkle root/);
+  });
+});
+
 // ── Control block mechanics ─────────────────────────────────────────────────
 
 describe('controlBlock / merkle path', () => {
-  const PATH = ['aa'.repeat(32), 'bb'.repeat(32)];
+  // Q_T has odd Y → parity bit 1 → 0xc1; Q_C even Y → 0xc0.
+  const PATH = ['aa'.repeat(32)];
 
-  it('parity 0 → 0xc0 prefix, parity 1 → 0xc1 prefix', () => {
-    expect(controlBlock(INTERNAL_X, PATH, 0).slice(0, 2)).toBe('c0');
-    expect(controlBlock(INTERNAL_X, PATH, 1).slice(0, 2)).toBe('c1');
+  it('stamps the OUTPUT-key parity into the first byte (derived, never assumed)', () => {
+    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_T).slice(0, 2)).toBe('c1');
+    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_C).slice(0, 2)).toBe('c0');
   });
 
   it('round-trips internal key and path', () => {
-    const cb = controlBlock(INTERNAL_X, PATH, 1);
+    const cb = controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_T);
     expect(controlBlockInternalKey(cb)).toBe(INTERNAL_X);
     expect(controlBlockMerklePath(cb)).toEqual(PATH);
   });
 
-  it('rejects bad keys, bad parity, bad path elements', () => {
-    expect(() => controlBlock('aa'.repeat(31), [], 0)).toThrow(/internal key/);
-    expect(() => controlBlock(INTERNAL_X, [], 2 as 0 | 1)).toThrow(/parity/);
-    expect(() => controlBlock(INTERNAL_X, ['aa'.repeat(31)], 0)).toThrow(/32 bytes/);
+  it('rejects bad keys, bad roots, bad path elements', () => {
+    expect(() => controlBlock('aa'.repeat(31), [], VECTORS.MERKLE_T)).toThrow(/internal key/);
+    expect(() => controlBlock(INTERNAL_X, [], 'bb'.repeat(31))).toThrow(/merkle root/);
+    expect(() => controlBlock(INTERNAL_X, ['aa'.repeat(31)], VECTORS.MERKLE_T)).toThrow(/32 bytes/);
     expect(() => controlBlockMerklePath('aa'.repeat(32))).toThrow(/malformed/);
     expect(() => controlBlockInternalKey('aa'.repeat(32))).toThrow(/malformed/);
   });
@@ -248,8 +311,10 @@ describe('taprootSighashElements', () => {
     const expected = handBuiltExpectedSighash();
     const actual = taprootSighashElements(minimalTxParams());
     expect(actual).toBe(expected);
-    // Pinned digest — refactors must preserve it byte-for-byte.
-    expect(actual).toBe('43b0b047c6e56793acfc5f36d419aa5e9b498a9f9e14f173d2c32736466824ee');
+    // Pinned digest — refactors must preserve it byte-for-byte. Re-pinned in
+    // v0.6.2: the genesis constant now holds true INTERNAL byte order (was
+    // display hex, feeding reversed bytes into the preimage).
+    expect(actual).toBe('edf985681d64c7c5e9a7c465ad03df0db55345fea38c1b20aec6b33f8f9602f5');
   });
 
   it('is deterministic', () => {
@@ -296,6 +361,19 @@ describe('taprootSighashElements', () => {
   it('reverseHex flips display ↔ internal byte order', () => {
     expect(reverseHex('00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'))
       .toBe('ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100');
+  });
+
+  it('genesis constants hold INTERNAL byte order (reverse of display) — v0.6.2 fix', () => {
+    // Display forms pinned by Elements Core kernel/chainparams.cpp (mainnet
+    // GetHex assert) and the Liquid / liquidtestnet Esplora APIs, height 0.
+    // Elements seeds the sighash hasher with the raw uint256 bytes
+    // (interpreter.cpp: HashWriter(HASHER_TAPSIGHASH_ELEMENTS) << genesis <<
+    // genesis), which are the REVERSE of the display hex (uint256.h). The
+    // v0.6.0 constants stored display hex verbatim → reversed preimages.
+    expect(reverseHex(LIQUID_MAINNET_GENESIS))
+      .toBe('1466275836220db2944ca059a3a10ef6fd2ea684b0688d2c379296888a206003');
+    expect(reverseHex(LIQUID_TESTNET_GENESIS))
+      .toBe('a771da8e52ee6ad581ed1e9a99825e5b3b7992225534eaa2ae23244fe26ab1c1');
   });
 });
 
@@ -358,6 +436,25 @@ describe('finalizeTaproot', () => {
     p.expectedOutputKey = VECTORS.Q_T;
     const res = finalizeTaproot(p);
     expect(res.witness).toEqual([SIG, VECTORS.REFUND_T, VECTORS.CB_T1]);
+  });
+
+  it('appends the hash_type byte for non-default sighash (65-byte witness element)', () => {
+    const base = finalizeTaproot(finalizeParams());
+    expect(base.witness[0]).toBe(SIG); // SIGHASH_DEFAULT keeps the bare 64-byte form
+    const p = finalizeParams();
+    p.hashType = SIGHASH_ALL;
+    const res = finalizeTaproot(p);
+    expect(hexToBytes(res.witness[0]).length).toBe(65);
+    expect(res.witness[0]).toBe(SIG + '01');
+    // …and the digest commits the non-default type too.
+    expect(res.sighash).not.toBe(base.sighash);
+  });
+
+  it('rejects a control block whose parity bit contradicts the output key', () => {
+    const p = finalizeParams();
+    // Q_T has odd Y; flip the parity bit to 0xc0 (the v2.1 vector bug).
+    p.controlBlock = 'c0' + p.controlBlock.slice(2);
+    expect(() => finalizeTaproot(p)).toThrow(/parity does not match the output key/);
   });
 });
 

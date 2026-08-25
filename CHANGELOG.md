@@ -9,6 +9,57 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.6.2] — 2026-08-24
+
+Consensus-correctness release for `./taproot-spend`: three independent
+BIP-341/Elements bugs fixed. **Consumer-visible signature changes** in
+`controlBlock` / `scriptPathControlBlock` — see *Changed* below.
+
+### Fixed
+- **Control-block parity (consensus blocker).** The script-path control
+  block's low bit is the Y-parity of the OUTPUT key
+  Q = lift_x(P) + tagged_hash("TapTweak", P ‖ root)·G per BIP-341 — not a
+  property of the internal key. v0.6.0 defaulted it to 0, producing
+  consensus-invalid control blocks for every output whose Q has odd Y (~50%:
+  proven numerically on the §8.1 vectors). Parity is now derived from
+  `(internalKey, merkleRoot)` via the new `outputKeyParity` export and cannot
+  be mis-stated; `finalizeTaproot` now rejects control blocks whose parity
+  bit contradicts the recomputed output key (the old x-only output-key check
+  could not catch this).
+- **Genesis byte order in the Elements sighash.**
+  `LIQUID_MAINNET_GENESIS` / `LIQUID_TESTNET_GENESIS` are documented as
+  uint256 INTERNAL byte order (Elements Core seeds
+  `HASHER_TAPSIGHASH_ELEMENTS` with the raw genesis uint256 twice), but the
+  values shipped were the well-known DISPLAY hex — every sighash preimage got
+  reversed bytes. The constants now hold true internal order, derived from
+  their display forms (`reverseHex`) so the two orders cannot be mixed up
+  again. Verified against Elements Core `src/script/interpreter.cpp`,
+  `src/uint256.h` serialization, the `kernel/chainparams.cpp` mainnet genesis
+  assert, and the live Liquid / liquidtestnet Esplora APIs (height 0).
+- **`finalizeTaproot` hash_type witness form.** A non-default `hashType`
+  silently produced a bare 64-byte signature element; BIP-341/Elements
+  require the hash_type byte appended (65-byte element,
+  `CheckSchnorrSignature`). SIGHASH_DEFAULT keeps the 64-byte form.
+
+### Changed (consumer-visible)
+- `controlBlock(internalKeyXOnly, merklePath)` →
+  `controlBlock(internalKeyXOnly, merklePath, merkleRoot)`: the third
+  parameter is now the merkle ROOT the parity is derived from (was a manual
+  `parity: 0|1` defaulting to 0 — the bug above).
+- `scriptPathControlBlock(internalKeyXOnly, leaves, leafIndex, parity?)` →
+  `scriptPathControlBlock(internalKeyXOnly, leaves, leafIndex)`: path, root
+  and parity are all derived internally.
+- New export `outputKeyParity(internalKeyXOnly, merkleRoot): 0 | 1`.
+
+### Vector regeneration (spec §8.1, v2.2)
+- `CB_T0` / `CB_T1` re-pinned with prefix `0xc1` (Q_T has odd Y); paths and
+  all other §8.1 values unchanged (`CB_C0` / `CB_C1` stay `0xc0` — Q_C is
+  even-Y, which is why they passed before). Tests add an independent numeric
+  Q-parity cross-check, a genesis-byte-order pin against the display hashes,
+  a non-default-hashType witness test, and a finalizeTaproot parity-rejection
+  test; the hand-built sighash known-answer digest was re-pinned for the
+  corrected genesis bytes.
+
 ## [0.6.0] — 2026-08-24
 
 New module — WS-A Taproot script-path spend finalization for Liquid/Elements

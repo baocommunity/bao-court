@@ -10,8 +10,10 @@
  *   1. **Control-block construction** — `controlBlock()` /
  *      `scriptPathControlBlock()`, with the merkle path derived from the same
  *      split-at-half tree `tapMerkleRoot` commits (Bitcoin Core
- *      `taproot_tree_helper` shape). A wrong-shaped tree fails consensus; the
- *      path here is guaranteed consistent with the pinned vectors.
+ *      `taproot_tree_helper` shape) and the control block's parity bit
+ *      computed from the OUTPUT key Q = lift_x(P) + t·G per BIP-341 (never
+ *      assumed). A wrong-shaped tree or wrong parity fails consensus; both
+ *      are guaranteed consistent with the pinned vectors.
  *
  *   2. **The Elements taproot signature hash** — `taprootSighashElements()`,
  *      a faithful port of Elements Core's `SignatureHashSchnorr` (TAPSCRIPT
@@ -42,14 +44,17 @@
 
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 
 import { locktimeToPush, pushHex, taprootProgram } from './liquidEscrow';
+
+const Point = secp256k1.Point;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** BIP-341 tapscript leaf version (all WS-A leaves use 0xc0). */
 export const TAPROOT_LEAF_VERSION = 0xc0;
-/** First byte of a script-path control block: leaf version | internal-key parity. */
+/** First byte of a script-path control block: leaf version | OUTPUT-key Y-parity (BIP-341). */
 export const TAPROOT_CONTROL_BASE = 0xc0;
 
 /** BIP-341 / Elements sighash types (the taproot digest commits the raw byte). */
@@ -70,15 +75,28 @@ export const CODESEP_POS_NONE = 0xffffffff;
 
 /**
  * Chain genesis block hashes, uint256 **internal byte order** (the raw bytes
- * as serialized — reverse of the display hex), used to domain-separate the
- * Elements taproot sighash per chain.
+ * as serialized — reverse of the RPC/explorer display hex), used to
+ * domain-separate the Elements taproot sighash per chain.
  *
- * Verified against Elements Core `chainparams.cpp` (mainnet assert) and
- * esplora block 0. BAO signet is its own chain — supply its genesis hash
- * explicitly (testnet HRPs do not imply the testnet genesis).
+ * Elements Core seeds the sighash hasher with the genesis uint256 TWICE
+ * (`interpreter.cpp`: `HashWriter(HASHER_TAPSIGHASH_ELEMENTS) <<
+ * hash_genesis_block << hash_genesis_block`), and `HashWriter` serializes a
+ * uint256 as its raw internal bytes (`uint256.h`: `s << Span(m_data)`;
+ * `GetHex()` display is the REVERSE of those bytes). The constants are
+ * therefore derived from their display forms (pinned by Elements Core
+ * `kernel/chainparams.cpp` mainnet `GetHex()` assert and the Liquid /
+ * liquidtestnet Esplora APIs, block height 0) so the two orders cannot be
+ * mixed up again — v0.6.0 shipped the display hex verbatim, which fed the
+ * reversed bytes into every sighash preimage (fixed in v0.6.2).
+ *
+ * BAO signet is its own chain — supply its genesis hash explicitly, in
+ * internal byte order (see `reverseHex`); testnet HRPs do not imply the
+ * testnet genesis.
  */
-export const LIQUID_MAINNET_GENESIS = '1466275836220db2944ca059a3a10ef6fd2ea684b0688d2c379296888a206003';
-export const LIQUID_TESTNET_GENESIS = 'a771da8e52ee6ad581ed1e9a99825e5b3b7992225534eaa2ae23244fe26ab1c1';
+const LIQUID_MAINNET_GENESIS_DISPLAY = '1466275836220db2944ca059a3a10ef6fd2ea684b0688d2c379296888a206003';
+const LIQUID_TESTNET_GENESIS_DISPLAY = 'a771da8e52ee6ad581ed1e9a99825e5b3b7992225534eaa2ae23244fe26ab1c1';
+export const LIQUID_MAINNET_GENESIS = reverseHex(LIQUID_MAINNET_GENESIS_DISPLAY);
+export const LIQUID_TESTNET_GENESIS = reverseHex(LIQUID_TESTNET_GENESIS_DISPLAY);
 
 const textEncoder = new TextEncoder();
 
@@ -192,6 +210,49 @@ export function buildWsARefundLeaf(pkXOnly: string, refundLocktime: number): str
 
 // ── Taproot tree: leaf hash, path, control block ────────────────────────────
 
+/** Lift an x-only pubkey to its curve point (tries both Y parities). */
+function liftXOnly(xOnly: Uint8Array): ReturnType<typeof Point.fromHex> {
+  for (const parity of [2, 3]) {
+    const candidate = new Uint8Array(33);
+    candidate[0] = parity;
+    candidate.set(xOnly, 1);
+    try {
+      return Point.fromHex(bytesToHex(candidate));
+    } catch {
+      // wrong parity, try next
+    }
+  }
+  throw new Error('taprootSpend: cannot lift x-only key to curve point');
+}
+
+function bytesToScalar(bytes: Uint8Array): bigint {
+  let v = 0n;
+  for (const b of bytes) v = (v << 8n) | BigInt(b);
+  return v;
+}
+
+/**
+ * Y-parity (0 = even, 1 = odd) of the taproot OUTPUT key
+ *
+ *   Q = lift_x(P) + tagged_hash("TapTweak", P || merkleRoot)·G   (BIP-341)
+ *
+ * The script-path control block's low bit MUST equal this value. This is a
+ * property of the tweaked key pair, so it can only be computed from the
+ * internal key + merkle root — it cannot be defaulted or guessed.
+ */
+export function outputKeyParity(internalKeyXOnly: string, merkleRootHex: string): 0 | 1 {
+  const key = hexToBytes(internalKeyXOnly);
+  if (key.length !== 32) throw new Error(`taprootSpend: internal key must be 32-byte x-only, got ${key.length}`);
+  const merkle = hexToBytes(merkleRootHex);
+  if (merkle.length !== 32) throw new Error(`taprootSpend: merkle root must be 32 bytes, got ${merkle.length}`);
+  const tweak = bytesToScalar(taggedHash('TapTweak', key, merkle));
+  if (tweak >= Point.Fn.ORDER) {
+    throw new Error('taprootSpend: taproot tweak exceeds the curve order');
+  }
+  const Q = liftXOnly(key).add(Point.BASE.multiply(tweak));
+  return Q.toHex(true).startsWith('03') ? 1 : 0;
+}
+
 /** BIP-341 TapLeaf hash: tagged_hash("TapLeaf", 0xc0 || compact_size(len) || script). */
 export function tapleafHash(scriptHex: string): string {
   const script = hexToBytes(scriptHex);
@@ -235,13 +296,15 @@ export function taprootMerklePath(leaves: readonly string[], leafIndex: number):
 
 /**
  * BIP-341 control block: `[0xc0 | parity] || internal_key_x || path…`.
- * `parity` is the Y-parity of the internal key as lifted for the taproot tweak
- * (the vendored `taprootProgram` lifts even-Y, so WS-A control blocks carry
- * parity 0 → first byte `0xc0`, matching the pinned vectors).
+ * `parity` is the Y-parity of the OUTPUT key Q = lift_x(P) + t·G with
+ * t = int(tagged_hash("TapTweak", P || merkleRoot)) — never the internal
+ * key's. It is derived here from `(internalKeyXOnly, merkleRoot)` so an
+ * out-of-parity (consensus-invalid) control block cannot be assembled by
+ * accident; v0.6.0 took parity as a parameter defaulting to 0, which is
+ * wrong whenever Q has odd Y (~50% of outputs).
  */
-export function controlBlock(internalKeyXOnly: string, merklePath: readonly string[], parity: 0 | 1 = 0): string {
-  assertXOnly(internalKeyXOnly, 'internal key');
-  if (parity !== 0 && parity !== 1) throw new Error(`taprootSpend: parity must be 0|1, got ${parity}`);
+export function controlBlock(internalKeyXOnly: string, merklePath: readonly string[], merkleRootHex: string): string {
+  const parity = outputKeyParity(internalKeyXOnly, merkleRootHex);
   const parts: string[] = [bytesToHex(Uint8Array.of(TAPROOT_CONTROL_BASE | parity)), internalKeyXOnly];
   for (const p of merklePath) {
     const b = hexToBytes(p);
@@ -251,14 +314,15 @@ export function controlBlock(internalKeyXOnly: string, merklePath: readonly stri
   return parts.join('');
 }
 
-/** Convenience: control block for a leaf in a tree, computing the path internally. */
+/** Convenience: control block for a leaf in a tree — path, root and Q-parity all derived internally. */
 export function scriptPathControlBlock(
   internalKeyXOnly: string,
   leaves: readonly string[],
   leafIndex: number,
-  parity: 0 | 1 = 0,
 ): string {
-  return controlBlock(internalKeyXOnly, taprootMerklePath(leaves, leafIndex), parity);
+  const path = taprootMerklePath(leaves, leafIndex); // validates leafIndex / non-empty tree
+  const root = bytesToHex(merkleRootHashes(leaves.map((l) => hexToBytes(tapleafHash(l)))));
+  return controlBlock(internalKeyXOnly, path, root);
 }
 
 /** Internal key (x-only) embedded in a control block. */
@@ -537,7 +601,8 @@ export interface FinalizeTaprootParams {
   readonly leafScript: string;
   /** Control block for this leaf (hex — `scriptPathControlBlock`). */
   readonly controlBlock: string;
-  /** 64-byte Schnorr signature over the sighash (hex, WITHOUT the sighash byte). */
+  /** 64-byte Schnorr signature over the sighash (hex, WITHOUT the sighash byte —
+   *  it is appended automatically when `hashType` ≠ SIGHASH_DEFAULT). */
   readonly signature: string;
   /** Extra stack items pushed BEFORE the signature. Default [] — WS-A COOP/REFUND leaves need only the sig. */
   readonly stack?: readonly string[];
@@ -554,7 +619,9 @@ export interface FinalizeTaprootParams {
  * When `expectedOutputKey` is supplied, the leaf + control block are verified
  * to commit to it (recompute the merkle root from leaf + path, re-tweak the
  * internal key embedded in the control block) — catching a wrong leaf/path
- * before anything is signed.
+ * before anything is signed. The control block's parity bit is ALWAYS checked
+ * against the Y-parity of the recomputed output key (BIP-341), whether or not
+ * `expectedOutputKey` is given.
  */
 export function finalizeTaproot(params: FinalizeTaprootParams): { sighash: string; witness: readonly string[] } {
   const leafHash = tapleafHash(params.leafScript);
@@ -565,6 +632,13 @@ export function finalizeTaproot(params: FinalizeTaprootParams): { sighash: strin
   if (params.expectedOutputKey !== undefined && outputKey !== params.expectedOutputKey) {
     throw new Error('finalizeTaproot: leaf/control block do not commit to expectedOutputKey');
   }
+  // BIP-341: the control block's low bit must equal the OUTPUT key Q's
+  // Y-parity — an x-only comparison above cannot catch a wrong parity.
+  const cbParity = (hexToBytes(params.controlBlock)[0] & 0x01) as 0 | 1;
+  if (cbParity !== outputKeyParity(internalKey, recomputedRoot)) {
+    throw new Error('finalizeTaproot: control block parity does not match the output key');
+  }
+  const hashType = params.hashType ?? SIGHASH_DEFAULT;
   const signature = hexToBytes(params.signature);
   if (signature.length !== 64) {
     throw new Error(`finalizeTaproot: signature must be 64 bytes, got ${signature.length}`);
@@ -578,9 +652,15 @@ export function finalizeTaproot(params: FinalizeTaprootParams): { sighash: strin
     outputWitnesses: params.outputWitnesses,
     inputIndex: params.inputIndex,
     tapleafHash: leafHash,
-    hashType: params.hashType,
+    hashType,
     codesepPos: params.codesepPos,
   });
-  const witness = [params.signature, ...(params.stack ?? []), params.leafScript, params.controlBlock];
+  // BIP-341 / Elements (`CheckSchnorrSignature`): a non-default hash_type is
+  // appended to the signature (65-byte witness element); SIGHASH_DEFAULT keeps
+  // the bare 64-byte form.
+  const sigElement = bytesToHex(
+    hashType === SIGHASH_DEFAULT ? signature : concatBytes(signature, Uint8Array.of(hashType)),
+  );
+  const witness = [sigElement, ...(params.stack ?? []), params.leafScript, params.controlBlock];
   return { sighash, witness };
 }

@@ -119,7 +119,9 @@ describe('WS-A taproot spend — live elementsregtest', () => {
 
     const NUMS = 'ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4';
     const outputProgram = Buffer.from(taprootProgram(NUMS, merkleRoot)).toString('hex');
-    const cbCoop = controlBlock(NUMS, taprootMerklePath([hashCoop, hashRefund], 0));
+    // v0.6.2: controlBlock derives the BIP-341 parity bit from the output key
+    // Q, so it needs the merkle root the output commits to.
+    const cbCoop = controlBlock(NUMS, taprootMerklePath([hashCoop, hashRefund], 0), merkleRoot);
 
     console.log(`\n── WS-A taproot tree ──`);
     console.log(`  Merkle root:   ${merkleRoot}`);
