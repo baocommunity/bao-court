@@ -52,10 +52,13 @@ const Point = secp256k1.Point;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** BIP-341 tapscript leaf version (all WS-A leaves use 0xc0). */
-export const TAPROOT_LEAF_VERSION = 0xc0;
-/** First byte of a script-path control block: leaf version | OUTPUT-key Y-parity (BIP-341). */
-export const TAPROOT_CONTROL_BASE = 0xc0;
+/** Elements tapscript leaf version (interpreter.h TAPROOT_LEAF_TAPSCRIPT).
+ *  ELEMENTS uses 0xc4 — Bitcoin's BIP-342 value is 0xc0, which elementsd
+ *  treats as an upgradable leaf version and rejects with "Taproot version
+ *  reserved for soft-fork upgrades". (v0.6.3 fix; v0.6.2 shipped 0xc0.) */
+export const TAPROOT_LEAF_VERSION = 0xc4;
+/** First byte of a script-path control block: leaf version | OUTPUT-key Y-parity. */
+export const TAPROOT_CONTROL_BASE = 0xc4;
 
 /** BIP-341 / Elements sighash types (the taproot digest commits the raw byte). */
 export const SIGHASH_DEFAULT = 0x00;
@@ -162,9 +165,10 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
   return 0;
 }
 
+/** Elements TapBranch hash over lexicographically sorted children (HASHER_TAPBRANCH_ELEMENTS). */
 function branchHash(l: Uint8Array, r: Uint8Array): Uint8Array {
   const [a, b] = [l, r].sort(compareBytes);
-  return taggedHash('TapBranch', a, b);
+  return taggedHash('TapBranch/elements', a, b);
 }
 
 function serializeVector(bytes: Uint8Array): Uint8Array {
@@ -234,7 +238,10 @@ function bytesToScalar(bytes: Uint8Array): bigint {
 /**
  * Y-parity (0 = even, 1 = odd) of the taproot OUTPUT key
  *
- *   Q = lift_x(P) + tagged_hash("TapTweak", P || merkleRoot)·G   (BIP-341)
+ *   Q = lift_x(P) + tagged_hash("TapTweak/elements", P || merkleRoot)·G
+ *
+ * (Elements domain per pubkeys.cpp HASHER_TAPTWEAK_ELEMENTS; v0.6.2 used the
+ * Bitcoin-domain tag — see the v0.6.3 change note.)
  *
  * The script-path control block's low bit MUST equal this value. This is a
  * property of the tweaked key pair, so it can only be computed from the
@@ -245,7 +252,7 @@ export function outputKeyParity(internalKeyXOnly: string, merkleRootHex: string)
   if (key.length !== 32) throw new Error(`taprootSpend: internal key must be 32-byte x-only, got ${key.length}`);
   const merkle = hexToBytes(merkleRootHex);
   if (merkle.length !== 32) throw new Error(`taprootSpend: merkle root must be 32 bytes, got ${merkle.length}`);
-  const tweak = bytesToScalar(taggedHash('TapTweak', key, merkle));
+  const tweak = bytesToScalar(taggedHash('TapTweak/elements', key, merkle));
   if (tweak >= Point.Fn.ORDER) {
     throw new Error('taprootSpend: taproot tweak exceeds the curve order');
   }
@@ -253,10 +260,13 @@ export function outputKeyParity(internalKeyXOnly: string, merkleRootHex: string)
   return Q.toHex(true).startsWith('03') ? 1 : 0;
 }
 
-/** BIP-341 TapLeaf hash: tagged_hash("TapLeaf", 0xc0 || compact_size(len) || script). */
+/** Elements TapLeaf hash:
+ *  tagged_hash("TapLeaf/elements", 0xc4 || compact_size(len) || script)
+ *  (interpreter.cpp HASHER_TAPLEAF_ELEMENTS + TAPROOT_LEAF_TAPSCRIPT=0xc4 —
+ *  v0.6.2 used Bitcoin's plain "TapLeaf" tag and 0xc0 version byte). */
 export function tapleafHash(scriptHex: string): string {
   const script = hexToBytes(scriptHex);
-  return bytesToHex(taggedHash('TapLeaf', Uint8Array.of(TAPROOT_LEAF_VERSION), compactSize(script.length), script));
+  return bytesToHex(taggedHash('TapLeaf/elements', Uint8Array.of(TAPROOT_LEAF_VERSION), compactSize(script.length), script));
 }
 
 function merkleRootHashes(list: Uint8Array[]): Uint8Array {
@@ -295,12 +305,12 @@ export function taprootMerklePath(leaves: readonly string[], leafIndex: number):
 }
 
 /**
- * BIP-341 control block: `[0xc0 | parity] || internal_key_x || path…`.
+ * Elements control block: `[0xc4 | parity] || internal_key_x || path…`.
  * `parity` is the Y-parity of the OUTPUT key Q = lift_x(P) + t·G with
- * t = int(tagged_hash("TapTweak", P || merkleRoot)) — never the internal
- * key's. It is derived here from `(internalKeyXOnly, merkleRoot)` so an
- * out-of-parity (consensus-invalid) control block cannot be assembled by
- * accident; v0.6.0 took parity as a parameter defaulting to 0, which is
+ * t = int(tagged_hash("TapTweak/elements", P || merkleRoot)) — never the
+ * internal key's. It is derived here from `(internalKeyXOnly, merkleRoot)`
+ * so an out-of-parity (consensus-invalid) control block cannot be assembled
+ * by accident; v0.6.0 took parity as a parameter defaulting to 0, which is
  * wrong whenever Q has odd Y (~50% of outputs).
  */
 export function controlBlock(internalKeyXOnly: string, merklePath: readonly string[], merkleRootHex: string): string {

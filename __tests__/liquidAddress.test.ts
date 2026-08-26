@@ -163,17 +163,27 @@ describe('court → spend branch integration', () => {
 // keep sha256/hexToBytes imports honest (avoid unused warnings)
 void sha256; void hexToBytes; void bytesToHex;
 
-// ── Official BIP-341 wallet vectors (bitcoin core bip341_wallet_vectors.json) ─
-// Pins the tagged-hash tweak and merkle tree: the old untagged SHA-256
-// construction produced output keys/roots that consensus validation would not
-// recompute from the control block — every script-path spend would fail.
+// ── Official BIP-341 wallet vector INPUTS (bitcoin core
+// bip341_wallet_vectors.json), regenerated under the ELEMENTS tagged-hash
+// domains + Tapscript leaf version 0xc4 (v0.6.3: "TapTweak/elements" /
+// "TapLeaf/elements" / "TapBranch/elements", TAPROOT_LEAF_TAPSCRIPT per
+// Elements interpreter.cpp/h + pubkeys.cpp).
+//
+// The Bitcoin-domain outputs of the originals are kept in comments for
+// provenance: key-only tweak 53a1f6e454df1aa2776a2814a721372d6258050de330b3
+// c6d10ee8f4e0dda343; single-leaf root 5b75adecf53548f3ec6ad7d78383bf84cc57b
+// 55a3127c72b9a2481752dd88b21 and program 147c9c57132f6e7ecddba9800bb0c44492
+// 51c92a1e60371ee77557b6620f3ea3. Elements consensus recomputes DIFFERENT
+// values — spending on an elements chain with Bitcoin-domain derivations
+// fails with "Witness program hash mismatch". The regenerated values below
+// were cross-verified by an independent pure-python secp256k1 implementation.
 
-describe('BIP-341 official wallet vectors', () => {
+describe('BIP-341 wallet vector inputs under Elements domains', () => {
   it('matches vector 0 — key-only taproot (no script tree)', () => {
     const internal = 'd6889cb081036e0faefa3a35157ad71086b123b2b144b649798b494c300a961d';
     const program = taprootProgram(internal, undefined);
-    expect(bytesToHex(program)).toBe('53a1f6e454df1aa2776a2814a721372d6258050de330b3c6d10ee8f4e0dda343');
-    // The output key must NOT be the raw internal key (BIP-341 always tweaks).
+    expect(bytesToHex(program)).toBe('3ce74e4e5c292c1fbf94eaaf2ec64fb4700e28250070bfd5704867ee31e30420');
+    // The output key must NOT be the raw internal key (always tweaked).
     expect(bytesToHex(program)).not.toBe(internal);
   });
 
@@ -181,8 +191,8 @@ describe('BIP-341 official wallet vectors', () => {
     const internal = '187791b6f712a8ea41c8ecdd0ee77fab3e85263b37e1ec18a3651926b3a6cf27';
     const script = '20d85a959b0290bf19bb89ed43c916be835475d013da4b362117393e25a48229b8ac';
     const root = tapMerkleRoot([script]);
-    expect(root).toBe('5b75adecf53548f3ec6ad7d78383bf84cc57b55a3127c72b9a2481752dd88b21');
+    expect(root).toBe('1dbec2039c7146f7b58a2249eb131ca19fb29de74c65411c1d6d972e889a261c');
     const program = taprootProgram(internal, root);
-    expect(bytesToHex(program)).toBe('147c9c57132f6e7ecddba9800bb0c4449251c92a1e60371ee77557b6620f3ea3');
+    expect(bytesToHex(program)).toBe('27fbdf0758b6860432c9da522abc124871be67ac82ea4c213f494c35a7f36215');
   });
 });

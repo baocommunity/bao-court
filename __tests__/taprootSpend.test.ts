@@ -27,6 +27,7 @@ import {
   scriptPathControlBlock,
   serializeExplicitAsset,
   serializeExplicitValue,
+  TAPROOT_LEAF_VERSION,
   tapleafHash,
   taprootMerklePath,
   taprootSighashElements,
@@ -50,24 +51,33 @@ const REFUND_HEIGHT = CLOSE + DELTA; // 2_000_144
 // leaves and REFUND-leaf control-block paths are unchanged.
 //
 // NOTE (v2.2 parity REGENERATION, v0.6.2): BIP-341 control-block low bit =
-// Y-parity of the OUTPUT key Q, not the internal key. Q_T has odd Y → the
-// T-tree control blocks carry 0xc1; Q_C has even Y → the C-tree ones stay
-// 0xc0. The v2.1 CB_T* vectors (0xc0) were consensus-invalid.
+// Y-parity of the OUTPUT key Q, not the internal key.
+//
+// NOTE (v2.4 ELEMENTS DOMAINS + LEAF VERSION, v0.6.3): Elements chains tag
+// the taproot hashes "TapLeaf/elements" / "TapBranch/elements" /
+// "TapTweak/elements" AND use Tapscript leaf version 0xc4 (interpreter.h
+// TAPROOT_LEAF_TAPSCRIPT), NOT Bitcoin's plain tags with 0xc0. v0.6.2 shipped
+// Bitcoin-domain values, which elementsd rejects ("Witness program hash
+// mismatch" / "Taproot version reserved for soft-fork upgrades"). ALL
+// tree/tweak-derived values below were regenerated under the Elements
+// domains and independently cross-verified by a pure-python secp256k1
+// implementation. Parities under the final domains: Q_T even (CB_T* 0xc4),
+// Q_C odd (CB_C* 0xc5).
 const VECTORS = {
   COOP_T: '201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
   REFUND_T: '0410851e00b175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
   COOP_C: '20cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
   REFUND_C: '0410851e00b17520cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
-  MERKLE_T: '44bf0381e6c30fc7d465ee3cd25d806fdd99a1107c06143193522d54b7f94d90',
-  MERKLE_C: 'e2a75a3224d24bdf5cf7b5ee621141bc9fabc38d458c156c87b6f70fa9f2257e',
-  Q_T: 'bd263d326bf0701247bac2e8ff123a30f406a564f41285ac27fa6c0cef8008ee',
-  Q_C: 'f4b210abc99416a3f1de913a56e5502979596c61e4437fabaacb2f3806ba35e6',
-  ADDR_T: 'tq1ph5nr6vnt7pcpy3a6ct507y36xr6qdfty7sfgttp8lfkqemuqprhqfuzeej',
-  ADDR_C: 'tq1p7jepp27fjst28uw7jya9de2s99u4jmrpu3phl2a2evhnsp46xhnqvjdtl6',
-  CB_T0: 'c1ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4b731bfbf2f8a9197ba64efcdbb993faa98ece93ef680a0946f2d1d4fc01720b9',
-  CB_T1: 'c1ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f41b7fbc0309ba606310a6d0641ca390b06fa91b482e9e958f51618e6da8fff476',
-  CB_C0: 'c0ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f43c0a96fbd33a47c6cc50a83179e0d97e1f22730d534f5dfa3677361160d3382e',
-  CB_C1: 'c0ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f428e4495a42d97a058b35d64a3271e6103037a5dee4f2a9d6a2e7691608dba5b8',
+  MERKLE_T: '8a42272157ec9e0812c77804612209ac5bf597a3985ac7a16dec7fd4525be32c',
+  MERKLE_C: '184bc4a2ca5b7a68df980c41ffab376ecc03f6c168669aff5d53d3a29ede4daa',
+  Q_T: 'a985486064dba65cc9e3ae680103aa99a9b05ef0e33781437177f78965960273',
+  Q_C: 'ca1846cdd2aee707c9f7d6099aa557188f3ac6b970595fc86820fabf4e5e957c',
+  ADDR_T: 'tq1p4xz5scrymwn9ej0r4e5qzqa2nx5mqhhsuvmczsm3wlmcjevkqfesvcg4tp',
+  ADDR_C: 'tq1pegvydnwj4mns0j0h6cye4f2hrz8n434ewpv4ljrgyrat7nj7j47qmykscu',
+  CB_T0: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f42b44fa7ae308f5975f1d55b4ab1ff0452209a66fd45d847a2036f7a1f6cc0b98',
+  CB_T1: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f41d88378f86aa3fbbc9cf5df60337086f0ba87521b4cc0dd0455c57c8d6057fda',
+  CB_C0: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4309f025f79821f6d48269d48149fb6bd3c901ee7d81062cc6f612da9d5e55803',
+  CB_C1: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f43b40d6cdda30fae68947d1d3e376135cdb3c7a94acf8d04c36791dbca689e23d',
 };
 
 // ── §8.1 frozen vectors ─────────────────────────────────────────────────────
@@ -102,11 +112,12 @@ describe('WS-A §8.1 frozen vectors', () => {
   });
 
   it('cross-checks the control-block paths: each path is the sibling TapLeaf hash', () => {
-    // The §8.1 paths must equal the BIP-341 TapLeaf hashes of the sibling leaves.
-    expect(tapleafHash(VECTORS.REFUND_T)).toBe('b731bfbf2f8a9197ba64efcdbb993faa98ece93ef680a0946f2d1d4fc01720b9');
-    expect(tapleafHash(VECTORS.COOP_T)).toBe('1b7fbc0309ba606310a6d0641ca390b06fa91b482e9e958f51618e6da8fff476');
-    expect(tapleafHash(VECTORS.REFUND_C)).toBe('3c0a96fbd33a47c6cc50a83179e0d97e1f22730d534f5dfa3677361160d3382e');
-    expect(tapleafHash(VECTORS.COOP_C)).toBe('28e4495a42d97a058b35d64a3271e6103037a5dee4f2a9d6a2e7691608dba5b8');
+    // The §8.1 paths must equal the Elements-domain TapLeaf hashes of the
+    // sibling leaves ("TapLeaf/elements" — v0.6.3).
+    expect(tapleafHash(VECTORS.REFUND_T)).toBe('2b44fa7ae308f5975f1d55b4ab1ff0452209a66fd45d847a2036f7a1f6cc0b98');
+    expect(tapleafHash(VECTORS.COOP_T)).toBe('1d88378f86aa3fbbc9cf5df60337086f0ba87521b4cc0dd0455c57c8d6057fda');
+    expect(tapleafHash(VECTORS.REFUND_C)).toBe('309f025f79821f6d48269d48149fb6bd3c901ee7d81062cc6f612da9d5e55803');
+    expect(tapleafHash(VECTORS.COOP_C)).toBe('3b40d6cdda30fae68947d1d3e376135cdb3c7a94acf8d04c36791dbca689e23d');
   });
 
   it('REFUND leaves carry OP_CLTV OP_DROP (0xb175) — regression guard for the v2.1 correction', () => {
@@ -127,7 +138,7 @@ describe('WS-A §8.1 frozen vectors', () => {
 
 // ── BIP-341 output-key parity (numeric, independent of module helpers) ──────
 
-/** Independent Q-parity: lift_x + TapTweak with @noble/curves directly. */
+/** Independent Q-parity: lift_x + TapTweak/elements with @noble/curves directly. */
 function qParityIndependent(internalXOnlyHex: string, merkleRootHex: string): 0 | 1 {
   const Pt = secp256k1.Point;
   const key = hexToBytes(internalXOnlyHex);
@@ -139,7 +150,7 @@ function qParityIndependent(internalXOnlyHex: string, merkleRootHex: string): 0 
     try { P = Pt.fromHex(bytesToHex(c)); break; } catch { /* try odd */ }
   }
   if (!P) throw new Error('lift failed');
-  const tagHash = sha256(new TextEncoder().encode('TapTweak'));
+  const tagHash = sha256(new TextEncoder().encode('TapTweak/elements'));
   const pre = new Uint8Array(64 + 64);
   pre.set(tagHash, 0);
   pre.set(tagHash, 32);
@@ -154,22 +165,22 @@ function qParityIndependent(internalXOnlyHex: string, merkleRootHex: string): 0 
 
 describe('BIP-341 output-key parity', () => {
   it('derives the control-block parity bit from the OUTPUT key Q — numerically', () => {
-    // The pinned NUMS internal key + both §8.1 trees:
-    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T)).toBe(1); // Q_T odd-Y
-    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C)).toBe(0); // Q_C even-Y
+    // The pinned NUMS internal key + both §8.1 trees (Elements domains):
+    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T)).toBe(0); // Q_T even-Y
+    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C)).toBe(1); // Q_C odd-Y
     // …so the regenerated control blocks carry exactly those bits.
-    expect(parseInt(VECTORS.CB_T0.slice(0, 2), 16) & 1).toBe(1);
-    expect(parseInt(VECTORS.CB_T1.slice(0, 2), 16) & 1).toBe(1);
-    expect(parseInt(VECTORS.CB_C0.slice(0, 2), 16) & 1).toBe(0);
-    expect(parseInt(VECTORS.CB_C1.slice(0, 2), 16) & 1).toBe(0);
+    expect(parseInt(VECTORS.CB_T0.slice(0, 2), 16) & 1).toBe(0);
+    expect(parseInt(VECTORS.CB_T1.slice(0, 2), 16) & 1).toBe(0);
+    expect(parseInt(VECTORS.CB_C0.slice(0, 2), 16) & 1).toBe(1);
+    expect(parseInt(VECTORS.CB_C1.slice(0, 2), 16) & 1).toBe(1);
     // …and the module's own derivation agrees with the independent computation.
     expect(outputKeyParity(INTERNAL_X, VECTORS.MERKLE_T)).toBe(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T));
     expect(outputKeyParity(INTERNAL_X, VECTORS.MERKLE_C)).toBe(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C));
     // The builders stamp the derived bit into the first byte.
     const leavesT = [VECTORS.COOP_T, VECTORS.REFUND_T];
     const leavesC = [VECTORS.COOP_C, VECTORS.REFUND_C];
-    expect(scriptPathControlBlock(INTERNAL_X, leavesT, 0).slice(0, 2)).toBe('c1');
-    expect(scriptPathControlBlock(INTERNAL_X, leavesC, 0).slice(0, 2)).toBe('c0');
+    expect(scriptPathControlBlock(INTERNAL_X, leavesT, 0).slice(0, 2)).toBe('c4');
+    expect(scriptPathControlBlock(INTERNAL_X, leavesC, 0).slice(0, 2)).toBe('c5');
   });
 
   it('rejects bad internal keys and bad merkle roots', () => {
@@ -181,12 +192,13 @@ describe('BIP-341 output-key parity', () => {
 // ── Control block mechanics ─────────────────────────────────────────────────
 
 describe('controlBlock / merkle path', () => {
-  // Q_T has odd Y → parity bit 1 → 0xc1; Q_C even Y → 0xc0.
+  // Under the Elements domains: Q_T even → 0xc4; Q_C odd → 0xc5.
+  // (First byte = TAPSCRIPT leaf version 0xc4 | OUTPUT-key Y-parity.)
   const PATH = ['aa'.repeat(32)];
 
   it('stamps the OUTPUT-key parity into the first byte (derived, never assumed)', () => {
-    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_T).slice(0, 2)).toBe('c1');
-    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_C).slice(0, 2)).toBe('c0');
+    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_T).slice(0, 2)).toBe('c4');
+    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_C).slice(0, 2)).toBe('c5');
   });
 
   it('round-trips internal key and path', () => {
@@ -312,9 +324,12 @@ describe('taprootSighashElements', () => {
     const actual = taprootSighashElements(minimalTxParams());
     expect(actual).toBe(expected);
     // Pinned digest — refactors must preserve it byte-for-byte. Re-pinned in
-    // v0.6.2: the genesis constant now holds true INTERNAL byte order (was
-    // display hex, feeding reversed bytes into the preimage).
-    expect(actual).toBe('edf985681d64c7c5e9a7c465ad03df0db55345fea38c1b20aec6b33f8f9602f5');
+    // v0.6.3: the SIGHASH tag was already correct in v0.6.x, but the TAPLEAF
+    // hash inside the preimage legitimately changed with the Elements-domain
+    // fix ("TapLeaf/elements" + Tapscript leaf version 0xc4), moving the
+    // digest. (v0.6.2 value, Bitcoin-domain leaf hash:
+    // edf985681d64c7c5e9a7c465ad03df0db55345fea38c1b20aec6b33f8f9602f5.)
+    expect(actual).toBe('461ff39dc1f0c22675bf3d401371d3fed09b32191703584900d956a1f0be5641');
   });
 
   it('is deterministic', () => {
@@ -450,8 +465,9 @@ describe('finalizeTaproot', () => {
 
   it('rejects a control block whose parity bit contradicts the output key', () => {
     const p = finalizeParams();
-    // Q_T has odd Y; flip the parity bit to 0xc0 (the v2.1 vector bug).
-    p.controlBlock = 'c0' + p.controlBlock.slice(2);
+    // Under the Elements domains Q_T has EVEN Y (correct CB starts 0xc4);
+    // flipping to 0xc5 contradicts it and must be rejected pre-signature.
+    p.controlBlock = 'c5' + p.controlBlock.slice(2);
     expect(() => finalizeTaproot(p)).toThrow(/parity does not match the output key/);
   });
 });
@@ -495,5 +511,76 @@ describe('D1-no invariant (spec §8 property test)', () => {
     for (const leaf of [VECTORS.COOP_T, VECTORS.REFUND_T, VECTORS.COOP_C, VECTORS.REFUND_C]) {
       expect(leaf).not.toContain(`20${INTERNAL_X}`);
     }
+  });
+});
+
+// ── Elements tagged-hash domains (v0.6.3 regression guard) ──────────────────
+// elementsd derives tapleaf/branch/tweak hashes under the "/elements" tags
+// (interpreter.cpp HASHER_TAPLEAF/TAPBRANCH_ELEMENTS, pubkeys.cpp
+// HASHER_TAPTWEAK_ELEMENTS). These tests rebuild the derivations with the
+// LITERAL tag strings so a regression back to Bitcoin's plain BIP-341 tags
+// cannot pass silently (it would surface on-chain as
+// "Witness program hash mismatch").
+
+function tagged(tag: string, ...parts: Uint8Array[]): Uint8Array {
+  const tagHash = sha256(new TextEncoder().encode(tag));
+  const length = parts.reduce((n, x) => n + x.length, 0);
+  const input = new Uint8Array(64 + length);
+  input.set(tagHash, 0);
+  input.set(tagHash, 32);
+  let o = 64;
+  for (const part of parts) { input.set(part, o); o += part.length; }
+  return sha256(input);
+}
+
+describe('Elements tagged-hash domains', () => {
+  const key = INTERNAL_X;
+
+  it('tapleafHash uses "TapLeaf/elements"', () => {
+    const script = hexToBytes(VECTORS.COOP_T);
+    const expected = bytesToHex(tagged('TapLeaf/elements', Uint8Array.of(TAPROOT_LEAF_VERSION), Uint8Array.of(script.length), script));
+    expect(tapleafHash(VECTORS.COOP_T)).toBe(expected);
+    // …and NOT Bitcoin's plain tag:
+    expect(tapleafHash(VECTORS.COOP_T)).not.toBe(
+      bytesToHex(tagged('TapLeaf', Uint8Array.of(0xc0), Uint8Array.of(script.length), script)), // plain-tag + Bitcoin leaf-version stays different
+    );
+  });
+
+  it('tapMerkleRoot branches under "TapBranch/elements"', () => {
+    const ha = tapleafHash(VECTORS.COOP_T);
+    const hb = tapleafHash(VECTORS.REFUND_T);
+    const [lo, hi] = [ha, hb].sort();
+    expect(tapMerkleRoot([VECTORS.COOP_T, VECTORS.REFUND_T])).toBe(
+      bytesToHex(tagged('TapBranch/elements', hexToBytes(lo), hexToBytes(hi))),
+    );
+    // …and NOT Bitcoin's plain tag:
+    expect(tapMerkleRoot([VECTORS.COOP_T, VECTORS.REFUND_T])).not.toBe(
+      bytesToHex(tagged('TapBranch', hexToBytes(lo), hexToBytes(hi))),
+    );
+  });
+
+  it('taprootProgram tweaks under "TapTweak/elements"', () => {
+    // independent lift_x + tweak·G using noble directly
+    let P: ReturnType<typeof secp256k1.Point.fromHex> | undefined;
+    for (const prefix of [2, 3]) {
+      const c = new Uint8Array(33);
+      c[0] = prefix; c.set(hexToBytes(key), 1);
+      try { P = secp256k1.Point.fromHex(bytesToHex(c)); break; } catch { /* odd */ }
+    }
+    if (!P) throw new Error('lift failed');
+    const tHash = tagged('TapTweak/elements', hexToBytes(key), hexToBytes(VECTORS.MERKLE_T));
+    let t = 0n;
+    for (const b of tHash) t = (t << 8n) | BigInt(b);
+    const expectedProgram = P.add(secp256k1.Point.BASE.multiply(t)).toHex(true).slice(2);
+    expect(bytesToHex(taprootProgram(key, VECTORS.MERKLE_T))).toBe(expectedProgram);
+    // …and NOT Bitcoin's plain tag:
+    const tHashPlain = tagged('TapTweak', hexToBytes(key), hexToBytes(VECTORS.MERKLE_T));
+    let tPlain = 0n;
+    for (const b of tHashPlain) tPlain = (tPlain << 8n) | BigInt(b);
+    expect(bytesToHex(taprootProgram(key, VECTORS.MERKLE_T))).not.toBe(
+      P.add(secp256k1.Point.BASE.multiply(tPlain)).toHex(true).slice(2),
+    );
+    // module parity agrees with the independently computed output key
+    expect(outputKeyParity(key, VECTORS.MERKLE_T)).toBe(qParityIndependent(key, VECTORS.MERKLE_T));
   });
 });

@@ -116,18 +116,24 @@ describe('taproot helpers (merkle root + address)', () => {
   });
 
   it('matches the official BIP-341 3-leaf vector (bitcoin-core split-at-mid)', () => {
-    // bip341_wallet_vectors.json — internalPubkey e0dfe2…, scriptTree
-    // [id0, [id1, id2]], merkleRoot ccbd66c6…. This pins the TREE SHAPE:
-    // Bitcoin Core's taproot_tree_helper splits at len // 2, so the root is
+    // Tree shape from bip341_wallet_vectors.json — internalPubkey e0dfe2…,
+    // scriptTree [id0, [id1, id2]]. This pins the SHAPE: Bitcoin Core's
+    // taproot_tree_helper splits at len // 2, so the root is
     // TapBranch(h0, TapBranch(h1, h2)) — leaf 0 is a direct child of the
     // root (its control block carries one sibling). A largest-power-of-two
     // split produces TapBranch(TapBranch(h0, h1), h2) — a different root
     // whose script-path spends would fail consensus validation.
+    //
+    // v0.6.3: expected root REGENERATED under the Elements tagged-hash
+    // domains AND the Elements Tapscript leaf version 0xc4
+    // ("TapLeaf/elements" / "TapBranch/elements", TAPROOT_LEAF_TAPSCRIPT).
+    // The Bitcoin-domain value was ccbd66c6f7e8fdab47b3a486f59d28262be857f30
+    // d4773f2d5ea47f7761ce0e2 — kept here for provenance only.
     const leaf0 = '2072ea6adcf1d371dea8fba1035a09f3d24ed5a059799bae114084130ee5898e69ac';
     const leaf1 = '202352d137f2f3ab38d1eaa976758873377fa5ebb817372c71e2c542313d4abda8ac';
     const leaf2 = '207337c0dd4253cb86f2c43a2351aadd82cccb12a172cd120452b9bb8324f2186aac';
     expect(tapMerkleRoot([leaf0, leaf1, leaf2])).toBe(
-      'ccbd66c6f7e8fdab47b3a486f59d28262be857f30d4773f2d5ea47f7761ce0e2',
+      'ab5da4169a19f41846713d39317efb2507248fd7f78e49ee9bfef9d20c191e60',
     );
   });
 });

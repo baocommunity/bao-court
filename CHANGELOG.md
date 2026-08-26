@@ -9,6 +9,54 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.6.3] — 2026-08-25
+
+**⚠️ ALL TREE/TWEAK-DERIVED VALUES CHANGE vs ≤ 0.6.2 — READ BEFORE UPGRADING.**
+Elements consensus tags the taproot hashes `TapLeaf/elements`,
+`TapBranch/elements`, and `TapTweak/elements` (Elements
+`src/script/interpreter.cpp` HASHER_TAPLEAF/TAPBRANCH_ELEMENTS,
+`src/pubkeys.cpp` HASHER_TAPTWEAK_ELEMENTS). v0.6.2 (and earlier) used
+Bitcoin's plain BIP-341 tags: every merkle root, tapleaf hash, output key /
+taproot program, taproot address, output-key parity bit, and control block
+derived by those versions is **invalid on any Elements chain** — script-path spends fail with `mempool-script-verify-flag-failed (Witness program hash
+mismatch)`. No production consumers exist yet (verified 2026-08-25), so the
+correction is a patch bump; API shape is unchanged.
+
+### Fixed
+- **Tagged-hash domains + Tapscript leaf version (consensus blockers).**
+  `liquidEscrow.ts` (`tapMerkleRoot`, `taprootProgram`) and `taprootSpend.ts`
+  (`tapleafHash`, `branchHash`, `outputKeyParity`, `TAPROOT_LEAF_VERSION`,
+  `TAPROOT_CONTROL_BASE`) now derive under the `/elements` tags AND the
+  Elements Tapscript leaf version **0xc4** (Elements interpreter.h
+  TAPROOT_LEAF_TAPSCRIPT — Bitcoin's BIP-342 value is 0xc0, which elementsd
+  rejects with "Taproot version reserved for soft-fork upgrades"). The two
+  bugs surfaced as distinct consensus rejections during live testing: wrong
+  tags → "Witness program hash mismatch"; right tags + 0xc0 → upgradable-
+  version rejection. The sighash tag (`TapSighash/elements`) was already
+  correct in v0.6.x (its known-answer test digest moved only because the
+  tapleaf hash inside the preimage changed). Proven against Elements Core sources
+  and a live elementsregtest chain: a hand-built WS-A cooperative script-path
+  spend (funded from the faucet, broadcast via `sendrawtransaction`) is
+  accepted by consensus and confirms on-chain only with these tags — the new
+  live test `__tests__/taprootSpend-live.test.ts` encodes that end-to-end §8.6
+  proof (env-gated: `BAO_LIVE_TAPROOT=true` + esplora + ssh targets).
+- **Live test actually exercises consensus.** The previous live test "spent"
+  via a second wallet send; the witness never touched validation. It now:
+  derives a fresh trader keypair, builds the production two-leaf tree, funds
+  the NUMS-taproot address, locates the UTXO by scriptPubKey, hand-serializes
+  the Elements transaction (single flags byte, witness-at-end layout, explicit
+  asset/value commitments with WIRE byte order — asset ids are reversed
+  uint256s like txids — explicit policy-asset fee output last), signs the COOP
+  leaf under SIGHASH_DEFAULT, broadcasts, mines, and verifies the confirmed
+  spend consumed our UTXO with our exact witness stack.
+
+### Changed
+- Regenerated pinned vectors under the corrected domains (§8.1 roots/keys/
+  addresses/control blocks, BIP-341 official-vector inputs, 3-leaf tree-shape
+  root); added a literal-tag regression guard suite ("Elements tagged-hash
+  domains") plus independent numeric parity cross-checks. Bitcoin-domain
+  originals are preserved as comments for provenance.
+
 ## [0.6.2] — 2026-08-24
 
 Consensus-correctness release for `./taproot-spend`: three independent
