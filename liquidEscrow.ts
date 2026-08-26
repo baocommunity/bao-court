@@ -306,9 +306,16 @@ function compactSize(length: number): Uint8Array {
 }
 
 /**
- * BIP-341 Taproot merkle root of leaf scripts (leaf version 0xc0 / BIP-342).
+ * Elements Taproot merkle root of leaf scripts (TAPSCRIPT leaf version 0xc4
+ * per Elements interpreter.h TAPROOT_LEAF_TAPSCRIPT — NOT Bitcoin's 0xc0).
  *
- * Leaf hashes are `hash_TapLeaf(0xc0 || compact_size(len) || script)` and
+ * ELEMENTS DOMAIN (v0.6.3): Elements chains tag these hashes
+ * "TapLeaf/elements" / "TapBranch/elements" (interpreter.cpp:
+ * HASHER_TAPLEAF_ELEMENTS / HASHER_TAPBRANCH_ELEMENTS), NOT Bitcoin's plain
+ * "TapLeaf" / "TapBranch". v0.6.2 shipped Bitcoin-domain values — every
+ * merkle root derived by <= v0.6.2 is invalid on any Elements chain.
+ *
+ * Leaf hashes are `hash_TapLeaf(0xc4 || compact_size(len) || script)` and
  * inner nodes are `hash_TapBranch(l || r)` over lexicographically sorted
  * children — the exact construction consensus validation recomputes from the
  * control block. Untagged double-SHA256 leaves would commit to a different
@@ -326,12 +333,12 @@ function compactSize(length: number): Uint8Array {
 export function tapMerkleRoot(leaves: readonly string[]): string {
   const hashes = leaves.map((scriptHex) => {
     const script = hexToBytes(scriptHex);
-    return taggedHash('TapLeaf', Uint8Array.of(0xc0), compactSize(script.length), script);
+    return taggedHash('TapLeaf/elements', Uint8Array.of(0xc4), compactSize(script.length), script);
   });
 
   function branch(l: Uint8Array, r: Uint8Array): Uint8Array {
     const [a, b] = [l, r].sort((x, y) => (bytesToScalar(x) <= bytesToScalar(y) ? -1 : 1));
-    return taggedHash('TapBranch', a, b);
+    return taggedHash('TapBranch/elements', a, b);
   }
 
   function merkle(list: Uint8Array[]): Uint8Array {
@@ -362,7 +369,9 @@ export function taprootProgram(internalKeyXOnly: string, merkleRootHex?: string)
   // BIP-341: t = int(hash_TapTweak(P || h)); h is empty when there is no
   // script tree — the output key is ALWAYS tweaked (a raw internal key would
   // not be the output key consensus recomputes from the control block).
-  const tweakHash = taggedHash('TapTweak', key, merkle);
+  // ELEMENTS DOMAIN (v0.6.3): the tagger is "TapTweak/elements"
+  // (pubkeys.cpp HASHER_TAPTWEAK_ELEMENTS), not Bitcoin's "TapTweak".
+  const tweakHash = taggedHash('TapTweak/elements', key, merkle);
   const t = bytesToScalar(tweakHash);
   if (t >= Point.Fn.ORDER) {
     throw new Error('liquidEscrow: taproot tweak exceeds the curve order');
