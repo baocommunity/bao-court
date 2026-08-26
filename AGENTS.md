@@ -18,7 +18,7 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
 2. **Tag every release in the same push.** This package ships by git
    ref/tag — it is NOT published to npm. After a version bump:
    `git tag -a vX.Y.Z -m "..." && git push origin main vX.Y.Z` in ONE
-   action. Current: **v0.5.4** (docs/version-headers; protocol = v0.5.x — see `docs/FIXES-2026-08-18.md`).
+   action. Current: **v0.6.3** (taproot-spend Elements consensus fixes + real script-path spend proof).
 3. **Versioning:** bug fixes → patch (`0.4.1`); new modules/capabilities or
    consumer-visible API changes → minor (`0.5.0`). 1.0.0 stays reserved
    until the trusted-dealer DKG is replaced with production Pedersen DKG
