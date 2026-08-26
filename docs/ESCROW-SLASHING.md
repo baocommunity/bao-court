@@ -1,6 +1,23 @@
 # BAO Court — Escrow Lifecycle & Slashing
 
-**Version:** 0.5.4 (tracks `@bao/court` v0.5.4 — this repository; module introduced in v0.2.3)
+> **Implementation status as of `@bao/court` v0.6.3 (2026-08-25).** The
+> escrow/slashing design below (§§1–7) is implemented in `escrow.ts` and its
+> behavior is unchanged since v0.2.x. The settlement side it feeds has since
+> gained full **WS-A Elements Taproot** support (`taprootSpend.ts`, new in
+> v0.6.0): script-tree derivation now uses the Elements-flavored tagged-hash
+> domains (`TapLeaf/elements`, `TapBranch/elements`, `TapTweak/elements`) and
+> Tapscript leaf version `0xc4`, control-block parity is derived from the
+> output key Q, and the Elements sighash + witness assembly are provided.
+> v0.6.2–v0.6.3 were consensus-correctness fixes — **every tree/tweak-derived
+> value produced by ≤ v0.6.2 is invalid on Elements chains**; correctness is
+> proven by a real on-chain Liquid elementsregtest script-path spend (txid
+> `59dc4a01d00224a9f19b8dc08326185610b565749a8e7d8f2574cbbdaad2ee34`).
+> The full WS-A taproot spec lives in **`baocommunity/bao.markets` →
+> `docs/proposals/WS-A-TAPROOT-ESCROW-SPEC.md`**; see this repo's
+> `CHANGELOG.md` entries **v0.6.0–v0.6.3** for the Elements consensus
+> corrections.
+
+**Version:** 0.6.3 (tracks `@bao/court` v0.6.3 — this repository; module introduced in v0.2.3)
 **Status:** Implemented in `escrow.ts` (this package); rail execution remains
 host-side per ADR-001 (hybrid dual-panel escrow).
 **Scope:** Bond ownership proofs, deterministic escrow ledger, slashing and
@@ -33,9 +50,12 @@ slashing results from the **same** inputs.
 
 ## 2. Design principles
 
-- **Rail-agnostic.** ADR-001 chooses a hybrid dual-panel escrow (Panel A:
-  Lightning hold invoices; Panel B: Liquid P2WSH M-of-N multisig). This package
-  does not pick a rail; hosts inject the actual lock/return/slash execution.
+- **Rail-agnostic.** ADR-001 chose a hybrid dual-panel escrow (Panel A:
+  Lightning hold invoices; Panel B: Liquid P2WSH M-of-N multisig). Panel B
+  has since been extended with Taproot judge/refund script trees (v0.3.0)
+  and WS-A Elements taproot script-path spend finalization (v0.6.x — see the
+  banner above). This package does not pick a rail; hosts inject the actual
+  lock/return/slash execution.
 - **Deterministic.** Every function is a pure function of its inputs. Any
   observer can recompute the redistribution plan and verify the ledger.
 - **Integer-exact.** All amounts are satoshis as integers; slashing uses
@@ -160,6 +180,7 @@ return/slash/forfeit/redistribute transitions, double-transition rejection,
 snapshot round-trip, `applyPlan` end-to-end for upheld and rejected disputes).
 
 Suite at v0.2.3 release: **520/520** in-package tests pass, `tsc --noEmit`
-clean. Current suite (v0.5.x, with settlement rails, simulation harness, and
-the appeal coordinator/watcher port): **600/600** (582 + 18 regressions from
-the 2026-08-18 review, see `docs/FIXES-2026-08-18.md`).
+clean. Current suite (v0.6.3, with settlement rails, simulation harness, the
+appeal coordinator/watcher port, and the taproot-spend vectors): **659
+passing / 660 total** — the one skipped test is the env-gated live
+elementsregtest proof (`npm run test:live`, see `CHANGELOG.md` v0.6.0–v0.6.3).

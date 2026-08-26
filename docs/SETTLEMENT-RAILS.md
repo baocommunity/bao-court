@@ -1,6 +1,6 @@
 # BAO Court — Settlement Rails (Panel A: Lightning, Panel B: Liquid)
 
-**Version:** 0.5.4 (implemented; signet execution by hosts)
+**Version:** 0.6.3 (implemented; signet execution by hosts)
 **Status:** Protocol-side settlement implemented and test-covered. Rail
 execution (node access, keys, broadcasting) is HOST-INJECTED per the secrecy
 boundary — this package contains no keys, no node URLs, no credentials.
@@ -17,7 +17,7 @@ primitives to make it happen on two rails* (ADR-001 hybrid dual-panel):
 | Rail | Module | What it provides |
 |---|---|---|
 | **Panel A — Lightning hold invoices** | `lnSettlement.ts` + `lnRail.ts` | deterministic preimage/payment-hash derivation, hold lifecycle state machine, settle/cancel decisions from the court plan, audit-event templates; host `LnRail` contract + in-memory fake |
-| **Panel B — Liquid P2WSH/Taproot escrow** | `liquidEscrow.ts` + `liquidRail.ts` | P2WSH M-of-N CHECKMULTISIG and Taproot judge/refund script trees, bech32/bech32m address derivation (BIP-173/BIP-350), release-skeleton builder, M-of-N witness assembly; host `LiquidRail` contract + fake |
+| **Panel B — Liquid P2WSH/Taproot escrow** | `liquidEscrow.ts` + `liquidRail.ts` (+ `taprootSpend.ts` since v0.6.0) | P2WSH M-of-N CHECKMULTISIG and Taproot judge/refund script trees, bech32/bech32m address derivation (BIP-173/BIP-350), release-skeleton builder, M-of-N witness assembly, and — since v0.6.0 — Elements taproot script-path spend finalization (control blocks, Elements sighash, witness assembly); host `LiquidRail` contract + fake |
 
 Both rails consume the same `RedistributionPlan` from `escrow.ts`, so a single
 court verdict drives deterministic LM and Liquid behavior with no drift.
@@ -68,11 +68,24 @@ choosing which branch to sign (ADR-001 negative).
   against the official vectors. The witness version is a 5-bit word prepended
   to the program words (a byte-concatenation would silently corrupt the
   version — covered by tests).
-- `taprootProgram` implements the BIP-341 tweak (key + merkle root, even-Y
-  parity correction), `tapMerkleRoot` the sorted-pairs tree.
+- `tapMerkleRoot` builds the sorted-pairs tree; `taprootProgram` /
+  `taprootAddress` derive under the **Elements-flavored** tagged-hash
+  domains (`TapLeaf/elements`, `TapBranch/elements`, `TapTweak/elements`)
+  with Tapscript leaf version **`0xc4`** — NOT Bitcoin's plain BIP-341 tags
+  or BIP-342 leaf version `0xc0`, which elementsd rejects. Values derived by
+  ≤ v0.6.2 are invalid on Elements chains (fixed in v0.6.3; see
+  `CHANGELOG.md`).
 - `buildReleaseSkeleton(inputs, recipients, minFee)` — fee-exact,
   integer-only; rejects negative/zero amounts and malformed scripts.
 - `assembleMultisigWitness(sigs, threshold)` — `OP_FALSE || sigs` ordering.
+- Script-path spend finalization (`taprootSpend.ts`, v0.6.x):
+  `controlBlock` / `scriptPathControlBlock` derive path, root, and the
+  control-block parity bit from the OUTPUT key Q via `outputKeyParity`
+  (v0.6.2); `taprootSighashElements` ports Elements Core's
+  `SignatureHashSchnorr` (tag `TapSighash/elements`, chain-genesis prefix in
+  uint256 internal byte order, confidential-field commitments);
+  `finalizeTaproot` assembles `[sig, ...stack, leafScript, controlBlock]`
+  and verifies leaf+control block → output key.
 
 **Host contract** (`LiquidRail`): `getUtxo`, `broadcast`, `getConfirmations`.
 bao.markets implements it against the Liquid node + Electrs on BAO signet —
@@ -111,6 +124,12 @@ Default suite (hermetic, no network):
   official BIP-350 vectors, program round-trip.
 - `__tests__/settlementE2E.test.ts` — court plan → LN decisions → Liquid
   branch → skeleton → broadcast via fakes; determinism.
+- `__tests__/taprootSpend.test.ts` — WS-A spec frozen vectors under the
+  corrected Elements domains, hand-built sighash known-answer,
+  control-block/output-key parity checks, Elements-tag regression guards.
+- `__tests__/taprootSpend-live.test.ts` — env-gated end-to-end consensus
+  proof: a real on-chain script-path spend on elementsregtest
+  (`npm run test:live`; skipped in the default suite).
 
 Signet integration tests are HOST-SIDE (opt-in, need credentials): bao.markets
 runs them against BAO signet before release and records evidence in release

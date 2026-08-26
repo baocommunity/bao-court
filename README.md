@@ -36,7 +36,7 @@ cannot resolve the package's extensionless internal imports; see
 [§11](#11-testing-and-gates) for details.
 
 ```bash
-npm install github:baocommunity/bao-court#v0.5.4
+npm install github:baocommunity/bao-court#v0.6.3
 npx tsx your-script.ts
 ```
 
@@ -328,6 +328,21 @@ Court's only economic acts are attestations and authorizations.
   `liquidRail.ts`: M-of-N CHECKMULTISIG and judge/refund Taproot script
   trees, BIP-173/BIP-350 addresses, release-skeleton builder, M-of-N witness
   assembly, and a host `LiquidRail` contract.
+- **Taproot script-path spend finalization (v0.6.x)** — `taprootSpend.ts`
+  (`@bao/court/taproot-spend`): WS-A taproot spend for Liquid/**Elements**,
+  with Elements semantics throughout — tagged-hash domains are the
+  Elements-flavored `TapLeaf/elements`, `TapBranch/elements`,
+  `TapTweak/elements`, `TapSighash/elements`, and the Tapscript leaf version
+  is `0xc4` (not Bitcoin's BIP-342 `0xc0`). Provides BIP-341 control-block
+  construction with parity derived from the output key Q
+  (`controlBlock`, `scriptPathControlBlock`, `outputKeyParity`), the
+  Elements taproot sighash (`taprootSighashElements`, a faithful port of
+  Elements Core's `SignatureHashSchnorr`), and witness assembly
+  (`finalizeTaproot`). The v0.6.3 release is a consensus-correctness fix:
+  all tree/tweak-derived values from ≤ v0.6.2 are invalid on Elements chains
+  (see `CHANGELOG.md` v0.6.0–v0.6.3); correctness is proven end-to-end by an
+  env-gated live test that performs a real on-chain script-path spend on
+  elementsregtest (`npm run test:live`).
 
 Both rails are protocol-side: hosts implement the adapters privately against
 BAO signet nodes and broadcast. No keys or credentials live in this package.
@@ -395,6 +410,7 @@ winning_secret_commitment`.
 | `escrow.ts` | bond ownership proofs, escrow lifecycle ledger, slashing/redistribution plan |
 | `lnSettlement.ts` / `lnRail.ts` | Panel A: hold-invoice protocol + host LnRail contract |
 | `liquidEscrow.ts` / `liquidRail.ts` | Panel B: P2WSH/Taproot scripts, addresses, skeletons + host LiquidRail contract |
+| `taprootSpend.ts` | Panel B: WS-A Elements taproot script-path spend — control blocks, Elements sighash, `finalizeTaproot` |
 | `appealTiming.ts` | JIT appeal phase timings (defaults + boundary helpers) |
 | `appealCoordinator.ts` | event-driven JIT appeal pipeline (dispute → candidacy → selection → DKG → vote → signing → attestation); relay transport host-injected |
 | `appealWatcher.ts` | kind-39007 attestation watcher: validate under the group key, route override outcomes; pool host-injected |
@@ -404,7 +420,9 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite
+npm test           # vitest suite (659 passing; 1 env-gated live test skipped)
+npm run test:live   # env-gated elementsregtest taproot spend proof
+                    # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit
 npm run simulate:court  # one-shot end-to-end court simulation (selection →
                         # DKG → vote → FROST sign → validate → escrow/slashing
@@ -437,8 +455,9 @@ import { ... } from '@bao/court/events'; // event builders/parsers
 ## 12. Status
 
 Active suite: `pedpop-v1-experimental`. Protocol layers (selection, DKG,
-vote, signing, attestation, escrow/slashing, settlement rails, appeal
-coordinator/watcher) are implemented and test-covered in this package; rail
+vote, signing, attestation, escrow/slashing, settlement rails incl.
+WS-A Elements taproot spend finalization, appeal coordinator/watcher) are
+implemented and test-covered in this package; rail
 execution, cross-client ceremonies, and contract-enforced phase deadlines
 are the remaining production gates — see the honest list in the paper
 (`docs/FROST_COURT_ORACLE_PAPER.md` §10). The phased hardening/upgrade plan
