@@ -9,6 +9,37 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.7.0] — 2026-08-27
+
+### Added
+- **M3 pairwise dual-refund WS-A tree leaves** (SMJ-MATCHING-ENGINE-PLAN.md
+  §M3, user-vs-user matched pairs):
+  - `buildPairwiseCoopLeaf(pkA, pkB)` — strict **2-of-2** coop leaf
+    `<pkA> OP_CHECKSIG <pkB> OP_CHECKSIGADD OP_2 OP_EQUAL` (`20<pkA>ac20<pkB>ba5287`).
+    Deliberately stricter than the WS-E `buildCoopStakeLeaf` shape (`… ba`,
+    which tapscript evaluates as 1-of-2 — acceptable there because the server
+    enforces the sponsor signature, but a theft vector user-vs-user where the
+    refusing loser could claim both UTXOs). Witness order `[sigB, sigA, leaf,
+    control]` matches WS-E's `[operatorSig, sponsorSig, …]` assembly.
+  - `buildDualRefundLeaves(pkA, pkB, refundLocktime)` — `[REFUND-A, REFUND-B]`
+    mirroring `buildWsARefundLeaf` per participant, so each user can pull back
+    only their OWN side after close+Δ.
+  - Frozen 3-leaf vectors (§8.1 style): leaf scripts, tapleaf hashes, split-
+    at-half merkle root, output key / signet address, and all three control
+    blocks, plus a minimal tapscript interpreter test proving the strict
+    2-of-2 semantics (both sigs required; one sig fails; the WS-E 1-of-2
+    shape demonstrably passes with one).
+
+### Fixed
+- **`taprootMerklePath` emitted siblings in root→leaf order (latent
+  consensus bug for >2-leaf trees).** BIP-341 folds a control-block path in
+  leaf→root order; the implementation accumulated top-down, so any leaf whose
+  path had ≥2 siblings produced a control block that did not re-derive
+  `tapMerkleRoot` (consensus-invalid). Every shipped consumer — WS-A and WS-E
+  two-leaf trees and the live spend proof — was order-invariant and therefore
+  unaffected; the bug was found while drafting the 3-leaf pairwise tree and
+  is regression-guarded by the fold-back assertions in the new vectors.
+
 ## [0.6.3] — 2026-08-25
 
 **⚠️ ALL TREE/TWEAK-DERIVED VALUES CHANGE vs ≤ 0.6.2 — READ BEFORE UPGRADING.**

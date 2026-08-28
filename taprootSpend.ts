@@ -212,6 +212,61 @@ export function buildWsARefundLeaf(pkXOnly: string, refundLocktime: number): str
   ));
 }
 
+/**
+ * M3 (SMJ-MATCHING-ENGINE-PLAN.md §M3) — pairwise user-vs-user tree leaves.
+ *
+ * Both users are matched counterparts on the SAME market. The coop leaf must
+ * therefore require BOTH signatures (winner-take-all mutual close) and the
+ * refund leaves must let each user pull back their OWN side after close+Δ —
+ * unlike the single-depositor WS-A tree (one trader vs platform).
+ */
+
+/**
+ * Strict 2-of-2 cooperative leaf: `<pk_A> OP_CHECKSIG <pk_B> OP_CHECKSIGADD
+ * OP_2 OP_EQUAL` — succeeds IFF both signatures are valid.
+ * Hex shape: `20 <pk_A> ac 20 <pk_B> ba 52 87`.
+ *
+ * ⚠️ Deliberate divergence from WS-E `buildCoopStakeLeaf` (bao.markets
+ * TournamentStakeService, #1055): that leaf is `… CHECKSIGADD` WITHOUT the
+ * `OP_2 OP_EQUAL` tail, which tapscript evaluates as 1-of-2 (CHECKSIGADD sums
+ * valid-sig counts; any one valid sig leaves a non-zero top-of-stack). WS-E
+ * can afford 1-of-2 because the operator is server-controlled and enforces
+ * the sponsor signature before finalizing. For user-vs-user pairs that is a
+ * theft vector — the refusing loser would unilaterally claim BOTH UTXOs — so
+ * the pairwise leaf pins the strict 2-of-2 form (see the §M3 design note:
+ * "COOP leaf requiring both sigs ONLY for mutual close").
+ *
+ * Witness stack order (top-down consumption): `[sigB, sigA, leaf, control]`
+ * — the same reversed order WS-E assembles (`[operatorSig, sponsorSig, …]`).
+ */
+export function buildPairwiseCoopLeaf(pkAXOnly: string, pkBXOnly: string): string {
+  assertXOnly(pkAXOnly, 'pairwise coop leaf pubkey A');
+  assertXOnly(pkBXOnly, 'pairwise coop leaf pubkey B');
+  return bytesToHex(concatBytes(
+    pushHex(pkAXOnly),
+    Uint8Array.of(0xac), // OP_CHECKSIG
+    pushHex(pkBXOnly),
+    Uint8Array.of(0xba), // OP_CHECKSIGADD
+    Uint8Array.of(0x52, 0x87), // OP_2 OP_EQUAL — strict 2-of-2
+  ));
+}
+
+/**
+ * Dual self-refund leaves: both parties can pull their OWN side back after
+ * close+Δ — `[refundA, refundB]`:
+ *   REFUND-A: `<close+Δ> OP_CLTV OP_DROP <pk_A> OP_CHECKSIG`
+ *   REFUND-B: `<close+Δ> OP_CLTV OP_DROP <pk_B> OP_CHECKSIG`
+ * Same shape as `buildWsARefundLeaf`, mirrored per participant. Each refund
+ * leaf only ever spends its OWNER's deposit, so a refusing loser cannot
+ * touch the winner's side — the CLTV is the shared escape valve post-close+Δ.
+ */
+export function buildDualRefundLeaves(pkAXOnly: string, pkBXOnly: string, refundLocktime: number): [string, string] {
+  return [
+    buildWsARefundLeaf(pkAXOnly, refundLocktime),
+    buildWsARefundLeaf(pkBXOnly, refundLocktime),
+  ];
+}
+
 // ── Taproot tree: leaf hash, path, control block ────────────────────────────
 
 /** Lift an x-only pubkey to its curve point (tries both Y parities). */
@@ -280,6 +335,12 @@ function merkleRootHashes(list: Uint8Array[]): Uint8Array {
  * ordered leaf→root (each entry is the sibling hash at that level). For a
  * two-leaf tree the path is the single sibling leaf hash — the shape pinned by
  * the §8.1 control-block vectors.
+ *
+ * M3 FIX (found drafting the pairwise tree): siblings are discovered top-down
+ * here, and BIP-341 folds the path in leaf→root order — the emitted path must
+ * be reversed or the folded root diverges from tapMerkleRoot for any tree
+ * with >2 leaves (2-leaf trees are order-invariant, which is why every
+ * shipped WS-A/WS-E control block was correct).
  */
 export function taprootMerklePath(leaves: readonly string[], leafIndex: number): string[] {
   if (!Number.isInteger(leafIndex) || leafIndex < 0 || leafIndex >= leaves.length) {
@@ -301,7 +362,7 @@ export function taprootMerklePath(leaves: readonly string[], leafIndex: number):
       index -= mid;
     }
   }
-  return path.map(bytesToHex);
+  return path.map(bytesToHex).reverse();
 }
 
 /**

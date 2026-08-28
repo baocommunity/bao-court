@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 
 import {
   BAO_SIGNET,
@@ -12,6 +12,8 @@ import {
   taprootProgram,
 } from '../liquidEscrow';
 import {
+  buildDualRefundLeaves,
+  buildPairwiseCoopLeaf,
   buildWsACoopLeaf,
   buildWsARefundLeaf,
   controlBlock,
@@ -583,4 +585,196 @@ describe('Elements tagged-hash domains', () => {
     // module parity agrees with the independently computed output key
     expect(outputKeyParity(key, VECTORS.MERKLE_T)).toBe(qParityIndependent(key, VECTORS.MERKLE_T));
   });
+
+// ── M3 pairwise dual-refund tree (SMJ-MATCHING-ENGINE-PLAN.md §M3) ──────────
+//
+// User-vs-user pairs need a strict 2-of-2 coop leaf + one refund leaf per
+// participant. Vectors regenerated 2026-08-27 under the Elements domains
+// (TapLeaf/Branch/Tweak/elements, leaf version 0xc4) with the module itself
+// and cross-checked by hand against the split-at-half tree shape.
+
+const M3_VECTORS = {
+  COOP_PAIR: '201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac20cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bba5287',
+  REFUND_A: '0410851e00b175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
+  REFUND_B: '0410851e00b17520cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
+  LEAFH_COOP: '7b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
+  MERKLE: '9b16957a9843479679d39eb18c0162bdec33110d82c24a42fd1a2c3f3c3d72a4',
+  Q: 'bc910b145a73592a57d809d45b41701eaaca313df6b092bdef8dabe8d913855a',
+  ADDR: 'tq1phjgsk9z6wdvj547cp829kstsr64v5vfa76cf90003k473kgns4dqfstrd3',
+  CB_0: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f48d63a457f6798a8c2c194428a13d9d5477650ee977c3a0b55fa45a09ae4e5606',
+  CB_1: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4309f025f79821f6d48269d48149fb6bd3c901ee7d81062cc6f612da9d5e558037b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
+  CB_2: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f42b44fa7ae308f5975f1d55b4ab1ff0452209a66fd45d847a2036f7a1f6cc0b987b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
+};
+
+function pairwiseLeaves() {
+  const coop = buildPairwiseCoopLeaf(PK_T, PK_C);
+  const [refundA, refundB] = buildDualRefundLeaves(PK_T, PK_C, REFUND_HEIGHT);
+  return { coop, refundA, refundB, leaves: [coop, refundA, refundB] };
+}
+
+describe('M3 pairwise dual-refund tree — frozen vectors', () => {
+  it('builds the strict 2-of-2 coop leaf byte-identically (…ba5287 tail)', () => {
+    const { coop, refundA, refundB } = pairwiseLeaves();
+    expect(coop).toBe(M3_VECTORS.COOP_PAIR);
+    expect(refundA).toBe(M3_VECTORS.REFUND_A);
+    expect(refundB).toBe(M3_VECTORS.REFUND_B);
+    // structural shape: pkA CHECKSIG pkB CHECKSIGADD OP_2 OP_EQUAL
+    expect(coop).toMatch(/^20[0-9a-f]{64}ac20[0-9a-f]{64}ba5287$/);
+    // refunds keep the CLTV gate (0xb175) and carry the OWNER key only
+    expect(refundA).toContain('b175');
+    expect(refundB).toContain('b175');
+    expect(refundA).toContain(PK_T);
+    expect(refundA).not.toContain(PK_C);
+    expect(refundB).toContain(PK_C);
+    expect(refundB).not.toContain(PK_T);
+  });
+
+  it('dual refunds mirror the single-trader refunds for the same keys', () => {
+    const { refundA, refundB } = pairwiseLeaves();
+    expect(refundA).toBe(VECTORS.REFUND_T); // PK_T == PK_A
+    expect(refundB).toBe(VECTORS.REFUND_C); // PK_C == PK_B
+  });
+
+  it('pins the 3-leaf split-at-half merkle root and output', () => {
+    const { leaves } = pairwiseLeaves();
+    // tapMerkleRoot takes leaf SCRIPTS (hashes internally) — never pass
+    // pre-hashed leaves (that double-hashes and drifts the committed root).
+    expect(tapMerkleRoot(leaves)).toBe(M3_VECTORS.MERKLE);
+    expect(tapleafHash(leaves[0])).toBe(M3_VECTORS.LEAFH_COOP);
+    expect(bytesToHex(taprootProgram(INTERNAL_X, M3_VECTORS.MERKLE))).toBe(M3_VECTORS.Q);
+    expect(taprootAddress(INTERNAL_X, M3_VECTORS.MERKLE, BAO_SIGNET)).toBe(M3_VECTORS.ADDR);
+  });
+
+  it('pins all three control blocks; refund paths re-prove the split-at-half tree', () => {
+    const { leaves } = pairwiseLeaves();
+    expect(scriptPathControlBlock(INTERNAL_X, leaves, 0)).toBe(M3_VECTORS.CB_0);
+    expect(scriptPathControlBlock(INTERNAL_X, leaves, 1)).toBe(M3_VECTORS.CB_1);
+    expect(scriptPathControlBlock(INTERNAL_X, leaves, 2)).toBe(M3_VECTORS.CB_2);
+
+    // Structural cross-checks independent of the pinned hex:
+    // 3-leaf split-at-half tree = [coop] | [refundA, refundB]
+    const coopHash = tapleafHash(leaves[0]);
+    const aHash = tapleafHash(leaves[1]);
+    const bHash = tapleafHash(leaves[2]);
+    // CB_0 (coop): single sibling = branch(refundA, refundB). tapMerkleRoot
+    // takes leaf SCRIPTS (hashes internally), so recompute the branch via the
+    // public leaf-hash primitive instead of double-hashing the hashes.
+    expect(controlBlockMerklePath(M3_VECTORS.CB_0)).toEqual([
+      merkleRootFromLeafAndPath(aHash, [bHash]),
+    ]);
+    // BIP-341 fold order is leaf→root: CB_1 (refundA) = [refundBHash, coopHash]
+    expect(controlBlockMerklePath(M3_VECTORS.CB_1)).toEqual([bHash, coopHash]);
+    // CB_2 (refundB) = [refundAHash, coopHash]
+    expect(controlBlockMerklePath(M3_VECTORS.CB_2)).toEqual([aHash, coopHash]);
+    // every path folds (leaf→root) back to the same merkle root — the
+    // regression guard for the taprootMerklePath order fix
+    expect(merkleRootFromLeafAndPath(coopHash, controlBlockMerklePath(M3_VECTORS.CB_0))).toBe(M3_VECTORS.MERKLE);
+    expect(merkleRootFromLeafAndPath(aHash, controlBlockMerklePath(M3_VECTORS.CB_1))).toBe(M3_VECTORS.MERKLE);
+    expect(merkleRootFromLeafAndPath(bHash, controlBlockMerklePath(M3_VECTORS.CB_2))).toBe(M3_VECTORS.MERKLE);
+    expect(controlBlockInternalKey(M3_VECTORS.CB_0)).toBe(INTERNAL_X);
+  });
+
+  it('the coop control block carries the OUTPUT-key parity (never assumed even)', () => {
+    expect(parseInt(M3_VECTORS.CB_0.slice(0, 2), 16) & 0x01).toBe(outputKeyParity(INTERNAL_X, M3_VECTORS.MERKLE));
+    expect(outputKeyParity(INTERNAL_X, M3_VECTORS.MERKLE)).toBe(0);
+  });
+});
+
+// ── M3 strict 2-of-2 semantics ───────────────────────────────────────────────
+//
+// Runs the coop leaf through a minimal tapscript interpreter for exactly the
+// opcodes the leaf uses (data push, CHECKSIG, CHECKSIGADD, OP_2, EQUAL) with
+// real Schnorr signatures. Success = final top-of-stack non-zero.
+
+describe('M3 pairwise coop leaf — strict 2-of-2 semantics', () => {
+  const MSG = hexToBytes('ab'.repeat(32)); // stand-in sighash
+  const seckeyA = hexToBytes('11'.repeat(32));
+  const seckeyB = hexToBytes('22'.repeat(32));
+  const pkA = bytesToHex(schnorr.getPublicKey(seckeyA));
+  const pkB = bytesToHex(schnorr.getPublicKey(seckeyB));
+
+  // Tapscript: a sig that is not exactly 64 bytes is INVALID (pushes 0), not
+  // a script error. noble's verify throws on malformed lengths, so gate first.
+  function sigOk(sig: Uint8Array | undefined, pubHex: string): boolean {
+    return !!sig && sig.length === 64 && schnorr.verify(sig, MSG, hexToBytes(pubHex));
+  }
+
+  function runCoop(witnessStack: Uint8Array[]): boolean {
+    const script = hexToBytes(buildPairwiseCoopLeaf(pkA, pkB));
+    const stack: Uint8Array[] = [...witnessStack]; // top = last element
+    let i = 0;
+    while (i < script.length) {
+      const op = script[i++];
+      if (op >= 0x01 && op <= 0x4b) {
+        stack.push(script.subarray(i, i + op));
+        i += op;
+      } else if (op === 0xac) { // OP_CHECKSIG
+        const pub = bytesToHex(stack.pop()!);
+        const sig = stack.pop();
+        stack.push(Uint8Array.of(sigOk(sig, pub) ? 1 : 0));
+      } else if (op === 0xba) { // OP_CHECKSIGADD — stack [sig, num, pubkey] bottom→top
+        const pub = bytesToHex(stack.pop()!); // pubkey on top
+        const n = Number(stack.pop()!);       // running count
+        const sig = stack.pop();              // sig deepest
+        stack.push(Uint8Array.of(n + (sigOk(sig, pub) ? 1 : 0)));
+      } else if (op === 0x52) { // OP_2
+        stack.push(Uint8Array.of(2));
+      } else if (op === 0x87) { // OP_EQUAL
+        const b = stack.pop();
+        const a = stack.pop();
+        stack.push(Uint8Array.of(a && b && a.length === b.length && a.every((v, k) => v === b[k]) ? 1 : 0));
+      } else {
+        throw new Error(`unhandled opcode 0x${op.toString(16)}`);
+      }
+    }
+    const top = stack[stack.length - 1];
+    return !!top && top.some((v) => v !== 0);
+  }
+
+  const sigA = schnorr.sign(MSG, seckeyA);
+  const sigB = schnorr.sign(MSG, seckeyB);
+  const garbage = Uint8Array.of(...Array(64).fill(0x55));
+
+  it('passes with BOTH valid signatures (witness [sigB, sigA, …])', () => {
+    expect(runCoop([sigB, sigA])).toBe(true);
+  });
+
+  it('FAILS with only one signature — the refusing party cannot claim unilaterally', () => {
+    expect(runCoop([sigB, new Uint8Array(0)])).toBe(false); // empty sigA
+    expect(runCoop([new Uint8Array(0), sigA])).toBe(false); // empty sigB
+    expect(runCoop([sigB, garbage])).toBe(false);           // garbage sigA
+    expect(runCoop([garbage, sigA])).toBe(false);           // garbage sigB
+  });
+
+  it('FAILS with no signatures at all', () => {
+    expect(runCoop([new Uint8Array(0), new Uint8Array(0)])).toBe(false);
+  });
+
+  it('is NOT the WS-E 1-of-2 shape: missing the OP_2 OP_EQUAL tail it would pass with one sig', () => {
+    // Prove the divergence is real: strip the `5287` tail → 1-of-2 semantics.
+    const coopStakeShape = `20${pkA}ac20${pkB}ba`;
+    const script = hexToBytes(coopStakeShape);
+    const stack: Uint8Array[] = [sigB, new Uint8Array(0)];
+    let i = 0;
+    while (i < script.length) {
+      const op = script[i++];
+      if (op >= 0x01 && op <= 0x4b) {
+        stack.push(script.subarray(i, i + op));
+        i += op;
+      } else if (op === 0xac) {
+        const pub = bytesToHex(stack.pop()!);
+        const sig = stack.pop();
+        stack.push(Uint8Array.of(sigOk(sig, pub) ? 1 : 0));
+      } else if (op === 0xba) {
+        const pub = bytesToHex(stack.pop()!);
+        const n = Number(stack.pop()!);
+        const sig = stack.pop();
+        stack.push(Uint8Array.of(n + (sigOk(sig, pub) ? 1 : 0)));
+      } else {
+        throw new Error(`unhandled opcode 0x${op.toString(16)}`);
+      }
+    }
+    expect(stack[stack.length - 1][0]).toBe(1); // single valid sig suffices → theft vector
+  });
+});
 });
