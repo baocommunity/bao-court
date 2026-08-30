@@ -101,3 +101,21 @@ export function isAppealActive(
   const phase = getActivePhase(resolutionTimestamp, nowSeconds, timings);
   return phase !== 'refund';
 }
+
+/**
+ * Seconds remaining until the next appeal phase begins, 0 once in the
+ * terminal refund phase.
+ */
+export function secondsUntilNextPhase(
+  resolutionTimestamp: number,
+  nowSeconds: number,
+  timings: AppealTimings = DEFAULT_APPEAL_TIMINGS,
+): number {
+  const bounds = computePhaseBounds(resolutionTimestamp, timings);
+  const active = bounds.find((b) => nowSeconds >= b.startsAt && nowSeconds < b.endsAt);
+  if (!active) {
+    return 0;
+  }
+
+  return Math.max(0, active.endsAt - nowSeconds);
+}
