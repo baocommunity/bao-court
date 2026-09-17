@@ -50,6 +50,20 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
    PR → merge (main is branch-protected).
 3. Update the machine notes (`/home/bob/AGENTS.md`) with the new version.
 
+## Public site — court.bao.network
+
+- `site/index.html` is the public paper-edition landing (static, no build
+  step). It is protocol-accurate copy only — this repo is public: no
+  internal hosts, credentials, or private rail details.
+- `.github/workflows/pages.yml` deploys `site/` to GitHub Pages on pushes to
+  `main` touching it (`workflow_dispatch` enabled). The Pages custom domain
+  is `court.bao.network`, HTTPS enforced; GitHub provisions/renews the cert
+  (keep the DNS record DNS-only so renewal works).
+- The same page is mirrored into the public `baocommunity/bao.network` repo
+  by its scheduled `mirror-court.yml` workflow and renders at
+  `https://bao.network/court/`. Edit it HERE only; the mirror copies
+  `site/index.html` byte-for-byte.
+
 ## Verify before tagging
 
 ```bash
