@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>₿AO Court — Threshold Oracle for Dispute Resolution</title>
-    <meta name="description" content="A FROST threshold oracle: a randomly selected jury runs DKG, votes under commit/reveal, and signs a verifiable threshold Schnorr verdict. It decides — it never holds funds.">
+    <title>₿AO Court - Threshold Oracle for Dispute Resolution</title>
+    <meta name="description" content="A FROST threshold oracle: a randomly selected jury runs DKG, votes under commit/reveal, and signs a verifiable threshold Schnorr verdict. It decides - it never holds funds.">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>₿</text></svg>">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://court.bao.network">
-    <meta property="og:title" content="₿AO Court — Threshold Oracle for Dispute Resolution">
+    <meta property="og:title" content="₿AO Court - Threshold Oracle for Dispute Resolution">
     <meta property="og:description" content="A randomly selected jury runs DKG, votes under commit/reveal, and signs a threshold Schnorr verdict any third party can verify.">
     <meta property="og:site_name" content="₿AO Court">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="₿AO Court — Threshold Oracle">
+    <meta name="twitter:title" content="₿AO Court - Threshold Oracle">
     <meta name="twitter:description" content="It decides. It never holds funds.">
 
     <style>
@@ -290,7 +290,7 @@
             <p class="pitch">
                 A randomly selected jury runs distributed key generation, votes under
                 commit/reveal, and produces a threshold Schnorr attestation over the final
-                verdict — verifiable by anyone against the Court's group public key.
+                verdict - verifiable by anyone against the Court's group public key.
             </p>
             <p class="fine">
                 No trusted verifier. No committee to take on faith. No custody of anyone's money.
@@ -308,11 +308,11 @@
         <div class="wrap">
             <div class="section-head">
                 <span class="kicker">The Ceremony</span>
-                <span class="no">Section I — How a verdict is made</span>
+                <span class="no">Section I - How a verdict is made</span>
             </div>
             <p class="section-lead">
                 Every dispute runs the same six phases. Each phase is cryptographic, and the
-                final attestation is verifiable by any third party — forever, without asking us.
+                final attestation is verifiable by any third party - forever, without asking us.
             </p>
             <div class="steps">
                 <div class="step">
@@ -322,23 +322,23 @@
                 </div>
                 <div class="step">
                     <div class="n">II</div>
-                    <h3>Setup — DKG</h3>
+                    <h3>Setup - DKG</h3>
                     <p>Jurors run distributed key generation together. The group key is born without any dealer and no single juror holds it.</p>
                 </div>
                 <div class="step">
                     <div class="n">III</div>
-                    <h3>Vote — commit</h3>
+                    <h3>Vote - commit</h3>
                     <p>Each juror commits to a salted hash of their outcome. Nobody can copy anyone else's vote.</p>
                 </div>
                 <div class="step">
                     <div class="n">IV</div>
-                    <h3>Count — reveal</h3>
+                    <h3>Count - reveal</h3>
                     <p>Reveals publish the outcome and salt; each must match the juror's earlier commit or it is rejected.</p>
                 </div>
                 <div class="step">
                     <div class="n">V</div>
                     <h3>Sign</h3>
-                    <p>The jury produces a threshold Schnorr signature over the final verdict — no single juror, and no minority, can forge it.</p>
+                    <p>The jury produces a threshold Schnorr signature over the final verdict - no single juror, and no minority, can forge it.</p>
                 </div>
                 <div class="step">
                     <div class="n">VI</div>
@@ -353,13 +353,13 @@
         <div class="wrap">
             <div class="section-head">
                 <span class="kicker">Guarantees</span>
-                <span class="no">Section II — What the Court never does</span>
+                <span class="no">Section II - What the Court never does</span>
             </div>
             <div class="cards">
                 <div class="card">
                     <div class="card-mark">⚿</div>
                     <h3>Never holds funds</h3>
-                    <p>The Court never holds, receives, redirects, or intermediates user funds. It contains no settlement logic — it authorizes, others settle.</p>
+                    <p>The Court never holds, receives, redirects, or intermediates user funds. It contains no settlement logic - it authorizes, others settle.</p>
                 </div>
                 <div class="card">
                     <div class="card-mark">✓</div>
@@ -369,7 +369,7 @@
                 <div class="card">
                     <div class="card-mark">◈</div>
                     <h3>No single point of trust</h3>
-                    <p>Key generation is distributed, votes are secret until counted, and the verdict requires a threshold of jurors — not an admin key.</p>
+                    <p>Key generation is distributed, votes are secret until counted, and the verdict requires a threshold of jurors - not an admin key.</p>
                 </div>
             </div>
             <div class="note" style="margin-top:1.25rem;">
@@ -384,7 +384,7 @@
         <div class="wrap">
             <div class="section-head">
                 <span class="kicker">Jurors</span>
-                <span class="no">Section III — The people behind the verdict</span>
+                <span class="no">Section III - The people behind the verdict</span>
             </div>
             <div class="split">
                 <div>
@@ -402,7 +402,7 @@
                         <div class="step">
                             <div class="n">→</div>
                             <h3>Get selected</h3>
-                            <p>Sessions pick juries at random — no applications, no favoritism, no insider seat.</p>
+                            <p>Sessions pick juries at random - no applications, no favoritism, no insider seat.</p>
                         </div>
                         <div class="step">
                             <div class="n">→</div>
@@ -421,10 +421,10 @@
                         A randomly selected jury runs distributed key generation, votes under
                         commit/reveal, and produces a threshold Schnorr attestation over the
                         final verdict that any third party can verify.
-                        <cite>— BAO Court protocol paper</cite>
+                        <cite>- BAO Court protocol paper</cite>
                     </blockquote>
                     <p class="section-lead" style="margin-top:1.25rem;">
-                        The protocol ships as platform-neutral TypeScript with normative testvectors —
+                        The protocol ships as platform-neutral TypeScript with normative testvectors -
                         math and state machines only, no networking, no storage, no secrets.
                     </p>
                     <div class="cta-row" style="justify-content:flex-start;">
@@ -439,7 +439,7 @@
         <div class="wrap">
             <div class="section-head">
                 <span class="kicker">Support</span>
-                <span class="no">Section IV — Keep the oracle running</span>
+                <span class="no">Section IV - Keep the oracle running</span>
             </div>
             <div class="support">
                 <h3>Support the Court</h3>
@@ -462,7 +462,7 @@
                     <button class="amount" data-amount="214000" type="button">214,000</button>
                 </div>
                 <p class="fine">
-                    Suggested amounts in sats — click an amount to copy the zap request, then paste it
+                    Suggested amounts in sats - click an amount to copy the zap request, then paste it
                     into your Lightning wallet. No custody, no invoices held by us.
                 </p>
             </div>
@@ -497,7 +497,7 @@
             <a href="https://github.com/baocommunity/bao-court" target="_blank" rel="noopener">github</a>
             <a href="https://github.com/baocommunity/bao-court/blob/main/docs/FROST_COURT_ORACLE_PAPER.md" target="_blank" rel="noopener">paper</a>
         </div>
-        <p class="colophon">© <span id="year">2026</span> ₿AO Court — It decides, it never holds funds</p>
+        <p class="colophon">© <span id="year">2026</span> ₿AO Court - It decides, it never holds funds</p>
     </div>
 </footer>
 
