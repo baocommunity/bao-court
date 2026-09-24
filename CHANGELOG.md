@@ -9,6 +9,44 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [Unreleased]
+
+### Fixed
+- **DKG shares are bound to the NIP-59 envelope author.**
+  `parseEncryptedShareEvent` / `parseEncryptedRefreshShareEvent` now take the
+  sender from the signed envelope author (`event.pubkey`) and reject events
+  with no author or with a `from` tag/content pubkey that disagrees with it —
+  a forged share claiming an honest juror's roster pubkey is no longer
+  re-attributed to that juror (it is rejected). `IndependentDkgSession`
+  `addEncryptedShare` / `addEncryptedRefreshShare` take the envelope author as
+  an optional second argument and require `payload.fromPubkey` (and the
+  author, when provided) to equal the roster pubkey for `fromIdx`.
+- **The appeal coordinator tallies only signed commit/reveal events.**
+  `vote_commit` collects signature-verified Kind 39004 commits authored by a
+  selected juror for this dispute (conflicting commits from one juror →
+  reselection), and `vote_reveal` counts only signature-verified Kind 39014
+  reveals whose `hashCommit(outcome, salt)` matches that juror's signed
+  commit. The verdict is never fabricated from the challenger's
+  `proposedOutcome`; a tally with no valid reveal triggers reselection instead
+  of attesting an empty outcome. The former self-contained flow stays behind
+  the explicit, test-only `simulateVotes` config switch (defaults to
+  `environment === 'test'`); `vote_commits_collected` / `vote_reveals_collected`
+  payloads carry `simulated`.
+- **Appeal settlement requires a pinned group key.** `settleAppeal` fails
+  closed (`unpinned_group_key`) for an attestation under a group key that is
+  neither the appeal's local `dkgRecord.groupPubkeyXOnly` nor an explicitly
+  allow-listed `empaneledGroupKeys` entry — an injected appeal can no longer
+  settle under a self-chosen key.
+
+### Breaking
+- `FrostAppealCoordinatorConfig` gains `simulateVotes` and
+  `empaneledGroupKeys` (both optional, no signature changes). Behaviour
+  changes by design: outside `environment: 'test'` the coordinator now
+  collects signed Kind 39004/39014 events instead of fabricating votes from
+  the challenger's claim, and externally-attested appeals with no local DKG
+  record must list the empaneled group key(s). Test-environment hosts keep
+  the simulated flow unless they pass `simulateVotes: false`.
+
 ## [0.7.0] — 2026-08-27
 
 ### Added

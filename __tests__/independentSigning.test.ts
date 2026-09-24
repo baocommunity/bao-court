@@ -66,7 +66,7 @@ async function runSigningSetup(
       });
     }
     for (const shareEvent of shareEvents) {
-      const payload = parseEncryptedShareEvent(shareEvent)!;
+      const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
       dkgSessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
     }
   }
@@ -119,7 +119,7 @@ describe('IndependentSigningSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         dkgSessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -283,7 +283,7 @@ describe('IndependentSigningSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         dkgSessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -360,7 +360,7 @@ describe('IndependentSigningSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         dkgSessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -474,7 +474,7 @@ describe('IndependentSigningSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         dkgSessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }

@@ -34,8 +34,31 @@ describe('DKG message builders', () => {
     expect(event.tags).toContainEqual(['from', '1', 'a'.repeat(64)]);
     expect(event.tags).toContainEqual(['to', '2', 'b'.repeat(64)]);
 
-    const parsed = parseEncryptedShareEvent(event);
+    // The sender is taken from the signed envelope author, exactly as the
+    // NIP-59 unwrap path presents it.
+    const parsed = parseEncryptedShareEvent({ ...event, pubkey: payload.fromPubkey });
     expect(parsed).toEqual(payload);
+  });
+
+  it('rejects an encrypted share with no envelope author or a forged from tag', () => {
+    const payload = {
+      disputeId,
+      fromIdx: 1,
+      fromPubkey: 'a'.repeat(64),
+      toIdx: 2,
+      toPubkey: 'b'.repeat(64),
+      encryptedShare: 'encrypted-payload',
+      phaseNonce: 'nonce-1',
+    };
+    const event = buildEncryptedShareEvent(payload);
+
+    // No signed author: unattributable, structurally invalid.
+    expect(parseEncryptedShareEvent(event)).toBeNull();
+
+    // Attacker signs with their own key but claims the honest juror's pubkey
+    // in the tag/content: rejected rather than silently re-attributed.
+    const forged = parseEncryptedShareEvent({ ...event, pubkey: 'c'.repeat(64) });
+    expect(forged).toBeNull();
   });
 
   it('builds and parses a DKG complaint event', () => {

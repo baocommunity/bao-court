@@ -82,6 +82,13 @@ export function parseEncryptedShareEvent(
   event: NostrEventLike,
 ): EncryptedVssShare | null {
   if (event.kind !== BAO_COURT_ENCRYPTED_SHARE_KIND) return null;
+  // Sender binding: the share's author is the signed envelope author, never a
+  // self-declared `from` tag/content field. Without this an attacker could
+  // claim an honest juror's roster pubkey and poison the round (e.g. a forged
+  // phase nonce disqualifying the honest juror).
+  if (typeof event.pubkey !== 'string' || !/^[0-9a-f]{64}$/.test(event.pubkey)) {
+    return null;
+  }
   try {
     const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
     const disputeTag = event.tags.find((t) => t[0] === 'dispute');
@@ -99,10 +106,16 @@ export function parseEncryptedShareEvent(
       : '';
     if (!encryptedShare || !phaseNonce) return null;
 
+    // A claimed-but-different sender is structurally invalid: reject rather
+    // than silently prefer one of the two identities.
+    const claimedFromPubkey = fromTag?.[2]
+      ?? (typeof content.fromPubkey === 'string' ? content.fromPubkey : '');
+    if (claimedFromPubkey && claimedFromPubkey !== event.pubkey) return null;
+
     return {
       disputeId: disputeTag?.[1] ?? String(content.disputeId ?? ''),
       fromIdx,
-      fromPubkey: fromTag?.[2] ?? String(content.fromPubkey ?? ''),
+      fromPubkey: event.pubkey,
       toIdx,
       toPubkey: toTag?.[2] ?? String(content.toPubkey ?? ''),
       encryptedShare,
@@ -427,6 +440,10 @@ export function parseEncryptedRefreshShareEvent(
   event: NostrEventLike,
 ): EncryptedRefreshShare | null {
   if (event.kind !== BAO_COURT_REFRESH_SHARE_KIND) return null;
+  // Same envelope-author binding as parseEncryptedShareEvent (see there).
+  if (typeof event.pubkey !== 'string' || !/^[0-9a-f]{64}$/.test(event.pubkey)) {
+    return null;
+  }
   try {
     const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
     const disputeTag = event.tags.find((t) => t[0] === 'dispute');
@@ -444,10 +461,14 @@ export function parseEncryptedRefreshShareEvent(
       : '';
     if (!encryptedShare || !phaseNonce) return null;
 
+    const claimedFromPubkey = fromTag?.[2]
+      ?? (typeof content.fromPubkey === 'string' ? content.fromPubkey : '');
+    if (claimedFromPubkey && claimedFromPubkey !== event.pubkey) return null;
+
     return {
       disputeId: disputeTag?.[1] ?? String(content.disputeId ?? ''),
       fromIdx,
-      fromPubkey: fromTag?.[2] ?? String(content.fromPubkey ?? ''),
+      fromPubkey: event.pubkey,
       toIdx,
       toPubkey: toTag?.[2] ?? String(content.toPubkey ?? ''),
       encryptedShare,

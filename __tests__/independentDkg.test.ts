@@ -105,10 +105,10 @@ describe('IndependentDkgSession', () => {
 
       // Distribute encrypted shares to recipients.
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent);
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey });
         expect(payload).not.toBeNull();
         const recipient = sessions.find((s) => s.myIdx === payload!.toIdx)!;
-        recipient.addEncryptedShare(payload!);
+        recipient.addEncryptedShare(payload!, jurors[i].pubkey);
       }
     }
 
@@ -175,7 +175,7 @@ describe('IndependentDkgSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -225,7 +225,7 @@ describe('IndependentDkgSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -316,7 +316,7 @@ describe('IndependentDkgSession', () => {
       }
 
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -409,13 +409,17 @@ describe('IndependentDkgSession', () => {
     });
 
     // Tamper with the phase nonce of the share addressed to the victim.
-    const payload = parseEncryptedShareEvent(
-      shareEvents.find((e) => parseEncryptedShareEvent(e)!.toIdx === victim.myIdx)!,
-    )!;
+    const senderPubkey = jurors[0].pubkey;
+    const payload = parseEncryptedShareEvent({
+      ...shareEvents.find(
+        (e) => parseEncryptedShareEvent({ ...e, pubkey: senderPubkey })!.toIdx === victim.myIdx,
+      )!,
+      pubkey: senderPubkey,
+    })!;
     const tampered: EncryptedVssShare = { ...payload, phaseNonce: 'wrong-nonce' };
 
-    expect(victim.addEncryptedShare(tampered)).toBe(false);
-    expect(victim.addEncryptedShare(payload)).toBe(true);
+    expect(victim.addEncryptedShare(tampered, senderPubkey)).toBe(false);
+    expect(victim.addEncryptedShare(payload, senderPubkey)).toBe(true);
   });
 
   it('never finalizes over a threshold-sized subset of the roster', async () => {
@@ -449,7 +453,7 @@ describe('IndependentDkgSession', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         const recipient = active.find((s) => s.myIdx === payload.toIdx);
         recipient?.addEncryptedShare(payload);
       }
@@ -496,10 +500,13 @@ describe('IndependentDkgSession', () => {
         phaseNonce: parsedCommit.phaseNonce,
         eventId: 'commit-1',
       });
-      const mismatched = parseEncryptedShareEvent(
-        second.shareEvents.find((e) => parseEncryptedShareEvent(e)!.toIdx === victim.myIdx)!,
-      )!;
-      victim.addEncryptedShare({ ...mismatched, phaseNonce: parsedCommit.phaseNonce });
+      const mismatched = parseEncryptedShareEvent({
+        ...second.shareEvents.find(
+          (e) => parseEncryptedShareEvent({ ...e, pubkey: jurors[0].pubkey })!.toIdx === victim.myIdx,
+        )!,
+        pubkey: jurors[0].pubkey,
+      })!;
+      victim.addEncryptedShare({ ...mismatched, phaseNonce: parsedCommit.phaseNonce }, jurors[0].pubkey);
     }
 
     for (const victim of victims) {
@@ -569,7 +576,7 @@ describe('IndependentDkgSession refresh', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -604,8 +611,8 @@ describe('IndependentDkgSession refresh', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedRefreshShareEvent(shareEvent)!;
-        sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedRefreshShare(payload);
+        const payload = parseEncryptedRefreshShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
+        sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedRefreshShare(payload, jurors[i].pubkey);
       }
     }
 
@@ -667,7 +674,7 @@ describe('IndependentDkgSession refresh', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedShareEvent(shareEvent)!;
+        const payload = parseEncryptedShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
         sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedShare(payload);
       }
     }
@@ -698,8 +705,8 @@ describe('IndependentDkgSession refresh', () => {
         });
       }
       for (const shareEvent of shareEvents) {
-        const payload = parseEncryptedRefreshShareEvent(shareEvent)!;
-        sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedRefreshShare(payload);
+        const payload = parseEncryptedRefreshShareEvent({ ...shareEvent, pubkey: jurors[i].pubkey })!;
+        sessions.find((s) => s.myIdx === payload.toIdx)!.addEncryptedRefreshShare(payload, jurors[i].pubkey);
       }
     }
 
