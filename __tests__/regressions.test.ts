@@ -402,6 +402,7 @@ describe('regression: dkgMessages parsers reject NaN indices', () => {
     const event = {
       kind: 39003,
       created_at: 1,
+      pubkey: 'c'.repeat(64),
       tags: [
         ['d', 'x:1:2'],
         ['dispute', 'x'],
@@ -501,6 +502,52 @@ describe('regression: IndependentDkgSession roster binding', () => {
       phaseNonce: 'bogus-phase',
     });
     expect(outsider).toBe(false);
+  });
+
+  it('rejects a share whose envelope author is not the claimed roster juror', () => {
+    const jurors = makeRealJurors(3);
+    const disputeId = 'd'.repeat(64);
+    const victim = new IndependentDkgSession({
+      disputeId,
+      myIdx: jurors[1].juror.idx,
+      myPubkey: jurors[1].pubkey,
+      mySeckey: jurors[1].seckey,
+      threshold: 2,
+      jurors: jurors.map((j) => j.juror),
+    });
+
+    // Payload claims juror 1's roster pubkey (so the payload-level check
+    // alone would pass) but the signed NIP-59 envelope belongs to the
+    // attacker. The handler must reject the mismatched envelope author.
+    const forged = victim.addEncryptedShare(
+      {
+        disputeId,
+        fromIdx: jurors[0].juror.idx,
+        fromPubkey: jurors[0].pubkey,
+        toIdx: jurors[1].juror.idx,
+        toPubkey: jurors[1].pubkey,
+        encryptedShare: 'bogus-ciphertext',
+        phaseNonce: 'bogus-phase',
+      },
+      'f'.repeat(64),
+    );
+    expect(forged).toBe(false);
+
+    // The same payload with the true envelope author is admitted.
+    expect(
+      victim.addEncryptedShare(
+        {
+          disputeId,
+          fromIdx: jurors[0].juror.idx,
+          fromPubkey: jurors[0].pubkey,
+          toIdx: jurors[1].juror.idx,
+          toPubkey: jurors[1].pubkey,
+          encryptedShare: 'bogus-ciphertext',
+          phaseNonce: 'bogus-phase',
+        },
+        jurors[0].pubkey,
+      ),
+    ).toBe(true);
   });
 
   it('rejects a conflicting second commitment as equivocation', async () => {

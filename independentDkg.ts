@@ -293,15 +293,23 @@ export class IndependentDkgSession {
 
   /**
    * Add an encrypted share addressed to this juror.
+   *
+   * `envelopeAuthor` is the NIP-59 envelope author of the share event. The
+   * parser sets `payload.fromPubkey` from `event.pubkey`, and this handler
+   * requires that author to be exactly the roster pubkey for `fromIdx`; a
+   * claimed-but-unbound sender is rejected. Hosts that hold the envelope
+   * separately MUST pass its author so a forged payload object cannot bypass
+   * the parser-level binding.
    */
-  addEncryptedShare(payload: EncryptedVssShare): boolean {
+  addEncryptedShare(payload: EncryptedVssShare, envelopeAuthor?: string): boolean {
     if (payload.toIdx !== this.myIdx) return false;
     if (payload.disputeId !== this.disputeId) return false;
     // Bind the claimed sender to the certified roster; a forged share with a
     // bogus phase nonce can otherwise disqualify an honest juror.
     const fromJuror = this.getJuror(payload.fromIdx);
     if (!fromJuror) return false;
-    if (payload.fromPubkey && payload.fromPubkey !== fromJuror.nostrPubkey) return false;
+    if (payload.fromPubkey !== fromJuror.nostrPubkey) return false;
+    if (envelopeAuthor !== undefined && envelopeAuthor !== fromJuror.nostrPubkey) return false;
     const expected = this.phaseNonces.get(payload.fromIdx);
     if (expected !== undefined && payload.phaseNonce !== expected) {
       // Replay or wrong DKG round.
@@ -937,14 +945,17 @@ export class IndependentDkgSession {
 
   /**
    * Add an encrypted refresh share addressed to this juror.
+   * `envelopeAuthor` carries the same NIP-59 envelope-author requirement as
+   * `addEncryptedShare` (see there).
    */
-  addEncryptedRefreshShare(payload: EncryptedRefreshShare): boolean {
+  addEncryptedRefreshShare(payload: EncryptedRefreshShare, envelopeAuthor?: string): boolean {
     if (payload.toIdx !== this.myIdx) return false;
     if (payload.disputeId !== this.disputeId) return false;
     // Same sender-binding rules as addEncryptedShare (see there).
     const fromJuror = this.getJuror(payload.fromIdx);
     if (!fromJuror) return false;
-    if (payload.fromPubkey && payload.fromPubkey !== fromJuror.nostrPubkey) return false;
+    if (payload.fromPubkey !== fromJuror.nostrPubkey) return false;
+    if (envelopeAuthor !== undefined && envelopeAuthor !== fromJuror.nostrPubkey) return false;
     const expected = this.refreshPhaseNonces.get(payload.fromIdx);
     if (expected !== undefined && payload.phaseNonce !== expected) {
       this.disqualified.add(payload.fromIdx);

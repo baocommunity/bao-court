@@ -22,6 +22,7 @@
  */
 
 import type { Event as NostrEvent, Filter } from 'nostr-tools';
+import { verifyEvent } from 'nostr-tools/pure';
 import {
   buildDisputeEvent,
   buildJurorCandidacyEvent,
@@ -33,6 +34,8 @@ import {
   buildDisputeAttestationEvent,
   validateSelectionEvent,
   parseJurorCandidacyEvent,
+  parseVoteCommitEvent,
+  parseVoteRevealEvent,
 } from './events';
 import { selectJuryWithBackups, deriveSelectionSeed } from './selection';
 import { generateFrostKeys, type KeygenResult, type KeygenParams } from './dkg';
@@ -71,8 +74,21 @@ export interface FrostAppealState {
   backupJurors?: SelectedJuror[];
   dkgRecord?: DkgRecord;
   shares?: { idx: number; seckey: string }[];
-  voteCommits: Map<number, { outcome: string; salt: string }>;
-  voteReveals: Map<number, { outcome: string; salt: string }>;
+  /**
+   * Signed Kind 39004 commits from selected jurors. The simulation path also
+   * fills `outcome`/`salt` directly; the real path stores only the commit
+   * hash plus the signed event binding.
+   */
+  voteCommits: Map<number, {
+    outcome: string;
+    salt: string;
+    commitHash?: string;
+    eventId?: string;
+    pubkey?: string;
+  }>;
+  /** Signed Kind 39014 reveals from selected jurors (real path) or the
+   *  simulated copy of the commit (test-only). */
+  voteReveals: Map<number, { outcome: string; salt: string; eventId?: string; pubkey?: string }>;
   /**
    * The tally winner (the Court's verdict) — the ONLY outcome the signing
    * round may attest. The challenger's `proposedOutcome` is a claim, not a
@@ -139,6 +155,21 @@ export interface FrostAppealCoordinatorConfig {
   readonly selectionBlockHash?: string;
   /** Async check that a stake commitment is valid for this market. */
   readonly verifyStakeCommitment?: (commitment: StakeCommitment) => Promise<boolean>;
+  /**
+   * TEST-ONLY: fabricate commit/reveal votes from the challenger's
+   * proposedOutcome so the in-process ceremony can run without juror nodes.
+   * Defaults to `environment === 'test'`. Demo/prod MUST leave this false
+   * (or rely on the environment default) so only signed Kind 39004/39014
+   * events from the selected roster are tallied.
+   */
+  readonly simulateVotes?: boolean;
+  /**
+   * Explicit allow-list of x-only group pubkeys that may settle an appeal for
+   * which this coordinator holds no local DKG record (e.g. empaneled keys
+   * from an external ceremony). Without a local `dkgRecord` and without a
+   * matching allow-list entry, settlement fails closed.
+   */
+  readonly empaneledGroupKeys?: readonly string[];
 }
 
 export interface FrostAppealCoordinatorEvent {
@@ -170,6 +201,7 @@ const KIND_JUROR_CANDIDACY = 39001;
 const KIND_SELECTION = 39002;
 const KIND_DKG_COMMITMENT = 38031;
 const KIND_VOTE = 39004;
+const KIND_VOTE_REVEAL = 39014;
 const KIND_FROST_COMMIT = 39005;
 const KIND_FROST_REVEAL = 39006;
 const KIND_ATTESTATION = 39007;
@@ -187,6 +219,11 @@ export function createFrostAppealCoordinator(
   const jurySize = config.jurySize ?? 5;
   const backupCount = config.backupCount ?? 2;
   const minStakeSats = config.minStakeSats ?? 10_000;
+  // The in-process vote simulation is a TEST-ONLY fixture: the coordinator
+  // must never sign a verdict it did not collect as signed commits/reveals
+  // from the selected roster.
+  const simulateVotes = config.simulateVotes ?? config.environment === 'test';
+  const empaneledGroupKeys = config.empaneledGroupKeys ?? [];
   async function defaultVerifyStakeCommitment(commitment: StakeCommitment): Promise<boolean> {
     if (commitment.amountSats < minStakeSats || commitment.bondAddress.length === 0) return false;
     const hasEvidence = Boolean(commitment.scriptPubKey && commitment.bondTxid && commitment.bondVout !== undefined);
@@ -453,41 +490,113 @@ export function createFrostAppealCoordinator(
 
       case 'vote_commit': {
         if (!appeal.selectedJurors) break;
-        // In a real implementation, selected jurors publish Kind 39004 commits.
-        // For the coordinator demo we simulate them from shares so the flow is self-contained.
-        const proposedOutcome = appeal.disputeCase.proposedOutcome;
-        for (const juror of appeal.selectedJurors) {
-          const salt = randomBytesHex(16);
-          appeal.voteCommits.set(juror.idx, { outcome: proposedOutcome, salt });
+        if (simulateVotes) {
+          // TEST-ONLY fixture: fabricate commits from the challenger's
+          // proposed outcome so the in-process ceremony is self-contained.
+          const proposedOutcome = appeal.disputeCase.proposedOutcome;
+          for (const juror of appeal.selectedJurors) {
+            const salt = randomBytesHex(16);
+            appeal.voteCommits.set(juror.idx, { outcome: proposedOutcome, salt });
+          }
+          appeal.phase = 'vote_reveal';
+          emit('vote_commits_collected', appeal, { count: appeal.voteCommits.size, simulated: true });
+          break;
         }
+
+        // Real path: only signature-verified Kind 39004 commits authored by
+        // a selected juror for THIS dispute enter the tally.
+        const commitEvents = await fetchRelayEvents([KIND_VOTE], {
+          '#dispute': [appeal.disputeId],
+        });
+        for (const event of commitEvents) {
+          if (!verifyEvent(event)) continue;
+          const parsed = parseVoteCommitEvent(event);
+          if (!parsed || parsed.disputeId !== appeal.disputeId) continue;
+          if (!/^[0-9a-f]{64}$/.test(parsed.commitHash)) continue;
+          const juror = appeal.selectedJurors.find((j) => j.idx === parsed.jurorIdx);
+          if (!juror || juror.nostrPubkey !== parsed.pubkey) continue;
+          const existing = appeal.voteCommits.get(parsed.jurorIdx);
+          if (existing && existing.commitHash !== parsed.commitHash) {
+            // Equivocation: two different commits from the same selected
+            // juror. Fail closed — abort the attempt, never pick one.
+            maybeReselect(appeal, 'vote_equivocation', new Error('conflicting vote commits'));
+            break;
+          }
+          appeal.voteCommits.set(parsed.jurorIdx, {
+            outcome: '',
+            salt: '',
+            commitHash: parsed.commitHash,
+            eventId: event.id,
+            pubkey: parsed.pubkey,
+          });
+        }
+        if (appeal.phase !== 'vote_commit') break; // reselection already moved on
+        if (appeal.voteCommits.size < appeal.selectedJurors.length) break; // wait for the roster
         appeal.phase = 'vote_reveal';
-        emit('vote_commits_collected', appeal, { count: appeal.voteCommits.size });
+        emit('vote_commits_collected', appeal, { count: appeal.voteCommits.size, simulated: false });
         break;
       }
 
       case 'vote_reveal': {
         if (!appeal.selectedJurors) break;
-        for (const [idx, commit] of appeal.voteCommits.entries()) {
-          appeal.voteReveals.set(idx, commit);
+        if (simulateVotes) {
+          for (const [idx, commit] of appeal.voteCommits.entries()) {
+            appeal.voteReveals.set(idx, commit);
+          }
+        } else {
+          // Real path: only signature-verified Kind 39014 reveals authored by
+          // a selected juror whose hash matches that juror's signed commit.
+          const revealEvents = await fetchRelayEvents([KIND_VOTE_REVEAL], {
+            '#dispute': [appeal.disputeId],
+          });
+          for (const event of revealEvents) {
+            if (!verifyEvent(event)) continue;
+            const parsed = parseVoteRevealEvent(event);
+            if (!parsed || parsed.disputeId !== appeal.disputeId) continue;
+            if (!parsed.outcome || !parsed.salt) continue;
+            const juror = appeal.selectedJurors.find((j) => j.idx === parsed.jurorIdx);
+            if (!juror || juror.nostrPubkey !== parsed.pubkey) continue;
+            const commit = appeal.voteCommits.get(parsed.jurorIdx);
+            if (!commit) continue;
+            const expectedCommit = commit.commitHash ?? hashCommit(commit.outcome, commit.salt);
+            if (hashCommit(parsed.outcome, parsed.salt) !== expectedCommit) continue;
+            appeal.voteReveals.set(parsed.jurorIdx, {
+              outcome: parsed.outcome,
+              salt: parsed.salt,
+              eventId: event.id,
+              pubkey: parsed.pubkey,
+            });
+          }
+          if (appeal.voteReveals.size < appeal.voteCommits.size) break; // wait for the reveals
         }
 
         const votes = appeal.selectedJurors.map((j) => {
+          const commit = appeal.voteCommits.get(j.idx);
           const reveal = appeal.voteReveals.get(j.idx);
           return {
             idx: j.idx,
             pubkey: j.nostrPubkey,
-            commit: reveal ? hashCommit(reveal.outcome, reveal.salt) : '',
+            commit: commit
+              ? (commit.commitHash ?? hashCommit(commit.outcome, commit.salt))
+              : '',
             reveal,
           };
         });
         const verdict = tallyVotes(votes);
+        if (!verdict.outcome) {
+          // No valid reveal among the signed commits: never attest a claim
+          // or an empty outcome.
+          maybeReselect(appeal, 'vote_failed', new Error('no_valid_reveals: cannot tally a verdict'));
+          break;
+        }
         appeal.verdictOutcome = verdict.outcome;
-        // Freeze the dispute verdict commitment BEFORE signing. This demo runs
-        // the vote in-process, so supporting reveals have no Nostr event ids;
-        // derive deterministic synthetic ones (production uses the real
-        // kind-39014 reveal event ids — same commitment structure).
+        // Freeze the dispute verdict commitment BEFORE signing. Real reveals
+        // contribute their signed event ids; the test-only simulation has no
+        // Nostr events, so it derives deterministic synthetic ids (same
+        // commitment structure).
         const supportingEventIds = verdict.supportingVotes.map((v) =>
-          deriveSimulatedRevealEventId(v.idx, v.reveal!.outcome, v.reveal!.salt),
+          appeal.voteReveals.get(v.idx)?.eventId
+            ?? deriveSimulatedRevealEventId(v.idx, v.reveal!.outcome, v.reveal!.salt),
         );
         appeal.verdictHash = hashDisputeVerdict({
           disputeId: appeal.disputeId,
@@ -499,6 +608,7 @@ export function createFrostAppealCoordinator(
         emit('vote_reveals_collected', appeal, {
           verdict: verdict.outcome,
           supportingVotes: verdict.supportingVotes.length,
+          simulated: simulateVotes,
         });
         break;
       }
@@ -777,10 +887,18 @@ export function createFrostAppealCoordinator(
         emit('settlement_rejected', appeal, { reason: 'invalid_signature' });
         return false;
       }
-      // When this coordinator ran the DKG itself, the settling attestation
-      // must come from that exact group key.
-      if (appeal.dkgRecord && attestation.groupPubkey !== appeal.dkgRecord.groupPubkeyXOnly) {
-        emit('settlement_rejected', appeal, { reason: 'group_key_mismatch' });
+      // Pin the settling group key. When this coordinator ran the DKG itself,
+      // the attestation must come from that exact group key. Without a local
+      // DKG record, only an explicitly allow-listed empaneled key may settle:
+      // an addAppeal-injected appeal must not settle under a self-chosen key.
+      const pinnedGroupKey = appeal.dkgRecord?.groupPubkeyXOnly;
+      if (pinnedGroupKey) {
+        if (attestation.groupPubkey !== pinnedGroupKey) {
+          emit('settlement_rejected', appeal, { reason: 'group_key_mismatch' });
+          return false;
+        }
+      } else if (!empaneledGroupKeys.includes(attestation.groupPubkey)) {
+        emit('settlement_rejected', appeal, { reason: 'unpinned_group_key' });
         return false;
       }
       releaseBackupStakes(appeal);

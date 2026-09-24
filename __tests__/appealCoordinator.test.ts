@@ -4,13 +4,16 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { finalizeEvent } from 'nostr-tools/pure';
+import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import {
   BAO_COURT_DISPUTE_KIND,
   createFrostAppealCoordinator,
   TEST_APPEAL_TIMINGS,
   buildDisputeEvent,
+  buildVoteCommitEvent,
+  buildVoteRevealEvent,
   generateFrostKeys,
+  hashCommit,
   runNormalSigningRound,
   hashDisputeVerdict,
   deriveSimulatedRevealEventId,
@@ -118,6 +121,120 @@ describe('FrostAppealCoordinator', () => {
 
     coordinator.stop();
     off();
+  });
+
+  it('tallies only signed commit/reveal events from the selected roster (never the challenger claim)', async () => {
+    const marketId = randomBytes(32).toString('hex');
+    const disputeId = randomBytes(32).toString('hex');
+
+    // Real juror keypairs so the selected roster can sign Kind 39004/39014.
+    const jurorKeys = Array.from({ length: 4 }, (_, i) => {
+      const seckey = generateSecretKey();
+      const pubkey = getPublicKey(seckey);
+      return { seckey, pubkey, juror: makeJuror({ nostrPubkey: pubkey, stakeCapacitySats: 500_000 + i * 10_000 }) };
+    });
+    const keyByPubkey = new Map(jurorKeys.map((k) => [k.pubkey, k]));
+
+    // Built once selection has assigned FROST indices; the fake relay serves
+    // whatever is present, so the vote phases see real signed events.
+    let signedCommits: Array<{ jurorIdx: number; salt: string; event: ReturnType<typeof finalizeEvent> }> = [];
+    let signedReveals: Array<ReturnType<typeof finalizeEvent>> = [];
+    const buildSignedVotes = (selected: readonly { idx: number; nostrPubkey: string }[]): void => {
+      signedCommits = selected.map((j) => {
+        const salt = randomBytes(16).toString('hex');
+        const template = buildVoteCommitEvent({
+          disputeId,
+          jurorIdx: j.idx,
+          commitHash: hashCommit('NO', salt),
+        });
+        return { jurorIdx: j.idx, salt, event: finalizeEvent(template, keyByPubkey.get(j.nostrPubkey)!.seckey) };
+      });
+      signedReveals = signedCommits.map((c) => {
+        const key = keyByPubkey.get(selected.find((j) => j.idx === c.jurorIdx)!.nostrPubkey)!;
+        const template = buildVoteRevealEvent({
+          disputeId,
+          jurorIdx: c.jurorIdx,
+          outcome: 'NO',
+          salt: c.salt,
+        });
+        return finalizeEvent(template, key.seckey);
+      });
+    };
+
+    const fakeRelayPool: FrostRelayPool = {
+      publish: () => [Promise.resolve()],
+      querySync: async (_relayUrls, filter) => {
+        const kinds = filter.kinds ?? [];
+        if (kinds.includes(39004)) return signedCommits.map((c) => c.event);
+        if (kinds.includes(39014)) return signedReveals;
+        return [];
+      },
+    };
+
+    const coordinator = createFrostAppealCoordinator({
+      relayUrls: ['wss://fake.example'],
+      relayPool: fakeRelayPool,
+      environment: 'test',
+      // Explicitly disable the test-only fabrication: this coordinator must
+      // collect signed events only.
+      simulateVotes: false,
+      timings: TEST_APPEAL_TIMINGS,
+      jurySize: 3,
+      backupCount: 1,
+      signer: async (event) => finalizeEvent(event, randomBytes(32)) as unknown as ReturnType<typeof finalizeEvent>,
+    });
+
+    const appeal: FrostAppealState = {
+      disputeId,
+      marketId,
+      // The challenger CLAIMS 'YES'; the signed jury reveals say 'NO'.
+      disputeCase: {
+        disputeId,
+        marketId,
+        challengerPubkey: randomBytes(32).toString('hex'),
+        respondentPubkey: randomBytes(32).toString('hex'),
+        evidenceHashes: [],
+        proposedOutcome: 'YES',
+      },
+      resolutionTimestamp: Math.floor(Date.now() / 1000) - 10_000,
+      phase: 'pending',
+      candidacies: new Map(),
+      voteCommits: new Map(),
+      voteReveals: new Map(),
+      selectionAttempts: 0,
+      excludedSelectedPubkeys: [],
+      reselectionDeadline: Math.floor(Date.now() / 1000) + 10_000,
+    };
+    for (const k of jurorKeys) appeal.candidacies.set(k.pubkey, k.juror);
+    coordinator.addAppeal(appeal);
+
+    // pending -> opt_in -> selection -> dkg -> vote_commit
+    for (let i = 0; i < 4; i++) {
+      await coordinator.tick();
+    }
+    const selected = coordinator.getActiveAppeals()[0]!.selectedJurors!;
+    expect(coordinator.getActiveAppeals()[0]!.phase).toBe('vote_commit');
+    expect(selected).toHaveLength(3);
+    buildSignedVotes(selected);
+
+    for (let i = 0; i < 8; i++) {
+      await coordinator.tick();
+    }
+
+    const active = coordinator.getActiveAppeals()[0]!;
+    expect(active.phase).toBe('settled');
+    expect(active.verdictOutcome).toBe('NO');
+    expect(active.attestation?.outcome).toBe('NO');
+
+    // The verdict commitment is built from the real Kind 39014 event ids,
+    // not the synthetic simulation ids.
+    const realRevealIds = new Set(signedReveals.map((e) => e.id));
+    expect(active.verdictSupportingEventIds).toHaveLength(3);
+    for (const id of active.verdictSupportingEventIds!) {
+      expect(realRevealIds.has(id)).toBe(true);
+    }
+
+    coordinator.stop();
   });
 
   it('detects a published FROST dispute event and starts tracking it', async () => {
@@ -266,17 +383,33 @@ describe('FrostAppealCoordinator', () => {
 
   it('can be settled by an external attestation without a single facilitator', async () => {
     const signerPrivkey = randomBytes(32);
+    const marketId = randomBytes(32).toString('hex');
+    const disputeId = randomBytes(32).toString('hex');
+
+    // Real threshold attestation for this exact dispute/market/outcome, so
+    // settleAppeal's own validation (message binding + Schnorr verification)
+    // accepts it - a forged object must now be rejected.
+    const { record, shares } = generateFrostKeys({
+      marketId,
+      disputeId,
+      threshold: 2,
+      jurors: [
+        { ...makeJuror(), idx: 1, priority: 1 },
+        { ...makeJuror(), idx: 2, priority: 2 },
+      ],
+    });
+
     const coordinator = createFrostAppealCoordinator({
       relayUrls: [],
       environment: 'test',
       timings: TEST_APPEAL_TIMINGS,
       jurySize: 5,
       backupCount: 2,
+      // This appeal carries no local DKG record, so the external group key
+      // must be explicitly empaneled or settlement fails closed.
+      empaneledGroupKeys: [record.groupPubkeyXOnly],
       signer: async (event) => finalizeEvent(event, signerPrivkey) as unknown as ReturnType<typeof finalizeEvent>,
     });
-
-    const marketId = randomBytes(32).toString('hex');
-    const disputeId = randomBytes(32).toString('hex');
 
     const disputeCase = {
       disputeId,
@@ -309,15 +442,6 @@ describe('FrostAppealCoordinator', () => {
     // Real threshold attestation for this exact dispute/market/outcome, so
     // settleAppeal's own validation (message binding + Schnorr verification)
     // accepts it — a forged object must now be rejected.
-    const { record, shares } = generateFrostKeys({
-      marketId,
-      disputeId,
-      threshold: 2,
-      jurors: [
-        { ...makeJuror(), idx: 1, priority: 1 },
-        { ...makeJuror(), idx: 2, priority: 2 },
-      ],
-    });
     // The attestation must certify the TALLY that produced the outcome —
     // settleAppeal rejects dispute attestations without a verdict commitment.
     const supportingEventIds = [1, 2].map((idx) =>
@@ -372,6 +496,78 @@ describe('FrostAppealCoordinator', () => {
 
     coordinator.stop();
     off();
+  });
+
+  it('rejects settlement under a group key that is neither local nor empaneled', () => {
+    const marketId = randomBytes(32).toString('hex');
+    const disputeId = randomBytes(32).toString('hex');
+    const { record, shares } = generateFrostKeys({
+      marketId,
+      disputeId,
+      threshold: 2,
+      jurors: [
+        { ...makeJuror(), idx: 1, priority: 1 },
+        { ...makeJuror(), idx: 2, priority: 2 },
+      ],
+    });
+
+    // No dkgRecord on the appeal and no allow-list on the coordinator: the
+    // external attestation is cryptographically valid but unpinned.
+    const coordinator = createFrostAppealCoordinator({
+      relayUrls: [],
+      environment: 'test',
+      timings: TEST_APPEAL_TIMINGS,
+      jurySize: 5,
+      backupCount: 2,
+      signer: async (event) => finalizeEvent(event, randomBytes(32)) as unknown as ReturnType<typeof finalizeEvent>,
+    });
+
+    const appeal: FrostAppealState = {
+      disputeId,
+      marketId,
+      disputeCase: {
+        disputeId,
+        marketId,
+        challengerPubkey: randomBytes(32).toString('hex'),
+        respondentPubkey: randomBytes(32).toString('hex'),
+        evidenceHashes: [],
+        proposedOutcome: 'NO',
+      },
+      resolutionTimestamp: Math.floor(Date.now() / 1000) - 10_000,
+      phase: 'signing',
+      candidacies: new Map(),
+      voteCommits: new Map(),
+      voteReveals: new Map(),
+      selectionAttempts: 0,
+      excludedSelectedPubkeys: [],
+      reselectionDeadline: Math.floor(Date.now() / 1000) + 10_000,
+    };
+    coordinator.addAppeal(appeal);
+
+    const supportingEventIds = [1, 2].map((idx) =>
+      deriveSimulatedRevealEventId(idx, 'NO', 'salt-' + idx),
+    );
+    const verdictHash = hashDisputeVerdict({ disputeId, outcome: 'NO', supportingEventIds });
+    const attestation = runNormalSigningRound({
+      marketId,
+      outcome: 'NO',
+      round: 1,
+      disputeEventId: disputeId,
+      verdictHash,
+      dkg: record,
+      shares,
+    });
+
+    const rejected: string[] = [];
+    coordinator.onEvent((ev) => {
+      if (ev.type === 'settlement_rejected') rejected.push(String(ev.data.reason));
+    });
+
+    expect(coordinator.settleAppeal(disputeId, attestation)).toBe(false);
+    expect(rejected).toContain('unpinned_group_key');
+    expect(coordinator.getActiveAppeals()[0]?.phase).toBe('signing');
+
+    coordinator.stop();
   });
 
   it('moves to refund and releases backup stakes when reselection is exhausted', async () => {
