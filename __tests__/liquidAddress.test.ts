@@ -139,7 +139,7 @@ const oracle = bytesToHex(schnorr.getPublicKey(hexToBytes('22'.repeat(32))));
 
 describe('court → spend branch integration', () => {
   it('builds the judge-path release for a dispute and derives its address', () => {
-    const { judgeLeaf, refundLeaf } = buildTaprootLeaves({ winnerXOnly: winner, oracleXOnly: oracle, refundLocktime: 5_000_000 });
+    const { judgeLeaf, refundLeaf } = buildTaprootLeaves({ winnerXOnly: winner, oracleXOnly: oracle, funderXOnly: winner, refundLocktime: 5_000_000 });
     const root = tapMerkleRoot([judgeLeaf, refundLeaf]);
     const addr = taprootAddress(oracle, root, BAO_SIGNET);
     expect(judgeLeaf).toContain(`20${winner}ad20${oracle}ac`);

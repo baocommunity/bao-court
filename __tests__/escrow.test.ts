@@ -15,6 +15,8 @@ import {
   createBondOwnershipChallenge,
   signBondOwnershipProof,
   verifyBondOwnershipProof,
+  bondScriptXOnlyPubkey,
+  verifyBondOwnershipForScript,
   EscrowLedger,
   type RedistributionParams,
 } from '../escrow';
@@ -272,6 +274,65 @@ describe('bond ownership proof', () => {
   it('returns false for garbage inputs instead of throwing', () => {
     expect(verifyBondOwnershipProof('zz', 'zz', 'zz')).toBe(false);
     expect(verifyBondOwnershipProof('', '', '')).toBe(false);
+  });
+});
+
+// ── Bond ownership bound to the COURT-DERIVED script (F1 residual) ──────────
+
+describe('bond ownership vs court-derived script', () => {
+  const seckey = '0a'.repeat(32);
+  const xonly = Buffer.from(schnorr.getPublicKey(Buffer.from(seckey, 'hex'))).toString('hex');
+  const p2pk = '21' + '02' + xonly + 'ac';
+  const p2tr = '5120' + xonly;
+  const base = { bondTxid: 'ab'.repeat(32), bondVout: 0, disputeId: 'd'.repeat(64), jurorPubkey: 'ee'.repeat(32) };
+
+  it('extracts the x-only key from supported scripts and rejects everything else', () => {
+    expect(bondScriptXOnlyPubkey(p2pk)).toBe(xonly);
+    expect(bondScriptXOnlyPubkey(p2pk.toUpperCase())).toBe(xonly);
+    expect(bondScriptXOnlyPubkey(p2tr)).toBe(xonly);
+    expect(bondScriptXOnlyPubkey('0014' + '11'.repeat(20))).toBeNull(); // P2WPKH not supported
+    expect(bondScriptXOnlyPubkey('5121' + xonly + '00')).toBeNull(); // malformed P2TR
+    expect(bondScriptXOnlyPubkey('not-hex')).toBeNull();
+    expect(bondScriptXOnlyPubkey('')).toBeNull();
+  });
+
+  it('accepts a proof made by the key the script pays', () => {
+    const proof = {
+      challengeNonce: 'nonce-1',
+      signature: signBondOwnershipProof(seckey, createBondOwnershipChallenge({ ...base, challengeNonce: 'nonce-1' })),
+    };
+    expect(verifyBondOwnershipForScript(p2pk, base, proof).valid).toBe(true);
+    expect(verifyBondOwnershipForScript(p2tr, base, proof).valid).toBe(true);
+  });
+
+  it('rejects proofs bound to another dispute, juror, output, or nonce', () => {
+    const makeProof = (over: Partial<typeof base> & { challengeNonce?: string } = {}) => ({
+      challengeNonce: over.challengeNonce ?? 'nonce-1',
+      signature: signBondOwnershipProof(
+        seckey,
+        createBondOwnershipChallenge({ ...base, ...over, challengeNonce: over.challengeNonce ?? 'nonce-1' }),
+      ),
+    });
+    expect(verifyBondOwnershipForScript(p2pk, base, makeProof({ disputeId: 'other' })).valid).toBe(false);
+    expect(verifyBondOwnershipForScript(p2pk, base, makeProof({ jurorPubkey: 'ff'.repeat(32) })).valid).toBe(false);
+    expect(verifyBondOwnershipForScript(p2pk, base, makeProof({ bondVout: 1 })).valid).toBe(false);
+    expect(verifyBondOwnershipForScript(p2pk, base, { ...makeProof(), challengeNonce: 'nonce-2' }).valid).toBe(false);
+  });
+
+  it('rejects a signature from a different key and unsupported scripts', () => {
+    const otherKey = '0b'.repeat(32);
+    const otherSig = signBondOwnershipProof(
+      otherKey,
+      createBondOwnershipChallenge({ ...base, challengeNonce: 'nonce-1' }),
+    );
+    expect(
+      verifyBondOwnershipForScript(p2pk, base, { challengeNonce: 'nonce-1', signature: otherSig }).valid,
+    ).toBe(false);
+    const validProof = {
+      challengeNonce: 'nonce-1',
+      signature: signBondOwnershipProof(seckey, createBondOwnershipChallenge({ ...base, challengeNonce: 'nonce-1' })),
+    };
+    expect(verifyBondOwnershipForScript('0014' + '11'.repeat(20), base, validProof).valid).toBe(false);
   });
 });
 

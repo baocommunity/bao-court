@@ -43,6 +43,7 @@ import { createCommitments, createRevealsAndPartialSigs, aggregateAttestation, c
 import { hashCommit, tallyVotes, deriveSimulatedRevealEventId } from './dispute';
 import { hashDisputeVerdict } from './courtVoteMachine';
 import { verifyBond, type BondVerifier } from './bondVerification';
+import { verifyBondOwnershipForScript } from './escrow';
 import { buildAttestationMessage } from './crypto';
 import { verifyRawSignature } from './validator';
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -147,6 +148,19 @@ export interface FrostAppealCoordinatorConfig {
   /** Optional UTXO verifier used to confirm on-chain bond funding. */
   readonly bondVerifier?: BondVerifier;
   /**
+   * Court-derived scriptPubKey the claimed bond UTXO must pay (derived from
+   * the configured escrow address). REQUIRED whenever a bondVerifier is wired
+   * or environment is 'prod': without it the only available expectation is the
+   * candidate's own claim, which makes bond verification circular.
+   */
+  readonly expectedStakeScriptPubKey?: string;
+  /**
+   * Require each candidacy to prove control of the bond output's key via a
+   * signed challenge (txid/vout/dispute/candidate bound). Defaults to true;
+   * set false only for legacy fixtures that predate the proof.
+   */
+  readonly requireBondOwnership?: boolean;
+  /**
    * Optional 32-byte hex block hash used as the jury-selection seed input.
    * Defaults to a CSPRNG draw; deployments with a real confirmed block hash
    * (see AppealTimings.seedBlockConfirmations) should supply it so the
@@ -224,31 +238,60 @@ export function createFrostAppealCoordinator(
   // from the selected roster.
   const simulateVotes = config.simulateVotes ?? config.environment === 'test';
   const empaneledGroupKeys = config.empaneledGroupKeys ?? [];
-  async function defaultVerifyStakeCommitment(commitment: StakeCommitment): Promise<boolean> {
-    if (commitment.amountSats < minStakeSats || commitment.bondAddress.length === 0) return false;
+  // Ownership is required by default: with a bond verifier wired, an unproven
+  // script match only shows SOMEONE paid the court script. Legacy test
+  // fixtures can opt out explicitly.
+  const requireBondOwnership = config.requireBondOwnership ?? true;
+  async function defaultVerifyStakeCommitment(
+    commitment: StakeCommitment,
+    context: { disputeId: string; jurorPubkey: string },
+  ): Promise<{ ok: boolean; verifiedAmountSats: number | null }> {
+    if (commitment.amountSats < minStakeSats || commitment.bondAddress.length === 0) {
+      return { ok: false, verifiedAmountSats: null };
+    }
     const hasEvidence = Boolean(commitment.scriptPubKey && commitment.bondTxid && commitment.bondVout !== undefined);
     if (!hasEvidence) {
       // Fail closed where a bond can actually be verified: an assertion of
       // on-chain funding without evidence must not admit a juror when a bond
       // verifier is wired (or in prod). Demo/test without a verifier has no
       // on-chain claim to assert, so it stays permissive — but never prod.
-      if (config.bondVerifier || config.environment === 'prod') return false;
-      return true;
+      if (config.bondVerifier || config.environment === 'prod') return { ok: false, verifiedAmountSats: null };
+      return { ok: true, verifiedAmountSats: null };
     }
-    if (!config.bondVerifier) return false;
+    if (!config.bondVerifier) return { ok: false, verifiedAmountSats: null };
+    // The destination binding MUST be court-derived. Previously the
+    // candidate's own claimed scriptPubKey was passed as the expectation,
+    // which only ever confirmed the candidate's assertion (circular).
+    const expectedScript = config.expectedStakeScriptPubKey;
+    if (!expectedScript) return { ok: false, verifiedAmountSats: null };
     const result = await verifyBond({
       commitment,
-      expectedScriptPubKey: commitment.scriptPubKey,
+      expectedScriptPubKey: expectedScript,
       minAmountSats: minStakeSats,
       verifier: config.bondVerifier,
     });
-    // TODO(court): the claimed UTXO's scriptPubKey is self-attested and there
-    // is still no proof the candidate OWNS the output (a challenge signature
-    // over bondTxid/bondVout with the UTXO key). Add an ownership proof to the
-    // candidacy protocol before any mainnet deployment.
-    return result.valid;
+    if (!result.valid) return { ok: false, verifiedAmountSats: null };
+    // A script match alone does not prove the candidate CONTROLS the output:
+    // without this, a candidate can name any UTXO that happens to pay the
+    // court script. The challenge binds txid/vout/dispute/candidate and the
+    // signature must come from the key the script pays.
+    if (requireBondOwnership) {
+      const proof = commitment.ownershipProof;
+      if (!proof) return { ok: false, verifiedAmountSats: null };
+      const ownership = verifyBondOwnershipForScript(
+        expectedScript,
+        {
+          bondTxid: commitment.bondTxid!,
+          bondVout: commitment.bondVout!,
+          disputeId: context.disputeId,
+          jurorPubkey: context.jurorPubkey,
+        },
+        proof,
+      );
+      if (!ownership.valid) return { ok: false, verifiedAmountSats: null };
+    }
+    return { ok: true, verifiedAmountSats: result.utxo?.amountSats ?? null };
   }
-  const verifyStakeCommitment = config.verifyStakeCommitment ?? defaultVerifyStakeCommitment;
 
   function emit(
     type: string,
@@ -382,23 +425,44 @@ export function createFrostAppealCoordinator(
         const events = await fetchRelayEvents([KIND_JUROR_CANDIDACY], {
           '#dispute': [appeal.disputeId],
         });
+        // One locked bond UTXO backs at most one candidacy per dispute, and
+        // an already-admitted pubkey is never re-admitted on a later tick.
+        const admittedBondKeys = new Set<string>();
+        for (const existing of appeal.candidacies.values()) {
+          const c = existing.stakeCommitment;
+          if (c.bondTxid && c.bondVout !== undefined) admittedBondKeys.add(`${c.bondTxid}:${c.bondVout}`);
+        }
         for (const event of events) {
+          if (appeal.candidacies.has(event.pubkey)) continue;
           const profile = parseJurorCandidacyEvent(event);
           if (!profile) {
             continue;
           }
-          const valid = await verifyStakeCommitment(profile.stakeCommitment);
-          if (!valid) {
+          const bondKey =
+            profile.stakeCommitment.bondTxid && profile.stakeCommitment.bondVout !== undefined
+              ? `${profile.stakeCommitment.bondTxid}:${profile.stakeCommitment.bondVout}`
+              : null;
+          if (bondKey && admittedBondKeys.has(bondKey)) continue;
+          const check = config.verifyStakeCommitment
+            ? { ok: await config.verifyStakeCommitment(profile.stakeCommitment), verifiedAmountSats: null }
+            : await defaultVerifyStakeCommitment(profile.stakeCommitment, {
+                disputeId: appeal.disputeId,
+                jurorPubkey: event.pubkey,
+              });
+          if (!check.ok) {
             continue;
           }
+          if (bondKey) admittedBondKeys.add(bondKey);
           // The coordinator is the admission authority: a candidate whose stake
           // commitment passed verification is admitted with a confirmed status
           // for jury selection (parseJurorCandidacyEvent no longer fabricates
           // confirmation itself). In prod, verification requires on-chain
           // evidence; in demo/test without a verifier it is the configured
-          // acceptance policy.
+          // acceptance policy. Selection weight must come from VERIFIED stake,
+          // never the candidate's self-attested capacity.
           appeal.candidacies.set(event.pubkey, {
             ...profile,
+            stakeCapacitySats: check.verifiedAmountSats ?? profile.stakeCapacitySats,
             stakeCommitment: {
               ...profile.stakeCommitment,
               status: 'confirmed',

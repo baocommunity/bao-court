@@ -9,7 +9,44 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
-## [Unreleased]
+## [0.7.2] — 2026-09-30
+
+### Fixed
+- **Liquid CLTV refunds pay the funder, with minimal tapscript locktimes.**
+  `buildTaprootLeaves` takes a required `funderXOnly` and the refund leaf is
+  `<locktime> OP_CLTV OP_DROP <funder> OP_CHECKSIG` — the depositor's key,
+  never the oracle's (previously the oracle could reclaim a refunded bond).
+  `locktimeToPush` now emits the MINIMAL signed script-number push required
+  by BIP-342 (trailing 0x00 bytes are rejected; a high-bit 4-byte value gets
+  the positive 5-byte form), so OP_CLTV accepts the argument at spend time.
+  Taproot vectors regenerated (leaf lengths, merkle roots, output keys,
+  addresses, control-block parity).
+- **LN hold settlement binds every hold to its plan.** `planDecisionsForHolds`
+  rejects (throws) a hold whose payment hash does not match its own witness or
+  whose amount does not match the plan stake, leaves holds from another
+  dispute/round unsettled, and matches bond holds by `plan.disputerPubkey` —
+  a foreign "disputer" hold can no longer inherit this plan's bond outcome.
+- **Bond admission verifies ownership against the court-derived script.**
+  `bondScriptXOnlyPubkey` / `verifyBondOwnershipForScript` bind a candidacy's
+  signed challenge (txid/vout/dispute/candidate + nonce) to the P2PK/P2TR
+  bond script. The coordinator requires `expectedStakeScriptPubKey` whenever a
+  bond verifier is wired, enforces `requireBondOwnership` (default true), one
+  locked UTXO per candidacy per dispute, and takes selection weight from the
+  VERIFIED stake amount. `verifyBond` fails closed when given an
+  `expectedAddress` without a derived `expectedScriptPubKey`.
+- **Candidacies carry an optional bond-ownership proof.** Kind 39001 parsing
+  reads `ownershipNonce` / `ownershipSig` tags into
+  `StakeCommitment.ownershipProof` (`BondOwnershipProof`).
+
+### Breaking
+- `TaprootEscrowParams` gains required `funderXOnly`.
+- `FrostAppealCoordinatorConfig` gains `expectedStakeScriptPubKey` and
+  `requireBondOwnership`. With a `bondVerifier` wired, admission now also
+  requires the court-derived script and (by default) an ownership proof; the
+  weight used for selection comes from the verified UTXO amount.
+- `FrostAppealCoordinatorConfig.verifyStakeCommitment` stays a boolean hook.
+
+## [0.7.1] — 2026-09-26
 
 ### Fixed
 - **DKG shares are bound to the NIP-59 envelope author.**

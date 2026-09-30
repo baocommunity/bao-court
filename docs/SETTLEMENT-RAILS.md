@@ -61,8 +61,10 @@ choosing which branch to sign (ADR-001 negative).
 - `buildMultisigScript({pubkeys, threshold})` — P2WSH M-of-N `CHECKMULTISIG`
   with the leading `OP_FALSE` (script bug), 1..15 pubkeys, compressed or
   x-only input (x-only lifted to compressed with correct parity).
-- `buildTaprootLeaves({winner, oracle, refundLocktime})` — judge leaf
-  `<winner> CHECKSIGVERIFY <oracle> CHECKSIG` and a CLTV refund leaf.
+- `buildTaprootLeaves({winner, oracle, funder, refundLocktime})` — judge leaf
+  `<winner> CHECKSIGVERIFY <oracle> CHECKSIG` and a CLTV refund leaf
+  `<refundLocktime> OP_CLTV OP_DROP <funder> CHECKSIG` (the depositor's key,
+  never the oracle; locktime is the minimal signed script-number push).
 - `p2wshAddress(script, net)` / `taprootAddress(pubkey, merkleRoot, net)` —
   bech32 (v0) / bech32m (v1) addresses. BIP-173/BIP-350 compliant; verified
   against the official vectors. The witness version is a 5-bit word prepended

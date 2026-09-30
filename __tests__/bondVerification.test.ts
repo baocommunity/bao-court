@@ -100,6 +100,66 @@ describe('bondVerification', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toContain('confirmations');
   });
+
+  it('fails closed when expectedAddress is passed without expectedScriptPubKey', async () => {
+    const verifier: BondVerifier = {
+      async getUtxo(txid, vout) {
+        return {
+          txid,
+          vout,
+          amountSats: 1_000_000,
+          scriptPubKey: 'script',
+          confirmations: 6,
+          status: 'confirmed',
+        };
+      },
+    };
+
+    const result = await verifyBond({
+      commitment: {
+        amountSats: 1_000_000,
+        bondAddress: 'bc1q',
+        bondTxid: 'txid',
+        bondVout: 0,
+        status: 'confirmed',
+      },
+      expectedAddress: 'bc1qaddress',
+      verifier,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('expectedScriptPubKey');
+  });
+
+  it('accepts expectedAddress when the derived script is supplied alongside it', async () => {
+    const verifier: BondVerifier = {
+      async getUtxo(txid, vout) {
+        return {
+          txid,
+          vout,
+          amountSats: 1_000_000,
+          scriptPubKey: 'script',
+          confirmations: 6,
+          status: 'confirmed',
+        };
+      },
+    };
+
+    const result = await verifyBond({
+      commitment: {
+        amountSats: 1_000_000,
+        bondAddress: 'bc1q',
+        bondTxid: 'txid',
+        bondVout: 0,
+        status: 'confirmed',
+      },
+      expectedAddress: 'bc1qaddress',
+      expectedScriptPubKey: 'script',
+      verifier,
+    });
+
+    expect(result.valid).toBe(true);
+  });
 });
 
 

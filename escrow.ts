@@ -360,6 +360,48 @@ export function verifyBondOwnershipProof(
   }
 }
 
+/**
+ * Extract the x-only public key a bond output must be spendable by. Supports
+ * the two stateless forms BAO bonds use:
+ *   P2PK:  <33-byte compressed pubkey> OP_CHECKSIG  → "21<key>ac"
+ *   P2TR:  OP_1 OP_PUSH32 <32-byte x-only>          → "5120<xonly>"
+ * Returns null for every other script form so ownership can never be
+ * asserted for a script this package does not understand.
+ */
+export function bondScriptXOnlyPubkey(scriptPubKeyHex: string): string | null {
+  const script = scriptPubKeyHex.trim().toLowerCase();
+  if (!/^[0-9a-f]+$/.test(script)) return null;
+  if (/^21[0-9a-f]{66}ac$/.test(script)) {
+    const compressed = script.slice(2, 68);
+    if (compressed.slice(0, 2) !== '02' && compressed.slice(0, 2) !== '03') return null;
+    return compressed.slice(2);
+  }
+  if (/^5120[0-9a-f]{64}$/.test(script)) return script.slice(4);
+  return null;
+}
+
+/**
+ * Verify a candidacy's bond-ownership proof against the COURT-DERIVED bond
+ * script: the challenge binds txid/vout/dispute/candidate and the signature
+ * must be made by the key the script actually pays. Fails closed when the
+ * script form is unsupported or the signature does not match.
+ */
+export function verifyBondOwnershipForScript(
+  scriptPubKeyHex: string,
+  challengeInput: Omit<BondOwnershipChallengeInput, 'challengeNonce'>,
+  proof: { readonly challengeNonce: string; readonly signature: string },
+): { valid: boolean; error?: string } {
+  const xonly = bondScriptXOnlyPubkey(scriptPubKeyHex);
+  if (!xonly) return { valid: false, error: 'bond script is not a supported ownership form' };
+  const challenge = createBondOwnershipChallenge({
+    ...challengeInput,
+    challengeNonce: proof.challengeNonce,
+  });
+  return verifyBondOwnershipProof(xonly, challenge, proof.signature)
+    ? { valid: true }
+    : { valid: false, error: 'bond ownership signature does not match the bond script' };
+}
+
 // ── Escrow ledger state machine (deterministic, serializable) ────────────────
 
 export interface EscrowLedgerSnapshot {

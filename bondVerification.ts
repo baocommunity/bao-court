@@ -69,9 +69,15 @@ export async function verifyBond(
   }
 
   // Address-based verification is verifier-specific; by default we only check
-  // scriptPubKey when provided. Callers can derive the expected script from the
-  // escrow address and pass it in.
-  void expectedAddress;
+  // scriptPubKey when provided. Callers must derive the expected script from
+  // the escrow address and pass it in — an ignored address expectation is
+  // worse than none, so passing only an address fails closed.
+  if (expectedAddress && !expectedScriptPubKey) {
+    return {
+      valid: false,
+      error: 'expectedAddress requires expectedScriptPubKey (derive the script from the escrow address first)',
+    };
+  }
 
   return { valid: true, utxo };
 }

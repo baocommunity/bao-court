@@ -431,6 +431,8 @@ export {
   createBondOwnershipChallenge,
   signBondOwnershipProof,
   verifyBondOwnershipProof,
+  bondScriptXOnlyPubkey,
+  verifyBondOwnershipForScript,
   EscrowLedger,
   BOND_OWNERSHIP_DOMAIN,
   type EscrowStatus,
