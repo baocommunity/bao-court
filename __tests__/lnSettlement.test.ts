@@ -226,6 +226,76 @@ describe('planDecisionsForHolds', () => {
     expect(unsettled).toContain('dispute1|juror|j9|1');
     expect(unsettled).not.toContain('dispute1|juror|j1|1');
   });
+
+  it('never decides a hold from another dispute or round (plan binding)', () => {
+    // A coherent juror hold from a DIFFERENT dispute/round must not inherit
+    // this plan's decision: the redistribution records are per-participant,
+    // so an out-of-scope hold would otherwise settle against the wrong plan.
+    const otherDispute = constructHoldOffer({
+      disputeId: 'dispute2',
+      role: 'juror',
+      pubkey: 'j1',
+      outcome: 'YES',
+      attestationDigest: 'aa'.repeat(32),
+      round: 1,
+      amountSats: 10_000,
+      expiresAt: 2_000_000_000,
+    });
+    const otherRound = constructHoldOffer({
+      disputeId: 'dispute1',
+      role: 'juror',
+      pubkey: 'j1',
+      outcome: 'YES',
+      attestationDigest: 'aa'.repeat(32),
+      round: 2,
+      amountSats: 10_000,
+      expiresAt: 2_000_000_000,
+    });
+    const { decisions, unsettled } = planDecisionsForHolds(plan(true), [otherDispute, otherRound]);
+    expect(decisions[otherDispute.id]).toBeUndefined();
+    expect(decisions[otherRound.id]).toBeUndefined();
+    expect(unsettled).toContain(otherDispute.id);
+    expect(unsettled).toContain(otherRound.id);
+  });
+
+  it('matches bond holds by disputerPubkey - a foreign disputer hold is unsettled', () => {
+    const foreign = bondHold('attacker');
+    const { decisions, unsettled } = planDecisionsForHolds(plan(true), [foreign]);
+    expect(decisions[foreign.id]).toBeUndefined();
+    expect(unsettled).toContain(foreign.id);
+  });
+
+  it('rejects a hold whose amount disagrees with the plan stake', () => {
+    const tampered = constructHoldOffer({
+      disputeId: 'dispute1',
+      role: 'juror',
+      pubkey: 'j1',
+      outcome: 'YES',
+      attestationDigest: 'aa'.repeat(32),
+      round: 1,
+      amountSats: 9_999, // plan stake is 10_000
+      expiresAt: 2_000_000_000,
+    });
+    expect(() => planDecisionsForHolds(plan(true), [tampered])).toThrow(/amount 9999 does not match/);
+  });
+
+  it('rejects a hold whose payment hash does not match its witness', () => {
+    const valid = holdFor('j1');
+    const tampered = { ...valid, paymentHash: 'ff'.repeat(32) };
+    expect(() => planDecisionsForHolds(plan(true), [tampered])).toThrow(/payment hash does not match/);
+  });
+
+  it('falls back to bondOutcome only for the plan disputer when its record is absent', () => {
+    const base = plan(true);
+    const withoutDisputer = {
+      ...base,
+      redistributions: base.redistributions.filter((r) => r.pubkey !== 'disputer'),
+    };
+    const upheld = planDecisionsForHolds(withoutDisputer, [bondHold('disputer')]);
+    expect(upheld.decisions['dispute1|disputer|disputer|1']).toBe('settle');
+    const rejected = planDecisionsForHolds({ ...withoutDisputer, bondOutcome: 'forfeited' }, [bondHold('disputer')]);
+    expect(rejected.decisions['dispute1|disputer|disputer|1']).toBe('cancel');
+  });
 });
 
 // ── Audit event templates ───────────────────────────────────────────────────

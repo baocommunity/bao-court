@@ -14,6 +14,7 @@ import {
   buildReleaseSkeleton,
   assembleMultisigWitness,
   assertScriptSane,
+  locktimeToPush,
   BAO_SIGNET,
   pushHex,
 } from '../liquidEscrow';
@@ -23,6 +24,7 @@ const PK_B = `02${'bb'.repeat(32)}`;
 const PK_C = `03${'cc'.repeat(32)}`;
 const X_A = 'aa'.repeat(32);
 const X_B = 'bb'.repeat(32);
+const X_C = 'cc'.repeat(32);
 
 // ── Script construction ─────────────────────────────────────────────────────
 
@@ -64,15 +66,17 @@ describe('buildTaprootLeaves', () => {
     const { judgeLeaf, refundLeaf } = buildTaprootLeaves({
       winnerXOnly: X_A,
       oracleXOnly: X_B,
+      funderXOnly: X_C,
       refundLocktime: 1_234_567,
     });
     // judge: push32 winner CHECKSIGVERIFY push32 oracle CHECKSIG
     expect(judgeLeaf.startsWith('20' + X_A + 'ad')).toBe(true);
     expect(judgeLeaf.endsWith('ac')).toBe(true);
     expect(bytesToHex(pushHex(X_B))).toBe(`20${X_B}`);
-    // refund: locktime push (CLTV) drop + oracle checksig
+    // refund: locktime push (CLTV) drop + FUNDER checksig (never the oracle)
     expect(refundLeaf).toContain('b175'); // OP_CLTV OP_DROP
-    expect(refundLeaf.endsWith('ac')).toBe(true);
+    expect(refundLeaf.endsWith(`20${X_C}ac`)).toBe(true);
+    expect(refundLeaf).not.toContain(X_B);
   });
 });
 
@@ -100,7 +104,7 @@ describe('p2wshProgram / p2wshAddress (known vector)', () => {
 describe('taproot helpers (merkle root + address)', () => {
   it('computes a deterministic merkle root', () => {
     const { judgeLeaf, refundLeaf } = buildTaprootLeaves({
-      winnerXOnly: X_A, oracleXOnly: X_B, refundLocktime: 1_000_000,
+      winnerXOnly: X_A, oracleXOnly: X_B, funderXOnly: X_C, refundLocktime: 1_000_000,
     });
     const root1 = tapMerkleRoot([judgeLeaf, refundLeaf]);
     const root2 = tapMerkleRoot([judgeLeaf, refundLeaf]);
@@ -197,23 +201,36 @@ describe('locktime push encoding', () => {
   it('encodes time-based locktimes (>= 0x80000000) as a positive 5-byte push', () => {
     // Script numbers are SIGNED little-endian: a 4-byte push of 0x80000001
     // would be negative and OP_CHECKLOCKTIMEVERIFY would always fail. The
-    // 5-byte form (leading 0x00) keeps the 32-bit value positive.
+    // 5-byte form (trailing 0x00) keeps the 32-bit value positive.
     const { refundLeaf } = buildTaprootLeaves({
       winnerXOnly: X_A,
       oracleXOnly: X_B,
+      funderXOnly: X_C,
       refundLocktime: 0x80000001,
     });
-    // 0x05 <5-byte LE 00 01 00 00 80> OP_CLTV OP_DROP ...
-    expect(refundLeaf.slice(0, 16)).toBe('050001000080b175');
+    // 0x05 <5-byte LE 01 00 00 80 00> OP_CLTV OP_DROP ...
+    expect(refundLeaf.slice(0, 16)).toBe('050100008000b175');
   });
 
-  it('keeps 4-byte encoding for block-height locktimes', () => {
+  it('uses MINIMAL encoding for block-height locktimes (no trailing zero byte)', () => {
     const { refundLeaf } = buildTaprootLeaves({
       winnerXOnly: X_A,
       oracleXOnly: X_B,
+      funderXOnly: X_C,
       refundLocktime: 1_000_000,
     });
-    // 0x04 <4-byte LE 40 42 0f 00> OP_CLTV OP_DROP ...
-    expect(refundLeaf.slice(0, 14)).toBe('0440420f00b175');
+    // 1_000_000 = 0x0f4240 → minimal LE 40 42 0f (3 bytes), NOT 40 42 0f 00.
+    // Tapscript (BIP-342) rejects non-minimal OP_CLTV arguments.
+    expect(refundLeaf.slice(0, 12)).toBe('0340420fb175');
+  });
+
+  it('matches hand-computed minimal script-number encodings', () => {
+    expect(bytesToHex(locktimeToPush(0))).toBe('00');
+    expect(bytesToHex(locktimeToPush(1))).toBe('0101');
+    expect(bytesToHex(locktimeToPush(500))).toBe('02f401');
+    expect(bytesToHex(locktimeToPush(0x7fffff))).toBe('03ffff7f');
+    expect(bytesToHex(locktimeToPush(0x800000))).toBe('0400008000');
+    expect(bytesToHex(locktimeToPush(0x80000000))).toBe('050000008000');
+    expect(bytesToHex(locktimeToPush(0xffffffff))).toBe('05ffffffff00');
   });
 });

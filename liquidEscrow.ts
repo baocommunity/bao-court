@@ -138,6 +138,9 @@ export interface TaprootEscrowParams {
   readonly winnerXOnly: string;
   /** Judge/oracle pubkey (32-byte x-only hex). */
   readonly oracleXOnly: string;
+  /** Funder/refund pubkey (32-byte x-only hex): the ONLY key that can spend
+   *  the CLTV refund leaf. Must be the depositor's key, never the oracle. */
+  readonly funderXOnly: string;
   /** Absolute locktime (block height) after which the funder can refund. */
   readonly refundLocktime: number;
 }
@@ -163,32 +166,33 @@ export function buildTaprootLeaves(params: TaprootEscrowParams): {
   const refundLeaf = bytesToHex(concatBytes(
     locktimePush,
     new Uint8Array([OP.OP_CHECKLOCKTIMEVERIFY, OP.OP_DROP]),
-    pushHex(params.oracleXOnly), // funder public key reused as refund signer
+    pushHex(params.funderXOnly),
     new Uint8Array([OP.CHECKSIG]),
   ));
   return { judgeLeaf, refundLeaf };
 }
 
-/** Encode a locktime as a minimal push (>= 0x80000000 → 5-byte little-endian, else 4-byte). */
+/**
+ * Encode a locktime as a MINIMAL signed script-number push. Tapscript
+ * (BIP-342) requires OP_CLTV arguments to be minimally encoded: trailing
+ * 0x00 bytes are rejected, and a 4-byte value with the high bit set needs an
+ * extra 0x00 so the signed interpretation stays positive (>= 0x80000000 is a
+ * Unix-time locktime).
+ */
 export function locktimeToPush(locktime: number): Uint8Array {
   if (!Number.isInteger(locktime) || locktime < 0 || locktime > 0xffffffff) {
     throw new Error(`liquidEscrow: invalid locktime ${locktime}`);
   }
-  let bytes: Uint8Array;
-  if (locktime >= 0x80000000) {
-    // Time-based locktimes carry the high bit; script numbers are SIGNED
-    // little-endian, so a 4-byte push with the bit set would be negative and
-    // OP_CHECKLOCKTIMEVERIFY would always fail. Emit a positive 5-byte form.
-    bytes = new Uint8Array(5);
-    new DataView(bytes.buffer).setUint32(1, locktime, true);
-  } else if (locktime > 0) {
-    bytes = new Uint8Array(4);
-    const dv = new DataView(bytes.buffer);
-    dv.setUint32(0, locktime, true); // little-endian
-  } else {
-    bytes = new Uint8Array([0]);
+  if (locktime === 0) return new Uint8Array([OP.FALSE]);
+  const bytes: number[] = [];
+  let remaining = locktime;
+  while (remaining > 0) {
+    bytes.push(remaining & 0xff);
+    remaining = Math.floor(remaining / 256);
   }
-  return pushHex(bytesToHex(bytes));
+  // SIGNED little-endian: append 0x00 when the top byte's high bit is set.
+  if ((bytes[bytes.length - 1]! & 0x80) !== 0) bytes.push(0x00);
+  return pushHex(bytesToHex(Uint8Array.from(bytes)));
 }
 
 // ── Address derivation ───────────────────────────────────────────────────────

@@ -4,25 +4,32 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
+import { schnorr } from '@noble/curves/secp256k1.js';
 import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import {
   BAO_COURT_DISPUTE_KIND,
+  BAO_COURT_JUROR_CANDIDACY_KIND,
   createFrostAppealCoordinator,
   TEST_APPEAL_TIMINGS,
   buildDisputeEvent,
+  buildJurorCandidacyEvent,
   buildVoteCommitEvent,
   buildVoteRevealEvent,
+  createBondOwnershipChallenge,
+  signBondOwnershipProof,
   generateFrostKeys,
   hashCommit,
   runNormalSigningRound,
   hashDisputeVerdict,
   deriveSimulatedRevealEventId,
+  type BondVerifier,
   type FrostAppealState,
   type FrostRelayPool,
   type JurorProfile,
   type StakeCommitment,
   type DkgAdapter,
   type FrostAppealCoordinatorEvent,
+  type UtxoInfo,
 } from '../index';
 
 function makeStakeCommitment(override?: Partial<StakeCommitment>): StakeCommitment {
@@ -706,5 +713,169 @@ describe('FrostAppealCoordinator', () => {
 
     coordinator.stop();
     off();
+  });
+});
+
+// ── Bond admission: court-derived script + ownership proof ───────────────────
+
+describe('FrostAppealCoordinator bond admission', () => {
+  const bondSeckey = '0a'.repeat(32);
+  const bondXOnly = Buffer.from(schnorr.getPublicKey(Buffer.from(bondSeckey, 'hex'))).toString('hex');
+  const courtScript = `2102${bondXOnly}ac`; // P2PK to the juror bond key
+  const wrongScript = `5120${'ff'.repeat(32)}`; // P2TR to a decoy key
+  const disputeId = 'dd'.repeat(32);
+  const marketId = 'cc'.repeat(32);
+  const bondTxid = 'ab'.repeat(32);
+  const wrongScriptTxid = 'cd'.repeat(32);
+
+  function ownershipProof(jurorPubkey: string, vout: number, nonce: string) {
+    const challenge = createBondOwnershipChallenge({
+      bondTxid, bondVout: vout, disputeId, jurorPubkey, challengeNonce: nonce,
+    });
+    return { nonce, sig: signBondOwnershipProof(bondSeckey, challenge) };
+  }
+
+  function candidacyEvent(opts: {
+    privkey: Uint8Array;
+    txid?: string;
+    script?: string;
+    proof?: { nonce: string; sig: string };
+  }) {
+    const txid = opts.txid ?? bondTxid;
+    const template = buildJurorCandidacyEvent({
+      disputeId,
+      marketId,
+      juror: {
+        nostrPubkey: getPublicKey(opts.privkey),
+        stakeCapacitySats: 500_000,
+        stakeCommitment: { amountSats: 100_000, bondAddress: 'bcrt1qcoord', status: 'pending' },
+        wotScore: 80,
+        categories: ['bitcoin'],
+        registeredAt: 1,
+      },
+      bondAmountSats: 100_000,
+      bondAddress: 'bcrt1qcoord',
+      bondTxid: txid,
+      bondVout: 0,
+      bondScriptPubKey: opts.script ?? courtScript,
+    });
+    if (opts.proof) {
+      template.tags.push(['ownershipNonce', opts.proof.nonce], ['ownershipSig', opts.proof.sig]);
+    }
+    return finalizeEvent(template, opts.privkey) as unknown as import('nostr-tools/pure').Event;
+  }
+
+  const utxos: Record<string, UtxoInfo> = {
+    [bondTxid]: { txid: bondTxid, vout: 0, amountSats: 250_000, scriptPubKey: courtScript, confirmations: 3, status: 'confirmed' },
+    [wrongScriptTxid]: { txid: wrongScriptTxid, vout: 0, amountSats: 250_000, scriptPubKey: wrongScript, confirmations: 3, status: 'confirmed' },
+  };
+  const verifier: BondVerifier = {
+    getUtxo: async (txid, vout) => (utxos[txid]?.vout === vout ? utxos[txid]! : null),
+  };
+
+  function makeAppeal(): FrostAppealState {
+    return {
+      disputeId,
+      marketId,
+      disputeCase: {
+        disputeId,
+        marketId,
+        challengerPubkey: randomBytes(32).toString('hex'),
+        respondentPubkey: randomBytes(32).toString('hex'),
+        evidenceHashes: [],
+        proposedOutcome: 'NO',
+      },
+      resolutionTimestamp: Math.floor(Date.now() / 1000) - 10_000,
+      phase: 'pending',
+      candidacies: new Map(),
+      voteCommits: new Map(),
+      voteReveals: new Map(),
+      selectionAttempts: 0,
+      excludedSelectedPubkeys: [],
+      reselectionDeadline: Math.floor(Date.now() / 1000) + 10_000,
+    };
+  }
+
+  async function admit(
+    events: ReturnType<typeof candidacyEvent>[],
+    config: Partial<Parameters<typeof createFrostAppealCoordinator>[0]> = {},
+  ) {
+    const pool: FrostRelayPool = {
+      publish: () => [Promise.resolve()],
+      querySync: async (_relayUrls, filter) =>
+        filter.kinds?.includes(BAO_COURT_JUROR_CANDIDACY_KIND) ? events : [],
+    };
+    const coordinator = createFrostAppealCoordinator({
+      relayUrls: ['wss://fake.example'],
+      relayPool: pool,
+      environment: 'test',
+      timings: TEST_APPEAL_TIMINGS,
+      jurySize: 3,
+      backupCount: 1,
+      signer: async (event) =>
+        finalizeEvent(event, generateSecretKey()) as unknown as ReturnType<typeof finalizeEvent>,
+      ...config,
+    });
+    coordinator.addAppeal(makeAppeal());
+    await coordinator.tick(); // pending -> opt_in
+    await coordinator.tick(); // fetch candidacies + verify/admit
+    const active = coordinator.getActiveAppeals()[0]!;
+    coordinator.stop();
+    return active.candidacies;
+  }
+
+  it('admits only the court-script candidate with a valid ownership proof; verified stake drives capacity', async () => {
+    const goodKey = generateSecretKey();
+    const noProofKey = generateSecretKey();
+    const foreignKey = generateSecretKey();
+    const dupKey = generateSecretKey();
+    const wrongScriptKey = generateSecretKey();
+
+    // A signature from a key the court script does NOT pay — must be rejected.
+    const foreignChallenge = createBondOwnershipChallenge({
+      bondTxid, bondVout: 0, disputeId, jurorPubkey: getPublicKey(foreignKey), challengeNonce: 'nonce-foreign',
+    });
+    const foreignSig = signBondOwnershipProof('0b'.repeat(32), foreignChallenge);
+
+    const candidacies = await admit(
+      [
+        candidacyEvent({ privkey: goodKey, proof: ownershipProof(getPublicKey(goodKey), 0, 'nonce-good') }),
+        candidacyEvent({ privkey: noProofKey }),
+        candidacyEvent({ privkey: foreignKey, proof: { nonce: 'nonce-foreign', sig: foreignSig } }),
+        // Same locked UTXO as the good candidate: one bond, one candidacy.
+        candidacyEvent({ privkey: dupKey, proof: ownershipProof(getPublicKey(dupKey), 0, 'nonce-dup') }),
+        candidacyEvent({ privkey: wrongScriptKey, txid: wrongScriptTxid, script: wrongScript, proof: ownershipProof(getPublicKey(wrongScriptKey), 0, 'nonce-script') }),
+      ],
+      { bondVerifier: verifier, expectedStakeScriptPubKey: courtScript, minStakeSats: 10_000 },
+    );
+
+    expect(candidacies.size).toBe(1);
+    const admitted = candidacies.get(getPublicKey(goodKey))!;
+    expect(admitted).toBeDefined();
+    // Selection weight comes from the VERIFIED utxo amount, never the claim.
+    expect(admitted.stakeCapacitySats).toBe(250_000);
+    expect(candidacies.has(getPublicKey(noProofKey))).toBe(false);
+    expect(candidacies.has(getPublicKey(foreignKey))).toBe(false);
+    expect(candidacies.has(getPublicKey(dupKey))).toBe(false);
+    expect(candidacies.has(getPublicKey(wrongScriptKey))).toBe(false);
+  });
+
+  it('fails closed when a bondVerifier is wired without a court-derived expected script', async () => {
+    const key = generateSecretKey();
+    const candidacies = await admit(
+      [candidacyEvent({ privkey: key, proof: ownershipProof(getPublicKey(key), 0, 'nonce-noscript') })],
+      { bondVerifier: verifier, minStakeSats: 10_000 },
+    );
+    expect(candidacies.size).toBe(0);
+  });
+
+  it('admits a legacy script-matching candidacy when ownership is explicitly not required', async () => {
+    const key = generateSecretKey();
+    const candidacies = await admit(
+      [candidacyEvent({ privkey: key })],
+      { bondVerifier: verifier, expectedStakeScriptPubKey: courtScript, requireBondOwnership: false, minStakeSats: 10_000 },
+    );
+    expect(candidacies.size).toBe(1);
+    expect(candidacies.get(getPublicKey(key))!.stakeCapacitySats).toBe(250_000);
   });
 });

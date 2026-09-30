@@ -63,23 +63,29 @@ const REFUND_HEIGHT = CLOSE + DELTA; // 2_000_144
 // mismatch" / "Taproot version reserved for soft-fork upgrades"). ALL
 // tree/tweak-derived values below were regenerated under the Elements
 // domains and independently cross-verified by a pure-python secp256k1
-// implementation. Parities under the final domains: Q_T even (CB_T* 0xc4),
-// Q_C odd (CB_C* 0xc5).
+// implementation. Parities under the final domains (v2.5, minimal-locktime
+// fix): Q_T odd (CB_T* 0xc5), Q_C even (CB_C* 0xc4).
+//
+// NOTE (v2.5 MINIMAL CLTV ENCODING): the refund leaf's locktime push is now
+// the MINIMAL signed script-number encoding required by tapscript (BIP-342):
+// 2_000_144 = 0x1e8510 → `03 10851e` (the old non-minimal `04 10851e00` is
+// rejected at spend time). REFUND leaves shrink by one byte, which regenerates
+// the merkle roots / output keys / addresses / control blocks below.
 const VECTORS = {
   COOP_T: '201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
-  REFUND_T: '0410851e00b175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
+  REFUND_T: '0310851eb175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
   COOP_C: '20cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
-  REFUND_C: '0410851e00b17520cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
-  MERKLE_T: '8a42272157ec9e0812c77804612209ac5bf597a3985ac7a16dec7fd4525be32c',
-  MERKLE_C: '184bc4a2ca5b7a68df980c41ffab376ecc03f6c168669aff5d53d3a29ede4daa',
-  Q_T: 'a985486064dba65cc9e3ae680103aa99a9b05ef0e33781437177f78965960273',
-  Q_C: 'ca1846cdd2aee707c9f7d6099aa557188f3ac6b970595fc86820fabf4e5e957c',
-  ADDR_T: 'tq1p4xz5scrymwn9ej0r4e5qzqa2nx5mqhhsuvmczsm3wlmcjevkqfesvcg4tp',
-  ADDR_C: 'tq1pegvydnwj4mns0j0h6cye4f2hrz8n434ewpv4ljrgyrat7nj7j47qmykscu',
-  CB_T0: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f42b44fa7ae308f5975f1d55b4ab1ff0452209a66fd45d847a2036f7a1f6cc0b98',
-  CB_T1: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f41d88378f86aa3fbbc9cf5df60337086f0ba87521b4cc0dd0455c57c8d6057fda',
-  CB_C0: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4309f025f79821f6d48269d48149fb6bd3c901ee7d81062cc6f612da9d5e55803',
-  CB_C1: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f43b40d6cdda30fae68947d1d3e376135cdb3c7a94acf8d04c36791dbca689e23d',
+  REFUND_C: '0310851eb17520cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
+  MERKLE_T: '310606c3249f62c217c7622eb3fe974d5cf91d497f802093baec250663b888ab',
+  MERKLE_C: '474256be8173eb7b0b705cb7a8eec103bbb82172c34dd1161487e9ff2ea4a140',
+  Q_T: '54f0e46bfd3a0cbc470af928723a89334272f1f76b9cfd661bcedb0bf6df2d8b',
+  Q_C: 'ce56ed8053b375eeda52d9a7daa8aebe7111cd38383ac4959f629321901000bd',
+  ADDR_T: 'tq1p2ncwg6la8gxtc3c2ly58yw5fxdp89u0hdww06esmemdshakl9k9szsuqca',
+  ADDR_C: 'tq1peetwmqznkd67akjjmxna429whec3rnfc8qavf9vlv2fjryqsqz7s8h4lev',
+  CB_T0: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f49c6be60265922bb0bca75bafde580b873165d570e9c31a22e645b482c9290c3e',
+  CB_T1: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f41d88378f86aa3fbbc9cf5df60337086f0ba87521b4cc0dd0455c57c8d6057fda',
+  CB_C0: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4811aeda0d9458c58bb65f210e4ad311a9a997c59846976ea343c0b92ab7299ed',
+  CB_C1: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f43b40d6cdda30fae68947d1d3e376135cdb3c7a94acf8d04c36791dbca689e23d',
 };
 
 // ── §8.1 frozen vectors ─────────────────────────────────────────────────────
@@ -116,9 +122,9 @@ describe('WS-A §8.1 frozen vectors', () => {
   it('cross-checks the control-block paths: each path is the sibling TapLeaf hash', () => {
     // The §8.1 paths must equal the Elements-domain TapLeaf hashes of the
     // sibling leaves ("TapLeaf/elements" — v0.6.3).
-    expect(tapleafHash(VECTORS.REFUND_T)).toBe('2b44fa7ae308f5975f1d55b4ab1ff0452209a66fd45d847a2036f7a1f6cc0b98');
+    expect(tapleafHash(VECTORS.REFUND_T)).toBe('9c6be60265922bb0bca75bafde580b873165d570e9c31a22e645b482c9290c3e');
     expect(tapleafHash(VECTORS.COOP_T)).toBe('1d88378f86aa3fbbc9cf5df60337086f0ba87521b4cc0dd0455c57c8d6057fda');
-    expect(tapleafHash(VECTORS.REFUND_C)).toBe('309f025f79821f6d48269d48149fb6bd3c901ee7d81062cc6f612da9d5e55803');
+    expect(tapleafHash(VECTORS.REFUND_C)).toBe('811aeda0d9458c58bb65f210e4ad311a9a997c59846976ea343c0b92ab7299ed');
     expect(tapleafHash(VECTORS.COOP_C)).toBe('3b40d6cdda30fae68947d1d3e376135cdb3c7a94acf8d04c36791dbca689e23d');
   });
 
@@ -168,21 +174,21 @@ function qParityIndependent(internalXOnlyHex: string, merkleRootHex: string): 0 
 describe('BIP-341 output-key parity', () => {
   it('derives the control-block parity bit from the OUTPUT key Q — numerically', () => {
     // The pinned NUMS internal key + both §8.1 trees (Elements domains):
-    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T)).toBe(0); // Q_T even-Y
-    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C)).toBe(1); // Q_C odd-Y
+    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T)).toBe(1); // Q_T odd-Y
+    expect(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C)).toBe(0); // Q_C even-Y
     // …so the regenerated control blocks carry exactly those bits.
-    expect(parseInt(VECTORS.CB_T0.slice(0, 2), 16) & 1).toBe(0);
-    expect(parseInt(VECTORS.CB_T1.slice(0, 2), 16) & 1).toBe(0);
-    expect(parseInt(VECTORS.CB_C0.slice(0, 2), 16) & 1).toBe(1);
-    expect(parseInt(VECTORS.CB_C1.slice(0, 2), 16) & 1).toBe(1);
+    expect(parseInt(VECTORS.CB_T0.slice(0, 2), 16) & 1).toBe(1);
+    expect(parseInt(VECTORS.CB_T1.slice(0, 2), 16) & 1).toBe(1);
+    expect(parseInt(VECTORS.CB_C0.slice(0, 2), 16) & 1).toBe(0);
+    expect(parseInt(VECTORS.CB_C1.slice(0, 2), 16) & 1).toBe(0);
     // …and the module's own derivation agrees with the independent computation.
     expect(outputKeyParity(INTERNAL_X, VECTORS.MERKLE_T)).toBe(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_T));
     expect(outputKeyParity(INTERNAL_X, VECTORS.MERKLE_C)).toBe(qParityIndependent(INTERNAL_X, VECTORS.MERKLE_C));
     // The builders stamp the derived bit into the first byte.
     const leavesT = [VECTORS.COOP_T, VECTORS.REFUND_T];
     const leavesC = [VECTORS.COOP_C, VECTORS.REFUND_C];
-    expect(scriptPathControlBlock(INTERNAL_X, leavesT, 0).slice(0, 2)).toBe('c4');
-    expect(scriptPathControlBlock(INTERNAL_X, leavesC, 0).slice(0, 2)).toBe('c5');
+    expect(scriptPathControlBlock(INTERNAL_X, leavesT, 0).slice(0, 2)).toBe('c5');
+    expect(scriptPathControlBlock(INTERNAL_X, leavesC, 0).slice(0, 2)).toBe('c4');
   });
 
   it('rejects bad internal keys and bad merkle roots', () => {
@@ -194,13 +200,13 @@ describe('BIP-341 output-key parity', () => {
 // ── Control block mechanics ─────────────────────────────────────────────────
 
 describe('controlBlock / merkle path', () => {
-  // Under the Elements domains: Q_T even → 0xc4; Q_C odd → 0xc5.
+  // Under the Elements domains (v2.5 vectors): Q_T odd → 0xc5; Q_C even → 0xc4.
   // (First byte = TAPSCRIPT leaf version 0xc4 | OUTPUT-key Y-parity.)
   const PATH = ['aa'.repeat(32)];
 
   it('stamps the OUTPUT-key parity into the first byte (derived, never assumed)', () => {
-    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_T).slice(0, 2)).toBe('c4');
-    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_C).slice(0, 2)).toBe('c5');
+    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_T).slice(0, 2)).toBe('c5');
+    expect(controlBlock(INTERNAL_X, PATH, VECTORS.MERKLE_C).slice(0, 2)).toBe('c4');
   });
 
   it('round-trips internal key and path', () => {
@@ -467,9 +473,10 @@ describe('finalizeTaproot', () => {
 
   it('rejects a control block whose parity bit contradicts the output key', () => {
     const p = finalizeParams();
-    // Under the Elements domains Q_T has EVEN Y (correct CB starts 0xc4);
-    // flipping to 0xc5 contradicts it and must be rejected pre-signature.
-    p.controlBlock = 'c5' + p.controlBlock.slice(2);
+    // Under the Elements domains (v2.5 vectors) Q_T has ODD Y (correct CB
+    // starts 0xc5); flipping to 0xc4 contradicts it and must be rejected
+    // pre-signature.
+    p.controlBlock = 'c4' + p.controlBlock.slice(2);
     expect(() => finalizeTaproot(p)).toThrow(/parity does not match the output key/);
   });
 });
@@ -500,8 +507,9 @@ describe('D1-no invariant (spec §8 property test)', () => {
           expect(leaf, `${label} leaf must not contain foreign key ${foreign.slice(0, 8)}…`).not.toContain(`20${foreign}`);
           expect(leaf, `${label} leaf must not contain compressed ${foreign.slice(0, 8)}…`).not.toContain(`21${foreign.slice(0, 2)}${foreign}`);
         }
-        // COOP leaf is exactly 34 bytes; REFUND leaf is 41 bytes (4-byte CLTV push).
-        const expectedLen = leaf.startsWith('04') ? 41 : 34;
+        // COOP leaf is exactly 34 bytes; REFUND leaf is 40 bytes (minimal
+        // 3-byte CLTV push for 0x1e8510, v2.5).
+        const expectedLen = leaf.startsWith('20') ? 34 : 40;
         expect(leaf.length / 2).toBe(expectedLen);
       }
     }
@@ -595,15 +603,15 @@ describe('Elements tagged-hash domains', () => {
 
 const M3_VECTORS = {
   COOP_PAIR: '201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac20cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bba5287',
-  REFUND_A: '0410851e00b175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
-  REFUND_B: '0410851e00b17520cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
+  REFUND_A: '0310851eb175201c0a553cabf1627b47ea3c3162f16f275342c7a0734f1b5f932a56ced00b7a84ac',
+  REFUND_B: '0310851eb17520cfe4d37930da1d6c4d547c9e6433d0852c3c72dff26369cc9a54b4dbdfdf473bac',
   LEAFH_COOP: '7b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
-  MERKLE: '9b16957a9843479679d39eb18c0162bdec33110d82c24a42fd1a2c3f3c3d72a4',
-  Q: 'bc910b145a73592a57d809d45b41701eaaca313df6b092bdef8dabe8d913855a',
-  ADDR: 'tq1phjgsk9z6wdvj547cp829kstsr64v5vfa76cf90003k473kgns4dqfstrd3',
-  CB_0: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f48d63a457f6798a8c2c194428a13d9d5477650ee977c3a0b55fa45a09ae4e5606',
-  CB_1: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4309f025f79821f6d48269d48149fb6bd3c901ee7d81062cc6f612da9d5e558037b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
-  CB_2: 'c4ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f42b44fa7ae308f5975f1d55b4ab1ff0452209a66fd45d847a2036f7a1f6cc0b987b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
+  MERKLE: '904c6c76542efde78cb058077ec982c3ea8ee825cb61beac0e1fdb89315cdbae',
+  Q: '92a3ef2646afebe3d4a5383677ad28fec7943731acffb295480844b033071dfe',
+  ADDR: 'tq1pj2377fjx4l4784998qm80tfglmregde34nlm992gppztqvc8rhlq9nvjln',
+  CB_0: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4182443d39effeeb98ed108a771ff73567ecfa8bc1fbca732b9c4a6d974814e02',
+  CB_1: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f4811aeda0d9458c58bb65f210e4ad311a9a997c59846976ea343c0b92ab7299ed7b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
+  CB_2: 'c5ad6d59067a92e28cce1ae55b51b060fc712cf897dc236debd386d692ce6973f49c6be60265922bb0bca75bafde580b873165d570e9c31a22e645b482c9290c3e7b2e7d7b603f69fc1fc98066fae63764cc0d558cca899e70ff620c080cf72c22',
 };
 
 function pairwiseLeaves() {
@@ -676,7 +684,7 @@ describe('M3 pairwise dual-refund tree — frozen vectors', () => {
 
   it('the coop control block carries the OUTPUT-key parity (never assumed even)', () => {
     expect(parseInt(M3_VECTORS.CB_0.slice(0, 2), 16) & 0x01).toBe(outputKeyParity(INTERNAL_X, M3_VECTORS.MERKLE));
-    expect(outputKeyParity(INTERNAL_X, M3_VECTORS.MERKLE)).toBe(0);
+    expect(outputKeyParity(INTERNAL_X, M3_VECTORS.MERKLE)).toBe(1);
   });
 });
 

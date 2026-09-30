@@ -18,9 +18,9 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
 2. **Tag every release in the same push.** This package ships by git
    ref/tag — it is NOT published to npm. After a version bump:
    `git tag -a vX.Y.Z -m "..." && git push origin main vX.Y.Z` in ONE
-   action. Current: **v0.6.3** (Elements taproot consensus corrections —
-   `/elements` tagged-hash domains, leaf version 0xc4, output-key-Q parity;
-   real script-path spend proven on-chain. See `CHANGELOG.md` v0.6.0–v0.6.3).
+   action. Current: **v0.7.2** (court/money binding fixes — funder-key Liquid
+   refunds with minimal CLTV encoding, LN hold plan binding, court-script
+   bond-ownership admission. See `CHANGELOG.md` v0.7.0–v0.7.2).
 3. **Versioning:** bug fixes → patch (`0.4.1`); new modules/capabilities or
    consumer-visible API changes → minor (`0.5.0`). 1.0.0 stays reserved
    until the trusted-dealer DKG is replaced with production Pedersen DKG

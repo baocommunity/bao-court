@@ -269,6 +269,14 @@ export interface LnDecisionPlan {
  * - treasury                     → no hold (informational)
  * - default                      → leave unsettled (host refunds unselected)
  *
+ * The plan MUST be the plan for the hold's own dispute + round, the hold's
+ * payment hash must match its witness, and the hold amount must match the
+ * plan's stake for that participant. Bond holds additionally require the
+ * hold pubkey to be the plan's `disputerPubkey`. Out-of-scope holds are
+ * returned as `unsettled` (host reclaim path); an in-scope hold whose amount
+ * or payment hash disagrees with the plan/witness is REJECTED (throws) so a
+ * host can never act on inconsistent settlement data.
+ *
  * Returns `unsettled` ids when a hold exists but the plan does not mention
  * it — the host uses this to run the reclaim path for unselected pledgers.
  */
@@ -284,15 +292,40 @@ export function planDecisionsForHolds(
   for (const r of plan.redistributions) byPubkey.set(r.pubkey, r);
 
   for (const h of holds) {
+    // A hold belongs to this plan only when BOTH the dispute and the round
+    // match: redistribution records are per-participant, so a plan for
+    // another dispute/round would otherwise silently decide this hold.
+    if (h.witness.disputeId !== plan.disputeId || h.witness.round !== plan.round) {
+      unsettled.push(h.id);
+      continue;
+    }
+    // The record's payment hash must be the hash of its own witness; a
+    // tampered record would otherwise settle/cancel a DIFFERENT invoice.
+    const { paymentHash: expectedPaymentHash } = deriveHoldInvoicePair(h.witness);
+    if (h.paymentHash !== expectedPaymentHash) {
+      throw new Error(`LnSettlement: hold ${h.id} payment hash does not match its witness`);
+    }
+    // Bond holds: only the plan's disputer may be decided by the bond
+    // outcome — a hold from any other "disputer" pubkey is out of scope.
+    if (h.witness.role === 'disputer' && h.witness.pubkey !== plan.disputerPubkey) {
+      unsettled.push(h.id);
+      continue;
+    }
     const rec = byPubkey.get(h.witness.pubkey);
     if (!rec) {
-      // Bond holds: disputer pubkey appears under bond_won/bond_lost.
       if (h.witness.role === 'disputer') {
+        // Bond hold whose plan omits an explicit record: decide by the plan's
+        // bond outcome (pubkey already pinned to disputerPubkey above).
         decisions[h.id] = plan.bondOutcome === 'returned' ? 'settle' : 'cancel';
         continue;
       }
       unsettled.push(h.id);
       continue;
+    }
+    if (h.amountSats !== rec.stakeAmount) {
+      throw new Error(
+        `LnSettlement: hold ${h.id} amount ${h.amountSats} does not match the plan stake ${rec.stakeAmount}`,
+      );
     }
     switch (rec.reason) {
       case 'coherent':

@@ -10,6 +10,19 @@ import type * as frost from '@vbyte/frost';
  * the data it needs.
  */
 
+/**
+ * Proof that the candidate controls the bond output's key. The challenge is
+ * derived from the candidacy context (txid/vout/dispute/candidate + nonce) so
+ * a proof cannot be replayed across disputes or juror identities; the
+ * signature must verify against the key the COURT-DERIVED bond script pays.
+ */
+export interface BondOwnershipProof {
+  /** Anti-replay salt signed into the challenge (chosen when candidacy is built). */
+  readonly challengeNonce: string;
+  /** BIP-340 signature over createBondOwnershipChallenge(...). */
+  readonly signature: string;
+}
+
 export interface StakeCommitment {
   /** Amount the juror has actually locked for this dispute, in sats. */
   readonly amountSats: number;
@@ -21,6 +34,8 @@ export interface StakeCommitment {
   readonly bondVout?: number;
   /** Optional expected scriptPubKey for the bond UTXO. */
   readonly scriptPubKey?: string;
+  /** Optional proof that the candidate controls the bond output's key. */
+  readonly ownershipProof?: BondOwnershipProof;
   /** Unix seconds after which the bond may be reclaimed if not selected/used. */
   readonly deadlineSeconds?: number;
   /** Current lifecycle status of the commitment. */

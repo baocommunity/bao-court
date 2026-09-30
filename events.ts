@@ -252,6 +252,8 @@ export function parseJurorCandidacyEvent(
     const voutTag = findTag(event.tags, 'bondVout');
     const scriptTag = findTag(event.tags, 'bondScript');
     const deadlineTag = findTag(event.tags, 'deadline');
+    const ownershipNonceTag = findTag(event.tags, 'ownershipNonce');
+    const ownershipSigTag = findTag(event.tags, 'ownershipSig');
     const categoryTags = event.tags.filter((t) => t[0] === 't').map((t) => t[1]);
 
     const amountSats = Number(bondTag?.[1] ?? content.bondAmountSats ?? 0);
@@ -278,6 +280,15 @@ export function parseJurorCandidacyEvent(
       return null;
     }
 
+    const ownershipProof =
+      typeof ownershipNonceTag?.[1] === 'string' &&
+      ownershipNonceTag[1].length > 0 &&
+      ownershipNonceTag[1].length <= 128 &&
+      typeof ownershipSigTag?.[1] === 'string' &&
+      /^[0-9a-f]{128}$/i.test(ownershipSigTag[1])
+        ? { challengeNonce: ownershipNonceTag[1], signature: ownershipSigTag[1].toLowerCase() }
+        : undefined;
+
     const stakeCommitment: StakeCommitment = {
       amountSats,
       bondAddress,
@@ -285,6 +296,7 @@ export function parseJurorCandidacyEvent(
       bondVout,
       scriptPubKey: bondScriptPubKey,
       deadlineSeconds,
+      ownershipProof,
       // NEVER fabricate confirmation here: the parser must not claim on-chain
       // status for the candidate. Admission authorities (e.g. the appeal
       // coordinator after its verifyStakeCommitment passes) stamp status.
