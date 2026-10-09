@@ -13,13 +13,15 @@
 #
 # RFC 9309 §2.2.2: the LONGEST matching path wins and `Allow` beats `Disallow`
 # at equal length, so each group can end in `Disallow: /` and still hand over
-# the paths below. The `$` on each file path is load-bearing: without it a
-# robots.txt path is a PREFIX match and `Allow: /llms.txt` would also allow
-# /llms.txt.bak.
+# the paths below.
 #
-# Non-conformant parsers (Python's `urllib.robotparser` is one: first-match
-# prefix, no `$`, no longest-match) read these groups as a plain `Disallow: /`,
-# which is what they saw before this file existed.
+# PARSER COMPATIBILITY: the llms discovery paths are deliberately left
+# UNANCHORED (no `$`). Python's `urllib.robotparser` — and any parser without
+# `$`-anchor support — percent-encodes `$` to `%24`, so `Allow: /llms.txt`
+# never matches and the group reads as a plain `Disallow: /`: on-demand
+# retrieval would silently break for agents built on that parser. A bare path
+# is a prefix match, so `Allow: /llms.txt` also matches /llms.txt.bak; that
+# widening is accepted because the origin publishes no such neighbour files.
 
 # ── Search engines: fully allowed ─────────────────────────────────────────────
 User-agent: Googlebot
@@ -35,60 +37,60 @@ Allow: /
 # OpenAI: GPTBot is the bulk crawler; ChatGPT-User and OAI-SearchBot are
 # user-triggered retrieval. One narrow answer for all three.
 User-agent: GPTBot
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 User-agent: ChatGPT-User
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 User-agent: OAI-SearchBot
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 # Anthropic: ClaudeBot and anthropic-ai are the bulk crawlers; Claude-Web and
 # Claude-User are user-triggered retrieval. One narrow answer for all of them.
 User-agent: ClaudeBot
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 User-agent: Claude-Web
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 User-agent: anthropic-ai
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 User-agent: Claude-User
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 User-agent: Claude-SearchBot
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 # Perplexity builds its index at user request, so retrieval is the product.
 User-agent: PerplexityBot
-Allow: /llms.txt$
-Allow: /llms.md$
-Allow: /.well-known/llms.txt$
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
 Disallow: /
 
 # ── Bulk training crawlers: refused outright ──────────────────────────────────
