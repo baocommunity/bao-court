@@ -1,0 +1,129 @@
+# robots.txt — ₿AO Court
+#   canonical: https://court.bao.network    mirror: https://bao.network/court/
+#
+# Two questions, two answers — the same split every BAO host carries:
+#
+#   1. "May I copy this whole site to train a model?"        -> NO.
+#   2. "May I fetch /llms.txt because someone just asked me   -> YES.
+#       a question about the ₿AO Court?"
+#
+# This host serves one landing page plus the discovery documents beside it
+# (/llms.txt, /llms.md, /.well-known/llms.txt). The full protocol paper and
+# the source of truth live elsewhere and are linked from /llms.txt.
+#
+# RFC 9309 §2.2.2: the LONGEST matching path wins and `Allow` beats `Disallow`
+# at equal length, so each group can end in `Disallow: /` and still hand over
+# the paths below. The `$` on each file path is load-bearing: without it a
+# robots.txt path is a PREFIX match and `Allow: /llms.txt` would also allow
+# /llms.txt.bak.
+#
+# Non-conformant parsers (Python's `urllib.robotparser` is one: first-match
+# prefix, no `$`, no longest-match) read these groups as a plain `Disallow: /`,
+# which is what they saw before this file existed.
+
+# ── Search engines: fully allowed ─────────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+# ── On-demand retrieval agents: the discovery documents only ──────────────────
+# OpenAI: GPTBot is the bulk crawler; ChatGPT-User and OAI-SearchBot are
+# user-triggered retrieval. One narrow answer for all three.
+User-agent: GPTBot
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+User-agent: ChatGPT-User
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+# Anthropic: ClaudeBot and anthropic-ai are the bulk crawlers; Claude-Web and
+# Claude-User are user-triggered retrieval. One narrow answer for all of them.
+User-agent: ClaudeBot
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+User-agent: Claude-Web
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+User-agent: anthropic-ai
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+User-agent: Claude-User
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+User-agent: Claude-SearchBot
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+# Perplexity builds its index at user request, so retrieval is the product.
+User-agent: PerplexityBot
+Allow: /llms.txt$
+Allow: /llms.md$
+Allow: /.well-known/llms.txt$
+Disallow: /
+
+# ── Bulk training crawlers: refused outright ──────────────────────────────────
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: YouBot
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
