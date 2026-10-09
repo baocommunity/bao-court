@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>₿AO Court - Threshold Oracle for Dispute Resolution</title>
     <meta name="description" content="A FROST threshold oracle: a randomly selected jury runs DKG, votes under commit/reveal, and signs a verifiable threshold Schnorr verdict. It decides - it never holds funds.">
+    <!-- Agent discovery. `rel="alternate"` is the registered HTML link
+         relation for "another representation of this document" (WHATWG +
+         RFC 8288) and `type="text/markdown"` is the llms.txt convention; it
+         is the ONE tag every BAO host ships, so an agent learns the same
+         thing everywhere. Root-relative, so each host advertises its OWN
+         /llms.txt: on court.bao.network and on the bao.network/court/ mirror
+         this resolves to the serving host's discovery document. Structural
+         metadata only - no body prose telling agents where to look. -->
+    <link rel="alternate" type="text/markdown" href="/llms.txt" title="₿AO Court for AI agents" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>₿</text></svg>">
 
     <meta property="og:type" content="website">
