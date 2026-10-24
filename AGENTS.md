@@ -59,6 +59,13 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
   `main` touching it (`workflow_dispatch` enabled). The Pages custom domain
   is `court.bao.network`, HTTPS enforced; GitHub provisions/renews the cert
   (keep the DNS record DNS-only so renewal works).
+- `.github/workflows/check-live-site.yml` compares the live documents
+  (`/llms.txt`, `/llms.md`, `/.well-known/llms.txt`, `/robots.txt`) to `site/`
+  every six hours and on manual dispatch, and fails naming the path that
+  drifted. Run `node scripts/check-live-site.mjs` locally to check now. The
+  check skips `index.html`: Cloudflare rewrites it in flight (body anchor,
+  `__cf_email__` obfuscation), so a byte comparison there would fail on a
+  perfectly current deployment.
 - The same page is mirrored into the public `baocommunity/bao.network` repo
   by its scheduled `mirror-court.yml` workflow and renders at
   `https://bao.network/court/`. Edit it HERE only; the mirror copies

@@ -1,0 +1,29 @@
+name: check-live-site
+
+# The landing page (court.bao.network) is published from site/ by hand, so a
+# merge alone does not update it and no other workflow looks at the host. This
+# compares the live bytes to this repo every six hours and on demand.
+# Public documents only: no secrets, read-only token.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '53 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  live-site:
+    name: Live site matches site/
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: court.bao.network serves this checkout
+        run: node scripts/check-live-site.mjs
