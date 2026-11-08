@@ -553,3 +553,49 @@ export {
   type FrostAppealWatcherCallbacks,
   type FrostAppealResolution,
 } from './appealWatcher';
+
+export {
+  COURT_CONFIRMATION_DOMAIN,
+  CourtConfirmationTransitionError,
+  createCourtConfirmationMachine,
+  hashCourtConfirmation,
+  reduceCourtConfirmationMachine,
+  type CourtConfirmationPhase,
+  type CourtConfirmationFailure,
+  type CourtConfirmationRecord,
+  type CourtChallengeRecord,
+  type CourtMassVoteRecord,
+  type CourtClawbackFlag,
+  type CourtConfirmationVerdict,
+  type CourtConfirmationMachineState,
+  type CourtConfirmationMachineEvent,
+} from './courtConfirmationMachine';
+
+export {
+  BAO_COURT_BATCH_ATTESTATION_KIND,
+  buildBatchMerkleTree,
+  buildBatchMerkleProof,
+  hashBatchManifest,
+  buildBatchAttestationEvent,
+  validateBatchAttestationEvent,
+  verifyCaseInBatch,
+  type BatchMerkleProof,
+} from './batchAttestation';
+
+export {
+  COURT_EPOCH_COHORT_DOMAIN,
+  COURT_EPOCH_HANDOFF_DOMAIN,
+  CourtEpochCohortError,
+  createCourtEpochCohort,
+  hashCourtEpochCohort,
+  hashCourtEpochHandoff,
+  assertEpochRotationOrdering,
+  type CourtEpochCohort,
+} from './epochCohort';
+
+export {
+  ATTESTATION_MESSAGE_DOMAIN_V2,
+  ATTESTATION_V2_FIELD_TAGS,
+  buildAttestationMessageV2,
+  type AttestationV2Field,
+} from './crypto';

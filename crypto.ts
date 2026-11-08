@@ -16,6 +16,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import * as frost from '@vbyte/frost';
 import type { PublicNonce } from '@vbyte/frost';
 import { CanonicalWriter } from './courtSession';
+import { HEX_32 } from './courtCeremonyCore';
 
 const SCALAR_ORDER = secp256k1.Point.Fn.ORDER;
 
@@ -85,6 +86,120 @@ export function deriveXOnlyPubkey(seckeyHex: string): string {
  * from every other Court hash domain (preimage, bond challenge, session…).
  */
 export const ATTESTATION_MESSAGE_DOMAIN = 'BAO-Court/AttestationMessage/v1';
+
+/**
+ * V2 attestation-message domain. Extends the v1 signed message with the
+ * finality-binding fields the universal-confirmation redesign requires
+ * (`epochId`, `tier`, `threshold`, `signerSetRoot`, `attempt`,
+ * `batchMerkleRoot`) so a low-tier or stale attestation can never be
+ * replayed or misrepresented as a final verdict under the same standing
+ * cohort key. Optional fields are encoded as tagged entries in a fixed
+ * order, so any subset can be present and every consumer derives the same
+ * digest from the same fields.
+ */
+export const ATTESTATION_MESSAGE_DOMAIN_V2 = 'BAO-Court/AttestationMessage/v2';
+
+/** Extension-tag ids for the v2 attestation message, in canonical order. */
+export const ATTESTATION_V2_FIELD_TAGS = {
+  epochId: 1,
+  tier: 2,
+  threshold: 3,
+  signerSetRoot: 4,
+  attempt: 5,
+  batchMerkleRoot: 6,
+} as const;
+
+export type AttestationV2Field = keyof typeof ATTESTATION_V2_FIELD_TAGS;
+
+/**
+ * Build the v2 canonical attestation message that jurors sign.
+ *
+ * Same body as v1 (`buildAttestationMessage`) with a version byte prefix and
+ * an ordered, tagged extension block. Absent optional fields are simply
+ * omitted — the encoding is self-describing, so two implementations that
+ * agree on the field set derive the identical digest.
+ */
+export function buildAttestationMessageV2(params: {
+  readonly marketId: string;
+  readonly outcome: string;
+  readonly round: number | string;
+  readonly disputeEventId?: string;
+  readonly verdictHash?: string;
+  readonly epochId?: number;
+  readonly tier?: number;
+  readonly threshold?: number;
+  readonly signerSetRoot?: string;
+  readonly attempt?: number;
+  readonly batchMerkleRoot?: string;
+}): string {
+  const writer = new CanonicalWriter();
+  writer.u8(0x02);
+  writer.text(ATTESTATION_MESSAGE_DOMAIN_V2);
+  writer.text(params.marketId);
+  writer.text(params.outcome);
+  writer.text(String(params.round));
+  if (params.disputeEventId !== undefined) {
+    if (typeof params.disputeEventId !== 'string' || !HEX_32.test(params.disputeEventId)) {
+      throw new Error('attestation v2 disputeEventId must be 32-byte lowercase hex');
+    }
+    writer.u8(1);
+    writer.text(params.disputeEventId);
+  } else {
+    writer.u8(0);
+  }
+  if (params.verdictHash !== undefined) {
+    if (typeof params.verdictHash !== 'string' || !HEX_32.test(params.verdictHash)) {
+      throw new Error('attestation v2 verdictHash must be 32-byte lowercase hex');
+    }
+    writer.u8(1);
+    writer.hex(params.verdictHash);
+  } else {
+    writer.u8(0);
+  }
+  const extensions: Array<readonly [number, () => void]> = [];
+  if (params.epochId !== undefined) {
+    assertSafeUint(params.epochId, 'attestation v2 epochId');
+    extensions.push([ATTESTATION_V2_FIELD_TAGS.epochId, () => writer.u32(params.epochId!)]);
+  }
+  if (params.tier !== undefined) {
+    if (!Number.isSafeInteger(params.tier) || params.tier < 0 || params.tier > 0xff) {
+      throw new Error('attestation v2 tier must be an integer in [0, 255]');
+    }
+    extensions.push([ATTESTATION_V2_FIELD_TAGS.tier, () => writer.u8(params.tier!)]);
+  }
+  if (params.threshold !== undefined) {
+    assertSafeUint(params.threshold, 'attestation v2 threshold');
+    extensions.push([ATTESTATION_V2_FIELD_TAGS.threshold, () => writer.u32(params.threshold!)]);
+  }
+  if (params.signerSetRoot !== undefined) {
+    if (typeof params.signerSetRoot !== 'string' || !HEX_32.test(params.signerSetRoot)) {
+      throw new Error('attestation v2 signerSetRoot must be 32-byte lowercase hex');
+    }
+    extensions.push([ATTESTATION_V2_FIELD_TAGS.signerSetRoot, () => writer.hex(params.signerSetRoot!)]);
+  }
+  if (params.attempt !== undefined) {
+    assertSafeUint(params.attempt, 'attestation v2 attempt');
+    extensions.push([ATTESTATION_V2_FIELD_TAGS.attempt, () => writer.u32(params.attempt!)]);
+  }
+  if (params.batchMerkleRoot !== undefined) {
+    if (typeof params.batchMerkleRoot !== 'string' || !HEX_32.test(params.batchMerkleRoot)) {
+      throw new Error('attestation v2 batchMerkleRoot must be 32-byte lowercase hex');
+    }
+    extensions.push([ATTESTATION_V2_FIELD_TAGS.batchMerkleRoot, () => writer.hex(params.batchMerkleRoot!)]);
+  }
+  writer.u8(extensions.length);
+  for (const [tag, write] of extensions) {
+    writer.u8(tag);
+    write();
+  }
+  return bytesToHex(sha256(writer.finish()));
+}
+
+function assertSafeUint(value: number, label: string): void {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
+    throw new Error(`${label} must be a safe integer in [0, 4294967295]`);
+  }
+}
 
 /**
  * Build the canonical attestation message that all jurors sign.

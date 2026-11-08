@@ -27,6 +27,35 @@ export interface SelectionParams {
    * the current time.
    */
   readonly referenceTimeSec?: number;
+  /**
+   * Optional reputation-derived weight per juror, enabling zero-stake
+   * phase-0 pools. When supplied it replaces the stake-derived weight for
+   * every juror: expected selection probability becomes proportional to
+   * `weight / Σweights` through the same exponential-clock draw, jurors
+   * with weight <= 0 are ineligible, and the draw/verify pipeline is
+   * otherwise identical to the stake path.
+   *
+   * The function MUST be a pure, deterministic function of the juror
+   * record alone. {@link verifyJurySelection} recomputes it on whatever
+   * params the verifier holds, so anything time-based, random, or read
+   * from mutable external state makes the roster unverifiable.
+   *
+   * Reputation inputs must eventually be snapshot-pinned (e.g. committed
+   * as a `reputationRoot` the disputing parties agree on when the dispute
+   * opens) so every party weights the exact same snapshot. That
+   * integration is future work; callers today must pin their inputs by
+   * construction (pass the same frozen juror records).
+   */
+  readonly weightFn?: (juror: JurorProfile) => number;
+  /**
+   * Waive the `stakeCapacitySats >= 1% of marketVolumeSats` gate so
+   * zero-stake phase-0 jurors can be seated. Only the volume gate is
+   * waived: `minStakeSats`, WoT, age, category, and commitment checks all
+   * still apply, so a zero-stake pool must also lower `minStakeSats`
+   * explicitly. With no effect on the default stake-weighted path unless
+   * the flag is set.
+   */
+  readonly zeroStakeAllowed?: boolean;
 }
 
 const DEFAULT_PARAMS = {
@@ -43,7 +72,18 @@ function validateHex(hex: string, expectedBytes: number): void {
   }
 }
 
-function validateInputs(params: SelectionParams): Required<SelectionParams> {
+/**
+ * Fully-resolved selection parameters (defaults applied). The optional
+ * `weightFn` / `zeroStakeAllowed` flags stay optional after resolution —
+ * there is no default weight function, only the default stake path.
+ */
+export interface ResolvedSelectionParams
+  extends Omit<Required<SelectionParams>, 'weightFn' | 'zeroStakeAllowed'> {
+  readonly weightFn?: (juror: JurorProfile) => number;
+  readonly zeroStakeAllowed?: boolean;
+}
+
+function validateInputs(params: SelectionParams): ResolvedSelectionParams {
   validateHex(params.disputeEventId, 32);
   validateHex(params.blockHash, 32);
   return {
@@ -58,6 +98,8 @@ function validateInputs(params: SelectionParams): Required<SelectionParams> {
     marketVolumeSats: params.marketVolumeSats,
     excludedPubkeys: params.excludedPubkeys ?? [],
     referenceTimeSec: params.referenceTimeSec ?? Math.floor(Date.now() / 1000),
+    weightFn: params.weightFn,
+    zeroStakeAllowed: params.zeroStakeAllowed,
   };
 }
 
@@ -104,9 +146,46 @@ export function quadraticPriority(random: number, stakeSats: number): number {
   return -Math.log(r) / Math.sqrt(Math.max(1, stakeSats));
 }
 
+/**
+ * Weighted generalization of {@link quadraticPriority}: the same
+ * exponential-clock lottery, but with an explicit weight instead of
+ * `sqrt(stake)`. With `r` uniform on (0, 1), `-ln(r)` is Exp(1)-distributed,
+ * so `Exp(1) / weight` is an exponential clock of rate `weight` and the
+ * minimum clock over the pool wins with probability
+ * `weight / Σweights` — exactly how `quadraticPriority` already makes
+ * P(win) ∝ `sqrt(stake)`. Fail-closed: a non-finite or non-positive weight
+ * throws rather than silently skewing the draw.
+ */
+export function weightedPriority(random: number, weight: number): number {
+  if (!Number.isFinite(weight) || weight <= 0) {
+    throw new Error(`Invalid juror weight: ${weight} (must be finite and positive)`);
+  }
+  let r = random;
+  if (r <= 0) r = Number.MIN_VALUE;
+  if (r >= 1) r = 1 - Number.EPSILON;
+  return -Math.log(r) / weight;
+}
+
+/**
+ * Resolve a juror's selection weight, validating the caller-supplied
+ * `weightFn` output fail-closed. A negative or non-finite weight is a
+ * caller/reputation-feed bug, not a merely unlucky juror, so it hard-throws
+ * at selection time; a weight of exactly 0 is a legitimate "not weighted
+ * in" verdict handled as ineligibility by {@link filterEligibleJurors}.
+ */
+function jurorWeight(j: JurorProfile, weightFn: (juror: JurorProfile) => number): number {
+  const w = weightFn(j);
+  if (!Number.isFinite(w) || w < 0) {
+    throw new Error(
+      `Invalid juror weight for ${j.nostrPubkey}: ${w} (weightFn must return finite non-negative numbers)`,
+    );
+  }
+  return w;
+}
+
 export function filterEligibleJurors(
   pool: readonly JurorProfile[],
-  params: Required<SelectionParams>,
+  params: ResolvedSelectionParams,
 ): JurorProfile[] {
   const nowSec = params.referenceTimeSec;
   const minAgeSec = params.minAccountAgeDays * 24 * 60 * 60;
@@ -120,11 +199,20 @@ export function filterEligibleJurors(
     if (j.registeredAt > nowSec) return false;
     if (nowSec - j.registeredAt < minAgeSec) return false;
     if (!j.categories.includes(params.marketCategory)) return false;
-    if (j.stakeCapacitySats < params.marketVolumeSats * 0.01) return false;
+    // The 1%-of-market-volume gate keeps casual stake sizes out of
+    // economically meaningful disputes; `zeroStakeAllowed` waives it for
+    // phase-0 reputation-weighted pools. Every other gate (minStakeSats
+    // included) still applies in that mode.
+    if (!params.zeroStakeAllowed && j.stakeCapacitySats < params.marketVolumeSats * 0.01) {
+      return false;
+    }
     // If a stake commitment is present, it must be confirmed.
     if (j.stakeCommitment && j.stakeCommitment.status !== 'confirmed') return false;
     // Exclude pubkeys that were part of a previously failed selected set.
     if (excluded.has(j.nostrPubkey)) return false;
+    // In weightFn mode, a weight of 0 opts the juror out entirely. Negative
+    // or non-finite weights are a caller bug and hard-throw (fail-closed).
+    if (params.weightFn && jurorWeight(j, params.weightFn) <= 0) return false;
     return true;
   });
 }
@@ -137,11 +225,17 @@ export interface JuryWithBackups {
 function scoreAndSort(
   pool: readonly JurorProfile[],
   seed: Uint8Array,
+  params: ResolvedSelectionParams,
 ): Array<SelectedJuror & { priority: number }> {
   return pool
     .map((j) => ({
       ...j,
-      priority: quadraticPriority(jurorRandomValue(seed, j.nostrPubkey), j.stakeCapacitySats),
+      priority: params.weightFn
+        ? // Weight mode: exponential clock of rate `weightFn(j)`, so
+          // P(wins a slot) ∝ weight / Σweights. Same seed → same clocks.
+          weightedPriority(jurorRandomValue(seed, j.nostrPubkey), jurorWeight(j, params.weightFn))
+        : // Default stake path, byte-identical to the legacy behaviour.
+          quadraticPriority(jurorRandomValue(seed, j.nostrPubkey), j.stakeCapacitySats),
       idx: 0,
     }))
     .sort(
@@ -165,7 +259,7 @@ export function selectJury(
     throw new Error(`Insufficient eligible jurors: ${eligible.length} < ${p.jurySize}`);
   }
   const seed = deriveSelectionSeed(p.disputeEventId, p.blockHash);
-  return scoreAndSort(eligible, seed).slice(0, p.jurySize);
+  return scoreAndSort(eligible, seed, p).slice(0, p.jurySize);
 }
 
 export function selectJuryWithBackups(
@@ -180,7 +274,7 @@ export function selectJuryWithBackups(
 
   const seed = deriveSelectionSeed(p.disputeEventId, p.blockHash);
   const totalNeeded = p.jurySize + p.backupCount;
-  const scored = scoreAndSort(eligible, seed).slice(0, totalNeeded);
+  const scored = scoreAndSort(eligible, seed, p).slice(0, totalNeeded);
 
   return {
     selected: scored.slice(0, p.jurySize),
@@ -188,6 +282,15 @@ export function selectJuryWithBackups(
   };
 }
 
+/**
+ * Recompute the draw and compare it against a claimed roster. Works
+ * identically in both modes: it re-runs {@link selectJury} with the SAME
+ * params object the selector used, so when a `weightFn` was supplied the
+ * verifier must pass the identical function (pure and deterministic — see
+ * the {@link SelectionParams.weightFn} docstring) plus the same
+ * `zeroStakeAllowed` flag, or verification fails. Any error during the
+ * recompute (e.g. an invalid weight) returns `false` — fail-closed.
+ */
 export function verifyJurySelection(
   pool: readonly JurorProfile[],
   selected: readonly SelectedJuror[],
