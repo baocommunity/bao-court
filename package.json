@@ -1,6 +1,6 @@
 {
   "name": "@bao/court",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "type": "module",
   "description": "BAO Court / FROST threshold-oracle: DKG, signing, court session machines, recovery, and protocol events for browser and Node.",
   "exports": {
@@ -27,6 +27,18 @@
     "./court-vote-machine": {
       "types": "./courtVoteMachine.ts",
       "default": "./courtVoteMachine.ts"
+    },
+    "./court-confirmation-machine": {
+      "types": "./courtConfirmationMachine.ts",
+      "default": "./courtConfirmationMachine.ts"
+    },
+    "./batch-attestation": {
+      "types": "./batchAttestation.ts",
+      "default": "./batchAttestation.ts"
+    },
+    "./epoch-cohort": {
+      "types": "./epochCohort.ts",
+      "default": "./epochCohort.ts"
     },
     "./court-signing-machine": {
       "types": "./courtSigningMachine.ts",

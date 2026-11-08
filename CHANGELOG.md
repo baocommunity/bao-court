@@ -9,6 +9,32 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.8.0] — 2026-11-08
+
+### Added
+- **Universal confirmation case machine (`courtConfirmationMachine.ts`).**
+  Pure fail-closed reducer for the confirm/challenge lifecycle: public
+  juror confirmations (`hashCourtConfirmation` binds session + proposal +
+  roster index), a bond-witnessed challenge window, one mass-vote ladder
+  round resolved by majority (vote-machine tie-break semantics), automatic
+  `overturned_confirmation` clawback flags when a proposal is overturned,
+  a fee ledger, explicit clawback flags during fee settlement, and a final
+  verdict whose hash reuses `hashCourtVerdict` so kind-89 attestations can
+  reference it unchanged. Multi-round escalation is future work (documented
+  in-module).
+- **Merkle-batched attestations (`batchAttestation.ts`, kind 39018).**
+  RFC-6962-style domain-separated tree over `hashCourtVerdict` leaves
+  (`BAO-Court/BatchLeaf/v1` / `BatchNode/v1`), sorted-leaf determinism with
+  duplicate rejection, unbalanced-split shape stability, inclusion proofs,
+  `hashBatchManifest` under `BAO-Court/BatchManifest/v1`, event builder +
+  fail-closed validator + per-case `verifyCaseInBatch` — one threshold
+  signature now covers a whole epoch batch of verdicts.
+- **Zero-stake reputation-weighted selection (`selection.ts`).** Optional
+  `weightFn` (pure, deterministic, fail-closed validation) and
+  `zeroStakeAllowed` gate-waiver; default draw path byte-identical;
+  `verifyJurySelection` round-trips both modes. Phase-0 vetted juror pools
+  no longer require stake.
+
 ## [0.7.2] — 2026-09-30
 
 ### Fixed
