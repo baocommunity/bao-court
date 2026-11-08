@@ -321,6 +321,7 @@
         <a href="#ceremony">The Ceremony</a>
         <a href="#guarantees">Guarantees</a>
         <a href="#jurors">Jurors</a>
+        <a href="#faq">FAQ</a>
         <a href="#support">Support</a>
         <a href="https://bao.network">bao.network</a>
     </div>
@@ -479,11 +480,103 @@
         </div>
     </section>
 
+    <section class="section" id="faq">
+        <div class="wrap">
+            <div class="section-head">
+                <span class="kicker">FAQ</span>
+                <span class="no">Section IV - Questions, answered</span>
+            </div>
+            <p class="section-lead">Short answers. The long version is the protocol paper.</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="n">01</div>
+                    <h3>What is BAO Court?</h3>
+                    <p>A FROST threshold oracle for dispute resolution. A randomly selected jury runs distributed key generation, votes under commit/reveal, and produces a threshold Schnorr attestation over the final verdict - verifiable by anyone against the Court's group public key. It decides; it never holds funds.</p>
+                </div>
+                <div class="step">
+                    <div class="n">02</div>
+                    <h3>Who is it for?</h3>
+                    <p>Anyone whose contract needs a neutral verdict: BAO Markets disputes today, and any platform that names the Court as its adjudicator (external claims are on the roadmap, Angor first). Jurors can be people or autonomous agents.</p>
+                </div>
+                <div class="step">
+                    <div class="n">03</div>
+                    <h3>Why not just trust the operator?</h3>
+                    <p>Because "trust us" is not a guarantee. A verdict here is a threshold signature over a group key that no single party - including the operator - ever holds. Verification needs no access to the Court, its jurors, or its operators, and works offline from the public library.</p>
+                </div>
+                <div class="step">
+                    <div class="n">04</div>
+                    <h3>How is a dispute resolved?</h3>
+                    <p>Four certified stages: seed-bound jury selection (anyone can recompute the draw), distributed key generation, secret commit/reveal voting, and threshold FROST signing. Any contradiction aborts the attempt rather than weakening it.</p>
+                </div>
+                <div class="step">
+                    <div class="n">05</div>
+                    <h3>Who are the jurors?</h3>
+                    <p>Registered candidates picked by a lottery derived from public block evidence - no applications, no favoritism. Participants and exposed parties are excluded, backups are drawn at the same time, and anyone can verify the roster.</p>
+                </div>
+                <div class="step">
+                    <div class="n">06</div>
+                    <h3>Do jurors stake anything?</h3>
+                    <p>The protocol verifies juror bonds against Bitcoin/Liquid backends and computes Kleros-style slashing: coherent jurors share the slashed pool, incoherent lose 50%, non-reveal and double-voting lose 100%. A fee-paid, vetted zero-stake program with reputation weighting is on the roadmap.</p>
+                </div>
+                <div class="step">
+                    <div class="n">07</div>
+                    <h3>How do I verify a verdict myself?</h3>
+                    <p>Attestations are public Nostr events. Recompute the verdict hash from the session parameters and revealed votes, then check the Schnorr signature against the Court's group public key. The vendored TypeScript library does this offline - you never need to ask us.</p>
+                </div>
+                <div class="step">
+                    <div class="n">08</div>
+                    <h3>What happens to a bad or lazy juror?</h3>
+                    <p>Slashing is deterministic: -50% for voting against the tally, -100% for withholding a reveal or double-voting; coherent jurors split the slashed pool. Anyone can recompute the redistribution plan from public inputs and verify its integrity.</p>
+                </div>
+                <div class="step">
+                    <div class="n">09</div>
+                    <h3>Does the Court hold or move funds?</h3>
+                    <p>Never. It decides outcomes and authorizes downstream actions. Settlement - Lightning hold invoices, Liquid escrow, Taproot script-path spends - is executed by hosts against their own rails. The protocol ships with no custody and no credentials.</p>
+                </div>
+                <div class="step">
+                    <div class="n">10</div>
+                    <h3>What if both parties agree?</h3>
+                    <p>Then the dispute pipeline never runs: the deal settles on its own terms. The Court exists for the cases that fall off the happy path. On the roadmap: universal confirmation, which attests every settlement by default - disputed or not.</p>
+                </div>
+                <div class="step">
+                    <div class="n">11</div>
+                    <h3>What if the evidence is genuinely unclear?</h3>
+                    <p>The protocol fails closed: ceremonies abort rather than degrade, ties break deterministically, and when no juror is coherent the pool goes to the treasury by fixed rule. Nothing is resolved by invented interpretation. An explicit UNDETERMINED outcome is on the roadmap.</p>
+                </div>
+                <div class="step">
+                    <div class="n">12</div>
+                    <h3>Which chains does it use?</h3>
+                    <p>The protocol is rail-agnostic. Bond verification runs against Bitcoin/Liquid backends; settlement adapters exist for Lightning hold invoices and Liquid P2WSH/Taproot escrow, with Elements-consensus taproot spends proven by a real on-chain script-path spend.</p>
+                </div>
+                <div class="step">
+                    <div class="n">13</div>
+                    <h3>Is juror deliberation private?</h3>
+                    <p>Yes. Votes are committed in secret and revealed later. DKG shares, complaints, and backups travel encrypted (NIP-44) under gift wrap (NIP-59). No juror ever holds the group private key, so there is nothing to steal from any single juror.</p>
+                </div>
+                <div class="step">
+                    <div class="n">14</div>
+                    <h3>Is the protocol open?</h3>
+                    <p>Yes. AGPL-3.0, developed in the canonical public repo, shipped as platform-neutral TypeScript source with normative test vectors and a deterministic end-to-end simulation you can run yourself.</p>
+                </div>
+                <div class="step">
+                    <div class="n">15</div>
+                    <h3>How do I try it?</h3>
+                    <p>Clone the repository, run the test suite and the end-to-end simulation to watch a full ceremony execute, and read the protocol paper. Integration starts with the validator - verify an attestation against the group key in a few lines of TypeScript.</p>
+                </div>
+                <div class="step">
+                    <div class="n">16</div>
+                    <h3>What is on the roadmap?</h3>
+                    <p>Universal jury confirmation (every settlement attested, disputed or not), an escalating appeal ladder with loser-funded rounds, Nostr reputation badges derived from attestations, and external-claim intake so partner platforms can route their disputes to the Court.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="section" id="support">
         <div class="wrap">
             <div class="section-head">
                 <span class="kicker">Support</span>
-                <span class="no">Section IV - Keep the oracle running</span>
+                <span class="no">Section V - Keep the oracle running</span>
             </div>
             <div class="support">
                 <h3>Support the Court</h3>
@@ -544,8 +637,8 @@
                 honest people disagree.
             </p>
             <div class="cta-row">
-                <a class="btn btn-accent" href="https://bao.network">Explore the Network</a>
-                <a class="btn" href="https://app.bao.network/">Enter BAO</a>
+                <a class="btn btn-accent" href="https://bao.markets">Explore the Network</a>
+                <a class="btn" href="https://bao.markets/testnet/markets">Enter BAO</a>
                 <a class="btn" href="https://fund.bao.network">Open the Fund</a>
             </div>
             <p class="fine">Decide. Verify. Never custody.</p>
@@ -557,9 +650,9 @@
 <footer>
     <div class="wrap">
         <div class="eco-links">
-            <a href="https://bao.network">bao.network</a>
+            <a href="https://bao.markets">bao.markets</a>
             <a class="current" href="https://court.bao.network">court</a>
-            <a href="https://app.bao.network/">bao</a>
+            <a href="https://bao.markets/testnet/markets">app</a>
             <a href="https://fund.bao.network">fund</a>
             <a href="https://bao.bao.network" target="_blank" rel="noopener">₿AO₿AO NOSTR APP</a>
             <a href="https://github.com/baocommunity/bao-court" target="_blank" rel="noopener">github</a>

@@ -23,6 +23,10 @@ reference implementation and published here under the AGPL-3.0.
 production gates — is
 [`docs/FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md).
 
+**FAQ.** Short answers to common questions —
+[`docs/FAQ.md`](docs/FAQ.md) (also rendered on the landing page's FAQ
+section).
+
 
 ---
 
