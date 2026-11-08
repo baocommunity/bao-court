@@ -267,6 +267,15 @@ persist states.
 - **`courtSigningMachine.ts`** — `intent → nonce_commit →
   commitment_set_final → partial_sign → aggregate → attestation_published`
   (+ `expired`, aborts); emits the publishable attestation.
+- **`courtConfirmationMachine.ts`** — universal-confirmation case machine:
+  `confirm_open → confirm_closed → challenge_window → (ladder rounds) →
+  fee_settlement → final` (+ `expired`/`aborted`); public confirmations
+  (one per roster index, canonical `hashCourtConfirmation` binding), a
+  bond-witnessed challenge window, one mass-vote ladder round with
+  vote-machine tie-break semantics, automatic `overturned_confirmation`
+  clawback flags, a fee ledger, and a final verdict reusing
+  `hashCourtVerdict`. Multi-round escalation is specified in the
+  universal-confirmation proposal and lands in a later minor version.
 
 The session-oriented classes (`IndependentDkgSession`,
 `IndependentSigningSession`) wrap the same rules for hosts that prefer an
@@ -284,7 +293,10 @@ Event kinds and builders/parsers live in `events.ts` and `dkgMessages.ts`:
 - FROST commit / reveal;
 - attestation — **kind 89** for normal verdicts, **kind 39007** for dispute
   overrides (`dispute.ts`, `deriveDisputeGroupPubkey`,
-  `runDisputeOverrideSigning`).
+  `runDisputeOverrideSigning`), and **kind 39018** for Merkle-batched epoch
+  attestations (`batchAttestation.ts`: one threshold signature over the
+  batch manifest covers every verdict in the batch; per-case inclusion
+  proofs verified by `verifyCaseInBatch`).
 
 `validator.ts` (`validateAttestationEvent`, `verifyRawSignature`) is the
 consumer-side gate: given an attestation event and the expected group key,
@@ -394,6 +406,9 @@ winning_secret_commitment`.
 | `courtDkgMachine.ts` | DKG state machine |
 | `courtVoteMachine.ts` | vote commit/reveal/tally state machine + verdict hashing |
 | `courtSigningMachine.ts` | FROST signing-session state machine + signing-session hashing |
+| `courtConfirmationMachine.ts` | universal-confirmation case machine: public confirmations, bond-witnessed challenges, mass-vote ladder round, clawback flags, fee ledger |
+| `batchAttestation.ts` | kind-39018 RFC-6962-style Merkle batch attestations: tree/proofs/manifest, fail-closed validator, per-case `verifyCaseInBatch` |
+| `epochCohort.ts` | standing-cohort records (n≤300 unanimous-DKG cap), rotation ordering rules, epoch handoff hashing |
 | `dkg.ts` | Pedersen DKG adapter, VSS verify, share combine, refresh math |
 | `independentDkg.ts` | host-facing DKG session (fail-closed, private blame) |
 | `signing.ts` | FROST round helpers + nonce-reuse guards |
@@ -424,7 +439,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (659 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (787 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit
