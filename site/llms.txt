@@ -35,7 +35,7 @@ Every one of these hosts publishes its own `/llms.txt` and its own robots policy
 - [BAO Markets](https://bao.markets/) — prediction markets; [demo API reference](https://bao.markets/devkit/api.html) and [LLM bot guide](https://bao.markets/devkit/llm.html).
 - [₿AO Fund](https://bao.fund/) — milestone fundraising; the [live campaign list](https://app.bao.network/fund-api/v1/fundraisers).
 - [₿AO₿AO](https://bao.bao.network/), [2140 Social](https://2140.social/) and [2140.wtf](https://2140.wtf/) — the Nostr clients.
-- [Demo relay](https://relay.bao.network/) and [testnet relay](https://relay.testnet.bao.network/); community chat runs on `wss://relay.bao.fund`.
+- [Demo relay](https://relay.bao.network/) and [testnet relay](https://relay.testnet.bao.markets/); community chat runs on `wss://relay.bao.fund`.
 
 ## Optional
 - [Prototype compromises](https://bao.markets/PROTOTYPE_COMPROMISES.md) — what the FROST prototype is explicitly not safe for.
