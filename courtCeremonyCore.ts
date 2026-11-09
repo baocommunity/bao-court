@@ -49,6 +49,45 @@ export function assertRosterMember(
   }
 }
 
+const canonicalTextEncoder = new TextEncoder();
+const canonicalTextDecoder = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * True when `value` is exactly the canonical decoding of its own UTF-8
+ * bytes. Encoding replaces lone surrogates with U+FFFD, so two DISTINCT
+ * strings (`'A\uD800'` and `'A\uFFFD'`) share one canonical byte form:
+ * accepting both would let two ballot outcomes hash identically while the
+ * tally counts them as different keys, splitting one canonical outcome
+ * across two buckets and making the winner order-dependent. Outcomes must
+ * therefore round-trip, which rejects lone surrogates at the boundary.
+ */
+export function isCanonicalUtf8Text(value: string): boolean {
+  try {
+    return canonicalTextDecoder.decode(canonicalTextEncoder.encode(value)) === value;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fail closed on a restored or tampered state whose array fields were
+ * replaced by non-array values. Guards that call `.includes` / `.find` /
+ * `.map` would otherwise crash with an uncaught TypeError, and a string
+ * allowlist would admit substring matches (`'YES'.includes('Y')`) outside
+ * the frozen ballot.
+ */
+export function assertStateArrays(
+  state: Record<string, unknown>,
+  fields: readonly string[],
+  ErrorCtor: CourtTransitionErrorCtor,
+): void {
+  for (const field of fields) {
+    if (!Array.isArray(state[field])) {
+      throw new ErrorCtor(`${field} must be an array`);
+    }
+  }
+}
+
 /**
  * Assert that a message arrives strictly before the ceremony deadline.
  */
@@ -88,6 +127,9 @@ export function normalizeCeremonyRoster(
   noun: string,
   ErrorCtor: CourtTransitionErrorCtor,
 ): number[] {
+  if (!Array.isArray(participantIndices)) {
+    throw new ErrorCtor('participantIndices must be an array');
+  }
   if (participantIndices.length === 0) {
     throw new ErrorCtor(`${noun} requires at least one participant`);
   }

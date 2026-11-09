@@ -6,6 +6,8 @@ import {
   assertNow,
   assertPositiveDeadline,
   assertRosterMember,
+  assertStateArrays,
+  isCanonicalUtf8Text,
   normalizeCeremonyRoster,
 } from './courtCeremonyCore';
 
@@ -163,6 +165,7 @@ export function hashCourtVoteCommit(params: {
     || params.outcome.length === 0
     || params.outcome.length > MAX_OUTCOME_BYTES
     || textEncoder.encode(params.outcome).length > MAX_OUTCOME_BYTES
+    || !isCanonicalUtf8Text(params.outcome)
   ) {
     throw new CourtVoteTransitionError('outcome must be a non-empty bounded string');
   }
@@ -203,6 +206,7 @@ export function hashCourtVerdict(params: {
     || params.outcome.length === 0
     || params.outcome.length > MAX_OUTCOME_BYTES
     || textEncoder.encode(params.outcome).length > MAX_OUTCOME_BYTES
+    || !isCanonicalUtf8Text(params.outcome)
   ) {
     throw new CourtVoteTransitionError('outcome must be a non-empty bounded string');
   }
@@ -265,6 +269,7 @@ export function hashDisputeVerdict(params: {
     || params.outcome.length === 0
     || params.outcome.length > MAX_OUTCOME_BYTES
     || textEncoder.encode(params.outcome).length > MAX_OUTCOME_BYTES
+    || !isCanonicalUtf8Text(params.outcome)
   ) {
     throw new CourtVoteTransitionError('outcome must be a non-empty bounded string');
   }
@@ -421,10 +426,11 @@ export function createCourtVoteMachine(params: {
     if (outcomeBytes.length === 0 || outcomeBytes.length > MAX_OUTCOME_BYTES) {
       throw new CourtVoteTransitionError('allowed outcomes must be bounded strings');
     }
-    // Reject outcomes with surrogate pairs or incomplete UTF-8 sequences.
-    try {
-      new TextDecoder('utf-8', { fatal: true }).decode(outcomeBytes);
-    } catch {
+    // The encoding must round-trip to the identical string: lone surrogates
+    // are replaced with U+FFFD when encoded, so two distinct strings would
+    // otherwise share one canonical byte form (hash collision across
+    // distinct outcomes, order-dependent tally).
+    if (new TextDecoder('utf-8', { fatal: true }).decode(outcomeBytes) !== outcome) {
       throw new CourtVoteTransitionError('allowed outcomes must be valid UTF-8');
     }
     if (seen.has(outcome)) {
@@ -456,6 +462,20 @@ export function reduceCourtVoteMachine(
   state: CourtVoteMachineState,
   event: CourtVoteMachineEvent,
 ): CourtVoteMachineState {
+  // Fail closed on a non-object event (a null/undefined event would crash
+  // with an uncaught TypeError on property access below).
+  if (event === null || typeof event !== 'object') {
+    throw new CourtVoteTransitionError('event must be an object');
+  }
+  // Fail closed on a tampered or hand-restored state whose configuration or
+  // ledger fields were replaced by non-array values (an uncaught TypeError
+  // in the guards below, or a string allowlist admitting substring matches
+  // outside the frozen ballot).
+  assertStateArrays(
+    state as unknown as Record<string, unknown>,
+    ['participantIndices', 'allowedOutcomes', 'commits', 'reveals'],
+    CourtVoteTransitionError,
+  );
   // Every time-bearing event must be monotonically non-decreasing: a caller
   // that restores or replays state cannot roll the clock back to re-admit
   // reveals after a later close, or hold the ceremony open past a deadline
@@ -673,5 +693,8 @@ export function reduceCourtVoteMachine(
     return freezeCourtVoteMachineState({ ...state, phase: 'tally_final', verdict });
   }
 
-  return state;
+  // Unreachable for well-typed events; fail closed instead of silently
+  // returning an unfrozen clock-advanced copy for a hostile unknown type.
+  const unknownType = (event as { readonly type?: unknown }).type;
+  throw new CourtVoteTransitionError(`unknown vote event type: ${String(unknownType)}`);
 }

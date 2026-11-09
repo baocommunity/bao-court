@@ -7,6 +7,8 @@ import {
   assertNow,
   assertPositiveDeadline,
   assertRosterMember,
+  assertStateArrays,
+  isCanonicalUtf8Text,
   normalizeCeremonyRoster,
 } from './courtCeremonyCore';
 
@@ -141,6 +143,22 @@ const TERMINAL_PHASES = new Set<CourtSigningPhase>([
 ]);
 
 /**
+ * Freeze a signing-machine state so no holder of a returned reference can
+ * mutate the frozen configuration, ledgers, or failure between transitions
+ * (mirrors the vote machine's freeze discipline).
+ */
+function freezeCourtSigningMachineState(state: CourtSigningMachineState): CourtSigningMachineState {
+  for (const commitment of state.commitments) Object.freeze(commitment);
+  for (const partial of state.partials) Object.freeze(partial);
+  Object.freeze(state.commitments);
+  Object.freeze(state.partials);
+  Object.freeze(state.participantIndices);
+  if (state.finalizedSignerSet) Object.freeze(state.finalizedSignerSet);
+  if (state.failure) Object.freeze(state.failure);
+  return Object.freeze(state);
+}
+
+/**
  * Canonical hash binding every field that defines one signing attempt. A
  * FROST nonce commitment may be consumed only under exactly one such hash.
  */
@@ -186,6 +204,35 @@ function assertParticipant(state: CourtSigningMachineState, idx: number): void {
 function assertSigningRecordInvariants(state: CourtSigningMachineState): void {
   if (!Array.isArray(state.commitments) || !Array.isArray(state.partials)) {
     throw new CourtSigningTransitionError('signing state ledgers must be arrays');
+  }
+  // Fail closed on a tampered roster before any roster-membership guard
+  // dereferences it (an uncaught TypeError on `.includes`).
+  assertStateArrays(
+    state as unknown as Record<string, unknown>,
+    ['participantIndices'],
+    CourtSigningTransitionError,
+  );
+  // Re-derive the signing session hash from the persisted fields: a restored
+  // or hand-tampered snapshot whose outcome, threshold, roster, or attempt
+  // was edited without re-signing the binding is rejected before any
+  // commitment or partial is accepted against it.
+  let expectedSigningSessionHash: string;
+  try {
+    expectedSigningSessionHash = hashCourtSigningSession({
+      sessionHash: state.sessionHash,
+      verdictHash: state.verdictHash,
+      outcome: state.outcome,
+      participantIndices: state.participantIndices,
+      threshold: state.threshold,
+      attempt: state.attempt,
+    });
+  } catch {
+    throw new CourtSigningTransitionError('signing state has malformed session-binding fields');
+  }
+  if (state.signingSessionHash !== expectedSigningSessionHash) {
+    throw new CourtSigningTransitionError(
+      'signing state does not match its signing session hash',
+    );
   }
   const commitmentIndices = new Set<number>();
   for (const commitment of state.commitments) {
@@ -271,7 +318,8 @@ export function createCourtSigningMachine(params: {
   if (
     typeof params.outcome !== 'string' ||
     params.outcome.length === 0 ||
-    textEncoder.encode(params.outcome).length > MAX_OUTCOME_BYTES
+    textEncoder.encode(params.outcome).length > MAX_OUTCOME_BYTES ||
+    !isCanonicalUtf8Text(params.outcome)
   ) {
     throw new CourtSigningTransitionError('outcome must be a non-empty bounded string');
   }
@@ -300,7 +348,7 @@ export function createCourtSigningMachine(params: {
   if (params.outcome.length > 4096) {
     throw new CourtSigningTransitionError('outcome must be at most 4096 bytes');
   }
-  return {
+  return freezeCourtSigningMachineState({
     signingSessionHash: hashCourtSigningSession({
       sessionHash: params.sessionHash,
       verdictHash: params.verdictHash,
@@ -319,13 +367,18 @@ export function createCourtSigningMachine(params: {
     phase: 'intent',
     commitments: [],
     partials: [],
-  };
+  });
 }
 
 export function reduceCourtSigningMachine(
   state: CourtSigningMachineState,
   event: CourtSigningMachineEvent,
 ): CourtSigningMachineState {
+  // Fail closed on a non-object event (a null/undefined event would crash
+  // with an uncaught TypeError on property access below).
+  if (event === null || typeof event !== 'object') {
+    throw new CourtSigningTransitionError('event must be an object');
+  }
   assertSigningRecordInvariants(state);
 
   if (event.type === 'tick') {
@@ -338,11 +391,11 @@ export function reduceCourtSigningMachine(
     }
     assertNow(event.now, CourtSigningTransitionError);
     if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) return state;
-    return {
+    return freezeCourtSigningMachineState({
       ...state,
       phase: 'expired',
       failure: { phase: 'expired', reason: 'The signing deadline passed before publication.' },
-    };
+    });
   }
   if (event.type === 'abort') {
     if (TERMINAL_PHASES.has(state.phase)) {
@@ -356,11 +409,11 @@ export function reduceCourtSigningMachine(
     // Ensure the caller cannot forge a peer-blame by supplying an unverified
     // blamedIdx — the index must be a valid roster participant.
     assertBlamedIdx(event.blamedIdx, state.participantIndices, 'signer', CourtSigningTransitionError);
-    return {
+    return freezeCourtSigningMachineState({
       ...state,
       phase: event.phase,
       failure: { phase: event.phase, reason: event.reason, blamedIdx: event.blamedIdx },
-    };
+    });
   }
   if (TERMINAL_PHASES.has(state.phase)) {
     throw new CourtSigningTransitionError(`cannot process ${event.type} after ${state.phase}`);
@@ -371,7 +424,7 @@ export function reduceCourtSigningMachine(
     if (state.phase !== 'intent') {
       throw new CourtSigningTransitionError(`cannot start signing from ${state.phase}`);
     }
-    return { ...state, phase: 'nonce_commit' };
+    return freezeCourtSigningMachineState({ ...state, phase: 'nonce_commit' });
   }
 
   if (event.type === 'accept_commitment') {
@@ -393,7 +446,7 @@ export function reduceCourtSigningMachine(
       if (existing.binderPn === event.binderPn && existing.hiddenPn === event.hiddenPn) {
         return state;
       }
-      return {
+      return freezeCourtSigningMachineState({
         ...state,
         phase: 'aborted_peer',
         failure: {
@@ -401,15 +454,15 @@ export function reduceCourtSigningMachine(
           blamedIdx: event.idx,
           reason: 'A signer published a conflicting nonce commitment for this signing attempt.',
         },
-      };
+      });
     }
-    return {
+    return freezeCourtSigningMachineState({
       ...state,
       commitments: [
         ...state.commitments,
         { idx: event.idx, binderPn: event.binderPn, hiddenPn: event.hiddenPn },
       ],
-    };
+    });
   }
 
   if (event.type === 'close_commitments') {
@@ -423,7 +476,7 @@ export function reduceCourtSigningMachine(
       );
     }
     const finalizedSignerSet = state.commitments.map((c) => c.idx).sort((a, b) => a - b);
-    return { ...state, phase: 'commitment_set_final', finalizedSignerSet };
+    return freezeCourtSigningMachineState({ ...state, phase: 'commitment_set_final', finalizedSignerSet });
   }
 
   if (event.type === 'accept_partial') {
@@ -448,7 +501,7 @@ export function reduceCourtSigningMachine(
     const existing = state.partials.find((p) => p.idx === event.idx);
     if (existing) {
       if (existing.psig === event.psig) return state;
-      return {
+      return freezeCourtSigningMachineState({
         ...state,
         phase: 'aborted_peer',
         failure: {
@@ -456,7 +509,7 @@ export function reduceCourtSigningMachine(
           blamedIdx: event.idx,
           reason: 'A signer published conflicting partial signatures for this signing attempt.',
         },
-      };
+      });
     }
     // Verify that the partial signature index is unique — duplicates would
     // bypass the distinct-signer threshold check and inflate the partial count.
@@ -466,11 +519,11 @@ export function reduceCourtSigningMachine(
         `duplicate partial signature from signer ${event.idx}`,
       );
     }
-    return {
+    return freezeCourtSigningMachineState({
       ...state,
       phase: 'partial_sign',
       partials: [...state.partials, { idx: event.idx, psig: event.psig }],
-    };
+    });
   }
 
   if (event.type === 'aggregate') {
@@ -486,7 +539,7 @@ export function reduceCourtSigningMachine(
     if (!SCHNORR_SIGNATURE.test(event.signature)) {
       throw new CourtSigningTransitionError('aggregated signature must be 64-byte lowercase hex');
     }
-    return { ...state, phase: 'aggregate', signature: event.signature };
+    return freezeCourtSigningMachineState({ ...state, phase: 'aggregate', signature: event.signature });
   }
 
   if (event.type === 'publish') {
@@ -497,8 +550,11 @@ export function reduceCourtSigningMachine(
     if (!HEX_32.test(event.attestationEventId)) {
       throw new CourtSigningTransitionError('attestation event id must be 32-byte lowercase hex');
     }
-    return { ...state, phase: 'attestation_published', attestationEventId: event.attestationEventId };
+    return freezeCourtSigningMachineState({ ...state, phase: 'attestation_published', attestationEventId: event.attestationEventId });
   }
 
-  return state;
+  // Unreachable for well-typed events; fail closed instead of silently
+  // returning state for a hostile unknown type.
+  const unknownType = (event as { readonly type?: unknown }).type;
+  throw new CourtSigningTransitionError(`unknown signing event type: ${String(unknownType)}`);
 }
