@@ -14,6 +14,16 @@ import {
   compareOutcomeUtf8,
   hashCourtVerdict,
 } from './courtVoteMachine';
+// Note (cross-module round 2, SEQUENCE-6): this machine intentionally reuses
+// the vote machine's COURT_VERDICT_DOMAIN via hashCourtVerdict — a
+// confirmation verdict and a mass-vote verdict with identical
+// (sessionHash, outcome, supportingEventIds) hash identically BY DESIGN
+// (same evidence semantics, one verdict domain). The machines draw their
+// supporting ids from different event universes (confirmation events vs
+// commit/reveal events), so substituting one universe for the other changes
+// the hash and fails batch/proof verification. Dispute attestations use the
+// separate DisputeVerdict/v1 domain (hashDisputeVerdict) and cannot be
+// confused with either.
 import { CanonicalWriter } from './courtSession';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
@@ -330,6 +340,80 @@ function assertValidMassVoteLedger(state: CourtConfirmationMachineState): void {
     }
     seenIndices.add(vote.idx);
     seenEventIds.add(vote.eventId);
+  }
+}
+
+/**
+ * Ledger barrier for the confirmation and challenge ledgers (the mass-vote
+ * barrier's counterpart): every persisted record must re-verify against the
+ * machine's own canonical bindings, so a restored or hand-tampered snapshot
+ * cannot feed `finalize`/`resolve_round` from records that were never
+ * accepted through `accept_confirmation`/`accept_challenge`. Recomputes each
+ * confirmation's canonical hash (sessionHash + proposalHash + idx) and
+ * re-checks roster membership, hex well-formedness, per-index uniqueness,
+ * and event-id uniqueness for both ledgers. Called at the two points where
+ * these ledgers lock value in: `resolve_round` (clawback flags from the
+ * confirmation ledger) and `finalize` (verdict supporting event ids).
+ */
+function assertValidConfirmationLedger(state: CourtConfirmationMachineState): void {
+  const seenConfirmIndices = new Set<number>();
+  const seenConfirmEventIds = new Set<string>();
+  for (const record of state.confirmations) {
+    if (typeof record !== 'object' || record === null) {
+      throw new CourtConfirmationTransitionError('confirmation ledger contains a malformed record');
+    }
+    assertParticipant(state, record.idx);
+    if (
+      typeof record.confirmHash !== 'string'
+      || typeof record.eventId !== 'string'
+      || !HEX_32.test(record.eventId)
+    ) {
+      throw new CourtConfirmationTransitionError('confirmation ledger contains a malformed record');
+    }
+    // Re-derive the canonical confirmation hash: a hand-restored record
+    // whose confirmHash was never accepted (or whose idx was reassigned)
+    // is caught here instead of feeding the verdict's supporting set.
+    const expected = hashCourtConfirmation({
+      sessionHash: state.sessionHash,
+      proposalHash: state.proposalHash,
+      idx: record.idx,
+    });
+    if (record.confirmHash !== expected) {
+      throw new CourtConfirmationTransitionError(
+        `confirmation record for participant ${record.idx} does not match the canonical confirmation hash`,
+      );
+    }
+    if (seenConfirmIndices.has(record.idx)) {
+      throw new CourtConfirmationTransitionError(
+        `participant ${record.idx} has duplicate confirmation records`,
+      );
+    }
+    if (seenConfirmEventIds.has(record.eventId)) {
+      throw new CourtConfirmationTransitionError('confirmation event ids must be unique');
+    }
+    seenConfirmIndices.add(record.idx);
+    seenConfirmEventIds.add(record.eventId);
+  }
+  const seenChallengeIndices = new Set<number>();
+  const seenChallengeEventIds = new Set<string>();
+  for (const record of state.challenges) {
+    if (typeof record !== 'object' || record === null) {
+      throw new CourtConfirmationTransitionError('challenge ledger contains a malformed record');
+    }
+    assertParticipant(state, record.idx);
+    assertHex32(record.bondTxid, 'challenge bond txid must be 32-byte lowercase hex');
+    assertHex32(record.bondProofHash, 'challenge bond proof hash must be 32-byte lowercase hex');
+    assertHex32(record.eventId, 'challenge event id must be 32-byte lowercase hex');
+    if (seenChallengeIndices.has(record.idx)) {
+      throw new CourtConfirmationTransitionError(
+        `participant ${record.idx} has duplicate challenge records`,
+      );
+    }
+    if (seenChallengeEventIds.has(record.eventId)) {
+      throw new CourtConfirmationTransitionError('challenge event ids must be unique');
+    }
+    seenChallengeIndices.add(record.idx);
+    seenChallengeEventIds.add(record.eventId);
   }
 }
 
@@ -700,6 +784,7 @@ export function reduceCourtConfirmationMachine(
       throw new CourtConfirmationTransitionError(`cannot resolve a round during ${state.phase}`);
     }
     assertValidMassVoteLedger(state);
+    assertValidConfirmationLedger(state);
     if (state.ladder.votes.length === 0) {
       throw new CourtConfirmationTransitionError('cannot resolve a round without any valid mass vote');
     }
@@ -798,6 +883,15 @@ export function reduceCourtConfirmationMachine(
     if (state.phase !== 'fee_settlement') {
       throw new CourtConfirmationTransitionError(`cannot finalize during ${state.phase}`);
     }
+    // Ledger barrier (cross-module round 2, SEQUENCE-4): the confirmation
+    // ledger becomes the verdict's supporting event ids, so a restored or
+    // hand-tampered snapshot is re-verified against the canonical
+    // confirmation bindings before any verdict hash is minted. The verdict
+    // is a pure function of the verified ledgers: clawback-flag history is
+    // deliberately NOT an input, so replaying the same pre-finalize
+    // snapshot with a different flag history yields the identical
+    // verdictHash (deterministic double-finalize protection).
+    assertValidConfirmationLedger(state);
     const pending = state.verdict;
     if (!pending) {
       throw new CourtConfirmationTransitionError('cannot finalize without a resolved round');

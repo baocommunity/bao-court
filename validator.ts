@@ -294,6 +294,16 @@ export interface AttestationV2ValidationContext {
   readonly minThreshold?: number;
   /** Pin the expected signer-set root (the `signers` tag must match). */
   readonly expectedSignerSetRoot?: string;
+  /**
+   * Pin the batch Merkle root — the `batch` tag must be PRESENT and match
+   * (fail-closed: a v2 attestation without a `batch` tag does not satisfy
+   * this pin). The signed message binds the root, so a pinned root proves
+   * the group signed finality over that batch; the epoch binding of the
+   * batch itself comes from separately validating the referenced kind-39018
+   * batch event with the SAME `expectedEpoch` (see
+   * `__tests__/adversarialCrossModule.test.ts`, SEQUENCE-1).
+   */
+  readonly expectedBatchMerkleRoot?: string;
   /** Full signer set — recomputes the root AND enforces `length === threshold`. */
   readonly signerSet?: readonly number[];
 }
@@ -327,6 +337,19 @@ function v2FieldByteLength(value: string): number {
  * v2 attestation message with the finality binding. Every v2 field must be
  * present as a tag, mirrored in content, and bound into the signed message;
  * the group signature must verify over that message.
+ *
+ * SECURITY (cross-module round 2): this function verifies the event against
+ * ITSELF plus the caller's context pins. A valid signature proves only that
+ * SOME key signed the message — it does NOT prove the key is the empaneled
+ * cohort. Any consumer that derives finality, tier policy, reputation, or
+ * settlement from an attestation MUST pin `expectedGroupPubkey`: without
+ * that pin, an attacker-controlled key can re-sign the very same tags with
+ * an ELEVATED `tier`/`threshold` and the result validates cleanly (see
+ * `__tests__/adversarialCrossModule.test.ts`, SEQUENCE-3). Consumers
+ * chaining a batch attestation must ALSO validate the referenced kind-39018
+ * batch event with the same `expectedEpoch` and match Merkle roots
+ * (SEQUENCE-1) — the `batch` tag carries only the root, not the batch's
+ * epoch or cohort binding.
  */
 export function validateAttestationEventV2(
   event: NostrEvent,
@@ -466,6 +489,9 @@ export function validateAttestationEventV2(
   if (context.expectedSignerSetRoot && signersTag !== context.expectedSignerSetRoot) {
     return { valid: false, pubkey, error: 'Signer-set root mismatch' };
   }
+  if (context.expectedBatchMerkleRoot !== undefined && (batchTag ?? undefined) !== context.expectedBatchMerkleRoot) {
+    return { valid: false, pubkey, error: 'Batch Merkle root mismatch' };
+  }
   if (context.signerSet) {
     let recomputed: string;
     try {
@@ -549,12 +575,22 @@ const V2_ONLY_POLICY_FIELDS = [
   'minTier',
   'minThreshold',
   'expectedSignerSetRoot',
+  'expectedBatchMerkleRoot',
   'signerSet',
 ] as const;
 
 /**
  * Shape dispatcher: v2 events (carrying an `epoch` tag) go through the v2
  * finality validation; everything else takes the frozen v1 path.
+ *
+ * SECURITY (cross-module round 2): whichever path runs, the validator only
+ * proves the event is INTERNALLY consistent plus whatever the caller pinned.
+ * A valid result does NOT identify the signer as the empaneled cohort —
+ * consumers MUST pass `expectedGroupPubkey` (and, for v2 finality policy,
+ * `expectedEpoch` / `minTier` / `minThreshold` / `expectedSignerSetRoot` /
+ * `expectedBatchMerkleRoot`) or any fresh key can re-sign elevated-tier
+ * tags past this check. See the v2 docstring and
+ * `__tests__/adversarialCrossModule.test.ts`, SEQUENCE-3.
  *
  * FINDING-1 (security round 1): the frozen v1 validator knows nothing about
  * the v2-only finality policy fields. Silently passing a v1-shaped event to
@@ -578,7 +614,7 @@ export function validateCourtAttestation(
       valid: false,
       pubkey: '',
       error:
-        'v1 attestation (no epoch tag) cannot satisfy v2 finality policy (expectedEpoch/minTier/minThreshold/expectedSignerSetRoot/signerSet) — downgrade refused',
+        'v1 attestation (no epoch tag) cannot satisfy v2 finality policy (expectedEpoch/minTier/minThreshold/expectedSignerSetRoot/expectedBatchMerkleRoot/signerSet) — downgrade refused',
     };
   }
   return validateAttestationEvent(event, context as AttestationValidationContext);
