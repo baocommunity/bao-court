@@ -9,6 +9,30 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.8.3] — 2026-11-09
+
+### Fixed (round-1 adversarial machine fuzz, PR #37)
+- **Canonicalization bypass:** lone surrogates encoded identically to their
+  U+FFFD replacement — two distinct outcomes hashed identically while the
+  tally counted separate buckets (order-dependent majorities). All four
+  machines now reject non-canonical UTF-8 (`isCanonicalUtf8Text` round-trip
+  check) at creation and in every hash helper; the dead surrogate-only fatal
+  decoder is replaced by the round-trip gate.
+- **State-shape tampering:** null/string rosters crashed uncaught; string
+  allowlists admitted substring outcomes past the ledger barrier
+  (`'YES'.includes('Y')`). `assertStateArrays` + roster array guard at every
+  reducer entry.
+- **Signing binding re-verification:** restored snapshots could edit
+  outcome/threshold/roster post-hoc (below-threshold aggregates) — the
+  signing-session hash is now re-derived on every dispatch.
+- **Freeze discipline:** signing/DKG machines now freeze returned states
+  (uniform with vote/confirmation).
+- **Unknown event types:** reducers throw typed errors instead of returning
+  unfrozen clock-advanced copies.
+- Reported-not-fixed (owner decisions): cross-index eventId reuse wedges
+  resolution fail-closed until tick-expiry; `abort.reason` unbounded.
+- Suite: 1206 passed / 1 skipped (+404 adversarial tests).
+
 ## [0.8.2] — 2026-11-09
 
 ### Fixed
