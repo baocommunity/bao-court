@@ -56,7 +56,7 @@ const hex32 = (r: () => number): string =>
 const TERMINAL_PHASES = new Set(['final', 'expired', 'aborted']);
 const ALL_PHASES = [
   'confirm_open', 'confirm_closed', 'challenge_window', 'ladder_pending',
-  'ladder_vote_open', 'ladder_vote_closed', 'fee_settlement',
+  'ladder_vote_open', 'ladder_vote_closed', 'round_resolved', 'fee_settlement',
   'final', 'expired', 'aborted',
 ];
 
@@ -73,10 +73,20 @@ function assertFullyFrozen(state: CourtConfirmationMachineState): void {
     expect(Object.isFrozen(ledger)).toBe(true);
     for (const record of ledger) expect(Object.isFrozen(record)).toBe(true);
   }
+  // Multi-round ladder ledgers (v0.9.0): outcome history and round rosters.
+  if (state.outcomeHistory) {
+    expect(Object.isFrozen(state.outcomeHistory)).toBe(true);
+    for (const record of state.outcomeHistory) {
+      expect(Object.isFrozen(record)).toBe(true);
+      expect(Object.isFrozen(record.winnerEventIds)).toBe(true);
+      expect(Object.isFrozen(record.winnerIndices)).toBe(true);
+    }
+  }
   if (state.ladder) {
     expect(Object.isFrozen(state.ladder)).toBe(true);
     expect(Object.isFrozen(state.ladder.votes)).toBe(true);
     for (const vote of state.ladder.votes) expect(Object.isFrozen(vote)).toBe(true);
+    if (state.ladder.roundRoster) expect(Object.isFrozen(state.ladder.roundRoster)).toBe(true);
   }
   if (state.verdict) {
     expect(Object.isFrozen(state.verdict)).toBe(true);
@@ -114,6 +124,8 @@ function runHostileProbes(state: CourtConfirmationMachineState, log: string): vo
     // value-bearing events are both refused.
     expectTypedError(state, { type: 'abort', reason: 'probe' }, 'abort-from-terminal', log);
     expectTypedError(state, { type: 'finalize', now: state.latestTimestamp }, 'finalize-after-terminal', log);
+    expectTypedError(state, { type: 'escalate', now: state.latestTimestamp }, 'escalate-after-terminal', log);
+    expectTypedError(state, { type: 'concede', now: state.latestTimestamp }, 'concede-after-terminal', log);
     // …and the tick no-op from a terminal phase is legal and returns frozen state.
     const ticked = reduceCourtConfirmationMachine(state, { type: 'tick', now: state.latestTimestamp });
     expect(Object.isFrozen(ticked)).toBe(true);
@@ -149,6 +161,11 @@ function runHostileProbes(state: CourtConfirmationMachineState, log: string): vo
     'wrong-confirm-hash',
     log,
   );
+  // …and escalate/concede are refused outside round_resolved (v0.9.0).
+  if (state.phase !== 'round_resolved') {
+    expectTypedError(state, { type: 'escalate', now: state.latestTimestamp }, 'escalate-out-of-phase', log);
+    expectTypedError(state, { type: 'concede', now: state.latestTimestamp }, 'concede-out-of-phase', log);
+  }
 }
 
 // ─── legal-sequence generator ───────────────────────────────────────────────
@@ -166,6 +183,9 @@ interface SequenceStats {
   terminal: 'final' | 'expired' | 'aborted' | 'open';
   ladderReached: boolean;
   overturned: boolean;
+  multiRound: boolean;
+  escalated: boolean;
+  conceded: boolean;
 }
 
 function runSequence(seed: number, maxSteps = 90): SequenceStats {
@@ -175,6 +195,7 @@ function runSequence(seed: number, maxSteps = 90): SequenceStats {
   const allowedOutcomes = Array.from({ length: int(r, 2, 5) }, (_, i) => `outcome-${i}`);
   const proposedOutcome = pick(r, allowedOutcomes);
   const confirmQuorum = int(r, 1, rosterSize);
+  const maxLadderRounds = int(r, 1, 3);
   const base = int(r, 1_700_000_000, 1_800_000_000);
   const confirmDeadline = base + int(r, 1, 2_000);
   const challengeDeadline = confirmDeadline + int(r, 1, 5_000);
@@ -199,13 +220,17 @@ function runSequence(seed: number, maxSteps = 90): SequenceStats {
     confirmQuorum,
     confirmDeadline,
     challengeDeadline,
+    maxLadderRounds,
   });
 
   // Sanity of the generator's own inputs.
   assertFullyFrozen(state);
   expect(state.phase).toBe('confirm_open');
 
-  const stats: SequenceStats = { steps: 0, terminal: 'open', ladderReached: false, overturned: false };
+  const stats: SequenceStats = {
+    steps: 0, terminal: 'open', ladderReached: false, overturned: false,
+    multiRound: false, escalated: false, conceded: false,
+  };
   let prevLatest = state.latestTimestamp;
 
   for (let step = 0; step < maxSteps; step += 1) {
@@ -258,11 +283,15 @@ function runSequence(seed: number, maxSteps = 90): SequenceStats {
           supportingEventIds: verdict.supportingEventIds,
         }),
       );
-      const source = verdict.upheld
+      // v0.9.0 finality: a never-challenged upheld case is backed by the
+      // confirmation ledger; a challenged case by the LAST resolved round's
+      // winning-vote event ids.
+      const source = next.challenges.length === 0 && verdict.upheld
         ? next.confirmations.map((c) => c.eventId)
         : (next.ladder?.votes ?? []).filter((v) => v.outcome === verdict.outcome).map((v) => v.eventId);
       for (const id of verdict.supportingEventIds) expect(source).toContain(id);
-      // An overturned proposal flags every confirming juror for clawback.
+      // An overturned proposal flags every confirming juror for clawback
+      // (idempotent per (idx, reason) — at least one flag each).
       if (!verdict.upheld) {
         for (const record of next.confirmations) {
           expect(
@@ -271,9 +300,34 @@ function runSequence(seed: number, maxSteps = 90): SequenceStats {
         }
         stats.overturned = true;
       }
+      // Outcome history: append-only, rounds strictly increasing, the last
+      // entry decides the verdict of a challenged case.
+      const history = next.outcomeHistory ?? [];
+      for (let h = 0; h < history.length; h += 1) {
+        expect(history[h]!.round).toBe(h + 1);
+        expect(history[h]!.winnerIndices.length).toBeGreaterThanOrEqual(1);
+        expect(history[h]!.winnerEventIds.length).toBeGreaterThanOrEqual(1);
+        if (h > 0) {
+          // Flip-flop rule: the previous round's majority is flagged when the
+          // next round's winner differs.
+          if (history[h - 1]!.outcome !== history[h]!.outcome) {
+            for (const idx of history[h - 1]!.winnerIndices) {
+              expect(
+                next.clawbackFlags.some((f) => f.idx === idx && f.reason === 'round_flip' && f.round === history[h - 1]!.round),
+              ).toBe(true);
+            }
+          }
+        }
+      }
+      if (next.challenges.length > 0) {
+        expect(history[history.length - 1]?.outcome).toBe(verdict.outcome);
+      }
     }
 
     if (next.ladder !== undefined) stats.ladderReached = true;
+    if (next.ladderRound >= 2) stats.multiRound = true;
+    if (event.type === 'escalate') stats.escalated = true;
+    if (event.type === 'concede') stats.conceded = true;
 
     // P6: hostile probes from the reached state fail closed, typed.
     runHostileProbes(next, log.join('\n'));
@@ -294,33 +348,34 @@ function nextLegalEvent(
 ): CourtConfirmationMachineEvent {
   const { r, clock } = ctx;
   const now = clock;
-  const maybeAbort = (): (() => CourtConfirmationMachineEvent)[] =>
-    r() < 0.08 ? [() => ({ type: 'abort', reason: 'host-abort' })] : [];
-  const recordFee = (): CourtConfirmationMachineEvent => ({
-    type: 'record_fee',
-    feeEventId: ctx.newEventId(),
-    now,
-  });
+  // Weighted candidates: productive transitions dominate; expiries, fees,
+  // idempotent no-ops, and aborts stay rare but reachable (deterministic).
+  type Weighted = { weight: number; make: () => CourtConfirmationMachineEvent };
+  const options: Weighted[] = [];
+  const add = (weight: number, make: () => CourtConfirmationMachineEvent): void => {
+    options.push({ weight, make });
+  };
+  const maybeAbort = (weight = 0.4): void => {
+    if (r() < 0.15) add(weight, () => ({ type: 'abort', reason: 'host-abort' }));
+  };
+  const recordFee = (): void => add(0.7, () => ({ type: 'record_fee', feeEventId: ctx.newEventId(), now }));
   // A tick that stays strictly before `deadline` (legal no-op / clock advance).
-  const tickBefore = (deadline: number): CourtConfirmationMachineEvent[] => {
+  const tickBefore = (deadline: number): void => {
     const slack = deadline - 1 - clock;
-    if (slack < 1) return [];
-    return [{ type: 'tick', now: clock + int(r, 1, Math.min(50, slack)) }];
+    if (slack >= 1) add(1.5, () => ({ type: 'tick', now: clock + int(r, 1, Math.min(50, slack)) }));
   };
   // A tick at/after `deadline` — legal, expires the case in tickable phases.
-  const tickPast = (deadline: number): CourtConfirmationMachineEvent => ({
-    type: 'tick',
-    now: Math.max(clock, deadline) + int(r, 0, 100),
-  });
+  const tickPast = (deadline: number): void =>
+    add(0.8, () => ({ type: 'tick', now: Math.max(clock, deadline) + int(r, 0, 100) }));
 
   switch (state.phase) {
     case 'confirm_open': {
       const unconfirmed = ctx.participantIndices.filter(
         (i) => !state.confirmations.some((c) => c.idx === i),
       );
-      const options: (() => CourtConfirmationMachineEvent)[] = [recordFee];
+      recordFee();
       if (clock < confirmDeadline && unconfirmed.length > 0) {
-        options.push(() => {
+        add(6, () => {
           const idx = pick(r, unconfirmed);
           return {
             type: 'accept_confirmation',
@@ -336,7 +391,7 @@ function nextLegalEvent(
         });
         // Idempotent re-send of an existing confirmation.
         if (state.confirmations.length > 0) {
-          options.push(() => {
+          add(0.7, () => {
             const record = pick(r, state.confirmations);
             return {
               type: 'accept_confirmation',
@@ -347,35 +402,32 @@ function nextLegalEvent(
             };
           });
         }
-        options.push(...tickBefore(confirmDeadline).map((e) => () => e));
-      }
-      if (clock >= confirmDeadline && state.confirmations.length >= state.confirmQuorum) {
-        options.push(() => ({ type: 'close_confirmations', now: Math.max(clock, confirmDeadline) }));
+        tickBefore(confirmDeadline);
       }
       // The clock can only cross the deadline BY a close (or expire): closing
       // at exactly the deadline is legal whenever the quorum stands.
-      if (clock < confirmDeadline && state.confirmations.length >= state.confirmQuorum) {
-        options.push(() => ({ type: 'close_confirmations', now: confirmDeadline }));
+      if (state.confirmations.length >= state.confirmQuorum) {
+        add(6, () => ({ type: 'close_confirmations', now: Math.max(clock, confirmDeadline) }));
       }
-      options.push(() => tickPast(confirmDeadline));
-      options.push(...maybeAbort());
-      return pick(r, options)();
+      tickPast(confirmDeadline);
+      maybeAbort();
+      break;
     }
     case 'confirm_closed': {
-      const options: (() => CourtConfirmationMachineEvent)[] = [recordFee];
-      if (clock < challengeDeadline) options.push(() => ({ type: 'open_challenge_window', now }));
-      options.push(() => tickPast(challengeDeadline));
-      options.push(...maybeAbort());
-      return pick(r, options)();
+      recordFee();
+      if (clock < challengeDeadline) add(6, () => ({ type: 'open_challenge_window', now }));
+      tickPast(challengeDeadline);
+      maybeAbort();
+      break;
     }
     case 'challenge_window': {
       const unchallenged = ctx.participantIndices.filter(
         (i) => !state.challenges.some((c) => c.idx === i),
       );
-      const options: (() => CourtConfirmationMachineEvent)[] = [recordFee];
+      recordFee();
       if (clock < challengeDeadline) {
         if (unchallenged.length > 0) {
-          options.push(() => ({
+          add(5, () => ({
             type: 'accept_challenge',
             idx: pick(r, unchallenged),
             bondTxid: hex32(r),
@@ -384,36 +436,42 @@ function nextLegalEvent(
             now,
           }));
         }
-        options.push(...tickBefore(challengeDeadline).map((e) => () => e));
+        tickBefore(challengeDeadline);
       }
-      options.push(() => ({ type: 'close_challenge_window', now: Math.max(clock, challengeDeadline) }));
-      options.push(() => tickPast(challengeDeadline));
-      options.push(...maybeAbort());
-      return pick(r, options)();
+      add(6, () => ({ type: 'close_challenge_window', now: Math.max(clock, challengeDeadline) }));
+      tickPast(challengeDeadline);
+      maybeAbort();
+      break;
     }
     case 'ladder_pending': {
-      const options: (() => CourtConfirmationMachineEvent)[] = [
-        recordFee,
-        () => ({
+      recordFee();
+      // v0.9.0: the host may expand the round panel (sequential 1..N, N ≥ 3);
+      // mass votes are then validated against the ROUND panel.
+      add(6, () => {
+        const expand = r() < 0.5;
+        const panelSize = expand ? int(r, 3, Math.max(3, ctx.participantIndices.length)) : ctx.participantIndices.length;
+        return {
           type: 'open_ladder_round',
           round: state.ladderRound + 1,
           voteDeadline: clock + int(r, 1, 3_000),
+          ...(expand ? { roundRoster: Array.from({ length: panelSize }, (_, i) => i + 1) } : {}),
           now,
-        }),
-        () => ({ type: 'tick', now: clock + int(r, 1, 100) }), // exempt phase: any now is legal
-        ...maybeAbort(),
-      ];
-      return pick(r, options)();
+        } as CourtConfirmationMachineEvent;
+      });
+      add(0.7, () => ({ type: 'tick', now: clock + int(r, 1, 100) })); // exempt phase: any now is legal
+      maybeAbort();
+      break;
     }
     case 'ladder_vote_open': {
       const deadline = state.ladder!.voteDeadline;
-      const nonVoted = ctx.participantIndices.filter(
-        (i) => !state.ladder!.votes.some((v) => v.idx === i),
-      );
-      const options: (() => CourtConfirmationMachineEvent)[] = [recordFee];
+      // v0.9.0: votes are validated against the ROUND panel (explicit roster
+      // when the host opened one, else the case roster).
+      const panel = state.ladder!.roundRoster ?? ctx.participantIndices;
+      const nonVoted = panel.filter((i) => !state.ladder!.votes.some((v) => v.idx === i));
+      recordFee();
       if (clock < deadline) {
         if (nonVoted.length > 0) {
-          options.push(() => ({
+          add(6, () => ({
             type: 'accept_mass_vote',
             idx: pick(r, nonVoted),
             outcome: pick(r, ctx.allowedOutcomes),
@@ -423,7 +481,7 @@ function nextLegalEvent(
         }
         // Idempotent re-send of an existing mass vote.
         if (state.ladder!.votes.length > 0) {
-          options.push(() => {
+          add(0.7, () => {
             const vote = pick(r, state.ladder!.votes);
             return {
               type: 'accept_mass_vote',
@@ -434,41 +492,64 @@ function nextLegalEvent(
             };
           });
         }
-        options.push(...tickBefore(deadline).map((e) => () => e));
+        tickBefore(deadline);
       }
-      options.push(() => ({ type: 'close_ladder_round', now: Math.max(clock, deadline) }));
-      options.push(() => tickPast(deadline));
-      options.push(...maybeAbort());
-      return pick(r, options)();
+      // Closing an EMPTY round is legal, but resolve_round refuses it — only
+      // close once at least one vote stands (otherwise expire instead).
+      // FINDING r3-6 (mirrored here, see the findings test): the machine
+      // defaults the round panel to the CASE roster, but its ledger barrier
+      // demands ≥ 3 panel members at close — so a 2-member case roster can
+      // never resolve a challenged case (dead end; expire/abort only).
+      if (state.ladder!.votes.length > 0 && panel.length >= 3) {
+        add(6, () => ({ type: 'close_ladder_round', now: Math.max(clock, deadline) }));
+      }
+      tickPast(deadline);
+      maybeAbort();
+      break;
     }
     case 'ladder_vote_closed': {
-      const options: (() => CourtConfirmationMachineEvent)[] = [
-        () => ({ type: 'resolve_round', now }),
-        recordFee,
-        () => ({ type: 'tick', now: clock + int(r, 1, 100) }), // exempt phase
-        ...maybeAbort(),
-      ];
-      return pick(r, options)();
+      add(7, () => ({ type: 'resolve_round', now }));
+      recordFee();
+      add(0.7, () => ({ type: 'tick', now: clock + int(r, 1, 100) })); // exempt phase
+      maybeAbort();
+      break;
+    }
+    case 'round_resolved': {
+      // v0.9.0: the host explicitly escalates (rounds remain) or concedes —
+      // the machine never auto-escalates and never auto-concedes. Both are
+      // legal here (a park only happens below the cap).
+      add(4, () => ({ type: 'escalate', now }));
+      add(4, () => ({ type: 'concede', now }));
+      recordFee();
+      add(0.7, () => ({ type: 'tick', now: clock + int(r, 1, 100) })); // exempt phase
+      maybeAbort();
+      break;
     }
     case 'fee_settlement': {
       const reasons = ['manual_flag', 'host_adjustment', 'overturned_confirmation'];
-      const options: (() => CourtConfirmationMachineEvent)[] = [
-        recordFee,
-        () => ({
-          type: 'flag_clawback',
-          idx: pick(r, ctx.participantIndices),
-          reason: pick(r, reasons),
-          now,
-        }),
-        () => ({ type: 'finalize', now }),
-        () => ({ type: 'tick', now: clock + int(r, 1, 100) }), // exempt phase
-        ...maybeAbort(),
-      ];
-      return pick(r, options)();
+      recordFee();
+      add(2, () => ({
+        type: 'flag_clawback',
+        idx: pick(r, ctx.participantIndices),
+        reason: pick(r, reasons),
+        now,
+      }));
+      add(6, () => ({ type: 'finalize', now }));
+      add(0.7, () => ({ type: 'tick', now: clock + int(r, 1, 100) })); // exempt phase
+      maybeAbort();
+      break;
     }
     default:
       throw new Error(`generator reached unknown phase ${state.phase} (log:\n${log.join('\n')})`);
   }
+
+  const total = options.reduce((sum, o) => sum + o.weight, 0);
+  let roll = r() * total;
+  for (const option of options) {
+    roll -= option.weight;
+    if (roll < 0) return option.make();
+  }
+  return options[options.length - 1]!.make();
 }
 
 // ─── the sweep ──────────────────────────────────────────────────────────────
@@ -476,7 +557,7 @@ function nextLegalEvent(
 const SEQUENCES = 400;
 
 describe('properties: confirmation machine legal-sequence sweep', () => {
-  it(`P1/P2/P4/P5: ${SEQUENCES} random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen`, () => {
+  it(`P1/P2/P4/P5: ${SEQUENCES} random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen`, { timeout: 120_000 }, () => {
     const terminals = { final: 0, expired: 0, aborted: 0, open: 0 };
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
       const stats = runSequence(seed);
@@ -489,16 +570,25 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
     expect(terminals.aborted).toBeGreaterThan(0);
   });
 
-  it('P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers', () => {
+  it('P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run', { timeout: 120_000 }, () => {
     let ladderReached = 0;
     let overturned = 0;
+    let multiRound = 0;
+    let escalated = 0;
+    let conceded = 0;
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
       const stats = runSequence(seed);
       if (stats.ladderReached) ladderReached += 1;
       if (stats.overturned) overturned += 1;
+      if (stats.multiRound) multiRound += 1;
+      if (stats.escalated) escalated += 1;
+      if (stats.conceded) conceded += 1;
     }
     expect(ladderReached).toBeGreaterThan(0);
     expect(overturned).toBeGreaterThan(0);
+    expect(multiRound).toBeGreaterThan(0);
+    expect(escalated).toBeGreaterThan(0);
+    expect(conceded).toBeGreaterThan(0);
   });
 
   it('P6 (FINDING r3, restored-state edge only): finalize with an upheld verdict over an EMPTY but well-formed confirmation ledger escapes a FOREIGN CourtVoteTransitionError', () => {
@@ -542,5 +632,82 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
     }
     expect(thrown).toBeInstanceOf(CourtVoteTransitionError);
     expect(thrown).not.toBeInstanceOf(CourtConfirmationTransitionError);
+  });
+
+  it('P6 (FINDING r3-6): a challenged case with a 2-member case roster can never resolve its ladder — the round-panel default (case roster, 2 seats) is rejected by the machine\'s own ≥3 ledger barrier at close', () => {
+    // createCourtConfirmationMachine accepts 2-member rosters; the v0.9.0
+    // round panel DEFAULTS to the case roster; but assertValidMassVoteLedger
+    // normalizes the round roster with MIN_ROUND_ROSTER = 3 at
+    // close_ladder_round / resolve_round — so the legal challenge path on a
+    // 2-roster case dead-ends (only tick-expiry / abort remain). Reported
+    // as a round-3 finding; asserted here for regression visibility.
+    const r = mulberry32(98);
+    const base = 1_750_000_000;
+    let state = createCourtConfirmationMachine({
+      sessionHash: hex32(r),
+      proposalHash: hex32(r),
+      proposedOutcome: 'YES',
+      allowedOutcomes: ['YES', 'NO'],
+      participantIndices: [1, 2],
+      confirmQuorum: 1,
+      confirmDeadline: base + 100,
+      challengeDeadline: base + 200,
+      maxLadderRounds: 2,
+    });
+    const idx = 1;
+    state = reduceCourtConfirmationMachine(state, {
+      type: 'accept_confirmation',
+      idx,
+      confirmHash: hashCourtConfirmation({ sessionHash: state.sessionHash, proposalHash: state.proposalHash, idx }),
+      eventId: hex32(r),
+      now: base,
+    });
+    state = reduceCourtConfirmationMachine(state, { type: 'close_confirmations', now: base + 100 });
+    state = reduceCourtConfirmationMachine(state, { type: 'open_challenge_window', now: base + 100 });
+    state = reduceCourtConfirmationMachine(state, {
+      type: 'accept_challenge',
+      idx: 2,
+      bondTxid: hex32(r),
+      bondProofHash: hex32(r),
+      eventId: hex32(r),
+      now: base + 150,
+    });
+    state = reduceCourtConfirmationMachine(state, { type: 'close_challenge_window', now: base + 200 });
+    expect(state.phase).toBe('ladder_pending');
+    state = reduceCourtConfirmationMachine(state, { type: 'open_ladder_round', round: 1, voteDeadline: base + 400, now: base + 200 });
+    expect(state.ladder?.roundRoster).toEqual([1, 2]);
+    state = reduceCourtConfirmationMachine(state, {
+      type: 'accept_mass_vote',
+      idx: 1,
+      outcome: 'NO',
+      eventId: hex32(r),
+      now: base + 300,
+    });
+    // The dead end: the ledger barrier refuses the machine's own default panel.
+    expect(() =>
+      reduceCourtConfirmationMachine(state, { type: 'close_ladder_round', now: base + 400 }),
+    ).toThrow(/round roster must contain at least 3 participants/);
+    // …while an explicit ≥3 round roster resolves fine on the same case
+    // (the failed close above left `state` untouched).
+    const withPanel = reduceCourtConfirmationMachine(
+      { ...state, ladderRound: 0, phase: 'ladder_pending', ladder: undefined } as CourtConfirmationMachineState,
+      {
+        type: 'open_ladder_round',
+        round: 1,
+        voteDeadline: base + 400,
+        roundRoster: [1, 2, 3],
+        now: base + 300,
+      },
+    );
+    const voted = reduceCourtConfirmationMachine(withPanel, {
+      type: 'accept_mass_vote',
+      idx: 1,
+      outcome: 'NO',
+      eventId: hex32(r),
+      now: base + 300,
+    });
+    expect(() =>
+      reduceCourtConfirmationMachine(voted, { type: 'close_ladder_round', now: base + 400 }),
+    ).not.toThrow();
   });
 });
