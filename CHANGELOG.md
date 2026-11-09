@@ -9,6 +9,26 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.8.5] — 2026-11-09
+
+### Fixed (round-2 cross-module adversarial audit, PR #41)
+- **`AttestationV2ValidationContext` gained `expectedBatchMerkleRoot`** — the
+  v2 `batch` tag carried only the Merkle root with no way to pin it; a stale
+  epoch's batch attestation could satisfy epoch policy via the epoch pin
+  alone. Now pinnable fail-closed (and in `V2_ONLY_POLICY_FIELDS`, refused on
+  v1-shaped downgrades).
+- **Confirmation/challenge ledgers re-verified after snapshot restore** —
+  `assertValidConfirmationLedger` (canonical confirmHash recomputation,
+  roster/hex/uniqueness) runs at `resolve_round` + `finalize`; a restored
+  snapshot could previously carry edited confirmations into finalization.
+- **Docstring hardening:** loud MUST-pin-`expectedGroupPubkey` warnings on
+  `validateAttestationEventV2` / `validateCourtAttestation` / batch context —
+  unpinned consumers accept any valid signature (documented trust boundary).
+- Documented by-design: same `verdictHash` in two epoch batches is valid —
+  reputation derivation MUST dedupe by verdict hash; cross-round vote leakage
+  impossible (barrier).
+- Suite: 1259 passed / 1 skipped.
+
 ## [0.8.4] — 2026-11-09
 
 ### Fixed
