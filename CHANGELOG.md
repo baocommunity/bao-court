@@ -9,6 +9,39 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.9.0] — 2026-11-09
+
+### Added (multi-round ladder escalation, universal-confirmation proposal §4.2)
+- **`courtConfirmationMachine` ladder is now multi-round.** Round panels grow
+  host-side (reference sizes r1=15, r2=45, r3=135 — FROST-subset selection is
+  host policy; the machine tracks rounds + votes). `createCourtConfirmationMachine`
+  gains `maxLadderRounds` (default 2, bounded 1..5).
+- **New phase `round_resolved`** — after a round resolves with rounds
+  remaining, the case parks there for an explicit host decision: new events
+  `escalate` (→ `ladder_pending`, next round) or `concede` (→
+  `fee_settlement`, current outcome final). The machine never auto-escalates.
+  Resolving round `maxLadderRounds` proceeds to `fee_settlement` directly.
+- **Per-round roster expansion** — `open_ladder_round` accepts an optional
+  `roundRoster` (sequential indices 1..N, N ≥ 3, N ≤ 10 000; superset of the
+  previous round NOT required). Mass votes validate against the ROUND panel;
+  round rosters re-verify at the close/resolve ledger barrier.
+- **Flip-flop clawback rule** — when round r's winner differs from round
+  r-1's winner, round r-1's majority voters are flagged with reason
+  `round_flip` (round = r-1). Flag accounting stays append-only and
+  idempotent: `overturned_confirmation` flags fire once (no duplicates on
+  repeated overturns), `round_flip` dedupes per (idx, reason, round).
+- **`outcomeHistory`** — append-only frozen `{round, outcome,
+  winnerEventIds, winnerIndices}[]` for host-side reputation scoring
+  (final-round weight 1.0, earlier 0.5 — scoring is host policy). Finality:
+  the verdict is the LAST resolved round's winner, backed by that round's
+  winning-vote event ids (confirmation ids when never challenged).
+- **Compatibility:** the v0.8.5 single-round flow is preserved via
+  `maxLadderRounds: 1` (resolve → `fee_settlement` directly) and produces
+  verdict-identical results to the default-cap flow with an explicit
+  `concede`. Consumers driving the default cap must now play
+  `concede`/`escalate` after each non-final round resolution.
+- Suite: 1314 passed / 1 skipped (adds `__tests__/multiRoundLadder.test.ts`).
+
 ## [0.8.5] — 2026-11-09
 
 ### Fixed (round-2 cross-module adversarial audit, PR #41)

@@ -92,6 +92,9 @@ function runConfirmation(votes: ReadonlyArray<readonly [number, 'YES' | 'NO']>):
     }
     s = reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 4000 });
     s = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 4100 });
+    // Round 1 of a maxLadderRounds=2 case parks in round_resolved; the host
+    // concedes to settle with the round outcome (multi-round ladder, 0.9).
+    s = reduceCourtConfirmationMachine(s, { type: 'concede', now: 4150 });
   } else {
     s = reduceCourtConfirmationMachine(s, { type: 'close_challenge_window', now: 3000 });
   }

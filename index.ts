@@ -572,6 +572,7 @@ export {
   type CourtChallengeRecord,
   type CourtMassVoteRecord,
   type CourtClawbackFlag,
+  type CourtRoundOutcomeRecord,
   type CourtConfirmationVerdict,
   type CourtConfirmationMachineState,
   type CourtConfirmationMachineEvent,
