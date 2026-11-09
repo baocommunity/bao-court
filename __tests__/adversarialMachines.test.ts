@@ -469,7 +469,7 @@ describe('adversarial: state-object tampering (vote machine)', () => {
     const poisonedState = JSON.parse(
       JSON.stringify(state).replace(/\}$/, ',"__proto__":{"polluted":1}}'),
     ) as CourtVoteMachineState;
-    expect(Object.hasOwn(poisonedState, '__proto__')).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(poisonedState, "__proto__")).toBe(true);
     const next = reduceCourtVoteMachine(poisonedState, { type: 'finalize_tally', now: 201 });
     expect(next.verdict?.outcome).toBe('NO');
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
