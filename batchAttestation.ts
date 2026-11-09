@@ -55,6 +55,12 @@ export interface BatchAttestationValidationResult {
 }
 
 export interface BatchAttestationValidationContext {
+  /**
+   * Pin the signing cohort's group key. MUST be set by every consumer that
+   * derives reputation or settlement from a batch: without it, ANY key can
+   * sign a self-selected batch manifest and the event validates cleanly
+   * (see `__tests__/adversarialCrossModule.test.ts`, SEQUENCE-3).
+   */
   readonly expectedGroupPubkey?: string;
   readonly expectedEpoch?: number;
   readonly expectedCohort?: string;
@@ -211,6 +217,15 @@ function foldRoot(
  * independent of submission order; duplicates are rejected because two
  * identical verdicts make proof indices ambiguous. n=0 throws; n=1 yields
  * root = leaf hash (an empty authentication path).
+ *
+ * Membership scope (cross-module round 2): a batch commits to verdict
+ * HASHES only — the leaf does not bind an epoch, cohort, or session inputs.
+ * The same verdictHash can therefore appear in batches of DIFFERENT epochs
+ * (deliberate re-batching by a successor cohort, or an adversarial
+ * duplicate) and both batch attestations validate. Consumers deriving
+ * reputation or participation stats from batches MUST deduplicate by
+ * verdictHash so a case is never double-counted (see
+ * `__tests__/adversarialCrossModule.test.ts`, SEQUENCE-2).
  */
 export function buildBatchMerkleTree(verdictHashes: readonly string[]): {
   readonly root: string;
@@ -521,6 +536,18 @@ export function validateBatchAttestationEvent(
  * and the manifest hash, then runs the full event validation. Any mismatch is
  * reported fail-closed as { valid: false, reason } — only malformed call
  * arguments (non-object event, wrong types) throw a BatchAttestationError.
+ *
+ * What the proof does and does not pin (cross-module round 2): the
+ * authentication path pins the VERDICT HASH only. The
+ * (sessionHash, outcome, supportingEventIds) inputs are caller-supplied and
+ * re-hashed here, so presenting inputs DIFFERENT from those the cohort
+ * batched yields a different leaf and is rejected — but correctness of the
+ * inputs themselves (that the supporting event ids are real
+ * confirmations/reveals of that session) is the CALLER's authentication
+ * duty: fetch and verify the referenced events. Likewise, batch membership
+ * is per-batch: the same verdictHash may appear in multiple epoch batches
+ * and each verification is independent — deduplicate by verdictHash before
+ * deriving reputation (SEQUENCE-2).
  */
 export function verifyCaseInBatch(
   event: NostrEvent,
