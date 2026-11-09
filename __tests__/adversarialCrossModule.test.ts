@@ -278,7 +278,10 @@ function toFeeSettlementChallenged(): CourtConfirmationMachineState {
   });
   s = reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 1250 });
   // 'no' wins 2–1 → proposal overturned → confirmers flagged for clawback.
-  return reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 1260 });
+  // Round 1 parks in round_resolved (maxLadderRounds=2); the host concedes
+  // to reach fee_settlement (multi-round ladder, 0.9).
+  s = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 1260 });
+  return reduceCourtConfirmationMachine(s, { type: 'concede', now: 1270 });
 }
 
 /** Full epoch-cohort rotation handshake epoch 1 → epoch 2 (K1 → K2). */
@@ -876,7 +879,7 @@ describe('SEQUENCE 5: mass-vote ledger cross-round leakage', () => {
     ).toThrow(/duplicate mass votes in round 2/);
   });
 
-  it('no legal transition carries votes across rounds: the ladder is single-round in v1 (opening round 2 after resolution is impossible)', () => {
+  it('no legal transition carries votes across rounds: escalation requires the explicit round_resolved decision (a conceded ladder cannot be reopened)', () => {
     const resolved = toFeeSettlementChallenged();
     expect(resolved.phase).toBe('fee_settlement');
     expect(resolved.ladderRound).toBe(1);

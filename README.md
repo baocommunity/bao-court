@@ -269,13 +269,16 @@ persist states.
   (+ `expired`, aborts); emits the publishable attestation.
 - **`courtConfirmationMachine.ts`** — universal-confirmation case machine:
   `confirm_open → confirm_closed → challenge_window → (ladder rounds) →
-  fee_settlement → final` (+ `expired`/`aborted`); public confirmations
-  (one per roster index, canonical `hashCourtConfirmation` binding), a
-  bond-witnessed challenge window, one mass-vote ladder round with
-  vote-machine tie-break semantics, automatic `overturned_confirmation`
-  clawback flags, a fee ledger, and a final verdict reusing
-  `hashCourtVerdict`. Multi-round escalation is specified in the
-  universal-confirmation proposal and lands in a later minor version.
+  fee_settlement → final` (+ `round_resolved`, `expired`/`aborted`); public
+  confirmations (one per roster index, canonical `hashCourtConfirmation`
+  binding), a bond-witnessed challenge window, mass-vote ladder rounds with
+  vote-machine tie-break semantics, host-driven escalation
+  (`escalate`/`concede` after each non-final round resolution, capped by
+  `maxLadderRounds`, default 2, bound 1..5; per-round roster expansion via
+  `open_ladder_round.roundRoster`), automatic `overturned_confirmation`
+  clawback flags plus `round_flip` flags when consecutive rounds disagree
+  (flip-flop rule), an append-only `outcomeHistory`, a fee ledger, and a
+  final verdict (= LAST resolved round's winner) reusing `hashCourtVerdict`.
 
 The session-oriented classes (`IndependentDkgSession`,
 `IndependentSigningSession`) wrap the same rules for hosts that prefer an
@@ -406,7 +409,7 @@ winning_secret_commitment`.
 | `courtDkgMachine.ts` | DKG state machine |
 | `courtVoteMachine.ts` | vote commit/reveal/tally state machine + verdict hashing |
 | `courtSigningMachine.ts` | FROST signing-session state machine + signing-session hashing |
-| `courtConfirmationMachine.ts` | universal-confirmation case machine: public confirmations, bond-witnessed challenges, mass-vote ladder round, clawback flags, fee ledger |
+| `courtConfirmationMachine.ts` | universal-confirmation case machine: public confirmations, bond-witnessed challenges, multi-round mass-vote ladder (host-driven escalate/concede), clawback flags, outcome history, fee ledger |
 | `batchAttestation.ts` | kind-39018 RFC-6962-style Merkle batch attestations: tree/proofs/manifest, fail-closed validator, per-case `verifyCaseInBatch` |
 | `epochCohort.ts` | standing-cohort records (n≤300 unanimous-DKG cap), rotation ordering rules, epoch handoff hashing |
 | `dkg.ts` | Pedersen DKG adapter, VSS verify, share combine, refresh math |

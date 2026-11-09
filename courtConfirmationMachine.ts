@@ -2,6 +2,7 @@
 
 import {
   HEX_32,
+  MAX_CEREMONY_PARTICIPANTS,
   assertBeforeDeadline as assertBeforeDeadlineCore,
   assertNow,
   assertPositiveDeadline,
@@ -37,20 +38,43 @@ import { bytesToHex } from '@noble/hashes/utils.js';
  *   confirm_open -> confirm_closed -> challenge_window
  *     ├─ (no challenge) -> fee_settlement -> final
  *     └─ (challenge)    -> ladder_pending -> ladder_vote_open ->
- *                          ladder_vote_closed -> fee_settlement -> final
+ *                          ladder_vote_closed -> resolve_round ─┐
+ *           ┌───────────────────────────────────────────────────┤
+ *           ├─ (round === maxLadderRounds) -> fee_settlement -> final
+ *           └─ (rounds remain)            -> round_resolved
+ *                                             ├─ concede  -> fee_settlement -> final
+ *                                             └─ escalate -> ladder_pending (next round)
  *
  * Confirmations are public endorsements (no commit/reveal — the confirmation
  * is itself the juror's signed statement). A challenge must carry a verified
  * bond witness (the host verifies the bond BEFORE dispatching the event; the
  * reducer binds the witness hash so any observer can re-verify). A challenged
- * case runs one mass-vote ladder round: roster jurors vote publicly, the
- * majority outcome against the proposal decides, and an overturned proposal
- * flags every confirming juror for clawback (reason `overturned_confirmation`).
+ * case runs mass-vote ladder rounds: round r's panel votes publicly, the
+ * majority outcome against the proposal decides, and a round that overturns
+ * the proposal flags every confirming juror for clawback (reason
+ * `overturned_confirmation`, once). When round r's winner differs from round
+ * r-1's winner, round r-1's majority voters are flagged for clawback with
+ * reason `round_flip` (they followed an outcome the next panel rejected).
  *
- * Scope note (v1): the ladder resolves in a single round. Multi-round
- * escalation (5 -> 15 -> ... -> mass vote) and per-round vote-set Merkle
- * roots are specified in the universal-confirmation proposal and will extend
- * this machine in a later minor version.
+ * Multi-round ladder (per the universal-confirmation proposal §4.2): round
+ * panels grow host-side (reference sizes r1=15, r2=45, r3=135 jurors —
+ * FROST-subset selection is host policy; this machine only tracks rounds and
+ * votes). `params.maxLadderRounds` (default 2, bounded 1..5) caps the round
+ * count. `open_ladder_round` may carry an expanded per-round roster
+ * (`roundRoster`); superset-of-previous is NOT required, but indices must be
+ * valid (sequential 1..N, N ≤ 10_000) and the effective round roster must
+ * have ≥ 3 members. Escalation is host-driven and explicit: after every
+ * round resolution with rounds remaining the machine parks in
+ * `round_resolved`, where the host plays `escalate` (next round pending) or
+ * `concede` (the current round's outcome becomes final) — the machine never
+ * auto-escalates and never auto-concedes. When the last permitted round
+ * resolves, the machine proceeds directly to `fee_settlement`. Finality:
+ * the verdict at `finalize` is the LAST resolved round's winner, backed by
+ * that round's winning-vote event ids (or the confirmation ids when never
+ * challenged); `outcomeHistory` records every round's
+ * {round, outcome, winnerEventIds, winnerIndices} append-only for host-side
+ * reputation scoring (final-round weight 1.0, earlier rounds 0.5 — scoring
+ * itself is host policy).
  *
  * This module performs no network or Nostr signature verification; the event
  * boundary must authenticate authors and roster indices before dispatching
@@ -67,6 +91,7 @@ export type CourtConfirmationPhase =
   | 'ladder_pending'
   | 'ladder_vote_open'
   | 'ladder_vote_closed'
+  | 'round_resolved'
   | 'fee_settlement'
   | 'final'
   | 'expired'
@@ -113,14 +138,34 @@ export interface CourtConfirmationVerdict {
   /** Supporting event ids, sorted lexicographically for canonical hashing. */
   readonly supportingEventIds: readonly string[];
   readonly verdictHash: string;
-  /** True when the proposed outcome survived the challenge window/round. */
+  /** True when the proposed outcome survived (the last resolved round's winner equals it). */
   readonly upheld: boolean;
+}
+
+/**
+ * Append-only record of one resolved ladder round's outcome (multi-round
+ * ladder, universal-confirmation proposal §4.2). `winnerEventIds` are the
+ * winning voters' event ids (sorted lexicographically); `winnerIndices` the
+ * matching roster indices, retained so a later flip-flop can flag the
+ * previous round's majority without re-keeping whole vote ledgers.
+ */
+export interface CourtRoundOutcomeRecord {
+  readonly round: number;
+  readonly outcome: string;
+  readonly winnerEventIds: readonly string[];
+  readonly winnerIndices: readonly number[];
 }
 
 interface LadderRound {
   readonly round: number;
   readonly voteDeadline: number;
   readonly votes: readonly CourtMassVoteRecord[];
+  /**
+   * This round's panel. Defaults to the case roster when the host opens the
+   * round without an explicit expansion (or on pre-0.9 snapshots). Sequential
+   * 1..N, N ≥ 3.
+   */
+  readonly roundRoster?: readonly number[];
 }
 
 export interface CourtConfirmationMachineState {
@@ -142,6 +187,19 @@ export interface CourtConfirmationMachineState {
   readonly ladder?: LadderRound;
   /** Highest ladder round opened so far (0 = none). */
   readonly ladderRound: number;
+  /**
+   * Maximum ladder rounds permitted for this case (1..5, default 2). When
+   * round `maxLadderRounds` resolves, the case proceeds to fee_settlement;
+   * earlier resolutions park in `round_resolved` for the host's explicit
+   * escalate/concede decision.
+   */
+  readonly maxLadderRounds: number;
+  /**
+   * Append-only history of resolved rounds' outcomes (frozen). The final
+   * verdict is the last entry; hosts derive reputation scores from the
+   * per-round coherence with the final outcome.
+   */
+  readonly outcomeHistory: readonly CourtRoundOutcomeRecord[];
   readonly clawbackFlags: readonly CourtClawbackFlag[];
   /** Fee-ledger event ids recorded for this case (bonds forfeit, fees paid). */
   readonly fees: readonly string[];
@@ -172,6 +230,12 @@ export type CourtConfirmationMachineEvent =
       readonly type: 'open_ladder_round';
       readonly round: number;
       readonly voteDeadline: number;
+      /**
+       * Optional expanded panel for THIS round (sequential indices 1..N,
+       * N ≥ 3, N ≤ 10_000). Superset of the previous round's roster is NOT
+       * required; when omitted the case roster is the round panel.
+       */
+      readonly roundRoster?: readonly number[];
       readonly now: number;
     }
   | {
@@ -183,6 +247,16 @@ export type CourtConfirmationMachineEvent =
     }
   | { readonly type: 'close_ladder_round'; readonly now: number }
   | { readonly type: 'resolve_round'; readonly now: number }
+  | {
+      /** Host-driven escalation: next ladder round becomes pending. */
+      readonly type: 'escalate';
+      readonly now: number;
+    }
+  | {
+      /** Host concedes: the current round's outcome becomes final. */
+      readonly type: 'concede';
+      readonly now: number;
+    }
   | { readonly type: 'record_fee'; readonly feeEventId: string; readonly now: number }
   | { readonly type: 'flag_clawback'; readonly idx: number; readonly reason: string; readonly now: number }
   | { readonly type: 'finalize'; readonly now: number }
@@ -205,6 +279,10 @@ const MAX_CLAWBACK_FLAGS = 10_000;
 const MAX_FEES = 256;
 const MAX_EVIDENCE_IDS = 256;
 const MAX_REASON_BYTES = 64;
+/** Ladder bounds: rounds are capped 1..5 (default 2); a round panel has ≥ 3 seats. */
+const MAX_LADDER_ROUNDS = 5;
+const DEFAULT_LADDER_ROUNDS = 2;
+const MIN_ROUND_ROSTER = 3;
 
 const TERMINAL_PHASES = new Set<CourtConfirmationPhase>(['final', 'expired', 'aborted']);
 
@@ -251,6 +329,41 @@ function assertParticipant(state: CourtConfirmationMachineState, idx: number): v
   assertRosterMember(state.participantIndices, idx, 'confirmation participant', CourtConfirmationTransitionError);
 }
 
+/**
+ * Effective panel for the current ladder round: the round's explicit roster
+ * when the host opened one, else the case roster. Mass votes are validated
+ * against the ROUND panel (round rosters may grow or change between rounds).
+ */
+function roundRosterOf(state: CourtConfirmationMachineState): readonly number[] {
+  return state.ladder?.roundRoster ?? state.participantIndices;
+}
+
+function assertRoundParticipant(state: CourtConfirmationMachineState, idx: number): void {
+  assertRosterMember(roundRosterOf(state), idx, 'mass vote participant', CourtConfirmationTransitionError);
+}
+
+/**
+ * Validate an `open_ladder_round` roster expansion: sequential indices 1..N
+ * within the ceremony-participant bound, with at least MIN_ROUND_ROSTER
+ * seats. Superset-of-previous-round is deliberately NOT required — per the
+ * universal-confirmation proposal §4.2 the host may reconstitute each
+ * round's panel (FROST-subset selection is host policy).
+ */
+function normalizeRoundRoster(roundRoster: readonly number[]): readonly number[] {
+  const roster = normalizeCeremonyRoster(roundRoster, 'round roster', CourtConfirmationTransitionError);
+  if (roster.length < MIN_ROUND_ROSTER) {
+    throw new CourtConfirmationTransitionError(
+      `round roster must contain at least ${MIN_ROUND_ROSTER} participants`,
+    );
+  }
+  if (roster.length > MAX_CEREMONY_PARTICIPANTS) {
+    throw new CourtConfirmationTransitionError(
+      `round roster length exceeds maximum of ${MAX_CEREMONY_PARTICIPANTS}`,
+    );
+  }
+  return roster;
+}
+
 function assertBeforeDeadline(now: number, deadline: number, message: string): void {
   assertBeforeDeadlineCore(now, deadline, message, CourtConfirmationTransitionError);
 }
@@ -288,9 +401,18 @@ function freezeState(state: CourtConfirmationMachineState): CourtConfirmationMac
   if (state.ladder) {
     for (const vote of state.ladder.votes) Object.freeze(vote);
     Object.freeze(state.ladder.votes);
+    Object.freeze(state.ladder.roundRoster);
     Object.freeze(state.ladder);
   }
   for (const flag of state.clawbackFlags) Object.freeze(flag);
+  if (state.outcomeHistory) {
+    for (const record of state.outcomeHistory) {
+      Object.freeze(record.winnerEventIds);
+      Object.freeze(record.winnerIndices);
+      Object.freeze(record);
+    }
+    Object.freeze(state.outcomeHistory);
+  }
   Object.freeze(state.confirmations);
   Object.freeze(state.challenges);
   Object.freeze(state.clawbackFlags);
@@ -317,13 +439,16 @@ function assertValidMassVoteLedger(state: CourtConfirmationMachineState): void {
   if (!ladder || !Array.isArray(ladder.votes)) {
     throw new CourtConfirmationTransitionError('ladder state is missing or malformed');
   }
+  // A hand-restored round roster must re-verify (sequential 1..N, N ≥ 3)
+  // before any of its votes lock an outcome in.
+  if (ladder.roundRoster !== undefined) normalizeRoundRoster(ladder.roundRoster);
   const seenIndices = new Set<number>();
   const seenEventIds = new Set<string>();
   for (const vote of ladder.votes) {
     if (typeof vote !== 'object' || vote === null) {
       throw new CourtConfirmationTransitionError('ladder state contains a malformed vote record');
     }
-    assertParticipant(state, vote.idx);
+    assertRoundParticipant(state, vote.idx);
     if (typeof vote.outcome !== 'string' || !state.allowedOutcomes.includes(vote.outcome)) {
       throw new CourtConfirmationTransitionError(
         'mass vote names an outcome outside the frozen allowlist',
@@ -428,6 +553,12 @@ export function createCourtConfirmationMachine(params: {
   readonly confirmQuorum?: number;
   readonly confirmDeadline: number;
   readonly challengeDeadline: number;
+  /**
+   * Maximum ladder rounds (1..5, default 2). Round r resolving with
+   * r === maxLadderRounds settles fees directly; earlier resolutions park in
+   * `round_resolved` awaiting an explicit host `escalate`/`concede`.
+   */
+  readonly maxLadderRounds?: number;
 }): CourtConfirmationMachineState {
   assertHex32(params.sessionHash, 'sessionHash must be 32-byte lowercase hex');
   assertHex32(params.proposalHash, 'proposalHash must be 32-byte lowercase hex');
@@ -486,6 +617,16 @@ export function createCourtConfirmationMachine(params: {
       'challengeDeadline must be later than confirmDeadline',
     );
   }
+  const maxLadderRounds = params.maxLadderRounds ?? DEFAULT_LADDER_ROUNDS;
+  if (
+    !Number.isSafeInteger(maxLadderRounds)
+    || maxLadderRounds < 1
+    || maxLadderRounds > MAX_LADDER_ROUNDS
+  ) {
+    throw new CourtConfirmationTransitionError(
+      `maxLadderRounds must be a safe integer in [1, ${MAX_LADDER_ROUNDS}]`,
+    );
+  }
   return freezeState({
     sessionHash: params.sessionHash,
     proposalHash: params.proposalHash,
@@ -501,6 +642,8 @@ export function createCourtConfirmationMachine(params: {
     confirmations: [],
     challenges: [],
     ladderRound: 0,
+    maxLadderRounds,
+    outcomeHistory: [],
     clawbackFlags: [],
     fees: [],
   });
@@ -521,7 +664,7 @@ export function reduceCourtConfirmationMachine(
   // outside the frozen ballot).
   assertStateArrays(
     state as unknown as Record<string, unknown>,
-    ['participantIndices', 'allowedOutcomes', 'confirmations', 'challenges', 'fees', 'clawbackFlags'],
+    ['participantIndices', 'allowedOutcomes', 'confirmations', 'challenges', 'fees', 'clawbackFlags', 'outcomeHistory'],
     CourtConfirmationTransitionError,
   );
   if (
@@ -543,10 +686,13 @@ export function reduceCourtConfirmationMachine(
   }
 
   if (event.type === 'tick') {
-    // `ladder_vote_closed` and `fee_settlement` are one step from (or at) a
-    // mandatory explicit transition — a tick must not expire them (mirrors
-    // the vote machine's `reveal_closed` exemption).
-    if (TERMINAL_PHASES.has(state.phase) || state.phase === 'ladder_vote_closed' || state.phase === 'fee_settlement' || state.phase === 'ladder_pending') {
+    // `ladder_vote_closed`, `round_resolved` and `fee_settlement` are one
+    // step from (or at) a mandatory explicit transition — a tick must not
+    // expire them (mirrors the vote machine's `reveal_closed` exemption).
+    // `round_resolved` waits on the host's appeal decision (`escalate` /
+    // `concede`); the appeal window itself is host policy, not a deadline
+    // this machine tracks.
+    if (TERMINAL_PHASES.has(state.phase) || state.phase === 'ladder_vote_closed' || state.phase === 'round_resolved' || state.phase === 'fee_settlement' || state.phase === 'ladder_pending') {
       return freezeState(state);
     }
     const deadline = TICK_DEADLINES[state.phase]?.(state);
@@ -721,13 +867,24 @@ export function reduceCourtConfirmationMachine(
         `ladder rounds must be consecutive: expected ${state.ladderRound + 1}`,
       );
     }
+    // Defense in depth: a hand-restored `ladder_pending` snapshot cannot
+    // open a round beyond the case's frozen ladder cap (the legal path —
+    // `escalate` — already refuses to exceed it).
+    if (event.round > state.maxLadderRounds) {
+      throw new CourtConfirmationTransitionError(
+        `ladder round ${event.round} exceeds maxLadderRounds ${state.maxLadderRounds}`,
+      );
+    }
     assertPositiveDeadline(event.voteDeadline, 'voteDeadline', CourtConfirmationTransitionError);
     assertBeforeDeadline(event.now, event.voteDeadline, 'cannot open a ladder round with a past vote deadline');
+    const roundRoster = event.roundRoster === undefined
+      ? state.participantIndices
+      : normalizeRoundRoster(event.roundRoster);
     return freezeState({
       ...state,
       phase: 'ladder_vote_open',
       ladderRound: event.round,
-      ladder: { round: event.round, voteDeadline: event.voteDeadline, votes: [] },
+      ladder: { round: event.round, voteDeadline: event.voteDeadline, votes: [], roundRoster },
     });
   }
 
@@ -736,7 +893,7 @@ export function reduceCourtConfirmationMachine(
       throw new CourtConfirmationTransitionError(`cannot accept mass votes during ${state.phase}`);
     }
     assertBeforeDeadline(event.now, state.ladder.voteDeadline, 'mass vote arrived at or after the round deadline');
-    assertParticipant(state, event.idx);
+    assertRoundParticipant(state, event.idx);
     if (typeof event.outcome !== 'string' || !state.allowedOutcomes.includes(event.outcome)) {
       throw new CourtConfirmationTransitionError(
         'mass vote names an outcome outside the frozen allowlist',
@@ -809,21 +966,62 @@ export function reduceCourtConfirmationMachine(
     }
     const upheld = winner === state.proposedOutcome;
     const round = state.ladder.round;
+    const winnerEventIds = (counts.get(winner) ?? []).map((e) => e.toLowerCase()).sort();
+    const winnerIndices = state.ladder.votes
+      .filter((v) => v.outcome === winner)
+      .map((v) => v.idx);
+    // Append-only outcome history (multi-round ladder §4.2): the final
+    // verdict is the LAST resolved round; hosts score per-round coherence
+    // against the final outcome (final round 1.0, earlier 0.5 — host-side).
+    const outcomeHistory: CourtRoundOutcomeRecord[] = [
+      ...state.outcomeHistory,
+      { round, outcome: winner, winnerEventIds, winnerIndices },
+    ];
     let clawbackFlags = state.clawbackFlags;
     if (!upheld) {
       // The proposal was overturned: every confirming juror is flagged for
-      // fee clawback. Flagging is a state transition, never a side effect.
-      const flags = state.confirmations.map((c) => ({
-        idx: c.idx,
-        reason: 'overturned_confirmation',
-        round,
-      }));
-      clawbackFlags = [...state.clawbackFlags, ...flags];
+      // fee clawback. Flagging is a state transition, never a side effect,
+      // and idempotent per (idx, reason): later rounds that also reject the
+      // proposal must not duplicate the original confirmers' flags.
+      const alreadyFlagged = new Set(
+        clawbackFlags.filter((f) => f.reason === 'overturned_confirmation').map((f) => f.idx),
+      );
+      const flags = state.confirmations
+        .filter((c) => !alreadyFlagged.has(c.idx))
+        .map((c) => ({ idx: c.idx, reason: 'overturned_confirmation', round }));
+      if (flags.length > 0) {
+        clawbackFlags = [...clawbackFlags, ...flags];
+      }
     }
+    // Flip-flop rule (§4.2): when round r's winner differs from round r-1's
+    // winner, round r-1's majority voters followed an outcome the next panel
+    // rejected — flag them for clawback with reason `round_flip`, idempotent
+    // per (idx, reason, round).
+    const previous = state.outcomeHistory[state.outcomeHistory.length - 1];
+    if (previous && previous.outcome !== winner) {
+      const alreadyFlipped = new Set(
+        clawbackFlags
+          .filter((f) => f.reason === 'round_flip' && f.round === previous.round)
+          .map((f) => f.idx),
+      );
+      const flipFlags = previous.winnerIndices
+        .filter((idx) => !alreadyFlipped.has(idx))
+        .map((idx) => ({ idx, reason: 'round_flip', round: previous.round }));
+      if (flipFlags.length > 0) {
+        clawbackFlags = [...clawbackFlags, ...flipFlags];
+      }
+    }
+    // Compatibility rule: the final permitted round settles fees directly
+    // (the v0.8.5 single-round flow with maxLadderRounds = 1, or the last
+    // round of a longer ladder); any earlier resolution parks in
+    // `round_resolved` where the host plays `escalate` or `concede` — the
+    // machine never auto-escalates and never auto-concedes.
+    const isFinalRound = round >= state.maxLadderRounds;
     return freezeState({
       ...state,
-      phase: 'fee_settlement',
+      phase: isFinalRound ? 'fee_settlement' : 'round_resolved',
       clawbackFlags,
+      outcomeHistory,
       verdict: {
         outcome: winner,
         supportingEventIds: [],
@@ -831,6 +1029,34 @@ export function reduceCourtConfirmationMachine(
         upheld,
       },
     });
+  }
+
+  if (event.type === 'escalate') {
+    if (state.phase !== 'round_resolved') {
+      throw new CourtConfirmationTransitionError(
+        `cannot escalate during ${state.phase}`,
+      );
+    }
+    // Fail closed: a hand-restored snapshot parked at round_resolved with
+    // the cap already reached must not re-open the ladder.
+    if (state.ladderRound >= state.maxLadderRounds) {
+      throw new CourtConfirmationTransitionError(
+        `maxLadderRounds ${state.maxLadderRounds} already reached at round ${state.ladderRound}`,
+      );
+    }
+    return freezeState({ ...state, phase: 'ladder_pending' });
+  }
+
+  if (event.type === 'concede') {
+    if (state.phase !== 'round_resolved') {
+      throw new CourtConfirmationTransitionError(
+        `cannot concede during ${state.phase}`,
+      );
+    }
+    // The pending verdict (the current round's outcome) becomes final; the
+    // host settles fees and finalize mints the verdict from the last
+    // resolved round's winning votes.
+    return freezeState({ ...state, phase: 'fee_settlement' });
   }
 
   if (event.type === 'record_fee') {
@@ -896,7 +1122,12 @@ export function reduceCourtConfirmationMachine(
     if (!pending) {
       throw new CourtConfirmationTransitionError('cannot finalize without a resolved round');
     }
-    const supportingEventIds = pending.upheld
+    // Finality (multi-round ladder §4.2): the verdict is the LAST resolved
+    // round's winner. A challenged case is backed by that round's
+    // winning-vote event ids; an never-challenged case by the confirmation
+    // ledger. (v0.8.5 backed an upheld challenged round with confirmations;
+    // the ladder spec pins the evidence to the round that decided.)
+    const supportingEventIds = state.challenges.length === 0 && pending.upheld
       ? state.confirmations.map((c) => c.eventId.toLowerCase()).sort()
       : (state.ladder?.votes ?? [])
           .filter((v) => v.outcome === pending.outcome)
