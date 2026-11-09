@@ -306,6 +306,22 @@ function parseV2Int(value: string, max: number, label: string): number | null {
   return parsed;
 }
 
+// v2 field bounds (hardening, security round 1): the signed message is a
+// fixed-size digest, but its INPUTS are attacker-influencable via the tags.
+// Without bounds a hostile relay/client can force validators to hash
+// megabyte-scale marketIds/outcomes (FINDING-2, round-1 audit). The outcome
+// bound mirrors the vote machine's MAX_OUTCOME_BYTES (256); the marketId and
+// round bounds are generous (1024/64 bytes) so no legitimate id is affected.
+// The frozen v1 validator is deliberately left unbounded (byte-compatible).
+const MAX_V2_MARKET_ID_BYTES = 1024;
+const MAX_V2_OUTCOME_BYTES = 256;
+const MAX_V2_ROUND_BYTES = 64;
+const v2FieldEncoder = new TextEncoder();
+
+function v2FieldByteLength(value: string): number {
+  return v2FieldEncoder.encode(value).length;
+}
+
 /**
  * Validate a v2 attestation: kind-89/39007 event whose signed message is the
  * v2 attestation message with the finality binding. Every v2 field must be
@@ -346,6 +362,13 @@ export function validateAttestationEventV2(
 
   if (!pubkey || !signature || !nonce || !outcome || !marketId || !round) {
     return { valid: false, pubkey: '', error: 'Missing required tags' };
+  }
+  if (
+    v2FieldByteLength(marketId) > MAX_V2_MARKET_ID_BYTES
+    || v2FieldByteLength(outcome) > MAX_V2_OUTCOME_BYTES
+    || v2FieldByteLength(round) > MAX_V2_ROUND_BYTES
+  ) {
+    return { valid: false, pubkey: '', error: 'marketId/outcome/round too long (v2 field bounds exceeded)' };
   }
   // v2 REQUIRED finality tags: a v2-shaped event missing any of these is invalid.
   if (!epochTag || !tierTag || !thresholdTag || !signersTag) {
@@ -417,6 +440,19 @@ export function validateAttestationEventV2(
 
   if (context.expectedGroupPubkey && pubkey !== context.expectedGroupPubkey) {
     return { valid: false, pubkey, error: `Pubkey mismatch: expected ${context.expectedGroupPubkey}, got ${pubkey}` };
+  }
+  // FINDING-3 (security round 1): these three context pins are declared on
+  // AttestationV2ValidationContext but were never enforced on the v2 path —
+  // an attestation for a different market, dispute, or a non-allowed
+  // outcome validated. Enforce the same scope checks as the frozen v1 path.
+  if (context.expectedDisputeEventId && disputeEventId !== context.expectedDisputeEventId) {
+    return { valid: false, pubkey, error: 'Dispute id mismatch' };
+  }
+  if (context.expectedMarketId && marketId !== context.expectedMarketId) {
+    return { valid: false, pubkey, error: 'Market id mismatch' };
+  }
+  if (context.allowedOutcomes && !context.allowedOutcomes.includes(outcome)) {
+    return { valid: false, pubkey, error: 'Outcome is not allowed' };
   }
   if (context.expectedEpoch !== undefined && epochId !== context.expectedEpoch) {
     return { valid: false, pubkey, error: `Epoch mismatch: expected ${context.expectedEpoch}, got ${epochId}` };
@@ -505,9 +541,28 @@ export function validateAttestationEventV2(
 }
 
 /**
+ * v2-only finality policy fields: the frozen v1 validator cannot enforce
+ * these, so the dispatcher refuses a v1-shaped event when any is requested.
+ */
+const V2_ONLY_POLICY_FIELDS = [
+  'expectedEpoch',
+  'minTier',
+  'minThreshold',
+  'expectedSignerSetRoot',
+  'signerSet',
+] as const;
+
+/**
  * Shape dispatcher: v2 events (carrying an `epoch` tag) go through the v2
- * finality validation; everything else takes the frozen v1 path. Contexts
- * are passed through untouched — supply the shape that matches the event.
+ * finality validation; everything else takes the frozen v1 path.
+ *
+ * FINDING-1 (security round 1): the frozen v1 validator knows nothing about
+ * the v2-only finality policy fields. Silently passing a v1-shaped event to
+ * it while the caller pinned `expectedEpoch` / `minTier` /
+ * `minThreshold` / `expectedSignerSetRoot` / `signerSet` would let a stale
+ * or low-tier legacy attestation validate under v2 policy it never satisfied.
+ * The dispatcher therefore fails closed: v2 policy on a v1-shaped event is a
+ * downgrade and is rejected, not ignored.
  */
 export function validateCourtAttestation(
   event: NostrEvent,
@@ -516,6 +571,15 @@ export function validateCourtAttestation(
   const context = typeof expected === 'string' ? { expectedGroupPubkey: expected } : (expected ?? {});
   if (event.tags.some((tag) => tag[0] === 'epoch')) {
     return validateAttestationEventV2(event, context as AttestationV2ValidationContext);
+  }
+  const requested = context as Record<string, unknown>;
+  if (V2_ONLY_POLICY_FIELDS.some((key) => requested[key] !== undefined)) {
+    return {
+      valid: false,
+      pubkey: '',
+      error:
+        'v1 attestation (no epoch tag) cannot satisfy v2 finality policy (expectedEpoch/minTier/minThreshold/expectedSignerSetRoot/signerSet) — downgrade refused',
+    };
   }
   return validateAttestationEvent(event, context as AttestationValidationContext);
 }
