@@ -9,6 +9,15 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.8.4] — 2026-11-09
+
+### Fixed
+- **Consumer-typelib compat:** `Object.hasOwn` (ES2022) in the adversarial
+  suite breaks typecheck under consumers whose `lib` target predates
+  es2022 (bao.markets build-config typecheck) — replaced with
+  `Object.prototype.hasOwnProperty.call`. Source-distributed packages must
+  stay within the consumer lib baseline.
+
 ## [0.8.3] — 2026-11-09
 
 ### Fixed (round-1 adversarial machine fuzz, PR #37)
