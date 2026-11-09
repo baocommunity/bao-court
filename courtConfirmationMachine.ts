@@ -6,6 +6,8 @@ import {
   assertNow,
   assertPositiveDeadline,
   assertRosterMember,
+  assertStateArrays,
+  isCanonicalUtf8Text,
   normalizeCeremonyRoster,
 } from './courtCeremonyCore';
 import {
@@ -248,6 +250,7 @@ function assertBoundedOutcome(outcome: string, message: string): void {
     typeof outcome !== 'string'
     || outcome.length === 0
     || textEncoder.encode(outcome).length > MAX_OUTCOME_BYTES
+    || !isCanonicalUtf8Text(outcome)
   ) {
     throw new CourtConfirmationTransitionError(message);
   }
@@ -423,6 +426,26 @@ export function reduceCourtConfirmationMachine(
   state: CourtConfirmationMachineState,
   event: CourtConfirmationMachineEvent,
 ): CourtConfirmationMachineState {
+  // Fail closed on a non-object event (a null/undefined event would crash
+  // with an uncaught TypeError on property access below).
+  if (event === null || typeof event !== 'object') {
+    throw new CourtConfirmationTransitionError('event must be an object');
+  }
+  // Fail closed on a tampered or hand-restored state whose configuration or
+  // ledger fields were replaced by non-array values (an uncaught TypeError
+  // in the guards below, or a string allowlist admitting substring matches
+  // outside the frozen ballot).
+  assertStateArrays(
+    state as unknown as Record<string, unknown>,
+    ['participantIndices', 'allowedOutcomes', 'confirmations', 'challenges', 'fees', 'clawbackFlags'],
+    CourtConfirmationTransitionError,
+  );
+  if (
+    state.ladder !== undefined
+    && (typeof state.ladder !== 'object' || state.ladder === null || !Array.isArray(state.ladder.votes))
+  ) {
+    throw new CourtConfirmationTransitionError('ladder state is missing or malformed');
+  }
   // Monotonic non-decreasing clock for every time-bearing event; `abort`
   // carries no clock (mirrors the vote machine).
   if (event.type !== 'abort') {
@@ -802,5 +825,8 @@ export function reduceCourtConfirmationMachine(
     });
   }
 
-  return state;
+  // Unreachable for well-typed events; fail closed instead of silently
+  // returning an unfrozen clock-advanced copy for a hostile unknown type.
+  const unknownType = (event as { readonly type?: unknown }).type;
+  throw new CourtConfirmationTransitionError(`unknown confirmation event type: ${String(unknownType)}`);
 }

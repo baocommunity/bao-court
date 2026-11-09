@@ -9,6 +9,7 @@ import {
   assertNow,
   assertPositiveDeadline,
   assertRosterMember,
+  assertStateArrays,
   normalizeCeremonyRoster,
 } from './courtCeremonyCore';
 
@@ -110,6 +111,20 @@ const TERMINAL_PHASES = new Set<CourtDkgPhase>([
   'incompatible_suite',
 ]);
 
+/**
+ * Freeze a DKG-machine state so no holder of a returned reference can mutate
+ * the frozen configuration, ledgers, or failure between transitions (mirrors
+ * the vote machine's freeze discipline).
+ */
+function freezeCourtDkgMachineState(state: CourtDkgMachineState): CourtDkgMachineState {
+  Object.freeze(state.participantIndices);
+  Object.freeze(state.round1Participants);
+  Object.freeze(state.round2Participants);
+  Object.freeze(state.transcriptCertifiers);
+  if (state.failure) Object.freeze(state.failure);
+  return Object.freeze(state);
+}
+
 function addSorted(values: readonly number[], idx: number): readonly number[] {
   if (values.includes(idx)) return values;
   return [...values, idx].sort((a, b) => a - b);
@@ -153,7 +168,7 @@ export function createCourtDkgMachine(params: {
     'DKG',
     CourtDkgTransitionError,
   );
-  return {
+  return freezeCourtDkgMachineState({
     sessionHash: params.sessionHash,
     participantIndices: participants,
     deadline: params.deadline,
@@ -162,14 +177,27 @@ export function createCourtDkgMachine(params: {
     round2Participants: [],
     transcriptCertifiers: [],
     backupVerified: false,
-  };
+  });
 }
 
 export function reduceCourtDkgMachine(
   state: CourtDkgMachineState,
   event: CourtDkgMachineEvent,
 ): CourtDkgMachineState {
-  if (event.type === 'tick') return expire(state, event.now);
+  // Fail closed on a non-object event (a null/undefined event would crash
+  // with an uncaught TypeError on property access below).
+  if (event === null || typeof event !== 'object') {
+    throw new CourtDkgTransitionError('event must be an object');
+  }
+  // Fail closed on a tampered or hand-restored state whose roster or ledger
+  // fields were replaced by non-array values (an uncaught TypeError on
+  // `.includes` in the guards below).
+  assertStateArrays(
+    state as unknown as Record<string, unknown>,
+    ['participantIndices', 'round1Participants', 'round2Participants', 'transcriptCertifiers'],
+    CourtDkgTransitionError,
+  );
+  if (event.type === 'tick') return freezeCourtDkgMachineState(expire(state, event.now));
   if (event.type === 'abort') {
     if (TERMINAL_PHASES.has(state.phase) || state.phase === 'certified') {
       throw new CourtDkgTransitionError(`cannot abort DKG from ${state.phase}`);
@@ -182,11 +210,11 @@ export function reduceCourtDkgMachine(
     // Ensure the caller cannot forge a peer-blame by supplying an unverified
     // blamedIdx — the index must be a valid roster participant.
     assertBlamedIdx(event.blamedIdx, state.participantIndices, 'participant', CourtDkgTransitionError);
-    return {
+    return freezeCourtDkgMachineState({
       ...state,
       phase: event.phase,
       failure: { phase: event.phase, reason: event.reason, blamedIdx: event.blamedIdx },
-    };
+    });
   }
   if (TERMINAL_PHASES.has(state.phase)) {
     throw new CourtDkgTransitionError(`cannot process ${event.type} after ${state.phase}`);
@@ -197,7 +225,7 @@ export function reduceCourtDkgMachine(
     if (state.phase !== 'parameters_confirmed') {
       throw new CourtDkgTransitionError(`cannot start DKG from ${state.phase}`);
     }
-    return { ...state, phase: 'dkg_round_1' };
+    return freezeCourtDkgMachineState({ ...state, phase: 'dkg_round_1' });
   }
 
   if (event.type === 'accept_round_1') {
@@ -207,11 +235,11 @@ export function reduceCourtDkgMachine(
       throw new CourtDkgTransitionError(`cannot accept round 1 data during ${state.phase}`);
     }
     const accepted = addSorted(state.round1Participants, event.idx);
-    return {
+    return freezeCourtDkgMachineState({
       ...state,
       round1Participants: accepted,
       phase: accepted.length === state.participantIndices.length ? 'dkg_round_2' : state.phase,
-    };
+    });
   }
 
   if (event.type === 'accept_round_2') {
@@ -220,7 +248,7 @@ export function reduceCourtDkgMachine(
     if (state.phase !== 'dkg_round_2') {
       throw new CourtDkgTransitionError(`cannot accept round 2 data during ${state.phase}`);
     }
-    return { ...state, round2Participants: addSorted(state.round2Participants, event.idx) };
+    return freezeCourtDkgMachineState({ ...state, round2Participants: addSorted(state.round2Participants, event.idx) });
   }
 
   if (event.type === 'finalize_transcript') {
@@ -239,12 +267,12 @@ export function reduceCourtDkgMachine(
     ) {
       throw new CourtDkgTransitionError('transcript hash or candidate group key has invalid encoding');
     }
-    return {
+    return freezeCourtDkgMachineState({
       ...state,
       phase: 'transcript_signing',
       transcriptHash: event.transcriptHash,
       candidateGroupPubkey: event.candidateGroupPubkey,
-    };
+    });
   }
 
   if (event.type === 'accept_certification') {
@@ -254,7 +282,7 @@ export function reduceCourtDkgMachine(
       throw new CourtDkgTransitionError(`cannot certify transcript during ${state.phase}`);
     }
     if (event.transcriptHash !== state.transcriptHash) {
-      return {
+      return freezeCourtDkgMachineState({
         ...state,
         phase: 'aborted_peer',
         failure: {
@@ -262,18 +290,18 @@ export function reduceCourtDkgMachine(
           blamedIdx: event.idx,
           reason: 'A participant certified a different DKG transcript.',
         },
-      };
+      });
     }
     const certifiers = addSorted(state.transcriptCertifiers, event.idx);
     if (certifiers.length !== state.participantIndices.length) {
-      return { ...state, transcriptCertifiers: certifiers };
+      return freezeCourtDkgMachineState({ ...state, transcriptCertifiers: certifiers });
     }
-    return {
+    return freezeCourtDkgMachineState({
       ...state,
       phase: 'certified',
       transcriptCertifiers: certifiers,
       certifiedGroupPubkey: state.candidateGroupPubkey,
-    };
+    });
   }
 
   if (event.type === 'confirm_backup') {
@@ -286,8 +314,11 @@ export function reduceCourtDkgMachine(
     if (state.phase !== 'certified' || !state.certifiedGroupPubkey) {
       throw new CourtDkgTransitionError('cannot confirm recovery data before DKG certification');
     }
-    return { ...state, phase: 'backed_up', backupVerified: true };
+    return freezeCourtDkgMachineState({ ...state, phase: 'backed_up', backupVerified: true });
   }
 
-  return state;
+  // Unreachable for well-typed events; fail closed instead of silently
+  // returning state for a hostile unknown type.
+  const unknownType = (event as { readonly type?: unknown }).type;
+  throw new CourtDkgTransitionError(`unknown DKG event type: ${String(unknownType)}`);
 }
