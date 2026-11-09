@@ -9,6 +9,41 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.8.2] — 2026-11-09
+
+### Fixed
+- **Security round 1 (validator/finality adversarial audit).** Three real
+  findings, all fixed in v2 paths + the dispatcher only; the frozen v1
+  validator is byte-compatible for legacy events (validated by
+  `__tests__/validator.test.ts`).
+  - **F3 (high) — v2 scope pins silently dropped.**
+    `validateAttestationEventV2` declared `expectedMarketId`,
+    `expectedDisputeEventId`, and `allowedOutcomes` on its context but never
+    enforced them: an attestation for the wrong market, a foreign dispute,
+    or a non-allowed outcome validated under v2. All three are now enforced
+    exactly as in the frozen v1 path.
+  - **F1 (medium) — dispatcher policy downgrade.**
+    `validateCourtAttestation` routed a v1-shaped event (no `epoch` tag) to
+    the frozen v1 validator while silently IGNORING v2-only finality policy
+    (`expectedEpoch` / `minTier` / `minThreshold` / `expectedSignerSetRoot`
+    / `signerSet`) — a stale v1 attestation could satisfy policy it never
+    met. The dispatcher now fails closed when v2 policy is requested for a
+    v1-shaped event.
+  - **F2 (low) — unbounded v2 field lengths.** v2 validators now bound
+    `marketId` (1024 UTF-8 bytes), `outcome` (256, mirrors the vote
+    machine's `MAX_OUTCOME_BYTES`), and `round` (64) before hashing, so a
+    hostile relay cannot force megabyte-scale hash inputs. v1 keeps its
+    frozen unbounded behaviour (documented).
+- Verified-hard (no change needed): epoch-tag downgrade of a v2 event to the
+  v1 validator is structurally impossible (v1 recomputes a different domain
+  digest); noble `schnorr.verify` rejects malleable `s ≥ n`, `s = 0`, and
+  non-curve pubkeys; `hashSignerSetRoot` rejects unsorted-free duplicates,
+  non-positive, fractional, NaN, and >2³² indices (no truncation collisions —
+  `CanonicalWriter.u32` throws); the vote-machine tie-break uses
+  `compareOutcomeUtf8` (UTF-8 byte order) where JS UTF-16 order diverges;
+  NFC/NFD outcomes are distinct with no aliasing. Repro suite:
+  `__tests__/attestationValidator.adversarial.test.ts` (30 cases).
+
 ## [0.8.1] — 2026-11-09
 
 ### Added
