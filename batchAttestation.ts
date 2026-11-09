@@ -581,6 +581,17 @@ export function verifyCaseInBatch(
     throw new BatchAttestationError('proof index and verdictHash are malformed');
   }
 
+  // Fail closed BEFORE any leaf work (round-3 finding r3-2): a tags-less
+  // event used to reach uniqueTag() only after the proof leaf was recomputed
+  // and matched, escaping a raw TypeError. The event shape is validated here
+  // — after malformed call ARGUMENTS throw (the PB6a contract) but before the
+  // leaf recomputation — so every malformed-event answer is the module's
+  // typed { valid, reason } result, identical to
+  // validateBatchAttestationEvent's guard.
+  if (!Array.isArray(event.tags)) {
+    return { valid: false, reason: 'malformed event' };
+  }
+
   // Recompute the verdict hash with the exact vote-machine logic — do not
   // fork it. hashCourtVerdict validates and throws for malformed case inputs.
   const verdictHash = hashCourtVerdict(caseInput);

@@ -9,6 +9,51 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.9.1] — 2026-11-09
+
+### Fixed (round-3 property-sweep findings)
+- **`courtConfirmationMachine` — r3-1:** `finalize` over a restored EMPTY
+  confirmation ledger used to escape the vote machine's FOREIGN
+  `CourtVoteTransitionError` (empty `supportingEventIds` reached
+  `hashCourtVerdict`). Finalize now fails closed with the machine's own
+  typed `CourtConfirmationTransitionError` when the verdict would carry zero
+  supporting event ids. Unreachable on live paths — `close_confirmations`
+  enforces the quorum (unchallenged cases) and `resolve_round` refuses an
+  empty vote ledger (challenged cases) — the guard protects the
+  restore/replay path.
+- **`batchAttestation` — r3-2:** `verifyCaseInBatch` escaped a raw
+  `TypeError` for a tags-less event once the proof leaf matched. The event
+  shape (`tags` array) is now validated BEFORE leaf work, answering the
+  module's typed `{ valid: false, reason: 'malformed event' }` — identical
+  to `validateBatchAttestationEvent`'s guard. Malformed call arguments
+  (proof path/index) still throw the typed `BatchAttestationError` as before.
+- **`validator` — r3-3:** `validateCourtAttestation` dereferenced
+  `event.tags` unguarded in the v1/v2 shape dispatch, crashing with a raw
+  `TypeError` on malformed events. Now guarded: a tags-less event answers
+  the typed `{ valid: false, error: 'Malformed event: tags must be an
+  array' }`.
+- **`courtConfirmationMachine` — r3-6 (design bug):** a challenged case on a
+  2-member case roster could NEVER resolve: the ladder round panel defaults
+  to the case roster, but the close/resolve ledger barrier demands ≥ 3
+  round-panel members — a mid-ladder dead end. Chosen fix: **fail closed at
+  creation** — `createCourtConfirmationMachine` now rejects a
+  `participantIndices` roster with fewer than 3 members (typed
+  `CourtConfirmationTransitionError`, `confirmation roster must contain at
+  least 3 participants`). This is the cleanest consistent rule: the
+  confirmation-quorum and round-panel semantics presuppose a panel. One
+  pre-existing test (`adversarialMachines.test.ts` quorum-shortfall case)
+  was updated from a 2-member to a 3-member roster; no API consumer change
+  beyond the stricter creation guard.
+- **`validator` — r3-5:** `hashSignerSetRoot` threw a plain `Error`; it now
+  throws the new typed **`CourtSignerSetError`** (exported from the package
+  root; error messages byte-identical to the previous text).
+- **`validator` — r3-4 (observation, documentation only):** documented the
+  nostr-tools `verifyEvent` verdict-cache semantics on
+  `validateAttestationEvent` (cache lives under a Symbol-keyed property,
+  derived state only; object-spread clones never carry it and re-verify
+  from scratch — in-place mutation of a verified event is the residual
+  hazard). No behaviour change.
+
 ## [0.9.0] — 2026-11-09
 
 ### Added (multi-round ladder escalation, universal-confirmation proposal §4.2)

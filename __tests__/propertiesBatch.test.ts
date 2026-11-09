@@ -459,12 +459,13 @@ describe('properties: batchAttestation', () => {
     expect(thrown).toBeInstanceOf(CourtVoteTransitionError);
   });
 
-  it('PB6d (FINDING r3): verifyCaseInBatch escapes a RAW TypeError for a tags-less event whose proof leaf matches', () => {
+  it('PB6d (FINDING r3, FIXED in 0.9.1): verifyCaseInBatch answers a TYPED { valid:false } for a tags-less event whose proof leaf matches — event shape validated BEFORE leaf work', () => {
     // validateBatchAttestationEvent guards !Array.isArray(event.tags), but
-    // verifyCaseInBatch reaches uniqueTag() without that guard once the
-    // recomputed leaf matches the proof — a malformed/empty event object
-    // then crashes with an uncaught TypeError instead of failing closed.
-    // Reported as a round-3 finding; asserted here for regression visibility.
+    // verifyCaseInBatch used to reach uniqueTag() without that guard once the
+    // recomputed leaf matched the proof — a malformed/empty event object then
+    // crashed with an uncaught TypeError. Since 0.9.1 the event shape is
+    // validated up front and the answer is the module's typed
+    // { valid: false, reason } result.
     const r = mulberry32(779);
     const caseInput = { sessionHash: 'aa'.repeat(32), outcome: 'x', supportingEventIds: ['bb'.repeat(32)] };
     const verdictHash = hashCourtVerdict(caseInput);
@@ -477,16 +478,14 @@ describe('properties: batchAttestation', () => {
     input.set(prefix, 0);
     input.set(body, prefix.length);
     const leaf = bytesToHex(sha256(input));
-    let thrown: unknown;
-    try {
-      verifyCaseInBatch(
+    let result: unknown;
+    expect(() => {
+      result = verifyCaseInBatch(
         { kind: 39018 } as unknown as NostrEvent,
         { ...caseInput, proof: { index: 0, verdictHash: leaf, path: [] } },
       );
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(TypeError);
+    }).not.toThrow();
+    expect(result).toMatchObject({ valid: false, reason: 'malformed event' });
   });
 
   it('PB6b: validateBatchAttestationEvent NEVER throws on hostile events — every answer is { valid: boolean }', () => {

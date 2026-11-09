@@ -549,6 +549,15 @@ export function createCourtConfirmationMachine(params: {
   readonly proposedOutcome: string;
   readonly allowedOutcomes: readonly string[];
   readonly evidenceIds?: readonly string[];
+  /**
+   * The juror panel: sequential indices 1..N with N ≥ 3 (round-3 finding
+   * r3-6, fail-closed at creation). The confirmation quorum semantics and
+   * the ladder's round-panel barrier presuppose a panel of at least
+   * MIN_ROUND_ROSTER seats — a 2-member case roster could never resolve a
+   * challenged case (the default round panel IS the case roster, and the
+   * ledger barrier demands ≥ 3 round-panel members), so such a machine is
+   * rejected up front instead of dead-ending mid-challenge.
+   */
   readonly participantIndices: readonly number[];
   readonly confirmQuorum?: number;
   readonly confirmDeadline: number;
@@ -568,6 +577,17 @@ export function createCourtConfirmationMachine(params: {
     'confirmation',
     CourtConfirmationTransitionError,
   );
+  // Fail closed at creation (round-3 finding r3-6): the confirmation quorum
+  // and the ladder's round-panel barrier (MIN_ROUND_ROSTER) presuppose a
+  // panel of ≥ 3 seats — a 2-member case roster could confirm (quorum ≤ 2)
+  // but could NEVER resolve a challenged case, because the default round
+  // panel is the case roster and close_ladder_round/resolve_round reject a
+  // < 3-seat panel. Rejecting here keeps every reachable state resolvable.
+  if (participants.length < MIN_ROUND_ROSTER) {
+    throw new CourtConfirmationTransitionError(
+      `confirmation roster must contain at least ${MIN_ROUND_ROSTER} participants`,
+    );
+  }
   if (
     !Array.isArray(params.allowedOutcomes)
     || params.allowedOutcomes.length < 2
@@ -1133,6 +1153,20 @@ export function reduceCourtConfirmationMachine(
           .filter((v) => v.outcome === pending.outcome)
           .map((v) => v.eventId.toLowerCase())
           .sort();
+    // Fail closed (round-3 finding r3-1): a final verdict needs at least one
+    // supporting event. On live paths this is unreachable —
+    // close_confirmations enforces the quorum (so the never-challenged path
+    // always has ≥ confirmQuorum ≥ 1 confirmation events) and resolve_round
+    // refuses an empty vote ledger (so the winner has ≥ 1 event id) — but a
+    // hand-restored snapshot with an emptied confirmation ledger used to
+    // reach hashCourtVerdict with zero ids, escaping the VOTE machine's
+    // foreign CourtVoteTransitionError out of THIS machine. Throw the
+    // confirmation machine's own typed error instead.
+    if (supportingEventIds.length === 0) {
+      throw new CourtConfirmationTransitionError(
+        'cannot finalize a verdict with zero supporting event ids — an upheld confirmation needs a quorum of confirmations, a resolved round needs winning votes',
+      );
+    }
     const verdictHash = hashCourtVerdict({
       sessionHash: state.sessionHash,
       outcome: pending.outcome,
