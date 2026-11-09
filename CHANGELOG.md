@@ -9,6 +9,20 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.8.1] — 2026-11-09
+
+### Added
+- **v2 attestation validation with in-band finality binding
+  (`validator.ts`).** `hashSignerSetRoot` (canonical sorted-index commitment
+  under `BAO-Court/SignerSet/v1`), `validateAttestationEventV2` (requires
+  epoch/tier/threshold/signers tags mirrored in content; recomputes the v2
+  signed message via `buildAttestationMessageV2`; dispute attestations
+  recompute the verdict hash exactly as the frozen v1 path; finality-policy
+  pins: expected epoch, minimum tier/threshold, signer-set root, full
+  signer-set verification with `length === threshold`), and
+  `validateCourtAttestation` (dispatcher: `epoch` tag → v2, else frozen v1).
+  Closes the round-0-attestation-replayed-as-final gap end to end.
+
 ## [0.8.0] — 2026-11-08
 
 ### Added

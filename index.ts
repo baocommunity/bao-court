@@ -524,7 +524,13 @@ export {
 export {
   validateAttestationEvent,
   verifyRawSignature,
+  COURT_SIGNER_SET_DOMAIN,
+  hashSignerSetRoot,
+  validateAttestationEventV2,
+  validateCourtAttestation,
   type ValidationResult,
+  type AttestationValidationContext,
+  type AttestationV2ValidationContext,
 } from './validator';
 
 export {

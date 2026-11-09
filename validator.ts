@@ -9,7 +9,7 @@ import { hexToBytes } from '@noble/hashes/utils.js';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
 import { verifyEvent } from 'nostr-tools/pure';
 import { BAO_COURT_ATTESTATION_KIND } from './events';
-import { buildAttestationMessage } from './crypto';
+import { buildAttestationMessage, buildAttestationMessageV2 } from './crypto';
 import { hashDisputeVerdict } from './courtVoteMachine';
 
 export interface ValidationResult {
@@ -228,4 +228,294 @@ export function verifyRawSignature(
   } catch {
     return false;
   }
+}
+
+// ─── v2: in-band finality binding ───────────────────────────────────────────
+//
+// The v1 validator above is FROZEN: existing attestations must verify
+// forever, byte-identically. V2 attestations add the finality binding inside
+// the SIGNED message (epochId / tier / threshold / signerSetRoot / attempt /
+// batchMerkleRoot) so a low-tier or stale attestation can never be presented
+// as a final verdict under the same standing cohort key. Use
+// `validateCourtAttestation` to accept both shapes; v2 is detected by the
+// presence of an `epoch` tag.
+
+import { CanonicalWriter } from './courtSession';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+
+export const COURT_SIGNER_SET_DOMAIN = 'BAO-Court/SignerSet/v1';
+
+/**
+ * Canonical Merkle-style commitment to the signer set: the sorted,
+ * deduplicated roster indices that produced a signature, length-prefixed
+ * under a dedicated domain. Signing sessions publish this as the `signers`
+ * tag; validators recompute it from a full signer set (or pin it directly)
+ * to prove WHICH set signed — required for tier-based finality policy.
+ */
+export function hashSignerSetRoot(indices: readonly number[]): string {
+  if (!Array.isArray(indices) || indices.length === 0 || indices.length > 10_000) {
+    throw new Error('signer set must contain 1..10000 indices');
+  }
+  const seen = new Set<number>();
+  for (const idx of indices) {
+    if (!Number.isSafeInteger(idx) || idx < 1) {
+      throw new Error('signer indices must be positive safe integers');
+    }
+    if (seen.has(idx)) {
+      throw new Error('signer set must not contain duplicate indices');
+    }
+    seen.add(idx);
+  }
+  const sorted = [...indices].sort((a, b) => a - b);
+  const writer = new CanonicalWriter();
+  writer.u8(1);
+  writer.u32(sorted.length);
+  for (const idx of sorted) writer.u32(idx);
+  const prefix = new TextEncoder().encode(COURT_SIGNER_SET_DOMAIN);
+  const encoded = writer.finish();
+  const input = new Uint8Array(prefix.length + encoded.length);
+  input.set(prefix, 0);
+  input.set(encoded, prefix.length);
+  return bytesToHex(sha256(input));
+}
+
+export interface AttestationV2ValidationContext {
+  readonly expectedGroupPubkey?: string;
+  readonly expectedDisputeEventId?: string;
+  readonly expectedMarketId?: string;
+  readonly allowedOutcomes?: readonly string[];
+  readonly trustedPublisherPubkeys?: readonly string[];
+  /** Pin the exact epoch — rejects attestations from any other epoch. */
+  readonly expectedEpoch?: number;
+  /** Finality policy: reject attestations below this tier. */
+  readonly minTier?: number;
+  /** Finality policy: reject signer sets smaller than this threshold. */
+  readonly minThreshold?: number;
+  /** Pin the expected signer-set root (the `signers` tag must match). */
+  readonly expectedSignerSetRoot?: string;
+  /** Full signer set — recomputes the root AND enforces `length === threshold`. */
+  readonly signerSet?: readonly number[];
+}
+
+function parseV2Int(value: string, max: number, label: string): number | null {
+  if (!/^[0-9]+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) return null;
+  void label;
+  return parsed;
+}
+
+/**
+ * Validate a v2 attestation: kind-89/39007 event whose signed message is the
+ * v2 attestation message with the finality binding. Every v2 field must be
+ * present as a tag, mirrored in content, and bound into the signed message;
+ * the group signature must verify over that message.
+ */
+export function validateAttestationEventV2(
+  event: NostrEvent,
+  context: AttestationV2ValidationContext = {},
+): ValidationResult {
+  if (event.kind !== 89 && event.kind !== BAO_COURT_ATTESTATION_KIND) {
+    return { valid: false, pubkey: '', error: `Not a Kind 89 or ${BAO_COURT_ATTESTATION_KIND} attestation` };
+  }
+  if (!verifyEvent(event)) {
+    return { valid: false, pubkey: '', error: 'Invalid Nostr event signature or id' };
+  }
+  if (
+    context.trustedPublisherPubkeys &&
+    !context.trustedPublisherPubkeys.includes(event.pubkey)
+  ) {
+    return { valid: false, pubkey: '', error: 'Untrusted attestation publisher' };
+  }
+
+  const pubkey = uniqueTag(event, 'p');
+  const signature = uniqueTag(event, 'sig');
+  const nonce = uniqueTag(event, 'nonce');
+  const outcome = uniqueTag(event, 'outcome');
+  const disputeEventId = uniqueTag(event, 'dispute');
+  const marketId = uniqueTag(event, 'm');
+  const round = uniqueTag(event, 'round');
+  const verdictHash = uniqueTag(event, 'verdict');
+  const epochTag = uniqueTag(event, 'epoch');
+  const tierTag = uniqueTag(event, 'tier');
+  const thresholdTag = uniqueTag(event, 'threshold');
+  const signersTag = uniqueTag(event, 'signers');
+  const attemptTag = uniqueTag(event, 'attempt');
+  const batchTag = uniqueTag(event, 'batch');
+
+  if (!pubkey || !signature || !nonce || !outcome || !marketId || !round) {
+    return { valid: false, pubkey: '', error: 'Missing required tags' };
+  }
+  // v2 REQUIRED finality tags: a v2-shaped event missing any of these is invalid.
+  if (!epochTag || !tierTag || !thresholdTag || !signersTag) {
+    return { valid: false, pubkey: pubkey ?? '', error: 'Missing v2 finality tags (epoch/tier/threshold/signers)' };
+  }
+  if (!isHex64(pubkey) || !/^[0-9a-fA-F]{128}$/.test(signature) || !isHex64(nonce)) {
+    return { valid: false, pubkey: pubkey ?? '', error: 'Invalid group pubkey, signature, or nonce' };
+  }
+  if (nonce !== signature.slice(0, 64)) {
+    return { valid: false, pubkey, error: 'Nonce tag does not match signature' };
+  }
+  if (event.kind === BAO_COURT_ATTESTATION_KIND) {
+    if (!disputeEventId) {
+      return { valid: false, pubkey, error: 'Missing dispute tag on dispute attestation' };
+    }
+    if (!verdictHash || !isHex64(verdictHash)) {
+      return { valid: false, pubkey, error: 'Missing or invalid verdict hash on dispute attestation' };
+    }
+    const supportingIds = event.tags
+      .filter((t) => t[0] === 'e' && t[3] === 'mention')
+      .map((t) => t[1]);
+    if (supportingIds.length === 0 || supportingIds.length > 10_000) {
+      return { valid: false, pubkey, error: 'Dispute attestation must carry 1..10000 supporting event IDs' };
+    }
+    if (supportingIds.some((id) => !isHex64(id))) {
+      return { valid: false, pubkey, error: 'Supporting event IDs must be 32-byte hex' };
+    }
+    if (new Set(supportingIds).size !== supportingIds.length) {
+      return { valid: false, pubkey, error: 'Duplicate supporting event IDs' };
+    }
+    // The verdict commitment must recompute from the event's own dispute,
+    // outcome, and supporting ids — same rule as the frozen v1 path.
+    let expectedVerdictHash: string;
+    try {
+      expectedVerdictHash = hashDisputeVerdict({
+        disputeId: disputeEventId.toLowerCase(),
+        outcome,
+        supportingEventIds: supportingIds.map((id) => id.toLowerCase()),
+      });
+    } catch {
+      return { valid: false, pubkey, error: 'Verdict hash does not match the dispute verdict inputs' };
+    }
+    if (verdictHash.toLowerCase() !== expectedVerdictHash) {
+      return { valid: false, pubkey, error: 'Verdict hash does not match the dispute verdict inputs' };
+    }
+  }
+
+  const epochId = parseV2Int(epochTag, 0xffff_ffff, 'epoch');
+  const tier = parseV2Int(tierTag, 0xff, 'tier');
+  const threshold = parseV2Int(thresholdTag, 0xffff_ffff, 'threshold');
+  if (epochId === null || tier === null || threshold === null || threshold < 1) {
+    return { valid: false, pubkey, error: 'Malformed v2 finality tags' };
+  }
+  if (!isHex64(signersTag)) {
+    return { valid: false, pubkey, error: 'signers tag must be a 32-byte hex signer-set root' };
+  }
+  let attempt: number | undefined;
+  if (attemptTag) {
+    const parsed = parseV2Int(attemptTag, 0xffff_ffff, 'attempt');
+    if (parsed === null || parsed === undefined) {
+      return { valid: false, pubkey, error: 'Malformed attempt tag' };
+    }
+    attempt = parsed;
+  }
+  const batchMerkleRoot = batchTag ?? undefined;
+  if (batchTag && !isHex64(batchTag)) {
+    return { valid: false, pubkey, error: 'batch tag must be a 32-byte hex Merkle root' };
+  }
+
+  if (context.expectedGroupPubkey && pubkey !== context.expectedGroupPubkey) {
+    return { valid: false, pubkey, error: `Pubkey mismatch: expected ${context.expectedGroupPubkey}, got ${pubkey}` };
+  }
+  if (context.expectedEpoch !== undefined && epochId !== context.expectedEpoch) {
+    return { valid: false, pubkey, error: `Epoch mismatch: expected ${context.expectedEpoch}, got ${epochId}` };
+  }
+  if (context.minTier !== undefined && tier < context.minTier) {
+    return { valid: false, pubkey, error: `Tier ${tier} below finality policy minimum ${context.minTier}` };
+  }
+  if (context.minThreshold !== undefined && threshold < context.minThreshold) {
+    return { valid: false, pubkey, error: `Threshold ${threshold} below finality policy minimum ${context.minThreshold}` };
+  }
+  if (context.expectedSignerSetRoot && signersTag !== context.expectedSignerSetRoot) {
+    return { valid: false, pubkey, error: 'Signer-set root mismatch' };
+  }
+  if (context.signerSet) {
+    let recomputed: string;
+    try {
+      recomputed = hashSignerSetRoot(context.signerSet);
+    } catch (err) {
+      return { valid: false, pubkey, error: `Invalid signer set: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    if (recomputed !== signersTag) {
+      return { valid: false, pubkey, error: 'Provided signer set does not hash to the signers tag' };
+    }
+    if (context.signerSet.length !== threshold) {
+      return { valid: false, pubkey, error: `Signer set size ${context.signerSet.length} does not match threshold ${threshold}` };
+    }
+  }
+
+  try {
+    const content = JSON.parse(event.content || '{}') as Record<string, unknown>;
+    const message = String(content.message || '');
+    if (!message) {
+      return { valid: false, pubkey, error: 'Attestation message missing' };
+    }
+    const contentStr = (key: string): string | undefined =>
+      typeof content[key] === 'string' ? String(content[key]) : undefined;
+    const consistency: Array<readonly [string, string | undefined, string | undefined]> = [
+      ['outcome', outcome, String(content.outcome ?? '')],
+      ['marketId', marketId, String(content.marketId ?? '')],
+      ['round', round, String(content.round ?? '')],
+      ['disputeEventId', disputeEventId ?? undefined, contentStr('disputeEventId')],
+      ['verdictHash', verdictHash ?? undefined, contentStr('verdictHash')],
+      ['epoch', epochTag, contentStr('epoch')],
+      ['tier', tierTag, contentStr('tier')],
+      ['threshold', thresholdTag, contentStr('threshold')],
+      ['signerSetRoot', signersTag, contentStr('signerSetRoot')],
+      ['attempt', attemptTag ?? undefined, contentStr('attempt')],
+      ['batchMerkleRoot', batchTag ?? undefined, contentStr('batchMerkleRoot')],
+    ];
+    for (const [label, tagValue, contentValue] of consistency) {
+      if ((tagValue ?? undefined) !== (contentValue ?? undefined)) {
+        return { valid: false, pubkey, error: `${label} tag does not match content` };
+      }
+    }
+    const expectedMessage = buildAttestationMessageV2({
+      marketId,
+      outcome,
+      round,
+      disputeEventId: disputeEventId ?? undefined,
+      verdictHash: verdictHash ?? undefined,
+      epochId,
+      tier,
+      threshold,
+      signerSetRoot: signersTag,
+      attempt,
+      batchMerkleRoot,
+    });
+    if (message !== expectedMessage) {
+      return { valid: false, pubkey, error: 'Attestation message does not bind v2 finality fields' };
+    }
+    const ok = schnorr.verify(
+      hexToBytes(signature),
+      hexToBytes(message),
+      hexToBytes(pubkey),
+    );
+    return ok
+      ? { valid: true, pubkey, outcome, message, disputeEventId: disputeEventId ?? undefined }
+      : { valid: false, pubkey, error: 'Schnorr signature verification failed' };
+  } catch (err) {
+    return {
+      valid: false,
+      pubkey,
+      error: `Validation exception: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+/**
+ * Shape dispatcher: v2 events (carrying an `epoch` tag) go through the v2
+ * finality validation; everything else takes the frozen v1 path. Contexts
+ * are passed through untouched — supply the shape that matches the event.
+ */
+export function validateCourtAttestation(
+  event: NostrEvent,
+  expected?: string | AttestationValidationContext | AttestationV2ValidationContext,
+): ValidationResult {
+  const context = typeof expected === 'string' ? { expectedGroupPubkey: expected } : (expected ?? {});
+  if (event.tags.some((tag) => tag[0] === 'epoch')) {
+    return validateAttestationEventV2(event, context as AttestationV2ValidationContext);
+  }
+  return validateAttestationEvent(event, context as AttestationValidationContext);
 }
