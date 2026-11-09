@@ -157,9 +157,9 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
-    "@vitest/ui": "^4.1.2",
+    "@vitest/ui": "^4.1.12",
     "tsx": "^4.23.12",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.12"
   }
 }
