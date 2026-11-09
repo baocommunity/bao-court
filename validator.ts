@@ -39,6 +39,21 @@ function isHex64(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+/**
+ * Cache semantics (round-3 finding r3-4, observation — no code change):
+ * nostr-tools' `verifyEvent` memoizes its verdict ON the event object, under
+ * a Symbol-keyed property (`Symbol('verified')`), and short-circuits to that
+ * cached boolean on any later call. The cache is DERIVED state — it only
+ * ever mirrors a verdict verifyEvent itself computed over the event's
+ * current bytes — so it is not an independent trust input. Object-spread
+ * copies (`{ ...event, ... }`) are safe by construction: spread does not
+ * copy symbol-keyed properties, so every clone re-verifies from scratch
+ * (this is what the hostile-event property tests rely on when they mutate
+ * spread clones). The residual hazard is in-place mutation of a previously
+ * verified event object: the stale cached verdict would then describe the
+ * OLD bytes — such callers must re-run validation on a fresh object rather
+ * than mutate a verified one.
+ */
 export function validateAttestationEvent(
   event: NostrEvent,
   expected?: string | AttestationValidationContext,
@@ -247,23 +262,39 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 export const COURT_SIGNER_SET_DOMAIN = 'BAO-Court/SignerSet/v1';
 
 /**
+ * Typed error family for signer-set commitment inputs (round-3 finding
+ * r3-5): hashSignerSetRoot used to throw a plain Error, so callers could not
+ * distinguish malformed signer-set input from any other failure. Messages
+ * are unchanged from the pre-0.9.1 plain-Error text.
+ */
+export class CourtSignerSetError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CourtSignerSetError';
+  }
+}
+
+/**
  * Canonical Merkle-style commitment to the signer set: the sorted,
  * deduplicated roster indices that produced a signature, length-prefixed
  * under a dedicated domain. Signing sessions publish this as the `signers`
  * tag; validators recompute it from a full signer set (or pin it directly)
  * to prove WHICH set signed — required for tier-based finality policy.
+ *
+ * Throws {@link CourtSignerSetError} for malformed input (empty/oversized
+ * set, non-positive or non-integer indices, duplicates).
  */
 export function hashSignerSetRoot(indices: readonly number[]): string {
   if (!Array.isArray(indices) || indices.length === 0 || indices.length > 10_000) {
-    throw new Error('signer set must contain 1..10000 indices');
+    throw new CourtSignerSetError('signer set must contain 1..10000 indices');
   }
   const seen = new Set<number>();
   for (const idx of indices) {
     if (!Number.isSafeInteger(idx) || idx < 1) {
-      throw new Error('signer indices must be positive safe integers');
+      throw new CourtSignerSetError('signer indices must be positive safe integers');
     }
     if (seen.has(idx)) {
-      throw new Error('signer set must not contain duplicate indices');
+      throw new CourtSignerSetError('signer set must not contain duplicate indices');
     }
     seen.add(idx);
   }
@@ -605,6 +636,13 @@ export function validateCourtAttestation(
   expected?: string | AttestationValidationContext | AttestationV2ValidationContext,
 ): ValidationResult {
   const context = typeof expected === 'string' ? { expectedGroupPubkey: expected } : (expected ?? {});
+  // Fail closed (round-3 finding r3-3): the shape dispatch below used to
+  // dereference event.tags unguarded, so a malformed (tags-less) event
+  // escaped a raw TypeError instead of the typed { valid, error } result
+  // every path in this module answers with.
+  if (!Array.isArray(event.tags)) {
+    return { valid: false, pubkey: '', error: 'Malformed event: tags must be an array' };
+  }
   if (event.tags.some((tag) => tag[0] === 'epoch')) {
     return validateAttestationEventV2(event, context as AttestationV2ValidationContext);
   }

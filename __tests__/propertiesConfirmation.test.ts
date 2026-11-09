@@ -5,7 +5,7 @@
  * machine.
  *
  * Deterministic seeded generators (mulberry32 LCG — no new dependencies)
- * drive random LEGAL event sequences (random rosters 2..25, random outcome
+ * drive random LEGAL event sequences (random rosters 3..25, random outcome
  * sets 2..5, random challenge/ladder interleavings) through the machine and
  * assert, after EVERY transition:
  *
@@ -190,7 +190,7 @@ interface SequenceStats {
 
 function runSequence(seed: number, maxSteps = 90): SequenceStats {
   const r = mulberry32(seed);
-  const rosterSize = int(r, 2, 25);
+  const rosterSize = int(r, 3, 25);
   const participantIndices = Array.from({ length: rosterSize }, (_, i) => i + 1);
   const allowedOutcomes = Array.from({ length: int(r, 2, 5) }, (_, i) => `outcome-${i}`);
   const proposedOutcome = pick(r, allowedOutcomes);
@@ -496,10 +496,10 @@ function nextLegalEvent(
       }
       // Closing an EMPTY round is legal, but resolve_round refuses it — only
       // close once at least one vote stands (otherwise expire instead).
-      // FINDING r3-6 (mirrored here, see the findings test): the machine
-      // defaults the round panel to the CASE roster, but its ledger barrier
-      // demands ≥ 3 panel members at close — so a 2-member case roster can
-      // never resolve a challenged case (dead end; expire/abort only).
+      // FINDING r3-6 (FIXED in 0.9.1): the machine's creation guard now
+      // rejects case rosters < 3, so the default round panel is always a
+      // legal ≥ 3-seat panel; the ledger barrier below remains as
+      // defense-in-depth for hand-restored snapshots.
       if (state.ladder!.votes.length > 0 && panel.length >= 3) {
         add(6, () => ({ type: 'close_ladder_round', now: Math.max(clock, deadline) }));
       }
@@ -591,13 +591,13 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
     expect(conceded).toBeGreaterThan(0);
   });
 
-  it('P6 (FINDING r3, restored-state edge only): finalize with an upheld verdict over an EMPTY but well-formed confirmation ledger escapes a FOREIGN CourtVoteTransitionError', () => {
+  it('P6 (FINDING r3-1, FIXED in 0.9.1): finalize over an EMPTY but well-formed confirmation ledger fails closed with the machine\'s OWN typed error', () => {
     // Legal sequences cannot produce this state (close_confirmations enforces
-    // the quorum), but a hand-restored snapshot can. The ledger barrier
-    // (assertValidConfirmationLedger) accepts an empty ledger, and finalize
-    // then calls hashCourtVerdict with zero supporting ids, which throws the
-    // VOTE machine's error class out of the CONFIRMATION machine. Reported
-    // as a round-3 finding; asserted here so the escape is regression-visible.
+    // the quorum), but a hand-restored snapshot can. Since 0.9.1 finalize
+    // fails closed BEFORE hashing: a final verdict needs ≥ 1 supporting
+    // event, and the error is the CONFIRMATION machine's typed
+    // CourtConfirmationTransitionError — the vote machine's foreign error
+    // class no longer escapes.
     const r = mulberry32(99);
     const participants = [1, 2, 3];
     const base = 1_750_000_000;
@@ -630,25 +630,57 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
     } catch (err) {
       thrown = err;
     }
-    expect(thrown).toBeInstanceOf(CourtVoteTransitionError);
-    expect(thrown).not.toBeInstanceOf(CourtConfirmationTransitionError);
+    expect(thrown).toBeInstanceOf(CourtConfirmationTransitionError);
+    expect(thrown).not.toBeInstanceOf(CourtVoteTransitionError);
+    expect((thrown as Error).message).toMatch(/zero supporting event ids/);
   });
 
-  it('P6 (FINDING r3-6): a challenged case with a 2-member case roster can never resolve its ladder — the round-panel default (case roster, 2 seats) is rejected by the machine\'s own ≥3 ledger barrier at close', () => {
-    // createCourtConfirmationMachine accepts 2-member rosters; the v0.9.0
-    // round panel DEFAULTS to the case roster; but assertValidMassVoteLedger
-    // normalizes the round roster with MIN_ROUND_ROSTER = 3 at
-    // close_ladder_round / resolve_round — so the legal challenge path on a
-    // 2-roster case dead-ends (only tick-expiry / abort remain). Reported
-    // as a round-3 finding; asserted here for regression visibility.
+  it('P6 (FINDING r3-6, FIXED in 0.9.1): a 2-member case roster is rejected at CREATION — the confirmation quorum + ladder round-panel semantics presuppose ≥ 3 seats', () => {
+    // Before 0.9.1 the machine accepted 2-member rosters, but a challenged
+    // case on one could never resolve: the v0.9.0 round panel DEFAULTS to the
+    // case roster and the ledger barrier (MIN_ROUND_ROSTER = 3) rejects a
+    // < 3-seat panel at close_ladder_round/resolve_round — a mid-ladder dead
+    // end. Chosen fix: fail closed at creation (roster ≥ 3 ALWAYS — the
+    // cleanest consistent rule; the only pre-existing test on a 2-member
+    // confirmation roster, the quorum-shortfall case in
+    // adversarialMachines.test.ts, was updated to a 3-member roster).
     const r = mulberry32(98);
     const base = 1_750_000_000;
+    expect(() =>
+      createCourtConfirmationMachine({
+        sessionHash: hex32(r),
+        proposalHash: hex32(r),
+        proposedOutcome: 'YES',
+        allowedOutcomes: ['YES', 'NO'],
+        participantIndices: [1, 2],
+        confirmQuorum: 1,
+        confirmDeadline: base + 100,
+        challengeDeadline: base + 200,
+        maxLadderRounds: 2,
+      }),
+    ).toThrow(CourtConfirmationTransitionError);
+    expect(() =>
+      createCourtConfirmationMachine({
+        sessionHash: hex32(r),
+        proposalHash: hex32(r),
+        proposedOutcome: 'YES',
+        allowedOutcomes: ['YES', 'NO'],
+        participantIndices: [1, 2],
+        confirmQuorum: 1,
+        confirmDeadline: base + 100,
+        challengeDeadline: base + 200,
+        maxLadderRounds: 2,
+      }),
+    ).toThrow(/confirmation roster must contain at least 3 participants/);
+
+    // The challenge path on the now-minimal 3-member roster resolves with the
+    // DEFAULT (case-roster) round panel — no explicit roundRoster needed.
     let state = createCourtConfirmationMachine({
       sessionHash: hex32(r),
       proposalHash: hex32(r),
       proposedOutcome: 'YES',
       allowedOutcomes: ['YES', 'NO'],
-      participantIndices: [1, 2],
+      participantIndices: [1, 2, 3],
       confirmQuorum: 1,
       confirmDeadline: base + 100,
       challengeDeadline: base + 200,
@@ -675,7 +707,7 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
     state = reduceCourtConfirmationMachine(state, { type: 'close_challenge_window', now: base + 200 });
     expect(state.phase).toBe('ladder_pending');
     state = reduceCourtConfirmationMachine(state, { type: 'open_ladder_round', round: 1, voteDeadline: base + 400, now: base + 200 });
-    expect(state.ladder?.roundRoster).toEqual([1, 2]);
+    expect(state.ladder?.roundRoster).toEqual([1, 2, 3]);
     state = reduceCourtConfirmationMachine(state, {
       type: 'accept_mass_vote',
       idx: 1,
@@ -683,31 +715,18 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
       eventId: hex32(r),
       now: base + 300,
     });
-    // The dead end: the ledger barrier refuses the machine's own default panel.
-    expect(() =>
-      reduceCourtConfirmationMachine(state, { type: 'close_ladder_round', now: base + 400 }),
-    ).toThrow(/round roster must contain at least 3 participants/);
-    // …while an explicit ≥3 round roster resolves fine on the same case
-    // (the failed close above left `state` untouched).
-    const withPanel = reduceCourtConfirmationMachine(
-      { ...state, ladderRound: 0, phase: 'ladder_pending', ladder: undefined } as CourtConfirmationMachineState,
-      {
-        type: 'open_ladder_round',
-        round: 1,
-        voteDeadline: base + 400,
-        roundRoster: [1, 2, 3],
-        now: base + 300,
-      },
-    );
-    const voted = reduceCourtConfirmationMachine(withPanel, {
-      type: 'accept_mass_vote',
-      idx: 1,
-      outcome: 'NO',
-      eventId: hex32(r),
-      now: base + 300,
-    });
-    expect(() =>
-      reduceCourtConfirmationMachine(voted, { type: 'close_ladder_round', now: base + 400 }),
-    ).not.toThrow();
+    state = reduceCourtConfirmationMachine(state, { type: 'close_ladder_round', now: base + 400 });
+    expect(state.phase).toBe('ladder_vote_closed');
+    state = reduceCourtConfirmationMachine(state, { type: 'resolve_round', now: base + 400 });
+    // Round 1 of maxLadderRounds 2 parks in round_resolved (host-driven
+    // escalate/concede); the dead end is gone either way.
+    expect(state.phase).toBe('round_resolved');
+    expect(state.verdict?.outcome).toBe('NO');
+    expect(state.outcomeHistory).toHaveLength(1);
+    state = reduceCourtConfirmationMachine(state, { type: 'concede', now: base + 400 });
+    expect(state.phase).toBe('fee_settlement');
+    const final = reduceCourtConfirmationMachine(state, { type: 'finalize', now: base + 400 });
+    expect(final.phase).toBe('final');
+    expect(final.verdict?.outcome).toBe('NO');
   });
 });

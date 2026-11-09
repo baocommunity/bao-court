@@ -451,17 +451,15 @@ describe('properties: v2 attestation validator', () => {
     }
   });
 
-  it('PV6 (FINDING r3): validateCourtAttestation escapes a RAW TypeError for a tags-less event — the dispatcher reads event.tags before any guard', () => {
+  it('PV6 (FINDING r3, FIXED in 0.9.1): validateCourtAttestation answers a TYPED invalid result for a tags-less event — the dispatcher guards event.tags before the shape dispatch', () => {
     // validateAttestationEvent / validateAttestationEventV2 bail out at
-    // verifyEvent() before touching tags, but the dispatcher dereferences
-    // event.tags.some(...) unguarded. Reported as a round-3 finding;
-    // asserted here for regression visibility.
-    let thrown: unknown;
-    try {
-      validateCourtAttestation({ kind: 89 } as unknown as NostrEvent);
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(TypeError);
+    // verifyEvent() before touching tags, but the dispatcher used to
+    // dereference event.tags.some(...) unguarded. Since 0.9.1 the dispatcher
+    // fails closed with the module's typed { valid, error } result.
+    let result: unknown;
+    expect(() => {
+      result = validateCourtAttestation({ kind: 89 } as unknown as NostrEvent);
+    }).not.toThrow();
+    expect(result).toMatchObject({ valid: false, pubkey: '', error: 'Malformed event: tags must be an array' });
   });
 });

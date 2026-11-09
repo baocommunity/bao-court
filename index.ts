@@ -526,6 +526,7 @@ export {
   verifyRawSignature,
   COURT_SIGNER_SET_DOMAIN,
   hashSignerSetRoot,
+  CourtSignerSetError,
   validateAttestationEventV2,
   validateCourtAttestation,
   type ValidationResult,

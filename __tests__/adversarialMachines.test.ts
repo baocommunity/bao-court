@@ -1172,12 +1172,15 @@ describe('adversarial: legality matrix — every event at every phase, typed fai
     expect(final.verdict?.supportingEventIds).toEqual([hexId('f10')]);
 
     // Quorum 2 with 1 confirmation: close is refused, tick expires.
+    // (r3-6 fix, 0.9.1: confirmation rosters must have ≥ 3 members, so this
+    // shortfall case now uses a 3-member roster — the quorum semantics are
+    // unchanged.)
     const shortQuorum = createCourtConfirmationMachine({
       sessionHash: SESSION,
       proposalHash: PROPOSAL,
       proposedOutcome: 'YES',
       allowedOutcomes: ['YES', 'NO'],
-      participantIndices: [1, 2],
+      participantIndices: [1, 2, 3],
       confirmQuorum: 2,
       confirmDeadline: 100,
       challengeDeadline: 200,
