@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { CourtError, CourtErrorOptions } from './errors';
 import {
   HEX_32,
   MAX_CEREMONY_PARTICIPANTS,
@@ -263,10 +264,9 @@ export type CourtConfirmationMachineEvent =
   | { readonly type: 'tick'; readonly now: number }
   | { readonly type: 'abort'; readonly reason: string };
 
-export class CourtConfirmationTransitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CourtConfirmationTransitionError';
+export class CourtConfirmationTransitionError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('CONFIRMATION_TRANSITION', message, options);
   }
 }
 

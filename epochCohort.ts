@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { CourtError, CourtErrorOptions } from './errors';
 import { HEX_32 } from './courtCeremonyCore';
 import { CanonicalWriter } from './courtSession';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -46,10 +47,9 @@ export interface CourtEpochCohort {
   readonly suite: string;
 }
 
-export class CourtEpochCohortError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CourtEpochCohortError';
+export class CourtEpochCohortError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('EPOCH_COHORT', message, options);
   }
 }
 

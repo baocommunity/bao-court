@@ -4,6 +4,7 @@
  * FROST attestation validator for the BAO Court / FROST appeal layer.
  */
 
+import { CourtError, CourtErrorOptions } from './errors';
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
@@ -278,10 +279,9 @@ export const COURT_SIGNER_SET_DOMAIN = 'BAO-Court/SignerSet/v1';
  * distinguish malformed signer-set input from any other failure. Messages
  * are unchanged from the pre-0.9.1 plain-Error text.
  */
-export class CourtSignerSetError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CourtSignerSetError';
+export class CourtSignerSetError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('SIGNER_SET', message, options);
   }
 }
 

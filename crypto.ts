@@ -6,6 +6,7 @@
  * Browser-compatible: uses @noble/curves and @noble/hashes instead of Node crypto.
  */
 
+import { CourtArgumentError, CourtCryptoError } from './errors';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 
 const Point = secp256k1.Point;
@@ -55,7 +56,7 @@ export function seededScalar(seed: Uint8Array, info: Uint8Array): bigint {
     if (s !== 0n) return s;
     counter++;
   }
-  throw new Error('seededScalar: could not derive non-zero scalar');
+  throw new CourtCryptoError('CRYPTO_STATE', 'seededScalar: could not derive non-zero scalar');
 }
 
 /**
@@ -140,7 +141,7 @@ export function buildAttestationMessageV2(params: {
   writer.text(String(params.round));
   if (params.disputeEventId !== undefined) {
     if (typeof params.disputeEventId !== 'string' || !HEX_32.test(params.disputeEventId)) {
-      throw new Error('attestation v2 disputeEventId must be 32-byte lowercase hex');
+      throw new CourtArgumentError('CRYPTO_ARGUMENT', 'attestation v2 disputeEventId must be 32-byte lowercase hex');
     }
     writer.u8(1);
     writer.text(params.disputeEventId);
@@ -149,7 +150,7 @@ export function buildAttestationMessageV2(params: {
   }
   if (params.verdictHash !== undefined) {
     if (typeof params.verdictHash !== 'string' || !HEX_32.test(params.verdictHash)) {
-      throw new Error('attestation v2 verdictHash must be 32-byte lowercase hex');
+      throw new CourtArgumentError('CRYPTO_ARGUMENT', 'attestation v2 verdictHash must be 32-byte lowercase hex');
     }
     writer.u8(1);
     writer.hex(params.verdictHash);
@@ -163,7 +164,7 @@ export function buildAttestationMessageV2(params: {
   }
   if (params.tier !== undefined) {
     if (!Number.isSafeInteger(params.tier) || params.tier < 0 || params.tier > 0xff) {
-      throw new Error('attestation v2 tier must be an integer in [0, 255]');
+      throw new CourtArgumentError('CRYPTO_ARGUMENT', 'attestation v2 tier must be an integer in [0, 255]');
     }
     extensions.push([ATTESTATION_V2_FIELD_TAGS.tier, () => writer.u8(params.tier!)]);
   }
@@ -173,7 +174,7 @@ export function buildAttestationMessageV2(params: {
   }
   if (params.signerSetRoot !== undefined) {
     if (typeof params.signerSetRoot !== 'string' || !HEX_32.test(params.signerSetRoot)) {
-      throw new Error('attestation v2 signerSetRoot must be 32-byte lowercase hex');
+      throw new CourtArgumentError('CRYPTO_ARGUMENT', 'attestation v2 signerSetRoot must be 32-byte lowercase hex');
     }
     extensions.push([ATTESTATION_V2_FIELD_TAGS.signerSetRoot, () => writer.hex(params.signerSetRoot!)]);
   }
@@ -183,7 +184,7 @@ export function buildAttestationMessageV2(params: {
   }
   if (params.batchMerkleRoot !== undefined) {
     if (typeof params.batchMerkleRoot !== 'string' || !HEX_32.test(params.batchMerkleRoot)) {
-      throw new Error('attestation v2 batchMerkleRoot must be 32-byte lowercase hex');
+      throw new CourtArgumentError('CRYPTO_ARGUMENT', 'attestation v2 batchMerkleRoot must be 32-byte lowercase hex');
     }
     extensions.push([ATTESTATION_V2_FIELD_TAGS.batchMerkleRoot, () => writer.hex(params.batchMerkleRoot!)]);
   }
@@ -197,7 +198,7 @@ export function buildAttestationMessageV2(params: {
 
 function assertSafeUint(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff) {
-    throw new Error(`${label} must be a safe integer in [0, 4294967295]`);
+    throw new CourtArgumentError('CRYPTO_ARGUMENT', `${label} must be a safe integer in [0, 4294967295]`);
   }
 }
 

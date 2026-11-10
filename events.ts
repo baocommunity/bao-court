@@ -8,6 +8,7 @@
  * returned templates.
  */
 
+import { CourtArgumentError } from './errors';
 import type { EventTemplate, Event as NostrEvent } from 'nostr-tools/pure';
 import type { FrostAttestation, JurorProfile, StakeCommitment } from './types';
 import type { DkgProofOfKnowledge } from './crypto';
@@ -145,7 +146,7 @@ const MAX_SUPPORTING_IDS = 10_000;
 
 export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
   if (params.evidenceHashes.length > MAX_EVIDENCE_HASHES) {
-    throw new Error(
+    throw new CourtArgumentError('NOSTR_EVENT_ARGUMENT', 
       `evidenceHashes length ${params.evidenceHashes.length} exceeds maximum of ${MAX_EVIDENCE_HASHES}`,
     );
   }
@@ -790,7 +791,7 @@ export function buildDisputeAttestationEvent(
   // `verdict` tag; the Nostr event id commits to both (tags are signed).
   const supportIds = attestation.supportingEventIds ?? [];
   if (supportIds.length > MAX_SUPPORTING_IDS) {
-    throw new Error(
+    throw new CourtArgumentError('NOSTR_EVENT_ARGUMENT', 
       `supportingEventIds length ${supportIds.length} exceeds maximum of ${MAX_SUPPORTING_IDS}`,
     );
   }
@@ -838,7 +839,7 @@ export function buildAttestationEvent(
   ) {
     return buildDisputeAttestationEvent(attestationOrParams);
   }
-  throw new Error(
+  throw new CourtArgumentError('NOSTR_EVENT_ARGUMENT', 
     'buildAttestationEvent: expected (attestation, marketEventId) or ' +
       '{ attestation, marketEventId }',
   );

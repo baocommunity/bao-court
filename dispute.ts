@@ -4,6 +4,7 @@
  * Dispute override signing for the BAO Court / FROST appeal layer.
  */
 
+import { CourtArgumentError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
@@ -30,10 +31,10 @@ export function hashCommit(outcome: string, salt: string): string {
   // machine path's 32-byte hex salt) so pre-existing integrations keep working.
   const outcomeBytes = new TextEncoder().encode(String(outcome));
   if (typeof outcome !== 'string' || outcome.length === 0 || outcomeBytes.length > 256) {
-    throw new Error('outcome must be a non-empty string of at most 256 bytes');
+    throw new CourtArgumentError('DISPUTE_ARGUMENT', 'outcome must be a non-empty string of at most 256 bytes');
   }
   if (typeof salt !== 'string' || salt.length === 0) {
-    throw new Error('salt must be a non-empty string');
+    throw new CourtArgumentError('DISPUTE_ARGUMENT', 'salt must be a non-empty string');
   }
   const writer = new CanonicalWriter();
   writer.text(outcome);
@@ -120,10 +121,10 @@ export function deriveDisputeGroupPubkey(
   disputeId: string,
 ): string {
   if (typeof normalGroupPubkey !== 'string' || normalGroupPubkey.length !== 64) {
-    throw new Error('normalGroupPubkey must be exactly 64 chars (fixed-width concat boundary)');
+    throw new CourtArgumentError('DISPUTE_ARGUMENT', 'normalGroupPubkey must be exactly 64 chars (fixed-width concat boundary)');
   }
   if (typeof disputeId !== 'string' || disputeId.length === 0 || disputeId.length > 512) {
-    throw new Error('disputeId must be a non-empty string of at most 512 chars');
+    throw new CourtArgumentError('DISPUTE_ARGUMENT', 'disputeId must be a non-empty string of at most 512 chars');
   }
   const order = secp256k1.Point.Fn.ORDER;
   let digest = sha256(new TextEncoder().encode(normalGroupPubkey + disputeId));

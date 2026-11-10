@@ -42,8 +42,19 @@
  *      Get*SHA256 helpers), src/primitives/confidential.h, transaction.h
  */
 
+import { CourtArgumentError, TaprootSpendError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { bytesToHex, hexToBytes as nobleHexToBytes } from '@noble/hashes/utils.js';
+
+/** Boundary-safe hex decode: malformed hex surfaces as CourtArgumentError
+ * (docs/FORMAL_INVARIANTS.md §15.3), never as the decoder's raw Error. */
+function hexToBytes(hex: string): Uint8Array {
+  try {
+    return nobleHexToBytes(hex);
+  } catch (cause) {
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', 'taprootSpend: malformed hex string', { cause });
+  }
+}
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 
 import { locktimeToPush, pushHex, taprootProgram } from './liquidEscrow';
@@ -183,7 +194,7 @@ function serializeScript(scriptHex: string): Uint8Array {
 
 function assertXOnly(hex: string, what: string): Uint8Array {
   const b = hexToBytes(hex);
-  if (b.length !== 32) throw new Error(`taprootSpend: ${what} must be 32-byte x-only, got ${b.length}`);
+  if (b.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: ${what} must be 32-byte x-only, got ${b.length}`);
   return b;
 }
 
@@ -281,7 +292,7 @@ function liftXOnly(xOnly: Uint8Array): ReturnType<typeof Point.fromHex> {
       // wrong parity, try next
     }
   }
-  throw new Error('taprootSpend: cannot lift x-only key to curve point');
+  throw new TaprootSpendError('TAPROOT_STATE', 'taprootSpend: cannot lift x-only key to curve point');
 }
 
 function bytesToScalar(bytes: Uint8Array): bigint {
@@ -304,12 +315,12 @@ function bytesToScalar(bytes: Uint8Array): bigint {
  */
 export function outputKeyParity(internalKeyXOnly: string, merkleRootHex: string): 0 | 1 {
   const key = hexToBytes(internalKeyXOnly);
-  if (key.length !== 32) throw new Error(`taprootSpend: internal key must be 32-byte x-only, got ${key.length}`);
+  if (key.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: internal key must be 32-byte x-only, got ${key.length}`);
   const merkle = hexToBytes(merkleRootHex);
-  if (merkle.length !== 32) throw new Error(`taprootSpend: merkle root must be 32 bytes, got ${merkle.length}`);
+  if (merkle.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: merkle root must be 32 bytes, got ${merkle.length}`);
   const tweak = bytesToScalar(taggedHash('TapTweak/elements', key, merkle));
   if (tweak >= Point.Fn.ORDER) {
-    throw new Error('taprootSpend: taproot tweak exceeds the curve order');
+    throw new TaprootSpendError('TAPROOT_STATE', 'taprootSpend: taproot tweak exceeds the curve order');
   }
   const Q = liftXOnly(key).add(Point.BASE.multiply(tweak));
   return Q.toHex(true).startsWith('03') ? 1 : 0;
@@ -344,7 +355,7 @@ function merkleRootHashes(list: Uint8Array[]): Uint8Array {
  */
 export function taprootMerklePath(leaves: readonly string[], leafIndex: number): string[] {
   if (!Number.isInteger(leafIndex) || leafIndex < 0 || leafIndex >= leaves.length) {
-    throw new Error(`taprootSpend: leafIndex ${leafIndex} out of range for ${leaves.length} leaves`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: leafIndex ${leafIndex} out of range for ${leaves.length} leaves`);
   }
   let list = leaves.map((l) => hexToBytes(tapleafHash(l)));
   let index = leafIndex;
@@ -379,7 +390,7 @@ export function controlBlock(internalKeyXOnly: string, merklePath: readonly stri
   const parts: string[] = [bytesToHex(Uint8Array.of(TAPROOT_CONTROL_BASE | parity)), internalKeyXOnly];
   for (const p of merklePath) {
     const b = hexToBytes(p);
-    if (b.length !== 32) throw new Error(`taprootSpend: path element must be 32 bytes, got ${b.length}`);
+    if (b.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: path element must be 32 bytes, got ${b.length}`);
     parts.push(p);
   }
   return parts.join('');
@@ -400,7 +411,7 @@ export function scriptPathControlBlock(
 export function controlBlockInternalKey(controlBlockHex: string): string {
   const b = hexToBytes(controlBlockHex);
   if (b.length < 33 || b.length % 32 !== 1) {
-    throw new Error(`taprootSpend: malformed control block (length ${b.length})`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: malformed control block (length ${b.length})`);
   }
   return bytesToHex(b.subarray(1, 33));
 }
@@ -409,7 +420,7 @@ export function controlBlockInternalKey(controlBlockHex: string): string {
 export function controlBlockMerklePath(controlBlockHex: string): string[] {
   const b = hexToBytes(controlBlockHex);
   if (b.length < 33 || b.length % 32 !== 1) {
-    throw new Error(`taprootSpend: malformed control block (length ${b.length})`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: malformed control block (length ${b.length})`);
   }
   const path: string[] = [];
   for (let i = 33; i < b.length; i += 32) path.push(bytesToHex(b.subarray(i, i + 32)));
@@ -419,10 +430,10 @@ export function controlBlockMerklePath(controlBlockHex: string): string[] {
 /** Merkle root committed by a leaf hash + path (the consensus recomputation). */
 export function merkleRootFromLeafAndPath(leafHash: string, merklePath: readonly string[]): string {
   let acc: Uint8Array = hexToBytes(leafHash);
-  if (acc.length !== 32) throw new Error(`taprootSpend: leaf hash must be 32 bytes, got ${acc.length}`);
+  if (acc.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: leaf hash must be 32 bytes, got ${acc.length}`);
   for (const p of merklePath) {
     const sib = hexToBytes(p);
-    if (sib.length !== 32) throw new Error(`taprootSpend: path element must be 32 bytes, got ${sib.length}`);
+    if (sib.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: path element must be 32 bytes, got ${sib.length}`);
     acc = branchHash(acc, sib);
   }
   return bytesToHex(acc);
@@ -437,7 +448,7 @@ export function merkleRootFromLeafAndPath(leafHash: string, merklePath: readonly
 export function serializeExplicitValue(amountSats: bigint | number): string {
   const amount = typeof amountSats === 'bigint' ? amountSats : BigInt(amountSats);
   if (amount < 0n || amount > 0xffffffffffffffffn) {
-    throw new Error(`taprootSpend: explicit value out of range: ${amount}`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: explicit value out of range: ${amount}`);
   }
   const out = new Uint8Array(9);
   out[0] = 0x01;
@@ -451,7 +462,7 @@ export function serializeExplicitValue(amountSats: bigint | number): string {
  */
 export function serializeExplicitAsset(assetIdHex: string): string {
   const id = hexToBytes(assetIdHex);
-  if (id.length !== 32) throw new Error(`taprootSpend: asset id must be 32 bytes, got ${id.length}`);
+  if (id.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: asset id must be 32 bytes, got ${id.length}`);
   return `01${assetIdHex}`;
 }
 
@@ -575,16 +586,16 @@ function serializeTxOutWitness(w: ElementsOutputWitness): Uint8Array {
 export function taprootSighashElements(params: ElementsTaprootSighashParams): string {
   const { inputs, outputs, inputIndex } = params;
   if (!Number.isInteger(inputIndex) || inputIndex < 0 || inputIndex >= inputs.length) {
-    throw new Error(`taprootSpend: inputIndex ${inputIndex} out of range for ${inputs.length} inputs`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: inputIndex ${inputIndex} out of range for ${inputs.length} inputs`);
   }
   const hashType = params.hashType ?? SIGHASH_DEFAULT;
   if (!(hashType <= 0x03 || (hashType >= 0x81 && hashType <= 0x83))) {
-    throw new Error(`taprootSpend: invalid sighash type 0x${hashType.toString(16)}`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: invalid sighash type 0x${hashType.toString(16)}`);
   }
   const genesis = hexToBytes(params.genesisBlockHash);
-  if (genesis.length !== 32) throw new Error(`taprootSpend: genesis block hash must be 32 bytes, got ${genesis.length}`);
+  if (genesis.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: genesis block hash must be 32 bytes, got ${genesis.length}`);
   const tapleaf = hexToBytes(params.tapleafHash);
-  if (tapleaf.length !== 32) throw new Error(`taprootSpend: tapleaf hash must be 32 bytes, got ${tapleaf.length}`);
+  if (tapleaf.length !== 32) throw new CourtArgumentError('TAPROOT_ARGUMENT', `taprootSpend: tapleaf hash must be 32 bytes, got ${tapleaf.length}`);
   const codesepPos = params.codesepPos ?? CODESEP_POS_NONE;
 
   const outputType = hashType === SIGHASH_DEFAULT ? SIGHASH_ALL : hashType & SIGHASH_OUTPUT_MASK;
@@ -637,7 +648,7 @@ export function taprootSighashElements(params: ElementsTaprootSighashParams): st
 
   if (outputType === SIGHASH_SINGLE) {
     if (inputIndex >= outputs.length) {
-      throw new Error('taprootSpend: SIGHASH_SINGLE requires an output at inputIndex');
+      throw new CourtArgumentError('TAPROOT_ARGUMENT', 'taprootSpend: SIGHASH_SINGLE requires an output at inputIndex');
     }
     body.push(sha256Concat([serializeTxOut(outputs[inputIndex])]));
     const w = (params.outputWitnesses ?? [])[inputIndex] ?? {};
@@ -701,18 +712,18 @@ export function finalizeTaproot(params: FinalizeTaprootParams): { sighash: strin
   const internalKey = controlBlockInternalKey(params.controlBlock);
   const outputKey = bytesToHex(taprootProgram(internalKey, recomputedRoot));
   if (params.expectedOutputKey !== undefined && outputKey !== params.expectedOutputKey) {
-    throw new Error('finalizeTaproot: leaf/control block do not commit to expectedOutputKey');
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', 'finalizeTaproot: leaf/control block do not commit to expectedOutputKey');
   }
   // BIP-341: the control block's low bit must equal the OUTPUT key Q's
   // Y-parity — an x-only comparison above cannot catch a wrong parity.
   const cbParity = (hexToBytes(params.controlBlock)[0] & 0x01) as 0 | 1;
   if (cbParity !== outputKeyParity(internalKey, recomputedRoot)) {
-    throw new Error('finalizeTaproot: control block parity does not match the output key');
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', 'finalizeTaproot: control block parity does not match the output key');
   }
   const hashType = params.hashType ?? SIGHASH_DEFAULT;
   const signature = hexToBytes(params.signature);
   if (signature.length !== 64) {
-    throw new Error(`finalizeTaproot: signature must be 64 bytes, got ${signature.length}`);
+    throw new CourtArgumentError('TAPROOT_ARGUMENT', `finalizeTaproot: signature must be 64 bytes, got ${signature.length}`);
   }
   const sighash = taprootSighashElements({
     genesisBlockHash: params.genesisBlockHash,

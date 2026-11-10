@@ -8,6 +8,7 @@
  * derive the same session hash from the same validated public parameters.
  */
 
+import { CourtError } from './errors';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
@@ -88,13 +89,11 @@ export type CourtSessionValidationCode =
   | 'participant_not_found'
   | 'participant_binding_mismatch';
 
-export class CourtSessionValidationError extends Error {
-  readonly code: CourtSessionValidationCode;
+export class CourtSessionValidationError extends CourtError {
+  declare readonly code: CourtSessionValidationCode;
 
   constructor(code: CourtSessionValidationCode, message: string) {
-    super(message);
-    this.name = 'CourtSessionValidationError';
-    this.code = code;
+    super(code, message);
   }
 }
 

@@ -11,6 +11,7 @@
  * the unwrapped rumors here.
  */
 
+import { CourtArgumentError } from './errors';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
 
 /** Maximum wraps processed in one batch to prevent resource exhaustion. */
@@ -29,7 +30,7 @@ export interface UnwrapFilterOptions {
 export function assertValidUnwrapKinds(kinds: readonly number[]): void {
   for (const kind of kinds) {
     if (!Number.isSafeInteger(kind) || kind < 0 || kind > 65535) {
-      throw new Error(`Invalid kind in filter: ${kind}`);
+      throw new CourtArgumentError('UNWRAP_ARGUMENT', `Invalid kind in filter: ${kind}`);
     }
   }
 }
@@ -37,7 +38,7 @@ export function assertValidUnwrapKinds(kinds: readonly number[]): void {
 /** Reject unwrap batches above {@link MAX_UNWRAP_BATCH}. */
 export function assertUnwrapBatchSize(count: number): void {
   if (count > MAX_UNWRAP_BATCH) {
-    throw new Error(`unwrap batch size ${count} exceeds maximum of ${MAX_UNWRAP_BATCH}`);
+    throw new CourtArgumentError('UNWRAP_ARGUMENT', `unwrap batch size ${count} exceeds maximum of ${MAX_UNWRAP_BATCH}`);
   }
 }
 

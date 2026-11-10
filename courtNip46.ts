@@ -24,6 +24,7 @@
  * host.
  */
 
+import { CourtError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import {
@@ -98,13 +99,11 @@ export type CourtCapabilityErrorCode =
   | 'phase_mismatch'
   | 'malformed';
 
-export class CourtCapabilityError extends Error {
-  readonly code: CourtCapabilityErrorCode;
+export class CourtCapabilityError extends CourtError {
+  declare readonly code: CourtCapabilityErrorCode;
 
   constructor(code: CourtCapabilityErrorCode, message: string) {
-    super(message);
-    this.name = 'CourtCapabilityError';
-    this.code = code;
+    super(code, message);
   }
 }
 

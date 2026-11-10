@@ -15,6 +15,7 @@
  * @see docs/ESCROW-SLASHING.md
  */
 
+import { CourtArgumentError, EscrowLedgerError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { schnorr } from '@noble/curves/secp256k1.js';
@@ -90,7 +91,7 @@ export const ALPHA_DOUBLE_VOTE = 1.0;
  */
 function normalizeRound(round: number): number {
   if (!Number.isSafeInteger(round) || round < 0) {
-    throw new Error('round must be a non-negative integer');
+    throw new CourtArgumentError('ESCROW_ARGUMENT', 'round must be a non-negative integer');
   }
   return Math.max(1, round);
 }
@@ -102,13 +103,13 @@ function normalizeRound(round: number): number {
 export function calculateBondAmount(marketVolumeSats: number, round: number): number {
   const r = normalizeRound(round);
   if (!Number.isSafeInteger(marketVolumeSats) || marketVolumeSats < 0) {
-    throw new Error('marketVolumeSats must be a non-negative integer');
+    throw new CourtArgumentError('ESCROW_ARGUMENT', 'marketVolumeSats must be a non-negative integer');
   }
   const baseBond = Math.max(Math.floor(marketVolumeSats * 0.05), 10_000);
   const multiplier = Math.pow(2, r - 1);
   const amount = baseBond * multiplier;
   if (!Number.isSafeInteger(amount)) {
-    throw new Error(`bond amount overflows for round ${round}`);
+    throw new CourtArgumentError('ESCROW_ARGUMENT', `bond amount overflows for round ${round}`);
   }
   return amount;
 }
@@ -120,13 +121,13 @@ export function calculateBondAmount(marketVolumeSats: number, round: number): nu
 export function calculateJurorStake(marketVolumeSats: number, round: number): number {
   const r = normalizeRound(round);
   if (!Number.isSafeInteger(marketVolumeSats) || marketVolumeSats < 0) {
-    throw new Error('marketVolumeSats must be a non-negative integer');
+    throw new CourtArgumentError('ESCROW_ARGUMENT', 'marketVolumeSats must be a non-negative integer');
   }
   const baseStake = Math.max(Math.floor(marketVolumeSats * 0.02), 5_000);
   const multiplier = Math.pow(2, r - 1);
   const amount = baseStake * multiplier;
   if (!Number.isSafeInteger(amount)) {
-    throw new Error(`stake amount overflows for round ${round}`);
+    throw new CourtArgumentError('ESCROW_ARGUMENT', `stake amount overflows for round ${round}`);
   }
   return amount;
 }
@@ -419,7 +420,7 @@ export class EscrowLedger {
     const seen = new Set<string>();
     for (const d of initial) {
       if (seen.has(d.id)) {
-        throw new Error(`EscrowLedger: duplicate deposit id ${d.id} in snapshot`);
+        throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: duplicate deposit id ${d.id} in snapshot`);
       }
       seen.add(d.id);
       this.depositsByKey.set(d.id, d);
@@ -448,7 +449,7 @@ export class EscrowLedger {
   record(deposit: Omit<EscrowDeposit, 'id' | 'status'> & { readonly id?: string }): EscrowDeposit {
     const id = deposit.id ?? `${deposit.disputeId}|${deposit.purpose}|${deposit.depositorPubkey}`;
     if (this.depositsByKey.has(id)) {
-      throw new Error(`EscrowLedger: duplicate deposit id ${id}`);
+      throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: duplicate deposit id ${id}`);
     }
     const entry: EscrowDeposit = {
       ...deposit,
@@ -469,7 +470,7 @@ export class EscrowLedger {
    */
   lock(id: string, proofOk: boolean, now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
-    if (d.status !== 'pending') throw new Error(`EscrowLedger: cannot lock ${d.status} deposit ${id}`);
+    if (d.status !== 'pending') throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: cannot lock ${d.status} deposit ${id}`);
     const next: EscrowDeposit = proofOk
       ? { ...d, status: 'locked' }
       : { ...d, status: 'failed', resolvedAt: now };
@@ -480,7 +481,7 @@ export class EscrowLedger {
   /** Return a locked deposit in full (coherent juror / upheld bond). */
   returnDeposit(id: string, reason: EscrowReason = 'coherent', now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
-    if (d.status !== 'locked') throw new Error(`EscrowLedger: cannot return ${d.status} deposit ${id}`);
+    if (d.status !== 'locked') throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: cannot return ${d.status} deposit ${id}`);
     const next: EscrowDeposit = { ...d, status: 'returned', reason, resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
@@ -489,7 +490,7 @@ export class EscrowLedger {
   /** Slash a locked deposit (incoherent 50%, non-reveal/double-vote 100%). */
   slash(id: string, reason: 'incoherent' | 'non_reveal' | 'double_vote', now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
-    if (d.status !== 'locked') throw new Error(`EscrowLedger: cannot slash ${d.status} deposit ${id}`);
+    if (d.status !== 'locked') throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: cannot slash ${d.status} deposit ${id}`);
     const status: EscrowStatus = reason === 'incoherent' ? 'slashed_50' : 'slashed_100';
     const next: EscrowDeposit = { ...d, status, reason, resolvedAt: now };
     this.depositsByKey.set(id, next);
@@ -503,7 +504,7 @@ export class EscrowLedger {
    */
   forfeitBond(id: string, now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
-    if (d.status !== 'locked') throw new Error(`EscrowLedger: cannot forfeit ${d.status} bond ${id}`);
+    if (d.status !== 'locked') throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: cannot forfeit ${d.status} bond ${id}`);
     const next: EscrowDeposit = { ...d, status: 'slashed_100', reason: 'bond_lost', resolvedAt: now };
     this.depositsByKey.set(id, next);
     return next;
@@ -513,7 +514,7 @@ export class EscrowLedger {
   redistribute(id: string, now = Math.floor(Date.now() / 1000)): EscrowDeposit {
     const d = this.require(id);
     if (d.status !== 'slashed_50' && d.status !== 'slashed_100') {
-      throw new Error(`EscrowLedger: cannot redistribute ${d.status} deposit ${id}`);
+      throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: cannot redistribute ${d.status} deposit ${id}`);
     }
     const next: EscrowDeposit = { ...d, status: 'redistributed', resolvedAt: now };
     this.depositsByKey.set(id, next);
@@ -551,7 +552,7 @@ export class EscrowLedger {
 
   private require(id: string): EscrowDeposit {
     const d = this.depositsByKey.get(id);
-    if (!d) throw new Error(`EscrowLedger: unknown deposit ${id}`);
+    if (!d) throw new EscrowLedgerError('ESCROW_LEDGER', `EscrowLedger: unknown deposit ${id}`);
     return d;
   }
 }

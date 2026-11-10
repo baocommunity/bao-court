@@ -21,6 +21,7 @@
  * full ceremony in-process — events are signed but not broadcast.
  */
 
+import { AppealError } from './errors';
 import type { Event as NostrEvent, Filter } from 'nostr-tools';
 import { verifyEvent } from 'nostr-tools/pure';
 import {
@@ -317,7 +318,7 @@ export function createFrostAppealCoordinator(
     if (nip07?.signEvent) {
       return async (e) => nip07.signEvent(e);
     }
-    throw new Error('No signer available');
+    throw new AppealError('APPEAL_STATE', 'No signer available');
   }
 
   async function publishEvent(template: { kind: number; tags: string[][]; content: string }): Promise<NostrEvent> {
@@ -583,7 +584,7 @@ export function createFrostAppealCoordinator(
           if (existing && existing.commitHash !== parsed.commitHash) {
             // Equivocation: two different commits from the same selected
             // juror. Fail closed — abort the attempt, never pick one.
-            maybeReselect(appeal, 'vote_equivocation', new Error('conflicting vote commits'));
+            maybeReselect(appeal, 'vote_equivocation', new AppealError('conflicting vote commits'));
             break;
           }
           appeal.voteCommits.set(parsed.jurorIdx, {
@@ -650,7 +651,7 @@ export function createFrostAppealCoordinator(
         if (!verdict.outcome) {
           // No valid reveal among the signed commits: never attest a claim
           // or an empty outcome.
-          maybeReselect(appeal, 'vote_failed', new Error('no_valid_reveals: cannot tally a verdict'));
+          maybeReselect(appeal, 'vote_failed', new AppealError('no_valid_reveals: cannot tally a verdict'));
           break;
         }
         appeal.verdictOutcome = verdict.outcome;
@@ -691,7 +692,7 @@ export function createFrostAppealCoordinator(
             // Same fail-closed path as any other signing failure: reselect
             // from backups or refund — never attest a claim or an empty
             // outcome.
-            maybeReselect(appeal, 'signing_failed', new Error('no_verdict: cannot sign without a tally winner'));
+            maybeReselect(appeal, 'signing_failed', new AppealError('no_verdict: cannot sign without a tally winner'));
             break;
           }
           const commitments = createCommitments(signingShares);
@@ -834,7 +835,7 @@ export function createFrostAppealCoordinator(
     // must never be used for draw inputs. (Node >= 19 and all browsers
     // expose the WebCrypto global.)
     if (typeof globalThis === 'undefined' || typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.getRandomValues !== 'function') {
-      throw new Error('No CSPRNG (crypto.getRandomValues) available for Court coordinator');
+      throw new AppealError('APPEAL_STATE', 'No CSPRNG (crypto.getRandomValues) available for Court coordinator');
     }
     const out = new Uint8Array(n);
     globalThis.crypto.getRandomValues(out);

@@ -2,6 +2,7 @@
 
 /** Strict, versioned event boundary for upgraded BAO Court ceremonies. */
 
+import { CourtError } from './errors';
 import {
   verifyEvent,
   type Event,
@@ -46,13 +47,11 @@ export type CourtProtocolEventErrorCode =
   | 'wrong_dispute'
   | 'participant_binding_mismatch';
 
-export class CourtProtocolEventError extends Error {
-  readonly code: CourtProtocolEventErrorCode;
+export class CourtProtocolEventError extends CourtError {
+  declare readonly code: CourtProtocolEventErrorCode;
 
   constructor(code: CourtProtocolEventErrorCode, message: string) {
-    super(message);
-    this.name = 'CourtProtocolEventError';
-    this.code = code;
+    super(code, message);
   }
 }
 
@@ -150,7 +149,7 @@ function isVerifiedEvent(event: Event): event is VerifiedEvent {
 function parseContent(content: string): Record<string, unknown> {
   try {
     const value: unknown = JSON.parse(content);
-    if (!isRecord(value)) throw new Error('not an object');
+    if (!isRecord(value)) throw new CourtProtocolEventError('invalid_content', 'not an object');
     return value;
   } catch {
     throw new CourtProtocolEventError(

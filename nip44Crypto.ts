@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { CourtArgumentError } from './errors';
 import { nip44 } from 'nostr-tools';
 import { hexToBytes } from '@noble/hashes/utils.js';
 
@@ -19,7 +20,7 @@ function normalizeSeckey(seckey: string | Uint8Array): Uint8Array {
   // Copy at the boundary so caller-held buffers never alias our secret.
   const bytes = typeof seckey === 'string' ? hexToBytes(seckey) : new Uint8Array(seckey);
   if (bytes.length !== 32) {
-    throw new Error('seckey must be 32 bytes');
+    throw new CourtArgumentError('CRYPTO_ARGUMENT', 'seckey must be 32 bytes');
   }
   return bytes;
 }

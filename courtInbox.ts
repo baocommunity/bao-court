@@ -39,6 +39,7 @@
  * subscription stream, tagging each event with the relay that delivered it.
  */
 
+import { CourtError } from './errors';
 import type { Event as NostrEvent } from 'nostr-tools/pure';
 import { getEventHash } from 'nostr-tools/pure';
 import {
@@ -108,13 +109,11 @@ export type CourtInboxErrorCode =
   | 'corrupt_snapshot';
 
 /** Error thrown by every fail-closed inbox gate. */
-export class CourtInboxError extends Error {
-  readonly code: CourtInboxErrorCode;
+export class CourtInboxError extends CourtError {
+  declare readonly code: CourtInboxErrorCode;
 
   constructor(code: CourtInboxErrorCode, message: string) {
-    super(message);
-    this.name = 'CourtInboxError';
-    this.code = code;
+    super(code, message);
   }
 }
 

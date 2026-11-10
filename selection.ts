@@ -4,6 +4,7 @@
  * Deterministic, verifiable jury selection for the BAO Court / FROST oracle.
  */
 
+import { CourtArgumentError, CourtSelectionError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import type { JurorProfile, SelectedJuror } from './types';
 
@@ -68,7 +69,7 @@ const DEFAULT_PARAMS = {
 
 function validateHex(hex: string, expectedBytes: number): void {
   if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length !== expectedBytes * 2) {
-    throw new Error(`Invalid hex string, expected ${expectedBytes} bytes`);
+    throw new CourtArgumentError('SELECTION_ARGUMENT', `Invalid hex string, expected ${expectedBytes} bytes`);
   }
 }
 
@@ -105,7 +106,7 @@ function validateInputs(params: SelectionParams): ResolvedSelectionParams {
 
 function bytesFromHex(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {
-    throw new Error('Invalid hex string');
+    throw new CourtArgumentError('SELECTION_ARGUMENT', 'Invalid hex string');
   }
   // Lookup-table decode — byte-identical to the previous regex + parseInt
   // loop for every input the regex accepted, and rejects (throws) on exactly
@@ -116,7 +117,7 @@ function bytesFromHex(hex: string): Uint8Array {
     const hi = HEX_CHAR_VALUE[hex.charCodeAt(i * 2)]!;
     const lo = HEX_CHAR_VALUE[hex.charCodeAt(i * 2 + 1)]!;
     // 0xFF sentinel flags every non-hex byte, including non-ASCII code units.
-    if (hi === 0xff || lo === 0xff) throw new Error('Invalid hex string');
+    if (hi === 0xff || lo === 0xff) throw new CourtArgumentError('SELECTION_ARGUMENT', 'Invalid hex string');
     bytes[i] = (hi << 4) | lo;
   }
   return bytes;
@@ -181,7 +182,7 @@ export function quadraticPriority(random: number, stakeSats: number): number {
  */
 export function weightedPriority(random: number, weight: number): number {
   if (!Number.isFinite(weight) || weight <= 0) {
-    throw new Error(`Invalid juror weight: ${weight} (must be finite and positive)`);
+    throw new CourtArgumentError('SELECTION_ARGUMENT', `Invalid juror weight: ${weight} (must be finite and positive)`);
   }
   let r = random;
   if (r <= 0) r = Number.MIN_VALUE;
@@ -199,7 +200,7 @@ export function weightedPriority(random: number, weight: number): number {
 function jurorWeight(j: JurorProfile, weightFn: (juror: JurorProfile) => number): number {
   const w = weightFn(j);
   if (!Number.isFinite(w) || w < 0) {
-    throw new Error(
+    throw new CourtArgumentError('SELECTION_ARGUMENT', 
       `Invalid juror weight for ${j.nostrPubkey}: ${w} (weightFn must return finite non-negative numbers)`,
     );
   }
@@ -302,7 +303,7 @@ export function selectJury(
   const p = validateInputs(params);
   const eligible = filterEligibleJurors(pool, p);
   if (eligible.length < p.jurySize) {
-    throw new Error(`Insufficient eligible jurors: ${eligible.length} < ${p.jurySize}`);
+    throw new CourtSelectionError('SELECTION_STATE', `Insufficient eligible jurors: ${eligible.length} < ${p.jurySize}`, { invariant: 'INV-SEL-6' });
   }
   const seed = deriveSelectionSeed(p.disputeEventId, p.blockHash);
   return toSelectedJurors(scoreAndSort(eligible, seed, p), p.jurySize);
@@ -315,7 +316,7 @@ export function selectJuryWithBackups(
   const p = validateInputs(params);
   const eligible = filterEligibleJurors(pool, p);
   if (eligible.length < p.jurySize) {
-    throw new Error(`Insufficient eligible jurors: ${eligible.length} < ${p.jurySize}`);
+    throw new CourtSelectionError('SELECTION_STATE', `Insufficient eligible jurors: ${eligible.length} < ${p.jurySize}`, { invariant: 'INV-SEL-6' });
   }
 
   const seed = deriveSelectionSeed(p.disputeEventId, p.blockHash);

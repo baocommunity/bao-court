@@ -9,6 +9,7 @@
  * juror's FROST secret share.
  */
 
+import { CourtArgumentError, IndependentDkgError } from './errors';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import * as frost from '@vbyte/frost';
 import { randomScalar, scalarToHex, createProofOfKnowledge, dkgPokDomain, verifyProofOfKnowledge } from './crypto';
@@ -128,20 +129,20 @@ export class IndependentDkgSession {
 
   constructor(options: IndependentDkgOptions) {
     if (!Number.isInteger(options.threshold) || options.threshold < 2) {
-      throw new Error('Threshold must be an integer of at least 2');
+      throw new CourtArgumentError('IDKG_ARGUMENT', 'Threshold must be an integer of at least 2');
     }
     if (options.jurors.length < options.threshold) {
-      throw new Error('Participants cannot be less than threshold');
+      throw new CourtArgumentError('IDKG_ARGUMENT', 'Participants cannot be less than threshold');
     }
     const indices = new Set(options.jurors.map((j) => j.idx));
     if (indices.size !== options.jurors.length) {
-      throw new Error('Duplicate juror indices');
+      throw new CourtArgumentError('IDKG_ARGUMENT', 'Duplicate juror indices');
     }
     if (options.jurors.some((j) => !Number.isInteger(j.idx) || j.idx < 1)) {
-      throw new Error('Juror indices must be positive integers');
+      throw new CourtArgumentError('IDKG_ARGUMENT', 'Juror indices must be positive integers');
     }
     if (!indices.has(options.myIdx)) {
-      throw new Error('myIdx must be one of the juror indices');
+      throw new CourtArgumentError('IDKG_ARGUMENT', 'myIdx must be one of the juror indices');
     }
 
     this.disputeId = options.disputeId;
@@ -154,7 +155,7 @@ export class IndependentDkgSession {
     const hasSeckey = options.mySeckey !== undefined;
     const hasNip44 = options.nip44 !== undefined;
     if (hasSeckey === hasNip44) {
-      throw new Error('Provide exactly one of mySeckey or nip44');
+      throw new CourtArgumentError('IDKG_ARGUMENT', 'Provide exactly one of mySeckey or nip44');
     }
     this.nip44 = options.nip44 ?? new Nip44SeckeyCrypto(options.mySeckey!);
   }
@@ -563,18 +564,18 @@ export class IndependentDkgSession {
     // disqualified roster member poisons the attempt no matter how far local
     // key generation progressed.
     if (this.disqualified.size > 0) {
-      throw new Error(
+      throw new IndependentDkgError('IDKG_STATE', 
         'DKG attempt failed: a roster participant was disqualified; ' +
           'Court must start a new attempt with a fresh roster instead of shrinking this one',
       );
     }
     if (!this.localPoly) {
-      throw new Error('Local polynomial not generated');
+      throw new IndependentDkgError('IDKG_STATE', 'Local polynomial not generated');
     }
 
     const qualifiedJurors = [...this.jurors];
     if (qualifiedJurors.length < this.threshold) {
-      throw new Error(
+      throw new IndependentDkgError('IDKG_STATE', 
         `DKG failed: roster has ${qualifiedJurors.length} jurors, threshold is ${this.threshold}`,
       );
     }
@@ -586,14 +587,14 @@ export class IndependentDkgSession {
       .filter((c): c is { idx: number; pubkey: string; commits: CurvePoint[] } => !!c);
 
     if (qualifiedCommits.length !== qualifiedJurors.length) {
-      throw new Error('Cannot compute the key before every roster commitment has arrived');
+      throw new IndependentDkgError('IDKG_STATE', 'Cannot compute the key before every roster commitment has arrived');
     }
 
     // Fail closed on any invalid peer share instead of mixing it into the key.
     for (const j of qualifiedJurors) {
       if (j.idx === this.myIdx) continue;
       const shareHex = this.decryptedShares.get(j.idx);
-      if (!shareHex) throw new Error(`Missing decrypted share from juror ${j.idx}`);
+      if (!shareHex) throw new IndependentDkgError('IDKG_STATE', `Missing decrypted share from juror ${j.idx}`);
       const peer = this.commitments.get(j.idx)!;
       if (!verifyVssShare(this.myIdx, shareHex, peer.commitHexes)) {
         this.disqualified.add(j.idx);
@@ -606,7 +607,7 @@ export class IndependentDkgSession {
           commitmentEventId: peer.eventId ?? '',
           reason: 'invalid_share',
         });
-        throw new Error(
+        throw new IndependentDkgError('IDKG_STATE', 
           `Share from juror ${j.idx} does not verify against its commitments; the DKG attempt must abort`,
         );
       }
@@ -648,7 +649,7 @@ export class IndependentDkgSession {
     if (myVerification) {
       const derived = Point.BASE.multiply(myShareScalar).toHex(true).slice(2);
       if (derived !== myVerification.pubkey) {
-        throw new Error('Computed share does not match verification share');
+        throw new IndependentDkgError('IDKG_STATE', 'Computed share does not match verification share');
       }
     }
 
@@ -671,14 +672,14 @@ export class IndependentDkgSession {
 
   getShare(): frost.SecretShare {
     if (!this.computedShare) {
-      throw new Error('Key not computed yet');
+      throw new IndependentDkgError('IDKG_STATE', 'Key not computed yet');
     }
     return this.computedShare;
   }
 
   getRecord(): DkgRecord {
     if (!this.computedRecord) {
-      throw new Error('Key not computed yet');
+      throw new IndependentDkgError('IDKG_STATE', 'Key not computed yet');
     }
     return this.computedRecord;
   }
@@ -802,10 +803,10 @@ export class IndependentDkgSession {
     backupEvent: ReturnType<typeof buildShareBackupEvent>;
   }> {
     if (!this.computedShare || !this.computedRecord) {
-      throw new Error('Key not computed yet');
+      throw new IndependentDkgError('IDKG_STATE', 'Key not computed yet');
     }
     if (encryptToPubkey !== this.myPubkey) {
-      throw new Error(
+      throw new IndependentDkgError('IDKG_STATE', 
         'Backups must be encrypted to this juror\'s own pubkey; ' +
           'a backup encrypted to another key cannot be restored by restoreFromBackup',
       );
@@ -839,7 +840,7 @@ export class IndependentDkgSession {
     shareEvents: ReturnType<typeof buildEncryptedRefreshShareEvent>[];
   }> {
     if (!this.computedRecord || !this.computedShare) {
-      throw new Error('DKG key must be computed before refresh');
+      throw new IndependentDkgError('IDKG_STATE', 'DKG key must be computed before refresh');
     }
 
     // Generate shares for the ACTUAL juror index set. Indices may be
@@ -1024,22 +1025,22 @@ export class IndependentDkgSession {
    */
   computeRefreshedKey(): DkgRecord {
     if (!this.computedRecord || !this.computedShare) {
-      throw new Error('DKG key not computed');
+      throw new IndependentDkgError('IDKG_STATE', 'DKG key not computed');
     }
     // Disqualification aborts the refresh regardless of local progress.
     if (this.disqualified.size > 0) {
-      throw new Error(
+      throw new IndependentDkgError('IDKG_STATE', 
         'Refresh failed: a roster participant was disqualified; the ceremony must abort rather than shrink the roster',
       );
     }
     if (!this.refreshLocalPkg) {
-      throw new Error('Refresh commitment not generated');
+      throw new IndependentDkgError('IDKG_STATE', 'Refresh commitment not generated');
     }
 
     // Refresh requires the exact certified roster, never a threshold subset.
     const qualifiedJurors = [...this.jurors];
     if (qualifiedJurors.length < this.threshold) {
-      throw new Error(
+      throw new IndependentDkgError('IDKG_STATE', 
         `Refresh failed: roster has ${qualifiedJurors.length} jurors, threshold is ${this.threshold}`,
       );
     }
@@ -1067,7 +1068,7 @@ export class IndependentDkgSession {
       );
 
     if (qualifiedRefreshCommits.length < qualifiedJurors.length) {
-      throw new Error('Missing refresh commitments from qualified jurors');
+      throw new IndependentDkgError('IDKG_STATE', 'Missing refresh commitments from qualified jurors');
     }
 
     // Build refresh shares addressed to this juror, including our own.
@@ -1077,7 +1078,7 @@ export class IndependentDkgSession {
       }
       const shareHex = this.decryptedRefreshShares.get(j.idx);
       if (!shareHex) {
-        throw new Error(`Missing decrypted refresh share from juror ${j.idx}`);
+        throw new IndependentDkgError('IDKG_STATE', `Missing decrypted refresh share from juror ${j.idx}`);
       }
       return { idx: this.myIdx, seckey: shareHex };
     });
@@ -1088,7 +1089,7 @@ export class IndependentDkgSession {
     const mergedVssCommitments = qualifiedJurors.map((j) => {
       const original = this.computedRecord!.vssCommitments.find((c) => c.idx === j.idx);
       if (!original) {
-        throw new Error(`Missing original commitments for juror ${j.idx}`);
+        throw new IndependentDkgError('IDKG_STATE', `Missing original commitments for juror ${j.idx}`);
       }
       const refresh = qualifiedRefreshCommits.find((c) => c.idx === j.idx)!;
       return {
@@ -1117,7 +1118,7 @@ export class IndependentDkgSession {
     const groupPubkey = groupPoint.toHex(true);
 
     if (groupPubkey !== this.computedRecord.groupPubkey) {
-      throw new Error('Refresh changed the group public key');
+      throw new IndependentDkgError('IDKG_STATE', 'Refresh changed the group public key');
     }
 
     const myVerification = verificationShares.find((v) => v.idx === this.myIdx);
@@ -1126,7 +1127,7 @@ export class IndependentDkgSession {
         .toHex(true)
         .slice(2);
       if (derived !== myVerification.pubkey) {
-        throw new Error('Refreshed share does not match verification share');
+        throw new IndependentDkgError('IDKG_STATE', 'Refreshed share does not match verification share');
       }
     }
 

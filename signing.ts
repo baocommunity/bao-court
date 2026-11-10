@@ -4,6 +4,7 @@
  * FROST threshold signing for the BAO Court / FROST appeal layer.
  */
 
+import { FrostSigningError } from './errors';
 import * as frost from '@vbyte/frost';
 import { hexToBytes } from '@noble/hashes/utils.js';
 import { buildAttestationMessage, deriveXOnlyPubkey } from './crypto';
@@ -91,7 +92,7 @@ export class LocalStorageNonceGuard implements NonceGuard {
 
   consume(idx: number, binder: string, hidden: string): boolean {
     if (typeof localStorage === 'undefined') {
-      throw new Error('localStorage is not available; provide an in-memory NonceGuard');
+      throw new FrostSigningError('FROST_SIGNING', 'localStorage is not available; provide an in-memory NonceGuard');
     }
     const entry = `${idx}|${binder}|${hidden}`;
     if (this.memory.has(entry)) return false;
@@ -210,7 +211,7 @@ export function createRevealAndPartialSig(
 
   const guard = getGuard(params);
   if (!guard.consume(share.idx, commit.binder_pn, commit.hidden_pn)) {
-    throw new Error(
+    throw new FrostSigningError('FROST_SIGNING', 
       `FROST nonce reuse detected for juror ${share.idx}: this commitment has already been used to sign`,
     );
   }
@@ -224,7 +225,7 @@ export function createRevealAndPartialSig(
     sig.psig,
   );
   if (!valid) {
-    throw new Error(`Partial signature from juror ${share.idx} failed verification`);
+    throw new FrostSigningError('FROST_SIGNING', `Partial signature from juror ${share.idx} failed verification`);
   }
 
   return {
@@ -269,7 +270,7 @@ export function aggregateAttestation(
   );
 
   if (reveals.length < params.dkg.threshold) {
-    throw new Error(
+    throw new FrostSigningError('FROST_SIGNING', 
       `Insufficient reveals: ${reveals.length} < threshold ${params.dkg.threshold}`,
     );
   }
@@ -277,7 +278,7 @@ export function aggregateAttestation(
   const seenIndices = new Set<number>();
   for (const reveal of reveals) {
     if (seenIndices.has(reveal.idx)) {
-      throw new Error(`Duplicate reveal from juror ${reveal.idx}`);
+      throw new FrostSigningError('FROST_SIGNING', `Duplicate reveal from juror ${reveal.idx}`);
     }
     seenIndices.add(reveal.idx);
 
@@ -292,7 +293,7 @@ export function aggregateAttestation(
       reveal.psig,
     );
     if (!valid) {
-      throw new Error(`Partial signature from juror ${reveal.idx} is invalid`);
+      throw new FrostSigningError('FROST_SIGNING', `Partial signature from juror ${reveal.idx} is invalid`);
     }
   }
 
@@ -309,7 +310,7 @@ export function aggregateAttestation(
     hexToBytes(signatureHex),
   );
   if (!isValid) {
-    throw new Error('Final aggregated signature failed verification');
+    throw new FrostSigningError('FROST_SIGNING', 'Final aggregated signature failed verification');
   }
 
   return {

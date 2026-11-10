@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { CourtError, CourtErrorOptions } from './errors';
 import {
   HEX_32,
   assertBeforeDeadline as assertBeforeDeadlineCore,
@@ -105,10 +106,9 @@ export type CourtVoteMachineEvent =
   | { readonly type: 'tick'; readonly now: number }
   | { readonly type: 'abort'; readonly reason: string };
 
-export class CourtVoteTransitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CourtVoteTransitionError';
+export class CourtVoteTransitionError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('VOTE_TRANSITION', message, options);
   }
 }
 
