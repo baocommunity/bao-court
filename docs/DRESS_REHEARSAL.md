@@ -111,6 +111,7 @@ doc-to-doc link on that path.
 | 5 | `docs/presentation/DEMO_SCRIPT.md` said "14 open gaps" (PR #63 number) vs the register's 13 open (of 17 entries) | **Fixed in this PR** → 13 |
 | 6 | `docs/TESTING_GUIDE.md` header said "~1486 tests" | Fixed — landed independently in PR #71; deduplicated on rebase |
 | 7 | (Observation, no change) demo beat-2 diff shows 4 banner lines if the presenter uses `npm run simulate:court` instead of direct `tsx` — the script already prescribes direct `tsx`; no change needed | Documented here |
+| 8 | Demo Beat 3 (`--only` sweep) rewrites the committed model-check fixture, so a following Beat 4 cross-check reports MC-3/MC-4 and exits non-zero — found live in rehearsal (the gate worked exactly as designed) | **Fixed in this PR** — Beat 3 heads-up + a fallback-table row added to `DEMO_SCRIPT.md` (`git restore __fixtures__/model-check-summary.json` between beats) |
 
 *Rebase note: the contract run in §1.1 executed on base `8422faa`; the
 parallel round-17 coherence PR (#71) landed mid-rehearsal and this branch

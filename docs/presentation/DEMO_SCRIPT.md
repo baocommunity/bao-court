@@ -117,6 +117,14 @@ npx tsx scripts/model-check.mjs --only "signing n=2"
 [model-check] wall time: 1.0s
 ```
 
+> **Heads-up (found in the round-17 dress rehearsal):** this beat rewrites
+> `__fixtures__/model-check-summary.json` with the 1-instance totals. If you
+> run Beat 4's cross-check without restoring first, it will correctly report
+> `MC-3: totals.instances = 1, expected 13` / `MC-4:
+> determinismPathsReplayed = 200, expected 2600` — the gate working, not a
+> regression. Restore between beats:
+> `git restore __fixtures__/model-check-summary.json`
+
 **Say:** "Every reachable state × every event application, asserting five
 property classes on **every edge** — phase legality, data invariants with
 real SHA-256 re-derivation and real secp256k1 nonce points, no dead ends,
@@ -235,6 +243,7 @@ Leave on screen: `RESULT: REPRODUCED — every artifact PASS`.
 | 2 | "sig differs" observation breaks the determinism story | It doesn't — it *is* the story: nonce freshness is a security feature (vector H). Pre-empt with the one-line diff explanation |
 | 3 | `--only` instance unexpectedly slow (>10 s, loaded host) | Show the committed fixture totals (Beat 3's node one-liner) + the full-sweep row from the repro log; say "live on a quiet box: ~1 s, see the committed 574 s full sweep" |
 | 4 | cross-check FAILs (docs edited since) | The failure output names the dangling pointer — say "the gate works: it just caught that docs moved ahead of evidence", then show the committed log's stage-[h] PASS line |
+| 3→4 | after Beat 3, cross-check reports MC-3/MC-4 | Expected: Beat 3 rewrote the committed fixture (see the Beat 3 heads-up). `git restore __fixtures__/model-check-summary.json`, re-run — `OK` |
 | 5 | log file unavailable | VERDICT block is reproduced in this document — read it from the slide |
 | any | Node < 22 | The env check prints `FAIL: Node >= 22 required` — run beats 2/4 as committed-output read-alongs; the story survives |
 
