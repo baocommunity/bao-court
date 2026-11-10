@@ -486,184 +486,227 @@ export function reduceCourtSigningMachine(
     state = { ...state, latestTimestamp: event.now };
   }
 
-  if (event.type === 'tick') {
-    // Validate the deadline hasn't been tampered with — if state is restored
-    // from an unsafe spread of a corrupted snapshot, catch it here.
-    if (!Number.isSafeInteger(state.deadline) || state.deadline < 1) {
-      throw new CourtSigningTransitionError(
-        'signing state has a corrupted deadline',
-      );
-    }
-    assertNow(event.now, CourtSigningTransitionError);
-    if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) {
-      return freezeCourtSigningMachineState(state);
-    }
-    return freezeCourtSigningMachineState({
-      ...state,
-      phase: 'expired',
-      failure: { phase: 'expired', reason: 'The signing deadline passed before publication.' },
-    });
-  }
-  if (event.type === 'abort') {
-    if (TERMINAL_PHASES.has(state.phase)) {
-      throw new CourtSigningTransitionError(`cannot abort signing from ${state.phase}`);
-    }
-    // Only reducer-defined failure phases may be injected as aborts — a
-    // caller cannot cast an arbitrary phase (e.g. 'aggregate') into state.
-    if (!ABORT_PHASES.has(event.phase)) {
-      throw new CourtSigningTransitionError(`invalid signing abort phase: ${String(event.phase)}`);
-    }
-    // Ensure the caller cannot forge a peer-blame by supplying an unverified
-    // blamedIdx — the index must be a valid roster participant.
-    assertBlamedIdx(event.blamedIdx, state.participantIndices, 'signer', CourtSigningTransitionError);
-    return freezeCourtSigningMachineState({
-      ...state,
-      phase: event.phase,
-      failure: { phase: event.phase, reason: event.reason, blamedIdx: event.blamedIdx },
-    });
+  switch (event.type) {
+    case 'tick': return onTick(state, event);
+    case 'abort': return onAbort(state, event);
+    default: break;
   }
   if (TERMINAL_PHASES.has(state.phase)) {
     throw new CourtSigningTransitionError(`cannot process ${event.type} after ${state.phase}`);
   }
 
-  if (event.type === 'start') {
-    assertBeforeDeadline(state, event.now);
-    if (state.phase !== 'intent') {
-      throw new CourtSigningTransitionError(`cannot start signing from ${state.phase}`);
-    }
-    return freezeCourtSigningMachineState({ ...state, phase: 'nonce_commit' });
-  }
-
-  if (event.type === 'accept_commitment') {
-    assertBeforeDeadline(state, event.now);
-    assertParticipant(state, event.idx);
-    if (state.phase !== 'nonce_commit') {
-      throw new CourtSigningTransitionError(`cannot accept nonce commitments during ${state.phase}`);
-    }
-    // Nonce points may arrive x-only (64 hex) or compressed (02/03 prefix);
-    // the protocol boundary (parseBoundFrostCommitEvent) accepts both, so the
-    // machine must not reject the x-only form. Beyond shape, the bytes must
-    // decode to a real curve point so malformed nonces cannot poison the
-    // binding-factor computation downstream.
-    if (!isValidSecp256k1Point(event.binderPn) || !isValidSecp256k1Point(event.hiddenPn)) {
-      throw new CourtSigningTransitionError('nonce commitments must be canonical secp256k1 points (x-only or compressed)');
-    }
-    const existing = state.commitments.find((c) => c.idx === event.idx);
-    if (existing) {
-      if (existing.binderPn === event.binderPn && existing.hiddenPn === event.hiddenPn) {
-        // `state` is the clock-advanced copy — freeze it (INV-SIGN-15).
-        return freezeCourtSigningMachineState(state);
-      }
-      return freezeCourtSigningMachineState({
-        ...state,
-        phase: 'aborted_peer',
-        failure: {
-          phase: 'aborted_peer',
-          blamedIdx: event.idx,
-          reason: 'A signer published a conflicting nonce commitment for this signing attempt.',
-        },
-      });
-    }
-    return freezeCourtSigningMachineState({
-      ...state,
-      commitments: [
-        ...state.commitments,
-        { idx: event.idx, binderPn: event.binderPn, hiddenPn: event.hiddenPn },
-      ],
-    });
-  }
-
-  if (event.type === 'close_commitments') {
-    assertBeforeDeadline(state, event.now);
-    if (state.phase !== 'nonce_commit') {
-      throw new CourtSigningTransitionError(`cannot close nonce commitments during ${state.phase}`);
-    }
-    if (state.commitments.length < state.threshold) {
-      throw new CourtSigningTransitionError(
-        `cannot finalize the commitment set with ${state.commitments.length} commitments below threshold ${state.threshold}`,
-      );
-    }
-    const finalizedSignerSet = state.commitments.map((c) => c.idx).sort((a, b) => a - b);
-    return freezeCourtSigningMachineState({ ...state, phase: 'commitment_set_final', finalizedSignerSet });
-  }
-
-  if (event.type === 'accept_partial') {
-    assertBeforeDeadline(state, event.now);
-    if (state.phase !== 'commitment_set_final' && state.phase !== 'partial_sign') {
-      throw new CourtSigningTransitionError(`cannot accept partial signatures during ${state.phase}`);
-    }
-    if (!state.finalizedSignerSet?.includes(event.idx)) {
-      throw new CourtSigningTransitionError(
-        `signer ${event.idx} is not in the finalized commitment set`,
-      );
-    }
-    // Reject malformed state — the partial signature must be well-formed hex.
-    if (!/^[0-9a-fA-F]{64}$/.test(event.psig)) {
-      throw new CourtSigningTransitionError(
-        'partial signature must be 64-char lowercase hex',
-      );
-    }
-    if (!HEX_32.test(event.psig)) {
-      throw new CourtSigningTransitionError('partial signature must be 32-byte lowercase hex');
-    }
-    const existing = state.partials.find((p) => p.idx === event.idx);
-    if (existing) {
-      // `state` is the clock-advanced copy — freeze it (INV-SIGN-15).
-      if (existing.psig === event.psig) return freezeCourtSigningMachineState(state);
-      return freezeCourtSigningMachineState({
-        ...state,
-        phase: 'aborted_peer',
-        failure: {
-          phase: 'aborted_peer',
-          blamedIdx: event.idx,
-          reason: 'A signer published conflicting partial signatures for this signing attempt.',
-        },
-      });
-    }
-    // Verify that the partial signature index is unique — duplicates would
-    // bypass the distinct-signer threshold check and inflate the partial count.
-    const seenIdxs = new Set(state.partials.map((p) => p.idx));
-    if (seenIdxs.has(event.idx)) {
-      throw new CourtSigningTransitionError(
-        `duplicate partial signature from signer ${event.idx}`,
-      );
-    }
-    return freezeCourtSigningMachineState({
-      ...state,
-      phase: 'partial_sign',
-      partials: [...state.partials, { idx: event.idx, psig: event.psig }],
-    });
-  }
-
-  if (event.type === 'aggregate') {
-    assertBeforeDeadline(state, event.now);
-    if (state.phase !== 'partial_sign' && state.phase !== 'commitment_set_final') {
-      throw new CourtSigningTransitionError(`cannot aggregate during ${state.phase}`);
-    }
-    if (state.partials.length < state.threshold) {
-      throw new CourtSigningTransitionError(
-        `cannot aggregate ${state.partials.length} partial signatures below threshold ${state.threshold}`,
-      );
-    }
-    if (!SCHNORR_SIGNATURE.test(event.signature)) {
-      throw new CourtSigningTransitionError('aggregated signature must be 64-byte lowercase hex');
-    }
-    return freezeCourtSigningMachineState({ ...state, phase: 'aggregate', signature: event.signature });
-  }
-
-  if (event.type === 'publish') {
-    assertBeforeDeadline(state, event.now);
-    if (state.phase !== 'aggregate' || !state.signature) {
-      throw new CourtSigningTransitionError(`cannot publish an attestation during ${state.phase}`);
-    }
-    if (!HEX_32.test(event.attestationEventId)) {
-      throw new CourtSigningTransitionError('attestation event id must be 32-byte lowercase hex');
-    }
-    return freezeCourtSigningMachineState({ ...state, phase: 'attestation_published', attestationEventId: event.attestationEventId });
+  switch (event.type) {
+    case 'start': return onStart(state, event);
+    case 'accept_commitment': return onAcceptCommitment(state, event);
+    case 'close_commitments': return onCloseCommitments(state, event);
+    case 'accept_partial': return onAcceptPartial(state, event);
+    case 'aggregate': return onAggregate(state, event);
+    case 'publish': return onPublish(state, event);
+    default: break;
   }
 
   // Unreachable for well-typed events; fail closed instead of silently
   // returning state for a hostile unknown type.
   const unknownType = (event as { readonly type?: unknown }).type;
   throw new CourtSigningTransitionError(`unknown signing event type: ${String(unknownType)}`);
+}
+
+/** Apply a `tick`: expire the ceremony when the signing deadline has passed. */
+function onTick(state: CourtSigningMachineState, event: Extract<CourtSigningMachineEvent, { type: 'tick' }>): CourtSigningMachineState {
+  // Validate the deadline hasn't been tampered with — if state is restored
+  // from an unsafe spread of a corrupted snapshot, catch it here.
+  if (!Number.isSafeInteger(state.deadline) || state.deadline < 1) {
+    throw new CourtSigningTransitionError(
+      'signing state has a corrupted deadline',
+    );
+  }
+  assertNow(event.now, CourtSigningTransitionError);
+  if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) {
+    return freezeCourtSigningMachineState(state);
+  }
+  return freezeCourtSigningMachineState({
+    ...state,
+    phase: 'expired',
+    failure: { phase: 'expired', reason: 'The signing deadline passed before publication.' },
+  });
+}
+
+/** Apply an `abort`: operator or peer-blame cancel from a live phase. */
+function onAbort(state: CourtSigningMachineState, event: Extract<CourtSigningMachineEvent, { type: 'abort' }>): CourtSigningMachineState {
+  if (TERMINAL_PHASES.has(state.phase)) {
+    throw new CourtSigningTransitionError(`cannot abort signing from ${state.phase}`);
+  }
+  // Only reducer-defined failure phases may be injected as aborts — a
+  // caller cannot cast an arbitrary phase (e.g. 'aggregate') into state.
+  if (!ABORT_PHASES.has(event.phase)) {
+    throw new CourtSigningTransitionError(`invalid signing abort phase: ${String(event.phase)}`);
+  }
+  // Ensure the caller cannot forge a peer-blame by supplying an unverified
+  // blamedIdx — the index must be a valid roster participant.
+  assertBlamedIdx(event.blamedIdx, state.participantIndices, 'signer', CourtSigningTransitionError);
+  return freezeCourtSigningMachineState({
+    ...state,
+    phase: event.phase,
+    failure: { phase: event.phase, reason: event.reason, blamedIdx: event.blamedIdx },
+  });
+}
+
+/** Apply a `start`: intent → nonce_commit. */
+function onStart(
+  state: CourtSigningMachineState,
+  event: Extract<CourtSigningMachineEvent, { type: 'start' }>,
+): CourtSigningMachineState {
+  assertBeforeDeadline(state, event.now);
+  if (state.phase !== 'intent') {
+    throw new CourtSigningTransitionError(`cannot start signing from ${state.phase}`);
+  }
+  return freezeCourtSigningMachineState({ ...state, phase: 'nonce_commit' });
+}
+
+/** Apply an `accept_commitment`: bind a signer's two nonce points. */
+function onAcceptCommitment(
+  state: CourtSigningMachineState,
+  event: Extract<CourtSigningMachineEvent, { type: 'accept_commitment' }>,
+): CourtSigningMachineState {
+  assertBeforeDeadline(state, event.now);
+  assertParticipant(state, event.idx);
+  if (state.phase !== 'nonce_commit') {
+    throw new CourtSigningTransitionError(`cannot accept nonce commitments during ${state.phase}`);
+  }
+  // Nonce points may arrive x-only (64 hex) or compressed (02/03 prefix);
+  // the protocol boundary (parseBoundFrostCommitEvent) accepts both, so the
+  // machine must not reject the x-only form. Beyond shape, the bytes must
+  // decode to a real curve point so malformed nonces cannot poison the
+  // binding-factor computation downstream.
+  if (!isValidSecp256k1Point(event.binderPn) || !isValidSecp256k1Point(event.hiddenPn)) {
+    throw new CourtSigningTransitionError('nonce commitments must be canonical secp256k1 points (x-only or compressed)');
+  }
+  const existing = state.commitments.find((c) => c.idx === event.idx);
+  if (existing) {
+    if (existing.binderPn === event.binderPn && existing.hiddenPn === event.hiddenPn) {
+      // `state` is the clock-advanced copy — freeze it (INV-SIGN-15).
+      return freezeCourtSigningMachineState(state);
+    }
+    return freezeCourtSigningMachineState({
+      ...state,
+      phase: 'aborted_peer',
+      failure: {
+        phase: 'aborted_peer',
+        blamedIdx: event.idx,
+        reason: 'A signer published a conflicting nonce commitment for this signing attempt.',
+      },
+    });
+  }
+  return freezeCourtSigningMachineState({
+    ...state,
+    commitments: [
+      ...state.commitments,
+      { idx: event.idx, binderPn: event.binderPn, hiddenPn: event.hiddenPn },
+    ],
+  });
+}
+
+/** Apply a `close_commitments`: freeze the signer set at/above threshold. */
+function onCloseCommitments(
+  state: CourtSigningMachineState,
+  event: Extract<CourtSigningMachineEvent, { type: 'close_commitments' }>,
+): CourtSigningMachineState {
+  assertBeforeDeadline(state, event.now);
+  if (state.phase !== 'nonce_commit') {
+    throw new CourtSigningTransitionError(`cannot close nonce commitments during ${state.phase}`);
+  }
+  if (state.commitments.length < state.threshold) {
+    throw new CourtSigningTransitionError(
+      `cannot finalize the commitment set with ${state.commitments.length} commitments below threshold ${state.threshold}`,
+    );
+  }
+  const finalizedSignerSet = state.commitments.map((c) => c.idx).sort((a, b) => a - b);
+  return freezeCourtSigningMachineState({ ...state, phase: 'commitment_set_final', finalizedSignerSet });
+}
+
+/** Apply an `accept_partial`: verify and record one partial signature. */
+function onAcceptPartial(
+  state: CourtSigningMachineState,
+  event: Extract<CourtSigningMachineEvent, { type: 'accept_partial' }>,
+): CourtSigningMachineState {
+  assertBeforeDeadline(state, event.now);
+  if (state.phase !== 'commitment_set_final' && state.phase !== 'partial_sign') {
+    throw new CourtSigningTransitionError(`cannot accept partial signatures during ${state.phase}`);
+  }
+  if (!state.finalizedSignerSet?.includes(event.idx)) {
+    throw new CourtSigningTransitionError(
+      `signer ${event.idx} is not in the finalized commitment set`,
+    );
+  }
+  // Reject malformed state — the partial signature must be well-formed hex.
+  if (!/^[0-9a-fA-F]{64}$/.test(event.psig)) {
+    throw new CourtSigningTransitionError(
+      'partial signature must be 64-char lowercase hex',
+    );
+  }
+  if (!HEX_32.test(event.psig)) {
+    throw new CourtSigningTransitionError('partial signature must be 32-byte lowercase hex');
+  }
+  const existing = state.partials.find((p) => p.idx === event.idx);
+  if (existing) {
+    // `state` is the clock-advanced copy — freeze it (INV-SIGN-15).
+    if (existing.psig === event.psig) return freezeCourtSigningMachineState(state);
+    return freezeCourtSigningMachineState({
+      ...state,
+      phase: 'aborted_peer',
+      failure: {
+        phase: 'aborted_peer',
+        blamedIdx: event.idx,
+        reason: 'A signer published conflicting partial signatures for this signing attempt.',
+      },
+    });
+  }
+  // Verify that the partial signature index is unique — duplicates would
+  // bypass the distinct-signer threshold check and inflate the partial count.
+  const seenIdxs = new Set(state.partials.map((p) => p.idx));
+  if (seenIdxs.has(event.idx)) {
+    throw new CourtSigningTransitionError(
+      `duplicate partial signature from signer ${event.idx}`,
+    );
+  }
+  return freezeCourtSigningMachineState({
+    ...state,
+    phase: 'partial_sign',
+    partials: [...state.partials, { idx: event.idx, psig: event.psig }],
+  });
+}
+
+/** Apply an `aggregate`: combine partials into the final signature. */
+function onAggregate(
+  state: CourtSigningMachineState,
+  event: Extract<CourtSigningMachineEvent, { type: 'aggregate' }>,
+): CourtSigningMachineState {
+  assertBeforeDeadline(state, event.now);
+  if (state.phase !== 'partial_sign' && state.phase !== 'commitment_set_final') {
+    throw new CourtSigningTransitionError(`cannot aggregate during ${state.phase}`);
+  }
+  if (state.partials.length < state.threshold) {
+    throw new CourtSigningTransitionError(
+      `cannot aggregate ${state.partials.length} partial signatures below threshold ${state.threshold}`,
+    );
+  }
+  if (!SCHNORR_SIGNATURE.test(event.signature)) {
+    throw new CourtSigningTransitionError('aggregated signature must be 64-byte lowercase hex');
+  }
+  return freezeCourtSigningMachineState({ ...state, phase: 'aggregate', signature: event.signature });
+}
+
+/** Apply a `publish`: bind the attestation event id and reach the final phase. */
+function onPublish(
+  state: CourtSigningMachineState,
+  event: Extract<CourtSigningMachineEvent, { type: 'publish' }>,
+): CourtSigningMachineState {
+  assertBeforeDeadline(state, event.now);
+  if (state.phase !== 'aggregate' || !state.signature) {
+    throw new CourtSigningTransitionError(`cannot publish an attestation during ${state.phase}`);
+  }
+  if (!HEX_32.test(event.attestationEventId)) {
+    throw new CourtSigningTransitionError('attestation event id must be 32-byte lowercase hex');
+  }
+  return freezeCourtSigningMachineState({ ...state, phase: 'attestation_published', attestationEventId: event.attestationEventId });
 }
