@@ -163,7 +163,7 @@ OK — every evidence pointer in docs/CROSS_CHECK.md resolves.
 21 literature-audit claims, 12 findings — each pointing at a test name, a
 fixture key, a bench id, or a registered gap. The script re-resolves all 493
 pointers against the tree *right now* and exits non-zero on a dangling one.
-The docs cannot drift silently. 95.2% carry executable proof; the 14 open
+The docs cannot drift silently. 95.2% carry executable proof; the 13 open
 gaps are registered with planned proofs — that's the roadmap, not a
 confession."
 
@@ -195,7 +195,7 @@ confession."
 ```
 
 **Say:** "One command from a clean clone — `bash scripts/reproduce.sh` —
-regenerates every artifact the paper cites: the full 1,491-test suite, three
+regenerates every artifact the paper cites: the full 1,492-test suite, three
 typechecks, the simulation, the model-check fixture **digit-identical**,
 bench within ±20% of baseline, the cross-check, and the contract-suite
 pass-counts. Total: 17 minutes. This is the committed run — and the model

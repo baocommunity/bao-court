@@ -38,7 +38,10 @@ with executable proof (§5). What the numbers do **not** prove is stated in
 **Recorded verification state at v0.10.2 `main` (2026-11-10, PR #64):** full
 suite **1,491 passed / 1 skipped (61 files)**; `npm run typecheck` +
 `typecheck:tests` clean; `node scripts/cross-check.mjs` verifies all 493
-evidence pointers, exit 0.
+evidence pointers, exit 0. *(Rehearsal refresh, round 17, 2026-11-10: full
+suite now **1,492 passed / 1 skipped (61 files)** — one test added by the
+round-16 review fixes; all contract stages PASS — see
+`docs/DRESS_REHEARSAL.md`.)*
 
 ---
 
@@ -354,7 +357,7 @@ so the before/after table is one artifact, not two methodologies.
 | **Claim coverage** | **94.9%** with executable proof at PR #63 (258/272), refreshed to **95.2%** (259/272) in PR #64 after four in-round gap closures; **13 open gaps** each registered with a planned proof | CROSS_CHECK §2 + Gap register |
 
 The 94.9% number is itself machine-checked: `node scripts/cross-check.mjs`
-parses the index, verifies all 492 evidence refs resolve against the tree
+parses the index, verifies all 493 evidence refs resolve against the tree
 today, and exits non-zero on a dangling pointer — the coverage claim cannot
 drift silently.
 
