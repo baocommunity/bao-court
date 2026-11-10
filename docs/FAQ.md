@@ -23,7 +23,10 @@ Because "trust us" is not a guarantee. A verdict is a threshold signature over
 a group key that **no single party — including the operator — ever holds**
 (it is born in DKG, with no dealer). Verification requires no access to the
 Court, its jurors, or its operators, and works offline from the public
-library.
+library. Two honest qualifications: prototype deployments co-locate the shares
+(single-process ceremonies — paper §10.2 G), and a verdict is not a payout —
+v1 settlement is host-mediated, so the operator can release but cannot alter a
+verdict ([`docs/SETTLEMENT-BINDING.md`](SETTLEMENT-BINDING.md)).
 
 **04 — How is a dispute resolved?**
 Four certified stages: (1) seed-bound jury selection — anyone can recompute

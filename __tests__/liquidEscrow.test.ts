@@ -7,6 +7,8 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import {
   buildMultisigScript,
   buildTaprootLeaves,
+  buildCourtJudgeLeaf,
+  isCourtJudgeLeaf,
   p2wshProgram,
   p2wshAddress,
   taprootAddress,
@@ -139,6 +141,65 @@ describe('taproot helpers (merkle root + address)', () => {
     expect(tapMerkleRoot([leaf0, leaf1, leaf2])).toBe(
       'ab5da4169a19f41846713d39317efb2507248fd7f78e49ee9bfef9d20c191e60',
     );
+  });
+});
+
+// ── Court (FROST / standing-cohort) judge leaf ──────────────────────────────
+
+describe('buildCourtJudgeLeaf (attested-spend binding)', () => {
+  it('serializes <winner> CHECKSIGVERIFY <group> CHECKSIG', () => {
+    const leaf = buildCourtJudgeLeaf({ winnerXOnly: X_A, groupXOnly: X_B });
+    expect(leaf.script).toBe(`20${X_A}ad20${X_B}ac`);
+    expect(leaf.binding).toBe('attested-spend');
+    expect(leaf.secondSignatureMessage).toBe('taproot-sighash');
+    expect(Object.isFrozen(leaf)).toBe(true);
+  });
+
+  it('is byte-identical in shape to the legacy judge leaf (no new consensus risk)', () => {
+    // The fix is the KEY CONTRACT, not the bytes: the same two keys through
+    // the legacy builder must produce exactly the same tape. Pinned so a
+    // future refactor cannot silently change either builder independently.
+    const legacy = buildTaprootLeaves({
+      winnerXOnly: X_A, oracleXOnly: X_B, funderXOnly: X_C, refundLocktime: 5_000_000,
+    });
+    expect(buildCourtJudgeLeaf({ winnerXOnly: X_A, groupXOnly: X_B }).script)
+      .toBe(legacy.judgeLeaf);
+  });
+
+  it('normalizes uppercase hex to the canonical lowercase leaf', () => {
+    const lower = buildCourtJudgeLeaf({ winnerXOnly: X_A, groupXOnly: X_B }).script;
+    const upper = buildCourtJudgeLeaf({
+      winnerXOnly: X_A.toUpperCase(), groupXOnly: X_B.toUpperCase(),
+    }).script;
+    expect(upper).toBe(lower);
+  });
+
+  it('refuses a shared winner/group key (authority collapse)', () => {
+    expect(() => buildCourtJudgeLeaf({ winnerXOnly: X_A, groupXOnly: X_A }))
+      .toThrow(/must differ/);
+  });
+
+  it('refuses malformed or non-x-only keys', () => {
+    expect(() => buildCourtJudgeLeaf({ winnerXOnly: 'aa', groupXOnly: X_B })).toThrow(/winnerXOnly/);
+    expect(() => buildCourtJudgeLeaf({ winnerXOnly: X_A, groupXOnly: `02${'bb'.repeat(32)}` }))
+      .toThrow(/groupXOnly/);
+    expect(() => buildCourtJudgeLeaf({
+      winnerXOnly: X_A,
+      groupXOnly: X_B,
+    })).not.toThrow();
+    expect(() => buildCourtJudgeLeaf({ winnerXOnly: 'zz'.repeat(32), groupXOnly: X_B }))
+      .toThrow(/winnerXOnly/);
+  });
+
+  it('isCourtJudgeLeaf accepts only the exact canonical serialization', () => {
+    const leaf = buildCourtJudgeLeaf({ winnerXOnly: X_A, groupXOnly: X_B }).script;
+    expect(isCourtJudgeLeaf(leaf, { winnerXOnly: X_A, groupXOnly: X_B })).toBe(true);
+    expect(isCourtJudgeLeaf(leaf.toUpperCase(), { winnerXOnly: X_A, groupXOnly: X_B })).toBe(true);
+    // swapped roles: the group key in the winner slot is NOT this leaf
+    expect(isCourtJudgeLeaf(leaf, { winnerXOnly: X_B, groupXOnly: X_A })).toBe(false);
+    // one key in both slots (the collapse the builder refuses)
+    expect(isCourtJudgeLeaf(`20${X_A}ad20${X_A}ac`, { winnerXOnly: X_A, groupXOnly: X_A })).toBe(false);
+    expect(isCourtJudgeLeaf('nothex', { winnerXOnly: X_A, groupXOnly: X_B })).toBe(false);
   });
 });
 

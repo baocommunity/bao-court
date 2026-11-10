@@ -49,6 +49,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) | one-command reproduction contract (`scripts/reproduce.sh`), variance bounds, committed repro record |
 | [`ESCROW-SLASHING.md`](docs/ESCROW-SLASHING.md) | escrow lifecycle and slashing math |
 | [`SETTLEMENT-RAILS.md`](docs/SETTLEMENT-RAILS.md) | settlement-rail contracts (Panel A Lightning, Panel B Liquid) |
+| [`SETTLEMENT-BINDING.md`](docs/SETTLEMENT-BINDING.md) | **what the FROST judge key actually signs**: attested-spend vs CHECKSIGFROMSTACK vs host-mediated, and the cohort-lifetime constraint |
 | [`COMPLAINT-PROTOCOL.md`](docs/COMPLAINT-PROTOCOL.md) | the DKG complaint/possession-binding contract |
 | [`FIXES-2026-08-15.md`](docs/FIXES-2026-08-15.md), [`FIXES-2026-08-18.md`](docs/FIXES-2026-08-18.md), [`FIXES-2026-08-21.md`](docs/FIXES-2026-08-21.md) | historical hardening memos (dated fix records) |
 | `adr/` | architecture decision records |
@@ -210,7 +211,10 @@ Even in the settlement construction, **FROST gates everything**: no Court
 attestation → no share release → no settlement. A FROST signature cannot
 serve as an HTLC preimage (it is 64 bytes, and signature shares are bound to
 their exact ceremony), which is why the settlement layer uses native 32-byte
-secrets with their own VSS.
+secrets with their own VSS. (That gate is enforced by the settlement layer's
+own release step — it is a *procedural* binding, not an on-chain one; see
+[`SETTLEMENT-BINDING.md`](docs/SETTLEMENT-BINDING.md) for which binding each
+rail actually ships.)
 
 **Rule:** the two systems must never share code paths, storage, or key
 material. Settlement-VSS dealing/reveal is future Court-side scope (Phase 7

@@ -170,6 +170,33 @@ Each ceremony machine is a tuple `(S, s₀, E, →)` where:
 defined transitions. Every returned state is deeply frozen (freeze discipline,
 §10 / INV-X-4).
 
+### 1.5 Named assumptions (A1–A6)
+
+The machines below are pure state machines over messages. Their invariants hold
+*conditional on assumptions that no machine can enforce*. Listing them here is
+deliberate: an unstated assumption is indistinguishable from a proof.
+
+- **A1** — one-more discrete-log hardness for FROST, random-oracle model for
+  `H` (paper §10.1).
+- **A2** — at least `M` honest roster members opt in and participate.
+- **A3** — honest members share authenticated, encrypted channels
+  (`nip44Crypto.ts` / `nip59.ts`).
+- **A4** — honest majority in the corruption sense `m+1 ≤ t` for the
+  possession-bound complaint bound (§2.4).
+- **A5** — the block-hash selection seed is unbiased at the required
+  confirmation depth.
+- **A6 — the settlement binding.** A verdict becomes a pay-out only through a
+  rail, and a rail is not a machine in this document. The attestation machines
+  guarantee *what* was decided and *who* signed; they say nothing about what
+  the escrow script verifies. Three bindings are analysed in
+  `docs/SETTLEMENT-BINDING.md`; v1 ships **host-mediated** release (the cohort
+  authorises, the host releases), so A6 is discharged by a *named trust point*,
+  not by cryptography. Any claim of the form "no single party can release
+  funds" is a claim about A6 and must cite which binding it assumes.
+
+The one machine-checkable piece of A6 in this package is the judge-leaf key
+contract, pinned as INV-SETTLE-1 (§11).
+
 ---
 
 ## 2. Fail-closed discipline (all machines)
@@ -1184,6 +1211,19 @@ Executable pins for this section live in
   `hashCourtVerdict` over `Verdict/v1`; the dispute attestation commitment is
   the separate `DisputeVerdict/v1` function. Test: `invariantAssertions.test.ts`
   › domain-binding test.
+- **INV-SETTLE-1 (judge-leaf key contract).** `buildCourtJudgeLeaf({winnerXOnly,
+  groupXOnly})` serializes `<winner> CHECKSIGVERIFY <group> CHECKSIG` iff both
+  inputs are 32-byte lowercase hex **and** `winner ≠ group`; it refuses a shared
+  key (one key in both roles collapses the two-signature conjunction to a
+  single party — the authority confusion this document's A6 exists to make
+  explicit). The builder is byte-identical to `buildTaprootLeaves`'s judge leaf
+  for the same keys, so the contract adds no consensus surface.
+  `isCourtJudgeLeaf` compares a persisted leaf to that canonical serialization
+  exactly (never a substring search for the key). Guard:
+  `liquidEscrow.ts › buildCourtJudgeLeaf`; test:
+  `__tests__/liquidEscrow.test.ts` › 'buildCourtJudgeLeaf (attested-spend
+  binding)'. **Not covered:** the signing ceremony that produces the two
+  signatures — that is A6, host-side.
 
 ---
 
@@ -1339,6 +1379,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-X-8 | CanonicalWriter totality | courtSession.ts:389-451 | invariantAssertions.test.ts › writer tests; courtSession.test.ts › length prefixes… |
 | INV-X-9 | compareOutcomeUtf8 = UTF-8 byte order | courtVoteMachine.ts:131-140 | invariantAssertions.test.ts › comparator oracle |
 | INV-X-10 | shared verdict domain by design | courtConfirmationMachine.ts:18-27,1170 | invariantAssertions.test.ts › domain binding |
+| INV-SETTLE-1 | judge-leaf key contract (winner ≠ group, byte-identical to legacy) | liquidEscrow.ts › buildCourtJudgeLeaf | liquidEscrow.test.ts › buildCourtJudgeLeaf (attested-spend binding) |
 
 ---
 
@@ -1430,6 +1471,20 @@ lack an enforcing test. Ordered by audit significance.
   unchanged (INV-SIGN-12, INV-DKG-9, INV-X-5). Minor-compatible: v0.9.1
   snapshots without the field initialize it to 0 on restore. No remaining
   asymmetry.
+
+- **F-13 (the settlement binding is not an invariant of any machine — A6).**
+  Every machine in this document is a message machine; none of them touches an
+  escrow. The shipped judge leaf (`<winner> CHECKSIGVERIFY <judge> CHECKSIG`)
+  verifies a *transaction* signature, while the court produces a signature over
+  a *Nostr* attestation message (`buildAttestationMessage`) — so nothing
+  in-script ties a verdict to a spend, and v1 releases through a host that
+  validates the attestation first. That makes the platform a release authority
+  (it cannot fabricate or alter a verdict, but it can release without one and
+  can choose among several valid verdicts) and makes the justifying assumption
+  A6, stated in §1.5 rather than hidden. Partial guard: INV-SETTLE-1 pins the
+  judge-leaf key contract. The protocol-side fix (spend-session binding +
+  signer policy) and the Liquid-only `CHECKSIGFROMSTACK` leaf are specified
+  with their gates in `docs/SETTLEMENT-BINDING.md` §2 and §4.
 
 ---
 
