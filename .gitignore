@@ -3,5 +3,6 @@ dist/
 .run-tmp/
 *.log
 .pi-subagents/
+proofs/mechanized/_apalache-out/
 SETTLEMENT_RAILS_PLAN.md
 .repro-artifacts/
