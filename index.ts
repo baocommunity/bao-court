@@ -585,6 +585,7 @@ export {
   BAO_COURT_BATCH_ATTESTATION_KIND,
   buildBatchMerkleTree,
   buildBatchMerkleProof,
+  buildBatchMerkleProofs,
   hashBatchManifest,
   buildBatchAttestationEvent,
   validateBatchAttestationEvent,

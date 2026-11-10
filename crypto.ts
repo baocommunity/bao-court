@@ -288,6 +288,27 @@ export function verifySchnorr(
 const SECP256K1_POINT = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
 
 /**
+ * Bounded memo for {@link isValidSecp256k1Point}.
+ *
+ * Safety argument (perf round 9): point validity is a PURE mathematical
+ * function of the encoding string — `Point.fromHex` is deterministic and
+ * side-effect-free — so a (string → boolean) memo returns bit-identical
+ * answers forever. The cache is module-private (never enumerable on any
+ * machine state, never serialized — the verified-verdict cache lesson), and
+ * bounded: clearing at the cap keeps memory O(cap) even under an adversarial
+ * flood of unique well-formed-but-invalid encodings, at worst re-paying one
+ * 88 µs decode per flooded entry between clears.
+ *
+ * Why it matters: `Point.fromHex` costs ~88 µs on this class of host (x-only
+ * y decompression = one modular exponentiation), and the signing machine's
+ * reducer re-validates EVERY stored nonce commitment (2 points each) on
+ * EVERY transition — O(threshold) decodes per reduce made transitions cost
+ * milliseconds (see docs/benchmarks/BASELINE.md, post-optimization notes).
+ */
+const POINT_VALIDITY_CACHE = new Map<string, boolean>();
+const POINT_VALIDITY_CACHE_MAX = 8192;
+
+/**
  * Validate an x-only or compressed secp256k1 point encoding.
  *
  * A regex alone accepts any 64-char hex string; this additionally verifies
@@ -296,12 +317,20 @@ const SECP256K1_POINT = /^(?:[0-9a-f]{64}|(?:02|03)[0-9a-f]{64})$/;
  */
 export function isValidSecp256k1Point(value: string): boolean {
   if (!SECP256K1_POINT.test(value)) return false;
+  const cached = POINT_VALIDITY_CACHE.get(value);
+  if (cached !== undefined) return cached;
+  let valid = false;
   try {
     Point.fromHex(value.length === 64 ? `02${value}` : value);
-    return true;
+    valid = true;
   } catch {
-    return false;
+    valid = false;
   }
+  if (POINT_VALIDITY_CACHE.size >= POINT_VALIDITY_CACHE_MAX) {
+    POINT_VALIDITY_CACHE.clear();
+  }
+  POINT_VALIDITY_CACHE.set(value, valid);
+  return valid;
 }
 
 export interface DkgProofOfKnowledge {
