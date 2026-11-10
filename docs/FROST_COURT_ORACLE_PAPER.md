@@ -41,7 +41,8 @@ Liquid P2WSH/Taproot escrow (script-enforced) — as pure, host-executed
 protocol math. The jury forms only when a dispute exists (or, for standing
 cohorts, once per epoch), so juror capital is
 never locked for the lifetime of a market. The reference implementation is
-this repository: platform-neutral TypeScript, a 1,300-test-strong suite,
+this repository: platform-neutral TypeScript, a 1,491-test-strong suite
+(live count re-recorded per round in `docs/CROSS_CHECK.md` §1),
 plus a deterministic end-to-end simulation harness that runs the entire
 pipeline — selection, DKG, voting, threshold signing, attestation validation,
 slashing, and both settlement rails — in one process with no network. The

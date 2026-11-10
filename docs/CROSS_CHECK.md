@@ -48,7 +48,7 @@ Conventions for evidence refs:
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,490 passed / 1 skipped (61 files)** — includes the 4 gap-closing tests added this round |
+| Full suite | `npm test` | **1,491 passed / 1 skipped (61 files)** — includes the 5 gap-closing tests added this round |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean |
 | Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (output in the PR body) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (17 min): **13 instances, 3,145,632 states, 128,522,740 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
@@ -68,14 +68,16 @@ breakdown).
 | `CRYPTO_AUDIT.md` §7 + §8 | 21 | 17 | 81.0% | 4 (spec'd S-1…S-4) |
 | Model-check meta-claims | 7 | 7 | 100% | 0 |
 | Bench claims (§11.4) | 7 | 7 | 100% | 0 |
-| Suite / simulation claims | 4 | 3 | 75% | 1 (SUITE-4 — suite-size wording) |
+| Suite / simulation claims | 4 | 4 | 100% | 0 |
 | Error-taxonomy claims (§15) | 5 | 5 | 100% | 0 |
 | Findings (F-1…F-12 dispositions) | 12 | 7 | 58.3% | 5 (F-5, F-7, F-8, F-10, F-11 — documented conventions/holds) |
-| **Total** | **272** | **258** | **94.9%** | **14 open** |
+| **Total** | **272** | **259** | **95.2%** | **13 open** |
 
-Gaps **closed this round** (new pinning tests written): 3 — the stale
-`AUDIT-4` pointer (binding-factor message dependence), the F-4 clawback-reason
-convention, and the A-11/§5.1 `seededScalar` contract. See the Gap register.
+Gaps **closed this round**: 4 — three with new pinning tests (the stale
+`AUDIT-4` pointer / binding-factor message dependence, the F-4 clawback-reason
+convention, the A-11/§5.1 `seededScalar` contract) and SUITE-4 by replacing
+the drifting suite-size adjective with a per-round recorded count. See the
+Gap register.
 
 ---
 
@@ -167,7 +169,7 @@ round` (pinning test written in round 14).
 | FINDING-A-6 | Node-side nonce guard is memory-only; a restarted process can re-consume a persisted commitment package | OPEN | S-3: file-backed Node guard or session-bound `(secret, sessionHash)` HKDF derivation (never share-only, per RFC 9591 §7.3) |
 | FINDING-A-7 | Nothing enforces at the type level that `seededScalar`-derived values never reach a signing nonce | OPEN | S-4: `@: SigningNonce` brand (or lint rule) separating demo-derivation from signing nonces |
 | PAPER-12-5 | Differential parity against a *second independent FROST implementation* (cross-implementation differential) remains open | OPEN | cross-implementation FROST vector exchange once a ChillDKG/BIP-445 reference implementation is available (production gate, not a protocol change) |
-| SUITE-4 | The paper's suite-size claim ("1,300-test-strong") drifts as the suite evolves | OPEN | replace the adjective in the abstract with a pointer to this cross-check (done this round); the live count is recorded in § 1 per round |
+| SUITE-4 | The paper's suite-size claim ("1,300-test-strong") drifts as the suite evolves | CLOSED this round | abstract now carries the live count (1,491) plus a pointer to the per-round recorded count in CROSS_CHECK §1 |
 
 Closed-before-this-round findings (evidence verified today): F-2 (empty-pin
 fail-closed), F-3 (outcome-history barrier), F-9 (commit version bit), F-12
@@ -416,7 +418,7 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | SUITE-1 | suite | doc | doc:docs/CROSS_CHECK.md |
 | SUITE-2 | suite | script | script:package.json |
 | SUITE-3 | suite | test | test:__tests__/simulateCourt.test.ts#runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid; test:__tests__/simulateCourt.test.ts#is reproducible: same seed → same pipeline result (no cross-run drift) |
-| SUITE-4 | suite | gap | gap |
+| SUITE-4 | suite | doc | doc:docs/CROSS_CHECK.md |
 | ER-1 | error-taxonomy | test | test:__tests__/errorTaxonomy.test.ts#every exported error class extends CourtError, keeps its name, and carries a code |
 | ER-2 | error-taxonomy | test | test:__tests__/errorTaxonomy.test.ts#new-family codes are SCREAMING_SNAKE |
 | ER-3 | error-taxonomy | test | test:__tests__/errorTaxonomy.test.ts#base wires cause-chaining through Error(message, { cause }) |
