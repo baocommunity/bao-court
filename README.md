@@ -482,7 +482,7 @@ WS-A Elements taproot spend finalization, appeal coordinator/watcher) are
 implemented and test-covered in this package; rail
 execution, cross-client ceremonies, and contract-enforced phase deadlines
 are the remaining production gates — see the honest list in the paper
-(`docs/FROST_COURT_ORACLE_PAPER.md` §10). The phased hardening/upgrade plan
+(`docs/FROST_COURT_ORACLE_PAPER.md` §12). The phased hardening/upgrade plan
 — including authenticated multi-relay transport, host keys, ChillDKG
 adapter, and bonds/production integration — is tracked in the
 `baocommunity/bao.markets` reference repository.
