@@ -9,6 +9,50 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.9.2] — 2026-11-10
+
+### Fixed (formal-audit findings F-12, F-2, F-3)
+
+- **`courtSigningMachine` + `courtDkgMachine` — F-12 (state-shape change,
+  minor-compat):** both machines now keep the monotonic clock ledger the
+  vote/confirmation machines already had: `latestTimestamp` in state, and
+  every time-bearing event must satisfy `now ≥ latestTimestamp` (typed
+  rejection: `now must not precede a previously observed timestamp`).
+  `abort` carries no clock and leaves the ledger unchanged; tick and
+  terminal semantics are unchanged (a terminal tick stays phase-preserving
+  and may only advance the clock). Old-timestamped replays into a restored
+  signing/DKG snapshot are no longer admissible.
+  **Restore semantics (additive field):** v0.9.1 snapshots without
+  `latestTimestamp` initialize it to `0` on restore — the first
+  time-bearing event writes it, and pre-upgrade replay sequences keep
+  working (they can only be rejected if they genuinely roll the clock
+  backwards). The two idempotent-redelivery paths in the signing machine
+  now return the clock-advanced state frozen (freeze discipline preserved).
+- **`validator` + `batchAttestation` — F-2:** a present-but-empty
+  `expectedGroupPubkey` pin (`''`) is now INVALID — the v1 validator, the
+  v2 validator, `validateCourtAttestation`, and
+  `validateBatchAttestationEvent` all answer typed-invalid
+  (`expectedGroupPubkey pin must be a non-empty group pubkey`) instead of
+  silently disabling the pin. A pin must be a real pubkey or absent; the
+  absent case behaves exactly as before.
+- **`courtConfirmationMachine` — F-3:** the append-only `outcomeHistory` is
+  now barrier-verified before it locks value in: a new
+  `assertValidOutcomeHistory` runs at `resolve_round` (which steers
+  `round_flip` clawbacks from `previous.winnerIndices`) and at `finalize`.
+  The barrier enforces the consecutive 1..k round sequence, ballot closure
+  of every recorded outcome, unique well-formed `winnerEventIds`, and
+  unique valid `winnerIndices` — a hand-restored snapshot with a forged
+  history can no longer direct clawbacks at arbitrary indices.
+
+### Added
+
+- **Exports:** `weightedPriority` is now exported from the package root
+  (it was reachable only via the `./selection` subpath — the juror-kit
+  weight-mode verification needs it from the vendored-visible surface).
+  `IndependentDkgSession` / `IndependentSigningSession` and their state
+  types (`IndependentDkgState`, `IndependentSigningState`,
+  `IndependentSigningSnapshot`) were verified present on the root surface.
+
 ## [0.9.1] — 2026-11-09
 
 ### Fixed (round-3 property-sweep findings)

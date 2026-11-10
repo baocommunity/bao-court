@@ -819,7 +819,9 @@ describe('adversarial: state-object tampering (signing machine)', () => {
   it('non-object events and unknown event types fail closed', () => {
     const state = signingFinalized();
     expect(() => reduceCourtSigningMachine(state, null as never)).toThrow(CourtSigningTransitionError);
-    expect(() => reduceCourtSigningMachine(state, { type: 'strike' } as never)).toThrow(/unknown signing event type/);
+    // A valid clock first (the F-12 monotonic-ledger guard runs at reducer
+    // entry, exactly as on the vote machine), then the unknown-type branch.
+    expect(() => reduceCourtSigningMachine(state, { type: 'strike', now: 10_000 } as never)).toThrow(/unknown signing event type/);
   });
 
   it('accepts exactly-threshold partials and rejects threshold-1', () => {
@@ -892,7 +894,9 @@ describe('adversarial: state-object tampering (DKG machine)', () => {
 
   it('non-object events and unknown event types fail closed', () => {
     expect(() => reduceCourtDkgMachine(dkgMachine(), null as never)).toThrow(CourtDkgTransitionError);
-    expect(() => reduceCourtDkgMachine(dkgMachine(), { type: 'strike' } as never)).toThrow(/unknown DKG event type/);
+    // A valid clock first (the F-12 monotonic-ledger guard runs at reducer
+    // entry, exactly as on the vote machine), then the unknown-type branch.
+    expect(() => reduceCourtDkgMachine(dkgMachine(), { type: 'strike', now: 10 } as never)).toThrow(/unknown DKG event type/);
   });
 
   it('non-iterable roster fails closed at creation', () => {

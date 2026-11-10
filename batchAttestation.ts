@@ -403,6 +403,14 @@ export function validateBatchAttestationEvent(
     if (typeof event !== 'object' || event === null || !Array.isArray(event.tags)) {
       return { valid: false, reason: 'malformed event' };
     }
+    // F-2: a present-but-empty group-key pin is a caller misconfiguration,
+    // NOT "no pin" — fail closed instead of silently disabling the pin.
+    if (ctx?.expectedGroupPubkey !== undefined && ctx.expectedGroupPubkey.length === 0) {
+      return {
+        valid: false,
+        reason: 'expectedGroupPubkey pin must be a non-empty group pubkey',
+      };
+    }
     if (event.kind !== BAO_COURT_BATCH_ATTESTATION_KIND) {
       return {
         valid: false,
