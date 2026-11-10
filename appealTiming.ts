@@ -2,10 +2,22 @@
 
 /**
  * JIT FROST appeal phase timing defaults and boundary helpers.
+ *
+ * Pipeline role: the clock table of the dispute pipeline (paper §5) —
+ * computes when each appeal phase (opt-in, selection, DKG, vote, signing)
+ * starts and ends, and which phase is active at a given instant.
+ *
+ * Purity: all functions are pure over (timings, timestamps); no clock read,
+ * no I/O. Callers pass explicit unix-second instants.
  */
 
 import type { AppealPhase, AppealTimings } from './types';
 
+/**
+ * Production timing defaults for the JIT appeal pipeline: 1-day dispute and
+ * opt-in windows, 2-hour selection deadline, 1-day DKG, 12-hour vote/signing
+ * windows, 7-day claim window, and 6 confirmations for the seed block.
+ */
 export const DEFAULT_APPEAL_TIMINGS: AppealTimings = {
   disputeWindowSeconds: 24 * 60 * 60,       // 1 day
   optInWindowSeconds: 24 * 60 * 60,         // 1 day
@@ -19,6 +31,10 @@ export const DEFAULT_APPEAL_TIMINGS: AppealTimings = {
   seedBlockConfirmations: 6,
 };
 
+/**
+ * Compressed timings for tests and simulations (seconds-scale windows,
+ * 1-confirmation seed blocks). NEVER use in production.
+ */
 export const TEST_APPEAL_TIMINGS: AppealTimings = {
   disputeWindowSeconds: 60,
   optInWindowSeconds: 60,

@@ -2,12 +2,31 @@
 
 /**
  * Deterministic, verifiable jury selection for the BAO Court / FROST oracle.
+ *
+ * Pipeline role: stage 1 of the dispute pipeline (paper §4) — derives the
+ * jury (and backups) from the dispute event id + anchor block hash via an
+ * exponential-clock draw, before any ceremony machine runs. The published
+ * Kind 39002 selection event (`events.ts`) carries the inputs any observer
+ * needs to re-verify the draw with `verifyJurySelection`.
+ *
+ * Purity: every function is pure and deterministic (seed, priorities, and
+ * gates are pure functions of the inputs); the only "clock" is the explicit
+ * `referenceTimeSec` parameter the caller pins for reproducibility. No I/O,
+ * no randomness beyond the seeded derivation.
+ *
+ * Invariants: INV-SEL-1 … INV-SEL-8 in docs/FORMAL_INVARIANTS.md §8.
  */
 
 import { CourtArgumentError, CourtSelectionError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import type { JurorProfile, SelectedJuror } from './types';
 
+/**
+ * Inputs to the deterministic jury draw. Defaults: `jurySize` 5,
+ * `backupCount` 2, `minWotScore` 0, `minAccountAgeDays` 30,
+ * `minStakeSats` 0. See field docs for the eligibility gates and the
+ * `weightFn` purity contract.
+ */
 export interface SelectionParams {
   readonly disputeEventId: string;
   readonly blockHash: string;
@@ -133,6 +152,14 @@ const HEX_CHAR_VALUE = /* @__PURE__ */ (() => {
   return table;
 })();
 
+/**
+ * Derive the 32-byte selection seed:
+ * `SHA-256(disputeEventId_bytes ‖ blockHash_bytes)`. Both inputs must be
+ * 32-byte hex; O(1).
+ *
+ * @throws {@link CourtArgumentError} code `SELECTION_ARGUMENT` on malformed
+ *         hex input.
+ */
 export function deriveSelectionSeed(
   disputeEventId: string,
   blockHash: string,
@@ -145,6 +172,11 @@ export function deriveSelectionSeed(
   );
 }
 
+/**
+ * Per-juror uniform random value in `[0, 1)`:
+ * `SHA-256(seed ‖ pubkeyBytes)` read as an unsigned 32-bit big-endian
+ * integer scaled by 2⁻³². Deterministic; O(1) per juror.
+ */
 export function jurorRandomValue(seed: Uint8Array, pubkey: string): number {
   // Single pre-sized concat — byte-identical input to the previous
   // `[...seed, ...bytesFromHex(pubkey)]` spread, without the intermediate
@@ -163,6 +195,12 @@ export function jurorRandomValue(seed: Uint8Array, pubkey: string): number {
   return u32 / 2 ** 32;
 }
 
+/**
+ * Exponential-clock priority for stake-weighted selection:
+ * `-ln(r) / sqrt(stakeSats)`. With `r` uniform on (0, 1), the minimum
+ * priority over the pool wins with probability ∝ `sqrt(stake)` (quadratic
+ * stake weighting). `r` is clamped into (0, 1). O(1).
+ */
 export function quadraticPriority(random: number, stakeSats: number): number {
   let r = random;
   if (r <= 0) r = Number.MIN_VALUE;
@@ -207,6 +245,13 @@ function jurorWeight(j: JurorProfile, weightFn: (juror: JurorProfile) => number)
   return w;
 }
 
+/**
+ * Apply the eligibility gates to the juror pool: WOT score, minimum stake,
+ * account age (fail-closed on future registration timestamps), market
+ * category, the 1%-of-market-volume gate (waivable in zero-stake mode),
+ * confirmed stake commitments, excluded pubkeys, and (weightFn mode) a
+ * positive weight. Pure; O(n) over the pool.
+ */
 export function filterEligibleJurors(
   pool: readonly JurorProfile[],
   params: ResolvedSelectionParams,
@@ -241,6 +286,10 @@ export function filterEligibleJurors(
   });
 }
 
+/**
+ * A completed draw: the selected jury plus ordered backups (next-best
+ * priorities), each with a 1-based roster `idx`.
+ */
 export interface JuryWithBackups {
   readonly selected: SelectedJuror[];
   readonly backups: SelectedJuror[];
@@ -296,6 +345,26 @@ function toSelectedJurors(
   return selected;
 }
 
+/**
+ * Select the jury for a dispute by deterministic exponential-clock draw
+ * (paper §4; INV-SEL-1…8).
+ *
+ * Pure: same inputs always yield the same roster, so any observer can
+ * re-derive it. O(n log n) over the pool.
+ *
+ * @throws {@link CourtSelectionError} code `SELECTION_STATE` (invariant
+ *         INV-SEL-6) when fewer than `jurySize` jurors are eligible;
+ *         {@link CourtArgumentError} code `SELECTION_ARGUMENT` on malformed
+ *         params.
+ *
+ * @example
+ * ```ts
+ * const jury = selectJury(pool, {
+ *   disputeEventId, blockHash, marketCategory: 'sports',
+ *   marketVolumeSats: 1_000_000,
+ * });
+ * ```
+ */
 export function selectJury(
   pool: readonly JurorProfile[],
   params: SelectionParams,
@@ -309,6 +378,14 @@ export function selectJury(
   return toSelectedJurors(scoreAndSort(eligible, seed, p), p.jurySize);
 }
 
+/**
+ * {@link selectJury} plus ordered backups: the `jurySize` winners followed
+ * by the `backupCount` next-best priorities, from a single shared draw.
+ * Pure; O(n log n).
+ *
+ * @throws {@link CourtSelectionError} / {@link CourtArgumentError} under the
+ *         same conditions as {@link selectJury}.
+ */
 export function selectJuryWithBackups(
   pool: readonly JurorProfile[],
   params: SelectionParams,

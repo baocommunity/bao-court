@@ -81,10 +81,34 @@ import { bytesToHex } from '@noble/hashes/utils.js';
  * boundary must authenticate authors and roster indices before dispatching
  * events into the reducer. Hosts inject clocks by passing `now`; the machine
  * is deterministic, freeze-safe, and snapshot-friendly (plain JSON state).
+ *
+ * Pipeline role: stage 3 of the dispute pipeline (paper §6, "Universal
+ * confirmation") — every market outcome, disputed or not, passes through
+ * this machine; a challenged case descends into the ladder rounds before
+ * any attestation is signed.
+ *
+ * Purity: factory and reducer are pure functions of (state, event) with an
+ * injected clock (`now` on each event); no I/O, no randomness, no wall
+ * clock. All hash inputs go through `CanonicalWriter`.
+ *
+ * Invariants: INV-CONF-1 … INV-CONF-36 in docs/FORMAL_INVARIANTS.md §5;
+ * verified by exhaustive model checking (`__tests__/modelChecking.test.ts`).
  */
 
+/**
+ * Domain string for canonical confirmation hashes (session + juror + case
+ * binding for a public confirmation endorsement).
+ */
 export const COURT_CONFIRMATION_DOMAIN = 'BAO-Court/Confirm/v1';
 
+/**
+ * Phases of the universal-confirmation machine: `confirm_open` →
+ * `confirm_closed` → `challenge_window` → (`fee_settlement` → `final`) or
+ * the ladder path (`ladder_pending` → `ladder_vote_open` →
+ * `ladder_vote_closed` → `round_resolved` → escalate/concede, eventually
+ * `fee_settlement` → `final`), with terminal-failure phases `expired` and
+ * `aborted`.
+ */
 export type CourtConfirmationPhase =
   | 'confirm_open'
   | 'confirm_closed'
@@ -98,17 +122,27 @@ export type CourtConfirmationPhase =
   | 'expired'
   | 'aborted';
 
+/**
+ * Terminal failure of a confirmation case: deadline expiry (`expired`) or
+ * operator abort (`aborted`), with a human-readable reason.
+ */
 export interface CourtConfirmationFailure {
   readonly phase: 'expired' | 'aborted';
   readonly reason: string;
 }
 
+/** One accepted public confirmation: roster index, canonical hash, event id. */
 export interface CourtConfirmationRecord {
   readonly idx: number;
   readonly confirmHash: string;
   readonly eventId: string;
 }
 
+/**
+ * One accepted challenge against the proposed outcome, carrying the verified
+ * bond witness (txid + bond-ownership proof hash) the host verified BEFORE
+ * dispatching the event.
+ */
 export interface CourtChallengeRecord {
   readonly idx: number;
   /** 32-byte lowercase hex transaction id of the escrowed challenge bond. */
@@ -122,18 +156,30 @@ export interface CourtChallengeRecord {
   readonly eventId: string;
 }
 
+/** One ladder-round mass vote: roster index, outcome, source event id. */
 export interface CourtMassVoteRecord {
   readonly idx: number;
   readonly outcome: string;
   readonly eventId: string;
 }
 
+/**
+ * A juror flagged for stake clawback: `overturned_confirmation` (their
+ * confirmation was overturned by the round that challenged it, applied once)
+ * or `round_flip` (they voted with a majority the next round rejected).
+ */
 export interface CourtClawbackFlag {
   readonly idx: number;
   readonly reason: string;
   readonly round: number;
 }
 
+/**
+ * Final verdict of a confirmation case: the last resolved round's winner
+ * (or the confirmed proposal when never challenged), the sorted supporting
+ * event ids, the canonical verdict hash, and whether the proposed outcome
+ * survived.
+ */
 export interface CourtConfirmationVerdict {
   readonly outcome: string;
   /** Supporting event ids, sorted lexicographically for canonical hashing. */
@@ -169,6 +215,11 @@ interface LadderRound {
   readonly roundRoster?: readonly number[];
 }
 
+/**
+ * Immutable state of one universal-confirmation case. Deep-frozen by the
+ * factory and reducer; `latestTimestamp` is the monotonic-clock ledger
+ * (INV-CONF monotonicity); `outcomeHistory` is append-only.
+ */
 export interface CourtConfirmationMachineState {
   readonly sessionHash: string;
   readonly proposalHash: string;
@@ -208,6 +259,15 @@ export interface CourtConfirmationMachineState {
   readonly failure?: CourtConfirmationFailure;
 }
 
+/**
+ * Input events for the confirmation reducer: `accept_confirmation`,
+ * `close_confirmations`, `open_challenge_window`, `accept_challenge`,
+ * `close_challenge_window`, `open_ladder_round`, `accept_mass_vote`,
+ * `close_ladder_round`, `resolve_round`, `escalate`, `concede`,
+ * `record_fee`, `flag_clawback`, `finalize`, `tick`, and `abort`. Every
+ * time-bearing event carries its own `now` (injected clock); `abort` and
+ * `flag_clawback`'s reason carry the operator's justification.
+ */
 export type CourtConfirmationMachineEvent =
   | {
       readonly type: 'accept_confirmation';
@@ -264,6 +324,10 @@ export type CourtConfirmationMachineEvent =
   | { readonly type: 'tick'; readonly now: number }
   | { readonly type: 'abort'; readonly reason: string };
 
+/**
+ * Error thrown for any illegal confirmation-machine transition or malformed
+ * input. Code: `CONFIRMATION_TRANSITION` (docs/FORMAL_INVARIANTS.md §15).
+ */
 export class CourtConfirmationTransitionError extends CourtError {
   constructor(message: string, options?: CourtErrorOptions) {
     super('CONFIRMATION_TRANSITION', message, options);
@@ -623,6 +687,20 @@ function assertValidConfirmationLedger(state: CourtConfirmationMachineState): vo
   }
 }
 
+/**
+ * Create the initial state of a universal-confirmation case (phase
+ * `confirm_open`).
+ *
+ * Validates and freezes the configuration: 32-byte-hex session and proposal
+ * hashes, a bounded proposed outcome, 2–256 unique allowed outcomes, a
+ * canonical roster of ≥ 3 participants (fail-closed at creation — a smaller
+ * panel could never resolve a challenged case), quorum/d deadlines, and
+ * ladder bounds (`maxLadderRounds` 1..5, default 2).
+ *
+ * @returns A deep-frozen initial {@link CourtConfirmationMachineState}.
+ * @throws {@link CourtConfirmationTransitionError} on any malformed
+ *         parameter.
+ */
 export function createCourtConfirmationMachine(params: {
   readonly sessionHash: string;
   /** 32-byte lowercase hex commitment to the proposed outcome + evidence. */
@@ -750,6 +828,20 @@ export function createCourtConfirmationMachine(params: {
   });
 }
 
+/**
+ * Apply one event to the confirmation-machine state and return the next
+ * state.
+ *
+ * Pure and fail-closed: validates event shape, state array fields (tamper
+ * barrier), ladder structural integrity, and the monotonic clock ledger
+ * before any transition. Complexity O(ledger size) for acceptance events,
+ * O(votes) for round resolution.
+ *
+ * @returns A new deep-frozen state; the input state is never mutated.
+ * @throws {@link CourtConfirmationTransitionError} on any illegal
+ *         transition (out-of-phase event, duplicate confirmation, unproven
+ *         challenge bond, clock rollback, event after a terminal phase).
+ */
 export function reduceCourtConfirmationMachine(
   state: CourtConfirmationMachineState,
   event: CourtConfirmationMachineEvent,

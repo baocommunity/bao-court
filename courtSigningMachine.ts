@@ -29,6 +29,20 @@ import {
  * This module performs no FROST cryptographic verification; the boundary must
  * verify partial signatures against the certified verification shares and the
  * finalized commitment set before dispatching events into the reducer.
+ *
+ * Pipeline role: final stage of the dispute pipeline (paper §5, ceremony
+ * tail) — turns a frozen verdict hash into a published kind-39007
+ * attestation via one FROST signing attempt (paper §2 for the FROST
+ * round structure).
+ *
+ * Purity: factory and reducer are pure functions of (state, event) with an
+ * injected clock (`now` on each event); no I/O, no randomness, no wall
+ * clock. All hash inputs go through `CanonicalWriter`.
+ *
+ * Invariants: INV-SIGN-1 … INV-SIGN-15 in docs/FORMAL_INVARIANTS.md §6,
+ * including the A-1 signer-set contract and the F-12 monotonic clock
+ * ledger; verified by exhaustive model checking
+ * (`__tests__/modelChecking.test.ts`).
  */
 
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -36,8 +50,19 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { isValidSecp256k1Point } from './crypto';
 import { CanonicalWriter } from './courtSession';
 
+/**
+ * Domain string for canonical signing-session hashes (session + verdict +
+ * outcome + attempt + threshold + signer set).
+ */
 export const COURT_SIGNING_SESSION_DOMAIN = 'BAO-Court/SigningSession/v1';
 
+/**
+ * Phases of one FROST signing attempt: `intent` → `nonce_commit` →
+ * `commitment_set_final` → `partial_sign` → `aggregate` →
+ * `attestation_published`, with terminal-failure phases `expired`,
+ * `aborted_peer` (equivocation/blame), `aborted_coordinator`, and
+ * `aborted_network`.
+ */
 export type CourtSigningPhase =
   | 'intent'
   | 'nonce_commit'
@@ -50,11 +75,20 @@ export type CourtSigningPhase =
   | 'aborted_coordinator'
   | 'aborted_network';
 
+/**
+ * The abort-family phases: which party caused the abort (a signer/peer, the
+ * coordinator, or the network layer).
+ */
 export type CourtSigningFailurePhase = Extract<
   CourtSigningPhase,
   'aborted_peer' | 'aborted_coordinator' | 'aborted_network'
 >;
 
+/**
+ * Terminal failure of a signing attempt: deadline expiry or one of the
+ * abort phases, a human-readable reason, and optionally the blamed roster
+ * index (nonce equivocation, invalid partial).
+ */
 export interface CourtSigningFailure {
   readonly phase: CourtSigningFailurePhase | 'expired';
   readonly reason: string;
@@ -72,6 +106,25 @@ export interface CourtSigningPartialRecord {
   readonly psig: string;
 }
 
+/** One accepted nonce commitment: roster index + binder/hidden public nonces. */
+export interface CourtSigningCommitmentRecord {
+  readonly idx: number;
+  readonly binderPn: string;
+  readonly hiddenPn: string;
+}
+
+/** One accepted partial signature: roster index + hex partial sig. */
+export interface CourtSigningPartialRecord {
+  readonly idx: number;
+  readonly psig: string;
+}
+
+/**
+ * Immutable state of one FROST signing attempt. Deep-frozen by factory and
+ * reducer; `latestTimestamp` is the monotonic-clock ledger (INV-SIGN/F-12);
+ * `finalizedSignerSet` is the frozen sorted signer set whose commitments
+ * define the signing context (A-1).
+ */
 export interface CourtSigningMachineState {
   readonly signingSessionHash: string;
   readonly sessionHash: string;
@@ -93,6 +146,12 @@ export interface CourtSigningMachineState {
   readonly failure?: CourtSigningFailure;
 }
 
+/**
+ * Input events for the signing reducer: `start`, `accept_commitment`,
+ * `close_commitments`, `accept_partial`, `aggregate`, `publish`, `tick`,
+ * and `abort` (with failure phase, reason, and optional blamed index). Every
+ * time-bearing event carries its own `now` (injected clock).
+ */
 export type CourtSigningMachineEvent =
   | { readonly type: 'start'; readonly now: number }
   | {
@@ -119,6 +178,10 @@ export type CourtSigningMachineEvent =
       readonly blamedIdx?: number;
     };
 
+/**
+ * Error thrown for any illegal signing-machine transition or malformed
+ * input. Code: `SIGNING_TRANSITION` (docs/FORMAL_INVARIANTS.md §15).
+ */
 export class CourtSigningTransitionError extends CourtError {
   constructor(message: string, options?: CourtErrorOptions) {
     super('SIGNING_TRANSITION', message, options);
@@ -305,6 +368,18 @@ function assertBeforeDeadline(state: CourtSigningMachineState, now: number): voi
   );
 }
 
+/**
+ * Create the initial state of one FROST signing attempt (phase `intent`).
+ *
+ * Validates and freezes the configuration: 32-byte-hex session and verdict
+ * hashes, a bounded canonical outcome, a canonical roster (≤ 10 000),
+ * 1 ≤ threshold ≤ n, and a positive deadline. The attempt number binds the
+ * machine to one signing attempt; every later attempt gets a fresh machine
+ * (invalidating prior nonce commitments).
+ *
+ * @returns A deep-frozen initial {@link CourtSigningMachineState}.
+ * @throws {@link CourtSigningTransitionError} on any malformed parameter.
+ */
 export function createCourtSigningMachine(params: {
   readonly sessionHash: string;
   readonly verdictHash: string;
@@ -373,6 +448,18 @@ export function createCourtSigningMachine(params: {
   });
 }
 
+/**
+ * Apply one event to the signing-machine state and return the next state.
+ *
+ * Pure and fail-closed: validates event shape, state array fields (tamper
+ * barrier), monotonic non-decreasing `now`, and phase legality before any
+ * transition. Duplicate nonce commitments abort with blame; aggregation
+ * happens outside the machine (the `aggregate` event carries the already
+ * verified final signature).
+ *
+ * @returns A new deep-frozen state; the input state is never mutated.
+ * @throws {@link CourtSigningTransitionError} on any illegal transition.
+ */
 export function reduceCourtSigningMachine(
   state: CourtSigningMachineState,
   event: CourtSigningMachineEvent,

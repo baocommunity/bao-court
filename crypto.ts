@@ -26,6 +26,11 @@ function modN(x: bigint): bigint {
   return r < 0n ? r + SCALAR_ORDER : r;
 }
 
+/**
+ * Generate a fresh 32-byte random value as 64-char lowercase hex, using the
+ * platform CSPRNG (`crypto.getRandomValues`). For nonces, salts, and
+ * challenge values; O(1).
+ */
 export function randomHex32(): string {
   return bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
 }
@@ -110,6 +115,7 @@ export const ATTESTATION_V2_FIELD_TAGS = {
   batchMerkleRoot: 6,
 } as const;
 
+/** Field name of a v2 attestation-message extension entry (canonical order in {@link ATTESTATION_V2_FIELD_TAGS}). */
 export type AttestationV2Field = keyof typeof ATTESTATION_V2_FIELD_TAGS;
 
 /**
@@ -217,6 +223,21 @@ function assertSafeUint(value: number, label: string): void {
  * TALLY that produced the outcome — an attestation for an outcome that lost
  * the vote is structurally invalid, not merely suspicious.
  */
+/**
+ * Build the v1 canonical attestation message that jurors sign:
+ * `SHA-256(AttestationMessage/v1 ‖ marketId ‖ outcome ‖ round ‖ [disputeId]
+ * ‖ [verdictHash])` over canonical length-prefixed fields. Pure; O(1) in
+ * field sizes. The v1 shape is FROZEN — existing attestations must verify
+ * forever.
+ *
+ * @example
+ * ```ts
+ * const message = buildAttestationMessage(marketId, 'YES', 1,
+ *   disputeEventId, verdictHash);
+ * // signers produce partials over `message`; observers re-derive it
+ * // inside validateAttestationEvent.
+ * ```
+ */
 export function buildAttestationMessage(
   marketId: string,
   outcome: string,
@@ -257,6 +278,13 @@ export function aggregatePublicNonce(
   return frost.Lib.get_group_pubnonce(sorted, binders);
 }
 
+/**
+ * Verify a FROST group signature over a message under a group public key.
+ *
+ * @returns `true` when the signature is valid; `false` on any verification
+ *          failure (including malformed hex — fail-closed, never throws).
+ *          O(1) cryptographic work.
+ */
 export function verifyFinalSignature(
   groupPubkey: string,
   messageHex: string,
@@ -270,6 +298,12 @@ export function verifyFinalSignature(
   );
 }
 
+/**
+ * Verify a BIP-340 Schnorr signature (x-only pubkey, 64-byte sig).
+ *
+ * @returns `true` when valid; `false` on any failure including malformed
+ *          inputs (never throws). O(1) cryptographic work.
+ */
 export function verifySchnorr(
   pubkeyHex: string,
   messageHex: string,
@@ -334,6 +368,11 @@ export function isValidSecp256k1Point(value: string): boolean {
   return valid;
 }
 
+/**
+ * A Schnorr proof of knowledge of a DKG polynomial's constant coefficient
+ * (Fiat–Shamir challenge under {@link dkgPokDomain}): nonce commitment and
+ * scalar response, both hex.
+ */
 export interface DkgProofOfKnowledge {
   /** Public nonce R = r*G in hex (compressed). */
   readonly nonce: string;

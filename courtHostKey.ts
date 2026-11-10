@@ -535,6 +535,13 @@ function freezeEnvelope(
  * `signer`. The secret transits as plaintext only inside the signer's NIP-44
  * session-key derivation; intermediate byte copies are zeroized before
  * return (see the module header for the honest JS guarantee limits).
+ *
+ * @example
+ * ```ts
+ * const key = generateCourtHostKey({ now: nowSec });
+ * const envelope = await createCourtHostKeyBackup(key, signer);
+ * await persist(envelope); // host-owned durable storage
+ * ```
  */
 export async function createCourtHostKeyBackup(
   key: CourtHostKey,

@@ -30,14 +30,23 @@ interface NostrEventLike {
   sig?: string;
 }
 
+/** Kind number for addressable dispute-open events (`NIP-33` parameterized replaceable). */
 export const BAO_COURT_DISPUTE_KIND = 38025;
+/** Kind number for juror candidacy (bond pledge) events. */
 export const BAO_COURT_JUROR_CANDIDACY_KIND = 39001;
+/** Kind number for published jury-selection events. */
 export const BAO_COURT_SELECTION_KIND = 39002;
+/** Kind number for per-juror DKG commitment (VSS + proof of knowledge) events. */
 export const BAO_COURT_DKG_COMMITMENT_KIND = 38031;
+/** Kind number for per-juror vote-commit (`H(outcome ‖ salt)`) events. */
 export const BAO_COURT_VOTE_COMMIT_KIND = 39004;
+/** Kind number for per-juror vote-reveal (outcome + salt) events. */
 export const BAO_COURT_VOTE_REVEAL_KIND = 39014;
+/** Kind number for per-juror FROST signing commitment (nonce package) events. */
 export const BAO_COURT_FROST_COMMIT_KIND = 39005;
+/** Kind number for per-juror FROST signing reveal (public nonce + partial signature) events. */
 export const BAO_COURT_FROST_REVEAL_KIND = 39006;
+/** Kind number for the cohort's published FROST attestation (the verdict event). */
 export const BAO_COURT_ATTESTATION_KIND = 39007;
 
 interface DisputeEventParams {
@@ -144,6 +153,30 @@ const MAX_EVIDENCE_HASHES = 64;
 /** Maximum number of supporting event IDs per attestation. */
 const MAX_SUPPORTING_IDS = 10_000;
 
+/**
+ * Build the Kind 38025 dispute-open event template.
+ *
+ * Sorts the evidence hashes canonically (lowercase, ascending) so the
+ * template is byte-deterministic for a given logical input regardless of
+ * insertion order.
+ *
+ * @param params - dispute coordinates; `evidenceHashes` is capped at 64.
+ * @returns An unsigned `EventTemplate` (kind 38025). Callers finalize with
+ *          their signer and broadcast; this function does no I/O.
+ * @throws {@link CourtArgumentError} code `NOSTR_EVENT_ARGUMENT` when
+ *         `evidenceHashes.length > 64`.
+ *
+ * @example
+ * ```ts
+ * const tpl = buildDisputeEvent({
+ *   marketId, disputeId: crypto.randomUUID(),
+ *   originalOutcome: 'YES', proposedOutcome: 'NO',
+ *   challengerPubkey, evidenceHashes: [sha256Hex(evidence)],
+ *   disputeDeadline: Math.floor(Date.now() / 1000) + 86400,
+ * });
+ * await pool.publish(relays, finalizeEvent(tpl, sk));
+ * ```
+ */
 export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
   if (params.evidenceHashes.length > MAX_EVIDENCE_HASHES) {
     throw new CourtArgumentError('NOSTR_EVENT_ARGUMENT', 
@@ -185,6 +218,14 @@ export function buildDisputeEvent(params: DisputeEventParams): EventTemplate {
   };
 }
 
+/**
+ * Build the Kind 39001 juror-candidacy (bond pledge) event template.
+ *
+ * Embeds the candidate's profile and bond evidence (amount, address, and
+ * optional txid/vout/script/deadline) in both tags and JSON content.
+ *
+ * @returns An unsigned `EventTemplate` (kind 39001); no I/O, no signing.
+ */
 export function buildJurorCandidacyEvent(
   params: JurorCandidacyParams,
 ): EventTemplate {
@@ -237,6 +278,18 @@ export function buildJurorCandidacyEvent(
   };
 }
 
+/**
+ * Parse a Kind 39001 candidacy event into a {@link JurorProfile}.
+ *
+ * Malformed numeric fields are rejected rather than coerced to `NaN`; the
+ * stake commitment is always returned with `status: 'pending'` — the parser
+ * never fabricates on-chain confirmation (admission authorities stamp status
+ * after their own bond verification).
+ *
+ * @returns The parsed profile, or `null` when the event is not a valid
+ *          candidacy (wrong kind, bad pubkey, unparsable content, or
+ *          non-finite numerics). Never throws.
+ */
 export function parseJurorCandidacyEvent(
   event: NostrEventLike,
 ): JurorProfile | null {
@@ -322,6 +375,15 @@ export function parseJurorCandidacyEvent(
   }
 }
 
+/**
+ * Build the Kind 39002 jury-selection event template.
+ *
+ * Publishes the deterministic draw outcome: seed, anchor block hash, and the
+ * selected + backup juror rosters. Observers re-run
+ * {@link verifyJurySelection} against these fields.
+ *
+ * @returns An unsigned `EventTemplate` (kind 39002); no I/O, no signing.
+ */
 export function buildSelectionEvent(
   params: SelectionEventParams,
 ): EventTemplate {
@@ -364,12 +426,25 @@ export function buildSelectionEvent(
   };
 }
 
+/** One juror entry in a selection event's selected/backup roster. */
 export interface SelectedJurorEntry {
+  /** 1-based roster index of the selected juror. */
   idx: number;
+  /** Nostr (x-only) public key, hex. */
   pubkey: string;
+  /** Bonded stake in satoshis at selection time. */
   stake: number;
 }
 
+/**
+ * Parse a Kind 39002 selection event.
+ *
+ * Juror indices must be positive integers and stakes finite, else the event
+ * is rejected.
+ *
+ * @returns The parsed selection payload, or `null` on any structural
+ *          failure. Never throws.
+ */
 export function parseSelectionEvent(
   event: NostrEventLike,
 ): { disputeId: string; marketId: string; selected: SelectedJurorEntry[]; backups: SelectedJurorEntry[]; seed: string; blockHash: string } | null {
@@ -406,6 +481,14 @@ export function parseSelectionEvent(
   }
 }
 
+/**
+ * Build the Kind 38031 DKG-commitment event template for one juror.
+ *
+ * Carries the VSS polynomial commitments, threshold, phase nonce, and the
+ * Schnorr proof of knowledge of the juror's secret polynomial share.
+ *
+ * @returns An unsigned `EventTemplate` (kind 38031); no I/O, no signing.
+ */
 export function buildDkgCommitmentEvent(
   params: DkgCommitmentParams,
 ): EventTemplate {
@@ -436,6 +519,14 @@ export function buildDkgCommitmentEvent(
   };
 }
 
+/**
+ * Parse a Kind 38031 DKG-commitment event.
+ *
+ * @returns `{ disputeId, jurorIdx, jurorPubkey, threshold, pok, vssCommits,
+ *            phaseNonce }`, or `null` when the kind, author pubkey,
+ *            proof-of-knowledge fields, phase nonce, or juror index are
+ *            missing/invalid. Never throws.
+ */
 export function parseDkgCommitmentEvent(
   event: NostrEventLike,
 ): { disputeId: string; jurorIdx: number; jurorPubkey: string; threshold: number; pok: DkgProofOfKnowledge; vssCommits: string[]; phaseNonce: string } | null {
@@ -479,6 +570,14 @@ export function parseDkgCommitmentEvent(
   }
 }
 
+/**
+ * Build the Kind 39004 vote-commit event template for one juror.
+ *
+ * Publishes `commitHash = H(outcome ‖ salt)` (domain
+ * {@link COURT_VOTE_COMMIT_DOMAIN}); the matching reveal is a Kind 39014.
+ *
+ * @returns An unsigned `EventTemplate` (kind 39004); no I/O, no signing.
+ */
 export function buildVoteCommitEvent(params: VoteCommitParams): EventTemplate {
   const tags: string[][] = [
     dTag(params.disputeId, params.jurorIdx),
@@ -503,6 +602,14 @@ export function buildVoteCommitEvent(params: VoteCommitParams): EventTemplate {
   };
 }
 
+/**
+ * Build the Kind 39014 vote-reveal event template for one juror.
+ *
+ * Publishes the plaintext outcome and salt; verifiers check
+ * `hashCommit(outcome, salt) === commitHash` from the earlier commit event.
+ *
+ * @returns An unsigned `EventTemplate` (kind 39014); no I/O, no signing.
+ */
 export function buildVoteRevealEvent(params: VoteRevealParams): EventTemplate {
   const tags: string[][] = [
     dTag(params.disputeId, params.jurorIdx),
@@ -529,6 +636,12 @@ export function buildVoteRevealEvent(params: VoteRevealParams): EventTemplate {
   };
 }
 
+/**
+ * Parse a Kind 39004 vote-commit event.
+ *
+ * @returns `{ disputeId, jurorIdx, pubkey, commitHash }`, or `null` when the
+ *          kind, author pubkey, or juror index is invalid. Never throws.
+ */
 export function parseVoteCommitEvent(
   event: NostrEventLike,
 ): { disputeId: string; jurorIdx: number; pubkey: string; commitHash: string } | null {
@@ -552,6 +665,12 @@ export function parseVoteCommitEvent(
   }
 }
 
+/**
+ * Parse a Kind 39014 vote-reveal event.
+ *
+ * @returns `{ disputeId, jurorIdx, pubkey, outcome, salt }`, or `null` when
+ *          the kind, author pubkey, or juror index is invalid. Never throws.
+ */
 export function parseVoteRevealEvent(
   event: NostrEventLike,
 ): { disputeId: string; jurorIdx: number; pubkey: string; outcome: string; salt: string } | null {
@@ -577,6 +696,14 @@ export function parseVoteRevealEvent(
   }
 }
 
+/**
+ * Build the Kind 39005 FROST signing-commitment event template for one juror.
+ *
+ * Publishes the binder/hidden public-nonce package from the FROST round-1
+ * commitment; the matching partial signature is a Kind 39006 reveal.
+ *
+ * @returns An unsigned `EventTemplate` (kind 39005); no I/O, no signing.
+ */
 export function buildFrostCommitEvent(
   params: FrostCommitParams,
 ): EventTemplate {
@@ -604,6 +731,14 @@ export function buildFrostCommitEvent(
   };
 }
 
+/**
+ * Build the Kind 39006 FROST signing-reveal event template for one juror.
+ *
+ * Publishes the public nonce, the BIP-340 partial signature, and the juror's
+ * FROST group-share public key.
+ *
+ * @returns An unsigned `EventTemplate` (kind 39006); no I/O, no signing.
+ */
 export function buildFrostRevealEvent(params: FrostRevealParams): EventTemplate {
   const tags: string[][] = [
     dTag(params.disputeId, params.jurorIdx),
@@ -633,6 +768,13 @@ export function buildFrostRevealEvent(params: FrostRevealParams): EventTemplate 
   };
 }
 
+/**
+ * Parse a Kind 39005 FROST signing-commitment event.
+ *
+ * @returns `{ disputeId, jurorIdx, pubkey, commitmentPackage }`, or `null`
+ *          when the kind, author pubkey, juror index, or either nonce field
+ *          is missing/invalid. Never throws.
+ */
 export function parseFrostCommitEvent(
   event: NostrEventLike,
 ): { disputeId: string; jurorIdx: number; pubkey: string; commitmentPackage: { idx: number; binder_pn: string; hidden_pn: string } } | null {
@@ -666,6 +808,13 @@ export function parseFrostCommitEvent(
   }
 }
 
+/**
+ * Parse a Kind 39006 FROST signing-reveal event.
+ *
+ * @returns `{ disputeId, jurorIdx, pubkey, publicNonce, partialSig,
+ *            frostPubkey }`, or `null` when any required field is missing or
+ *          the kind/author/juror index is invalid. Never throws.
+ */
 export function parseFrostRevealEvent(
   event: NostrEventLike,
 ): { disputeId: string; jurorIdx: number; pubkey: string; publicNonce: { idx: number; binder_pn: string; hidden_pn: string }; partialSig: string; frostPubkey: string } | null {
@@ -705,6 +854,27 @@ export function parseFrostRevealEvent(
   }
 }
 
+/**
+ * Parse a Kind 39007 (or legacy Kind 89) FROST attestation event.
+ *
+ * Structural validation only: hex shape of the group pubkey, public nonce,
+ * and 128-hex-char signature, plus required tags/content. This does NOT
+ * verify the Schnorr signature — feed the result through
+ * {@link validateAttestationEvent} (validator module) for cryptographic
+ * validation against the empaneled signer set.
+ *
+ * @returns The parsed {@link FrostAttestation}, or `null` on any structural
+ *          failure. Never throws.
+ *
+ * @example
+ * ```ts
+ * const parsed = parseAttestationEvent(rawEvent);
+ * if (parsed) {
+ *   const v = validateAttestationEvent(rawEvent, { groupPubkey, ... });
+ *   if (v.valid) acceptVerdict(parsed);
+ * }
+ * ```
+ */
 export function parseAttestationEvent(
   event: NostrEventLike,
 ): FrostAttestation | null {
@@ -761,6 +931,17 @@ export function parseAttestationEvent(
   };
 }
 
+/**
+ * Build the FROST attestation event template (kind 39007, or 89 for legacy
+ * compat) from a signed {@link FrostAttestation}.
+ *
+ * The attestation's `supportingEventIds` become `e`-tags with `mention`
+ * marker: Nostr signs tags, so the event id commits to the exact reveal set
+ * the verdict was tallied from. Capped at 10 000 supporting ids.
+ *
+ * @throws {@link CourtArgumentError} code `NOSTR_EVENT_ARGUMENT` when
+ *         `supportingEventIds` exceeds 10 000 entries.
+ */
 export function buildDisputeAttestationEvent(
   params: {
     attestation: FrostAttestation;
@@ -845,10 +1026,17 @@ export function buildAttestationEvent(
   );
 }
 
+/**
+ * Outcome of a structural {@link validateSelectionEvent} check.
+ */
 export interface SelectionValidationResult {
+  /** `true` when the event satisfies every structural rule. */
   readonly valid: boolean;
+  /** Human-readable failure reason; present only when `valid` is `false`. */
   readonly error?: string;
+  /** Parsed selected roster, present when parsing reached that stage. */
   readonly selected?: { idx: number; pubkey: string; stake: number }[];
+  /** Parsed backup roster, present when parsing reached that stage. */
   readonly backups?: { idx: number; pubkey: string; stake: number }[];
 }
 

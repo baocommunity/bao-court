@@ -24,13 +24,22 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { CanonicalWriter } from './courtSession';
 
+/** Domain string for canonical keeper-designation record hashes. */
 export const COURT_KEEPER_DESIGNATION_DOMAIN = 'BAO-Court/KeeperDesignation/v1';
+/** Domain string for canonical keeper-commitment record hashes. */
 export const COURT_KEEPER_COMMITMENT_DOMAIN = 'BAO-Court/KeeperCommitment/v1';
+/** Domain string for the seed-derived keeper candidate stream. */
 export const COURT_KEEPER_STREAM_DOMAIN = 'BAO-Court/KeeperStream/v1';
 
 /** Settlement branch a keeper secret locks. */
 export type CourtKeeperBranch = 'yes' | 'no';
 
+/**
+ * Machine-readable failure codes for keeper operations:
+ * `invalid_params`, `roster_exhausted` (no eligible keeper pair for the
+ * exclusions), `keeper_not_designated`, `commitment_mismatch`,
+ * `reveal_mismatch`, `wrong_branch`.
+ */
 export type CourtKeeperErrorCode =
   | 'invalid_params'
   | 'roster_exhausted'
@@ -39,6 +48,11 @@ export type CourtKeeperErrorCode =
   | 'reveal_mismatch'
   | 'wrong_branch';
 
+/**
+ * Error thrown by keeper designation/commitment/reveal checks. `code` is
+ * always one of {@link CourtKeeperErrorCode}; see
+ * docs/FORMAL_INVARIANTS.md §15 for the taxonomy entry.
+ */
 export class CourtKeeperError extends CourtError {
   declare readonly code: CourtKeeperErrorCode;
 
@@ -57,6 +71,11 @@ export interface CourtKeeperExclusions {
   readonly exposedPubkeys: readonly string[];
 }
 
+/**
+ * Inputs to keeper designation: the selection seed, settlement-manifest
+ * hash, contract id, roster, and (inherited) exclusions. Deterministic —
+ * every observer derives the same keeper pair.
+ */
 export interface DesignateKeepersParams extends CourtKeeperExclusions {
   /** 32-byte lowercase hex seed (e.g. from selection.ts deriveSelectionSeed). */
   readonly seed: string;

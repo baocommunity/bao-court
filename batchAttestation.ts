@@ -31,10 +31,14 @@ import { HEX_32 } from './courtCeremonyCore';
 import { CanonicalWriter } from './courtSession';
 import { hashCourtVerdict } from './courtVoteMachine';
 
+/** Kind number for batch attestation events (one signature per epoch cohort). */
 export const BAO_COURT_BATCH_ATTESTATION_KIND = 39018;
 
+/** Domain string for batch leaf digests (per-verdict). */
 export const BATCH_LEAF_DOMAIN = 'BAO-Court/BatchLeaf/v1';
+/** Domain string for batch internal-node digests. */
 export const BATCH_NODE_DOMAIN = 'BAO-Court/BatchNode/v1';
+/** Domain string for the signed batch-manifest hash. */
 export const BATCH_MANIFEST_DOMAIN = 'BAO-Court/BatchManifest/v1';
 
 /** Maximum verdicts per batch — bounds tree/proof recursion resource use. */
@@ -50,11 +54,21 @@ export interface BatchMerkleProof {
   readonly path: readonly string[];
 }
 
+/**
+ * Outcome of a batch-attestation structural check: validity and a failure
+ * reason when invalid.
+ */
 export interface BatchAttestationValidationResult {
   readonly valid: boolean;
   readonly reason?: string;
 }
 
+/**
+ * Caller-pinned expectations for batch-attestation validation. Note the
+ * contract on `expectedGroupPubkey`: every consumer that derives reputation
+ * or settlement from a batch MUST pin the cohort key, otherwise any key can
+ * sign a self-selected manifest.
+ */
 export interface BatchAttestationValidationContext {
   /**
    * Pin the signing cohort's group key. MUST be set by every consumer that
@@ -75,6 +89,11 @@ export interface BatchAttestationValidationContext {
   readonly now?: number;
 }
 
+/**
+ * Error thrown on malformed batch-attestation inputs (bad hex, oversized
+ * batches, invalid trees/proofs). Code: `BATCH_ATTESTATION`
+ * (docs/FORMAL_INVARIANTS.md §15).
+ */
 export class BatchAttestationError extends CourtError {
   constructor(message: string, options?: CourtErrorOptions) {
     super('BATCH_ATTESTATION', message, options);
@@ -410,6 +429,19 @@ function parseTagNumber(value: string | null): number | null {
  * The event id is the NIP-01 canonical serialization hash — the same
  * convention events.ts callers finalize with (getEventHash) — so the id
  * additionally commits to every tag, including the cohort signature.
+ *
+ * @throws {@link BatchAttestationError} on malformed epoch/cohort/root/
+ *         signature fields.
+ *
+ * @example
+ * ```ts
+ * const event = buildBatchAttestationEvent({
+ *   epoch: 7, cohortPubkey, batchIndex: 0, count: verdictHashes.length,
+ *   root: buildBatchMerkleTree(verdictHashes).root,
+ *   finalizedAtSec: nowSec, signature: aggregateHex,
+ *   createdAt: nowSec,
+ * });
+ * ```
  */
 export function buildBatchAttestationEvent(params: {
   readonly epoch: number;
@@ -636,6 +668,15 @@ export function validateBatchAttestationEvent(
  * is per-batch: the same verdictHash may appear in multiple epoch batches
  * and each verification is independent — deduplicate by verdictHash before
  * deriving reputation (SEQUENCE-2).
+ *
+ * @example
+ * ```ts
+ * const proof = buildBatchMerkleProof(verdictHashes, index);
+ * const check = verifyCaseInBatch(batchEvent, {
+ *   sessionHash, outcome, supportingEventIds, proof,
+ * }, { expectedGroupPubkey });
+ * if (!check.valid) rejectBatch(check.reason);
+ * ```
  */
 export function verifyCaseInBatch(
   event: NostrEvent,

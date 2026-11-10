@@ -2,6 +2,21 @@
 
 /**
  * FROST attestation validator for the BAO Court / FROST appeal layer.
+ *
+ * Pipeline role: the verification gate for published verdicts (paper §5,
+ * §10) — takes a kind-89/39007 attestation event, checks its Nostr
+ * signature, reconstructs the signed message (v1 or v2), and verifies the
+ * FROST/Schnorr signature against the empaneled group key and any pinned
+ * expectations (dispute id, market, outcomes, epoch/tier/threshold/
+ * signer-set root, batch root).
+ *
+ * Purity: validation is a pure predicate over (event, context); the only
+ * external work is cryptographic verification (CPU) and nostr-tools'
+ * event-object verdict memoization (see the cache note below). No network.
+ *
+ * Invariants: INV-VAL-1 … INV-VAL-16 in docs/FORMAL_INVARIANTS.md §10.
+ * Errors: {@link CourtSignerSetError} (code `SIGNER_SET`); validation
+ * itself returns {@link ValidationResult} rather than throwing.
  */
 
 import { CourtError, CourtErrorOptions } from './errors';
@@ -13,6 +28,10 @@ import { BAO_COURT_ATTESTATION_KIND } from './events';
 import { buildAttestationMessage, buildAttestationMessageV2 } from './crypto';
 import { hashDisputeVerdict } from './courtVoteMachine';
 
+/**
+ * Outcome of an attestation validation: validity, the signing pubkey, the
+ * parsed outcome/message/dispute id, and a failure reason when invalid.
+ */
 export interface ValidationResult {
   readonly valid: boolean;
   readonly pubkey: string;
@@ -22,6 +41,11 @@ export interface ValidationResult {
   readonly error?: string;
 }
 
+/**
+ * Caller-pinned expectations for a v1 attestation validation: group pubkey,
+ * dispute id, market id, allowed outcomes, and trusted publishers. All
+ * fields optional; an omitted field is simply not checked.
+ */
 export interface AttestationValidationContext {
   readonly expectedGroupPubkey?: string;
   readonly expectedDisputeEventId?: string;
@@ -54,6 +78,29 @@ function isHex64(value: string): boolean {
  * verified event object: the stale cached verdict would then describe the
  * OLD bytes — such callers must re-run validation on a fresh object rather
  * than mutate a verified one.
+ */
+/**
+ * Validate a v1 FROST attestation event (kind 89/39007) end-to-end:
+ * Nostr event signature, tag/content structure, message reconstruction
+ * (`buildAttestationMessage`), Schnorr verification against the group
+ * pubkey, and the caller's pinned expectations (F-2: an empty pin is a
+ * misconfiguration and fails closed, never "no pin"). O(1) cryptographic
+ * work plus O(tags).
+ *
+ * @param event   - The raw Nostr event.
+ * @param expected - A group pubkey shorthand or a full
+ *                  {@link AttestationValidationContext}.
+ * @returns A {@link ValidationResult}; never throws for invalid events.
+ *
+ * @example
+ * ```ts
+ * const result = validateAttestationEvent(rawEvent, {
+ *   expectedGroupPubkey: empaneledKey,
+ *   expectedDisputeEventId: disputeId,
+ *   allowedOutcomes: ['YES', 'NO'],
+ * });
+ * if (result.valid) applyOutcome(result.outcome!);
+ * ```
  */
 export function validateAttestationEvent(
   event: NostrEvent,
@@ -241,6 +288,12 @@ export function validateAttestationEvent(
   }
 }
 
+/**
+ * Verify a raw BIP-340 Schnorr signature over a hex message.
+ *
+ * @returns `true` when valid; `false` on any failure including malformed
+ *          inputs (never throws). O(1) cryptographic work.
+ */
 export function verifyRawSignature(
   pubkeyHex: string,
   messageHex: string,
@@ -271,6 +324,7 @@ import { CanonicalWriter } from './courtSession';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
+/** Domain string prefixing canonical signer-set commitment hashes. */
 export const COURT_SIGNER_SET_DOMAIN = 'BAO-Court/SignerSet/v1';
 
 /**
@@ -322,6 +376,11 @@ export function hashSignerSetRoot(indices: readonly number[]): string {
   return bytesToHex(sha256(input));
 }
 
+/**
+ * Extended expectations for a v2 attestation: everything from the v1
+ * context plus epoch pinning, minimum tier, minimum signer threshold, and
+ * signer-set / batch Merkle-root pins (the in-band finality binding).
+ */
 export interface AttestationV2ValidationContext {
   readonly expectedGroupPubkey?: string;
   readonly expectedDisputeEventId?: string;
@@ -650,6 +709,21 @@ const V2_ONLY_POLICY_FIELDS = [
  * or low-tier legacy attestation validate under v2 policy it never satisfied.
  * The dispatcher therefore fails closed: v2 policy on a v1-shaped event is a
  * downgrade and is rejected, not ignored.
+ */
+/**
+ * Validate a v1 OR v2 attestation event — the recommended entry point.
+ * Dispatches on the presence of an `epoch` tag (v2 in-band finality
+ * binding); v2-only policy fields requested against a v1 event fail closed.
+ * Malformed events return a typed `{ valid: false }` result, never a raw
+ * TypeError (r3-3).
+ *
+ * @example
+ * ```ts
+ * const result = validateCourtAttestation(rawEvent, {
+ *   expectedGroupPubkey: empaneledKey,
+ *   expectedEpoch: 7, minTier: 2, // enforced on v2 only
+ * });
+ * ```
  */
 export function validateCourtAttestation(
   event: NostrEvent,

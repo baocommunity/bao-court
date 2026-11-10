@@ -2,6 +2,17 @@
 
 /**
  * Dispute override signing for the BAO Court / FROST appeal layer.
+ *
+ * Pipeline role: the legacy/simulation-side companion to the ceremony
+ * pipeline — tallies a commit/reveal vote ledger directly (the imperative
+ * path, vs the `courtVoteMachine` machine path) and runs the FROST signing
+ * round that produces a dispute attestation (paper §5). The legacy commit
+ * format is domain-separated (`BAO-Court/LegacyVoteCommit/v1`) so the two
+ * paths cannot be confused.
+ *
+ * Purity: all functions are pure over their inputs; `runDisputeOverrideSigning`
+ * delegates to `signing.ts` (whose only side effect is nonce-guard
+ * consumption). No I/O, no clock.
  */
 
 import { CourtArgumentError } from './errors';
@@ -48,6 +59,11 @@ export function hashCommit(outcome: string, salt: string): string {
   return (Number.parseInt(digest[0], 16) & LEGACY_COMMIT_VERSION_MASK).toString(16) + digest.slice(1);
 }
 
+/**
+ * Result of a legacy-path tally: winning outcome, the supporting revealed
+ * votes, and the commit-mismatched reveals (excluded from the count,
+ * surfaced as slashing evidence).
+ */
 export interface TallyResult {
   readonly outcome: string;
   readonly supportingVotes: JurorVote[];
@@ -60,6 +76,19 @@ export interface TallyResult {
   readonly invalidReveals: JurorVote[];
 }
 
+/**
+ * Tally a legacy commit/reveal vote ledger: verify each reveal against its
+ * commit (`hashCommit`), count valid votes per outcome, and pick the winner
+ * with the canonical UTF-8 byte-order tie-break (identical to
+ * `courtVoteMachine.finalize_tally`, so both paths agree on the verdict).
+ * A mismatched reveal never aborts the count. O(n) over votes.
+ *
+ * @example
+ * ```ts
+ * const { outcome, supportingVotes, invalidReveals } = tallyVotes(votes);
+ * if (invalidReveals.length) flagForSlashing(invalidReveals);
+ * ```
+ */
 export function tallyVotes(
   votes: readonly JurorVote[],
 ): TallyResult {
@@ -139,6 +168,12 @@ export function deriveDisputeGroupPubkey(
   return bytesToHex(pk);
 }
 
+/**
+ * Inputs to dispute override signing: the dispute case, the DKG record and
+ * the caller's shares, the outcome (defaults to the dispute's proposed
+ * outcome), the dispute verdict commitment (required for real
+ * attestations), and the supporting reveal event ids.
+ */
 export interface DisputeSigningParams {
   readonly dispute: DisputeCase;
   readonly dkg: DkgRecord;
@@ -154,6 +189,14 @@ export interface DisputeSigningParams {
   readonly supportingEventIds?: readonly string[];
 }
 
+/**
+ * Run the full dispute-override signing round: FROST-sign the attestation
+ * message (round 1, dispute-bound) and decorate the result with
+ * kind 39007, the dispute event id, verdict hash, and supporting ids.
+ *
+ * @throws {@link FrostSigningError} (from {@link runNormalSigningRound}) on
+ *         nonce reuse, malformed shares, or a failed aggregate check.
+ */
 export function runDisputeOverrideSigning(
   params: DisputeSigningParams,
 ): FrostAttestation {

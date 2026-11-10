@@ -27,6 +27,10 @@ production gates — is
 [`docs/FAQ.md`](docs/FAQ.md) (also rendered on the landing page's FAQ
 section).
 
+**Glossary.** The normative domain vocabulary — ceremony, attestation,
+verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
+[`docs/GLOSSARY.md`](docs/GLOSSARY.md).
+
 
 ---
 
@@ -40,7 +44,7 @@ cannot resolve the package's extensionless internal imports; see
 [§11](#11-testing-and-gates) for details.
 
 ```bash
-npm install github:baocommunity/bao-court#v0.6.3
+npm install github:baocommunity/bao-court#v0.10.1
 npx tsx your-script.ts
 ```
 

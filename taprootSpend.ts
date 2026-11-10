@@ -73,15 +73,22 @@ export const TAPROOT_CONTROL_BASE = 0xc4;
 
 /** BIP-341 / Elements sighash types (the taproot digest commits the raw byte). */
 export const SIGHASH_DEFAULT = 0x00;
+/** BIP-341 sighash type: sign all outputs and all inputs (default for taproot). */
 export const SIGHASH_ALL = 0x01;
+/** BIP-341 sighash type: sign no outputs. */
 export const SIGHASH_NONE = 0x02;
+/** BIP-341 sighash type: sign only the output with the same index as the input. */
 export const SIGHASH_SINGLE = 0x03;
+/** BIP-341 sighash modifier: sign only this input (ANYONECANPAY). */
 export const SIGHASH_ANYONECANPAY = 0x80;
+/** Output-selection bit mask (ALL/NONE/SINGLE) applied to a sighash type byte. */
 export const SIGHASH_OUTPUT_MASK = 0x03;
+/** Input-selection bit mask (ANYONECANPAY) applied to a sighash type byte. */
 export const SIGHASH_INPUT_MASK = 0x80;
 
 /** Outpoint-flag bits (Elements COutPoint OUTPOINT_*_FLAG >> 24). 0 for WS-A inputs. */
 export const OUTPOINT_ISSUANCE_FLAG = 0x80;
+/** Elements outpoint flag marking a federated peg-in input. 0 for WS-A inputs. */
 export const OUTPOINT_PEGIN_FLAG = 0x40;
 
 /** Default codeseparator position (no OP_CODESEPARATOR in the leaf). */
@@ -109,7 +116,9 @@ export const CODESEP_POS_NONE = 0xffffffff;
  */
 const LIQUID_MAINNET_GENESIS_DISPLAY = '1466275836220db2944ca059a3a10ef6fd2ea684b0688d2c379296888a206003';
 const LIQUID_TESTNET_GENESIS_DISPLAY = 'a771da8e52ee6ad581ed1e9a99825e5b3b7992225534eaa2ae23244fe26ab1c1';
+/** Liquid mainnet genesis block hash, INTERNAL byte order (sighash preimage form). */
 export const LIQUID_MAINNET_GENESIS = reverseHex(LIQUID_MAINNET_GENESIS_DISPLAY);
+/** Liquid testnet genesis block hash, INTERNAL byte order (sighash preimage form). */
 export const LIQUID_TESTNET_GENESIS = reverseHex(LIQUID_TESTNET_GENESIS_DISPLAY);
 
 const textEncoder = new TextEncoder();
@@ -475,6 +484,7 @@ export function reverseHex(hex: string): string {
 
 // ── Elements taproot sighash (port of SignatureHashSchnorr, TAPSCRIPT) ──────
 
+/** An Elements issuance record attached to an input (confidential wire fields). */
 export interface ElementsIssuance {
   /** 32-byte hex asset blinding nonce. */
   readonly assetBlindingNonce: string;
@@ -486,6 +496,12 @@ export interface ElementsIssuance {
   readonly inflationKeys: string;
 }
 
+/**
+ * One Elements input as committed in the taproot sighash: prevout,
+ * outpoint flag, confidential asset/value commitments, spent script, and
+ * optional issuance data. Amounts/assets are wire-form serializations, not
+ * numbers.
+ */
 export interface ElementsSighashInput {
   /** Prevout txid in INTERNAL byte order (reverse of display hex — use `reverseHex`). */
   readonly txid: string;
@@ -507,6 +523,7 @@ export interface ElementsSighashInput {
   readonly issuanceInflationKeysRangeproof?: string;
 }
 
+/** One Elements output as committed in the taproot sighash (confidential wire fields + script). */
 export interface ElementsSighashOutput {
   /** Serialized output asset commitment (wire form). */
   readonly asset: string;
@@ -518,6 +535,7 @@ export interface ElementsSighashOutput {
   readonly scriptPubKey: string;
 }
 
+/** Per-output witness data (rangeproof / surjection proof) committed in the vtxoutwit hash. */
 export interface ElementsOutputWitness {
   /** Output rangeproof (hex, default ''). */
   readonly rangeproof?: string;
@@ -525,6 +543,11 @@ export interface ElementsOutputWitness {
   readonly surjectionproof?: string;
 }
 
+/**
+ * Full parameter set for the Elements taproot signature hash: chain genesis
+ * hash, tx-level fields, all inputs/outputs/output-witnesses, the spending
+ * input index, tapleaf hash, sighash type, and codeseparator position.
+ */
 export interface ElementsTaprootSighashParams {
   /** Chain genesis block hash, INTERNAL byte order (see LIQUID_*_GENESIS). */
   readonly genesisBlockHash: string;
@@ -670,6 +693,12 @@ export function taprootSighashElements(params: ElementsTaprootSighashParams): st
 
 // ── Witness finalization ─────────────────────────────────────────────────────
 
+/**
+ * Inputs to {@link finalizeTaproot}: tx shape (as in
+ * {@link ElementsTaprootSighashParams}), the leaf script + control block
+ * being spent, the Schnorr signature, extra stack items, and an optional
+ * expected output key for the strongest available self-check.
+ */
 export interface FinalizeTaprootParams {
   /** Chain genesis block hash, internal byte order. */
   readonly genesisBlockHash: string;

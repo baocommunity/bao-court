@@ -81,6 +81,19 @@ function reconstructPlain(event: NostrEvent): NostrEvent {
  *   ephemeral key. Broadcast it as-is — do NOT re-sign it (re-signing breaks
  *   NIP-44 unwrapping and de-anonymizes the sender).
  */
+/**
+ * Wrap a protocol event as a NIP-59 gift wrap from `senderSeckey` to
+ * `recipientPubkeyHex` (seals + private wrapping; the inner event's id/sig
+ * are produced by the wrap). O(1) cryptographic work.
+ *
+ * @returns The wrapped event ready to publish to relays.
+ *
+ * @example
+ * ```ts
+ * const wrapped = wrapProtocolEvent(template, senderSk, recipientPk);
+ * await pool.publish(relays, wrapped);
+ * ```
+ */
 export function wrapProtocolEvent(
   event: Omit<NostrEvent, 'id' | 'sig' | 'pubkey'>,
   senderSeckey: Uint8Array | string,
@@ -107,6 +120,15 @@ export function wrapProtocolEvent(
  *
  * Returns null for anything malformed, misaddressed, forged, or tampered
  * with — never a partially trusted event.
+ */
+/**
+ * Unwrap a NIP-59 gift wrap addressed to `recipientSeckey`, running the
+ * full verification battery (seal round-trip, rumor→seal→wrap chain,
+ * signature checks) before returning the inner event.
+ *
+ * @returns The inner verified event, or `null` when the wrap is not
+ *          addressed to this key, malformed, or fails verification
+ *          (fail-closed; never throws).
  */
 export function unwrapProtocolEvent(
   wrapEvent: NostrEvent,

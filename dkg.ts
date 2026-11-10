@@ -42,6 +42,13 @@ const N = secp256k1.Point.Fn.ORDER;
 type CurvePoint = InstanceType<typeof Point>;
 const MAX_DKG_PARTICIPANTS = 10_000;
 
+/**
+ * Reduce a scalar modulo the secp256k1 group order, mapping into
+ * `[0, N)` (negative inputs wrap to their positive residue).
+ *
+ * @param x - Any bigint (may be negative).
+ * @returns `x mod N`, always in `[0, N)`. O(1).
+ */
 export function modN(x: bigint): bigint {
   const r = x % N;
   return r < 0n ? r + N : r;
@@ -110,6 +117,12 @@ export function mergeRefreshCommitments(
   return merged.map((p) => p.toHex(true));
 }
 
+/**
+ * Encode a curve point as a 66-char BIP-340 x-only hex string (the 02/03
+ * parity prefix of the compressed form is dropped).
+ *
+ * @returns Lowercase x-only hex. O(1).
+ */
 export function pointToXOnlyHex(point: CurvePoint): string {
   // Drop the 02/03 prefix from the compressed encoding to obtain a BIP340 x-only pubkey.
   return point.toHex(true).slice(2);
@@ -148,6 +161,10 @@ export function generateRefreshShares(
   return { vss_commits, idx: senderIdx, shares };
 }
 
+/**
+ * Construction options for {@link PedersenDkgAdapter}. All non-default
+ * options are test-only.
+ */
 export interface PedersenDkgOptions {
   /**
    * When true, enables test/demo-only features: deterministic `seed` keygen
@@ -168,6 +185,12 @@ export interface PedersenDkgOptions {
   readonly corruptPok?: { readonly accused: number };
 }
 
+/**
+ * One participant's local DKG state: their juror record, private polynomial
+ * coefficients, public Feldman commitments, and proof of knowledge of the
+ * constant coefficient. Contains secrets — never serialize to public
+ * channels.
+ */
 export interface ParticipantState {
   readonly juror: SelectedJuror;
   readonly coeffs: readonly bigint[];
@@ -175,6 +198,10 @@ export interface ParticipantState {
   readonly pok: ReturnType<typeof createProofOfKnowledge>;
 }
 
+/**
+ * Inputs to a DKG keygen run: market (and optional dispute) scope, threshold
+ * `t`, the selected jurors, and — test-only — a deterministic seed.
+ */
 export interface KeygenParams {
   readonly marketId: string;
   /** Optional dispute id (2140wtf scopes DKG to a dispute). */
@@ -189,16 +216,27 @@ export interface KeygenParams {
   readonly seed?: string | Uint8Array;
 }
 
+/**
+ * Output of a DKG keygen run: the public {@link DkgRecord} (commitments,
+ * group pubkey, participant state) and the per-participant secret shares.
+ * Shares are secrets — distribute them over encrypted channels only.
+ */
 export interface KeygenResult {
   readonly record: DkgRecord;
   readonly shares: frost.SecretShare[];
 }
 
+/** Inputs to a proactive share refresh: the existing record and all shares. */
 export interface RefreshParams {
   readonly record: DkgRecord;
   readonly shares: readonly frost.SecretShare[];
 }
 
+/**
+ * Output of a share refresh: the updated {@link DkgRecord} (refresh
+ * commitments merged) and the new shares. Old shares are void after a
+ * successful refresh.
+ */
 export interface RefreshResult {
   readonly record: DkgRecord;
   readonly shares: frost.SecretShare[];
@@ -211,6 +249,25 @@ export interface DkgAdapter {
   readonly run: (params: KeygenParams) => KeygenResult;
   readonly refreshShares: (params: RefreshParams) => RefreshResult;
 }
+/**
+ * Pedersen (Feldman-VSS + proofs of knowledge) DKG adapter.
+ *
+ * Simulates the full multi-party DKG in one local process; every juror
+ * contributes a degree-`(t-1)` polynomial, publishes Feldman commitments and
+ * a Schnorr proof of knowledge, and verifies every received share
+ * (complaint/defense/disqualification via `dkgMessages.ts`). The group
+ * secret is never materialized in one place. Complexity: O(n²·t) share
+ * generation/verification for n participants, threshold t.
+ *
+ * Failure modes: {@link CourtDkgError} (code `DKG_STATE`, plus
+ * complaint-related codes) on verification failures; {@link CourtArgumentError}
+ * (code `DKG_ARGUMENT`) on malformed parameters. Test-only fault injection
+ * (`corruptShare`/`corruptPok`) requires `unsafeTestMode: true`.
+ *
+ * Limits: single-process simulation of the protocol — a production
+ * deployment must distribute share exchange over encrypted peer-to-peer
+ * channels (see `independentDkg.ts` and the module header note).
+ */
 export class PedersenDkgAdapter implements DkgAdapter {
   private readonly unsafeTestMode: boolean;
   private readonly corruptShare?: {
@@ -642,7 +699,16 @@ export function combineShares(shares: readonly { idx: number; shareHex: string }
 }
 
 /**
- * Default keygen — Pedersen DKG.
+ * Default keygen — Pedersen DKG ({@link PedersenDkgAdapter} with default
+ * options). Convenience wrapper; construct the adapter directly when you
+ * need fault-injection or a swappable {@link DkgAdapter}.
+ *
+ * @example
+ * ```ts
+ * const { record, shares } = generateFrostKeys({
+ *   marketId, threshold: 3, jurors: selectedJury,
+ * });
+ * ```
  */
 export function generateFrostKeys(params: KeygenParams): KeygenResult {
   return new PedersenDkgAdapter().run(params);

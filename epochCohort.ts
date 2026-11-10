@@ -29,8 +29,14 @@ import { bytesToHex } from '@noble/hashes/utils.js';
  */
 
 export const COURT_EPOCH_COHORT_DOMAIN = 'BAO-Court/EpochCohort/v1';
+/** Domain string for canonical epoch-handoff hashes (old cohort → new cohort). */
 export const COURT_EPOCH_HANDOFF_DOMAIN = 'BAO-Court/EpochHandoff/v1';
 
+/**
+ * The publicly verifiable anchor record of one standing epoch cohort:
+ * epoch id, cohort index, group pubkey, threshold, roster size, validity
+ * window, and crypto suite. Hash canonically via `hashCourtEpochCohort`.
+ */
 export interface CourtEpochCohort {
   readonly epochId: number;
   readonly cohortIndex: number;
@@ -47,6 +53,11 @@ export interface CourtEpochCohort {
   readonly suite: string;
 }
 
+/**
+ * Error thrown on malformed epoch-cohort records or illegal rotations
+ * (duplicate epoch id, same-key rotation, backwards time window). Code:
+ * `EPOCH_COHORT` (docs/FORMAL_INVARIANTS.md §15).
+ */
 export class CourtEpochCohortError extends CourtError {
   constructor(message: string, options?: CourtErrorOptions) {
     super('EPOCH_COHORT', message, options);
@@ -76,7 +87,21 @@ function assertHex32(value: string, label: string): void {
 /**
  * Validate and freeze one epoch-cohort record. Duplicate cohort keys within
  * one epoch are rejected by the caller's registry, not here — this function
- * only enforces the record's internal consistency.
+ * only enforces the record's internal consistency (u32 ids, hex pubkey,
+ * 1 ≤ threshold ≤ participantCount ≤ 300, ordered window, bounded suite).
+ *
+ * @returns A frozen {@link CourtEpochCohort}.
+ * @throws {@link CourtEpochCohortError} on any violated bound.
+ *
+ * @example
+ * ```ts
+ * const cohort = createCourtEpochCohort({
+ *   epochId: 7, cohortIndex: 0, cohortPubkey: groupKey,
+ *   threshold: 3, participantCount: 5,
+ *   startsAtSec: t0, endsAtSec: t0 + 86_400,
+ *   suite: 'pedpop-v1-experimental',
+ * });
+ * ```
  */
 export function createCourtEpochCohort(params: {
   readonly epochId: number;

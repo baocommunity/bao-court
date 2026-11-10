@@ -15,6 +15,7 @@
 import { LnRailError } from './errors';
 import type { LnDecision, LnHoldRecord } from './lnSettlement';
 
+/** Parameters for creating a hold invoice on the rail. */
 export interface LnRailCreateInvoiceParams {
   /** Payment hash (sha256 of deterministic preimage) the hold will pay. */
   readonly paymentHash: string;
@@ -24,12 +25,14 @@ export interface LnRailCreateInvoiceParams {
   readonly expiresAt: number;
 }
 
+/** Result of creating a hold invoice: host invoice id + optional bolt11 string. */
 export interface LnRailCreateInvoiceResult {
   readonly invoiceId: string;
   /** Optional: the bolt11 string (host-specific). */
   readonly bolt11?: string;
 }
 
+/** Current rail-side status of a hold invoice (all boolean flags independent). */
 export interface LnRailStatus {
   readonly invoiceId?: string;
   readonly paid: boolean;
@@ -38,6 +41,11 @@ export interface LnRailStatus {
   readonly expired: boolean;
 }
 
+/**
+ * Host-injected Lightning rail adapter: the ONLY way the court package
+ * touches a Lightning node. Hosts implement this over LNbits/CLN/LND; the
+ * package itself performs no I/O and holds no credentials.
+ */
 export interface LnRail {
   /** Create a hold invoice for the given payment hash. */
   readonly createHoldInvoice: (params: LnRailCreateInvoiceParams) => Promise<LnRailCreateInvoiceResult>;
@@ -67,6 +75,10 @@ export async function applyLnDecision(
 
 // ── In-memory fake (tests only) ─────────────────────────────────────────────
 
+/**
+ * Mutable state of the in-memory fake rail: invoice table and the ordered
+ * call log. Exposed for test assertions only.
+ */
 export interface FakeLnRailState {
   readonly invoices: Map<string, {
     paymentHash: string;
@@ -82,6 +94,7 @@ export interface FakeLnRailState {
   readonly calls: string[];
 }
 
+/** Test knobs for the fake rail: auto-pay behavior and settle/cancel failure injection. */
 export interface FakeLnRailOptions {
   /** Auto-mark paid on create after N holds (default 1: immediately paid). */
   readonly payOnCreate?: boolean;
@@ -90,6 +103,14 @@ export interface FakeLnRailOptions {
   readonly failCancel?: boolean;
 }
 
+/**
+ * Create an in-memory fake {@link LnRail} for tests: instant holds,
+ * deterministic status transitions, failure injection, and an ordered call
+ * log for asserting call ordering.
+ *
+ * LIMIT: TESTS ONLY — never wire this into a production host; it settles
+ * nothing on a real Lightning node.
+ */
 export function createFakeLnRail(options: FakeLnRailOptions = {}): { rail: LnRail; state: FakeLnRailState } {
   const state: FakeLnRailState = { invoices: new Map(), calls: [] };
   const payOnCreate = options.payOnCreate ?? true;
