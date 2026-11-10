@@ -458,7 +458,7 @@ complete from this audit; 🔶 = argument exists, external dependency noted.
 
 | ID | Sev | Location | Literature | Disposition |
 |---|---|---|---|---|
-| A-1 | M | `independentSigning.canAggregate` / `signing.aggregateAttestation` | RFC 9591 §5.2 (Lagrange over the signing set); NCC ZF-FROST 2023 | **Shipped** — equality guard + precise error + contract docs + tests |
+| A-1 | M | `independentSigning.canAggregate` / `signing.aggregateAttestation`; machine level: `courtSigningMachine` finalized signer set | RFC 9591 §5.2 (Lagrange over the signing set); NCC ZF-FROST 2023 | **Shipped** — equality guard + precise error + contract docs + tests; **exhaustively model-checked at the machine level** (`finalizedSignerSet` == distinct commitment set, partials ⊆ frozen set — every interleaving at n ≤ 3, incl. nonce/partial equivocation; `__tests__/modelChecking.test.ts` + `scripts/model-check.mjs`) |
 | A-2 | M | `crypto.ts` PoK challenge | Krawczyk HKDF §3.1; INV-X-1/CW-2 (internal) | **Shipped** — canonical v2 challenge + `dkgPokDomain` + v1-compat verify + tests |
 | A-3 | M | `dispute.deriveDisputeGroupPubkey` | BIP-340 tagged-hash rationale; hash-misbinding class | **Shipped** — fixed-width (64-char) + ≤512-char input validation (derivation unchanged) + tests |
 | A-4 | M | `selection.ts` seed | Committee-selection grinding (Algorand VRF notes; multi-block beacons) | **Spec'd S-1** — anchored multi-block seed + pool/weight roots |
