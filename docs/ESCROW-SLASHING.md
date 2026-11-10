@@ -160,8 +160,9 @@ rounding tolerance).
 3. **Resolution:** run `tallyVotes` → classify reveals into coherent /
    incoherent / non-reveal / double-vote → `computeRedistributionPlan(params)`
    → persist the plan (slash-evidence event; kind owned by the host protocol
-   layer — do not reuse the standing-oracle range 38035–38038 from
-   `FROST_THRESHOLD_ORACLE_PLAN.md`) → `ledger.applyPlan(plan)`.
+   layer — do not reuse the standing-oracle range 38035–38038; see
+   `docs/FROST_COURT_ORACLE_PAPER.md` and `docs/GLOSSARY.md` def. 20) →
+   `ledger.applyPlan(plan)`.
 4. **Execution:** host moves sats on its rail per plan records and marks
    `redistribute(id)` / `returnDeposit(id)` as funds clear. Treasury records
    go to the platform treasury.

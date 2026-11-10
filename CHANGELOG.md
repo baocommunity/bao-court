@@ -9,6 +9,37 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.10.2] — 2026-11-10
+
+### Documentation (API-surface documentation round — comments only, zero behavior change)
+
+- **Full public-surface JSDoc pass:** all 489 unique exported symbols
+  (212 functions, 27 classes, 132 interfaces, 40 type aliases, 78
+  constants across the 32 subpath modules + `index.ts`) now carry JSDoc:
+  one-line summary, contract (validation/guarantees), complexity where
+  meaningful, failure modes with the error-class/code taxonomy, honest
+  limits (caller duties), and cross-references to the INV-* ids in
+  docs/FORMAL_INVARIANTS.md.
+- **Usage examples** for the core symbols: session identity
+  (`assertCourtSessionParameters`, `hashCourtSessionParameters`), ceremony
+  machines (`createCourtVoteMachine`, …), selection (`selectJury`),
+  signing (`runNormalSigningRound`, `buildAttestationMessage`), validation
+  (`validateAttestationEvent`, `validateCourtAttestation`), transport
+  (`wrapProtocolEvent`, `unwrapProtocolEvent`), outbox/inbox, escrow
+  (`computeRedistributionPlan`, `EscrowLedger`), batch attestation
+  (`buildBatchAttestationEvent`, `verifyCaseInBatch`), capabilities
+  (`createCourtCapability`, `assertCourtCapabilityAction`), host-key
+  backup/recovery, and the appeal coordinator.
+- **Module headers** now state each file's pipeline role (ceremony stage),
+  purity contract (no I/O, injected clock), and paper section pointer
+  (`docs/FROST_COURT_ORACLE_PAPER.md` §).
+- **New `docs/GLOSSARY.md`:** 25 precisely defined domain terms (ceremony,
+  attestation vs verdict vs confirmation, epoch cohort, batch attestation,
+  keeper, fail-closed, purity, …).
+- **Stale-reference cleanup:** README install pin 0.6.3 → 0.10.1;
+  `SETTLEMENT-RAILS-PLAN.md` → `SETTLEMENT-RAILS.md`;
+  `FROST_THRESHOLD_ORACLE_PLAN.md` → `docs/FROST_COURT_ORACLE_PAPER.md`.
+
 ## [0.10.1] — 2026-11-10
 
 ### Added (round-11 error-taxonomy unification — additive only, no behaviour change)

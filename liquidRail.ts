@@ -14,6 +14,11 @@
 
 import type { ReleaseSkeleton, LiquidUtxo } from './liquidEscrow';
 
+/**
+ * Host-injected Liquid rail adapter: the ONLY way the court package touches
+ * a Liquid chain. Hosts implement this over node RPC + Esplora; the package
+ * itself performs no I/O.
+ */
 export interface LiquidRail {
   /** Fetch a UTXO's current state (spent/unspent, value, script). */
   readonly getUtxo: (txid: string, vout: number) => Promise<LiquidUtxo | null>;
@@ -31,6 +36,11 @@ export interface LiquidRail {
  */
 export type SpendBranch = 'judge' | 'refund' | 'multisig_release' | 'multisig_slash';
 
+/**
+ * Decide the spend branch for a release given the court verdict:
+ * `judge` when the dispute is upheld, `refund` when no juror was coherent,
+ * otherwise `multisig_release`. Pure; O(1).
+ */
 export function chooseSpendBranch(verdict: {
   readonly disputeUpheld: boolean;
   readonly coherentCount: number;
@@ -42,11 +52,22 @@ export function chooseSpendBranch(verdict: {
 
 // ── In-memory fake (tests only) ─────────────────────────────────────────────
 
+/**
+ * Mutable state of the in-memory fake rail: UTXO set and the broadcast log.
+ * Exposed for test assertions only.
+ */
 export interface FakeLiquidRailState {
   readonly utxos: Map<string, LiquidUtxo>;
   readonly broadcasts: Array<{ rawTxHex: string; txid: string }>;
 }
 
+/**
+ * Create an in-memory fake {@link LiquidRail} for tests: deterministic
+ * txids, instant confirmations, and a recorded broadcast log.
+ *
+ * LIMIT: TESTS ONLY — never wire this into a production host; it settles
+ * nothing on a real chain.
+ */
 export function createFakeLiquidRail(initialUtxos: readonly LiquidUtxo[] = []): {
   rail: LiquidRail;
   state: FakeLiquidRailState;

@@ -14,7 +14,7 @@
  * The script does NOT read the tally (ADR-001 negative): enforcement is
  * economic — the court signs the branch matching its verdict, hosts execute.
  *
- * @see docs/SETTLEMENT-RAILS-PLAN.md (status internal)
+ * @see docs/SETTLEMENT-RAILS.md
  * @see ADR-001 (docs/architecture/adr/001-juror-escrow-design.md in bao.markets)
  */
 
@@ -89,6 +89,10 @@ function opN(n: number): number {
 
 // ── Script trees ─────────────────────────────────────────────────────────────
 
+/**
+ * Parameters of the P2WSH M-of-N multisig lock: 1–15 compressed or x-only
+ * pubkeys and threshold `m` with 1 ≤ m ≤ n.
+ */
 export interface MultiSigParams {
   /** Compressed 33-byte or x-only 32-byte hex pubkeys, 1..15 of them. */
   readonly pubkeys: readonly string[];
@@ -144,6 +148,10 @@ function pointFromXOnly(xOnly: Uint8Array): ReturnType<typeof Point.fromHex> {
   throw new LiquidEscrowError('LIQUID_STATE', 'liquidEscrow: cannot lift x-only pubkey to curve point');
 }
 
+/**
+ * Parameters of the taproot escrow tree (paper §6.1): winner key, oracle
+ * key, funder/refund key, and the refund CLTV locktime.
+ */
 export interface TaprootEscrowParams {
   /** Winner pubkey (32-byte x-only hex). */
   readonly winnerXOnly: string;
@@ -244,6 +252,9 @@ function polymodStep(pm: number, v: number, gen: readonly number[]): number {
   return p >>> 0;
 }
 
+/**
+ * Bech32/bech32m HRPs for one Liquid-style network (P2WSH + taproot).
+ */
 export interface LiquidNetworkParams {
   /** Human-readable part for P2WSH (e.g. 'tex' for Liquid testnet, 'tlb' signet-ish). */
   readonly p2wshHrp: string;
@@ -253,6 +264,7 @@ export interface LiquidNetworkParams {
 
 /** Widely-used HRPs: Liquid mainnet uses 'ex'/'lq', testnet 'tex'/'tq', signet varies. */
 export const LIQUID_MAINNET: LiquidNetworkParams = { p2wshHrp: 'ex', taprootHrp: 'lq' };
+/** Liquid testnet HRPs: P2WSH `tex`, taproot `tq`. */
 export const LIQUID_TESTNET: LiquidNetworkParams = { p2wshHrp: 'tex', taprootHrp: 'tq' };
 /** BAO signet Liquid uses the testnet HRPs with signet asset ids on-chain. */
 export const BAO_SIGNET: LiquidNetworkParams = { p2wshHrp: 'tex', taprootHrp: 'tq' };
@@ -416,6 +428,7 @@ export function taprootAddress(internalKeyXOnly: string, merkleRootHex: string |
 
 // ── Transaction skeleton ─────────────────────────────────────────────────────
 
+/** One escrow-funding UTXO (court-side skeleton view). */
 export interface LiquidUtxo {
   readonly txid: string;
   readonly vout: number;
@@ -425,11 +438,17 @@ export interface LiquidUtxo {
   readonly scriptHex: string;
 }
 
+/** One release output: recipient script + amount in sats. */
 export interface LiquidRecipient {
   readonly scriptHex: string;
   readonly amountSats: number;
 }
 
+/**
+ * Court-side release transaction skeleton: inputs, recipients, totals, and
+ * the implied fee. The host confirms outpoints, adds change, and
+ * broadcasts; this is a plan, not a signed transaction.
+ */
 export interface ReleaseSkeleton {
   /** Inputs (host confirms outpoints). */
   readonly inputs: readonly LiquidUtxo[];

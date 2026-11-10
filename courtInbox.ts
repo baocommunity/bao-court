@@ -607,6 +607,13 @@ function compareRecords(a: CourtInboxRecord, b: CourtInboxRecord): number {
  * `myPubkey` before they are stored — so no code path can ever attempt to
  * decrypt a wrap addressed to someone else. Drain then re-checks the address
  * through the signer-backed NIP-59 unwrap, which verifies every layer.
+ *
+ * Example:
+ * ```ts
+ * const inbox = createCourtInbox({ myPubkey });
+ * inbox.ingest(event, 'wss://relay.example', nowSec);
+ * const messages = await inbox.drain(signerCrypto); // rejects are dropped, marked drained
+ * ```
  */
 export class CourtInbox {
   private readonly myPubkey: string;

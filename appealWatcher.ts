@@ -32,6 +32,11 @@ export interface FrostWatcherRelayPool {
   ): { close(): void };
 }
 
+/**
+ * Construction options for the appeal watcher: relays, the host-injected
+ * relay pool, an optional group-pubkey resolver for unwatched markets, and
+ * the `watchAll` mode.
+ */
 export interface FrostAppealWatcherConfig {
   readonly relays: string[];
   /**
@@ -52,6 +57,10 @@ export interface FrostAppealWatcherConfig {
   watchAll?: boolean;
 }
 
+/**
+ * A validated appeal resolution ready for host settlement: market, outcome,
+ * dispute event id, signing group key, and the attestation event id.
+ */
 export interface FrostAppealResolution {
   readonly marketId: string;
   readonly outcome: string;
@@ -60,11 +69,29 @@ export interface FrostAppealResolution {
   readonly eventId: string;
 }
 
+/**
+ * Host callbacks: `onResolution` fires once per accepted attestation
+ * (deduplicated by event id, including in-flight redeliveries);
+ * `onError` receives validation errors with the offending event.
+ */
 export interface FrostAppealWatcherCallbacks {
   readonly onResolution?: (resolution: FrostAppealResolution) => void | Promise<void>;
   readonly onError?: (error: Error, event: NostrEvent) => void;
 }
 
+/**
+ * Listens for Kind 39007 FROST attestations and routes validated override
+ * outcomes into the host settlement flow (paper §5).
+ *
+ * Every event is validated through {@link validateAttestationEvent} against
+ * the market's pinned group pubkey before any callback fires; duplicates are
+ * deduplicated by event id (including concurrent redeliveries). Transport
+ * is host-injected — subscription methods need a pool, direct
+ * `handleEvent`/`handleEvents` do not.
+ *
+ * LIMIT: the watcher validates attestations but performs NO settlement
+ * itself; hosts own fund movement.
+ */
 export class FrostAppealWatcher {
   private readonly relays: string[];
   private readonly pool?: FrostWatcherRelayPool;

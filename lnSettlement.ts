@@ -18,7 +18,7 @@
  * kind reservation) — this module emits no network events itself, only JSON-
  * safe protocol records and audit-event templates via {@link buildLnAuditEvent}.
  *
- * @see docs/SETTLEMENT-RAILS-PLAN.md (status internal)
+ * @see docs/SETTLEMENT-RAILS.md
  * @see ADR-001 (docs/architecture/adr/001-juror-escrow-design.md in bao.markets)
  */
 
@@ -32,6 +32,7 @@ import { CanonicalWriter } from './courtSession';
 /** Domain tag keeps preimages distinct across use sites (stake, bond, refunds). */
 export const LN_PREIMAGE_DOMAIN = 'BAO-Court/LnPreimage/v1';
 
+/** Participant role for a preimage witness: a juror stake or a disputer bond. */
 export type LnRole = 'juror' | 'disputer';
 
 /** Canonical witness that defines a single hold-invoice preimage. */
@@ -88,6 +89,12 @@ export function deriveHoldInvoicePair(w: LnPreimageWitness): {
 
 // ── Hold-invoice lifecycle ───────────────────────────────────────────────────
 
+/**
+ * Lifecycle status of one Lightning hold: `offer` (created, not yet held),
+ * `held` (payment pending), `settled` (preimage released), `cancelled`
+ * (incoherent/bond lost — no preimage), `expired` (timed out, refund path),
+ * or `failed` (malformed construction / invalid transition).
+ */
 export type LnHoldStatus =
   | 'offer'      // invoice created (or offer recorded), not yet held
   | 'held'       // payment pending (hold), awaiting settle/cancel/expire
@@ -96,8 +103,14 @@ export type LnHoldStatus =
   | 'expired'    // hold timed out — refund path, no preimage
   | 'failed';    // malformed construction / invalid transition target
 
+/** Court decision on a hold: `settle` (release preimage) or `cancel`. */
 export type LnDecision = 'settle' | 'cancel';
 
+/**
+ * Immutable record of one hold-invoice escrow: witness, deterministic
+ * preimage/payment hash, amount, lifecycle status, timestamps, decision, and
+ * optional host-side invoice id.
+ */
 export interface LnHoldRecord {
   /** Stable id: witness-derived (disputeId|role|pubkey|round). */
   readonly id: string;
@@ -118,6 +131,10 @@ export interface LnHoldRecord {
   readonly invoiceId?: string;
 }
 
+/**
+ * Input to {@link constructHoldOffer}: the witness fields plus amount,
+ * expiry, and optional host invoice id.
+ */
 export interface LnHoldConstruction {
   readonly disputeId: string;
   readonly role: LnRole;
@@ -161,10 +178,26 @@ export function constructHoldOffer(c: LnHoldConstruction): LnHoldRecord {
 
 // ── Deterministic ledger (serializable) ──────────────────────────────────────
 
+/**
+ * JSON-safe serialization of a ledger: the full list of hold records.
+ * Round-trips through {@link LnHoldLedger.fromSnapshot}.
+ */
 export interface LnLedgerSnapshot {
   readonly holds: readonly LnHoldRecord[];
 }
 
+/**
+ * Deterministic, serializable ledger of Lightning hold-invoice escrows.
+ *
+ * Pure bookkeeping: it derives preimages, tracks lifecycle transitions, and
+ * refuses duplicate ids, invalid transitions, and expired settles/cancels.
+ * It performs no I/O and talks to no node — hosts inject {@link LnRail} for
+ * actual invoice handling and persist snapshots for auditability. All
+ * methods are O(1) except `all()`/`snapshot()` (O(n)).
+ *
+ * @throws {@link LnHoldLedgerError} code `LN_LEDGER` on duplicate ids,
+ *         unknown ids, or illegal transitions.
+ */
 export class LnHoldLedger {
   private readonly byId = new Map<string, LnHoldRecord>();
 
@@ -255,6 +288,11 @@ export class LnHoldLedger {
 
 import type { StakeRedistribution, RedistributionPlan } from './escrow';
 
+/**
+ * Result of mapping a redistribution plan onto hold records: the
+ * id → settle/cancel decisions for every in-scope hold, plus the ids of
+ * holds the plan does not mention (host refund/reclaim path).
+ */
 export interface LnDecisionPlan {
   /** id → decision, for every record found in the redistribution plan. */
   readonly decisions: Record<string, LnDecision>;
@@ -358,12 +396,17 @@ export function planDecisionsForHolds(
 
 // ── Audit event templates (host-owned kinds) ────────────────────────────────
 
+/**
+ * JSON-safe audit event template for a hold transition. The host finalizes
+ * with its own kind and channel; this package emits templates only.
+ */
 export interface LnAuditEventTemplate {
   readonly kind: number;
   readonly tags: string[][];
   readonly content: string;
 }
 
+/** Domain string used in LN audit-event content hashing. */
 export const LN_AUDIT_DOMAIN = 'BAO-Court/LnAudit/v1';
 
 /**

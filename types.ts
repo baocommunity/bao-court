@@ -5,6 +5,13 @@ import type * as frost from '@vbyte/frost';
 /**
  * Shared types for the BAO Court / FROST threshold-oracle appeal module.
  *
+ * Pipeline role: type-only layer consumed by every stage of the dispute
+ * pipeline — dispute/candidacy records, jury selection, DKG records, votes,
+ * attestations, and appeal coordination (paper §3, §5). Declares data, no
+ * behavior.
+ *
+ * Purity: types carry no runtime logic; this module compiles away entirely.
+ *
  * These types are consumed by both the bao.markets reference implementation
  * and the 2140wtf Nostr client. Optional fields allow each app to use only
  * the data it needs.

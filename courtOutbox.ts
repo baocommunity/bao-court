@@ -401,6 +401,23 @@ export function hashCourtOutboxMessage(params: {
  *
  * All mutating methods replace entry objects immutably and are synchronous;
  * call {@link persist} after mutations to flush a snapshot to storage.
+ *
+ * Retry policy: exponential backoff (initial → max, capped) per entry until
+ * `deadlineSeconds` from enqueue, then the entry parks in a
+ * terminal-failed state for host inspection. Corrupt snapshots fail closed
+ * ({@link CourtOutboxError} code `corrupt_snapshot`), never silently drop.
+ *
+ * Example:
+ * ```ts
+ * const outbox = (await CourtOutbox.load(storage)) ?? createCourtOutbox({
+ *   initialRetrySeconds: 30, maxRetrySeconds: 3600,
+ *   deadlineSeconds: 7 * 86400, storage,
+ * });
+ * outbox.enqueue({ sessionHash, innerKind, recipientPubkey, payload, wrap }, nowSec);
+ * const due = outbox.dueEntries(nowSec);   // host broadcasts these wraps
+ * outbox.markSent(messageKey, nowSec);     // or recordAck(ackEvent, nowSec)
+ * await outbox.persist();
+ * ```
  */
 export class CourtOutbox {
   private readonly params: CourtOutboxRetryParams;

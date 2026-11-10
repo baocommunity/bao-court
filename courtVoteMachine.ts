@@ -24,16 +24,38 @@ import {
  * This module performs no network or Nostr signature verification; the event
  * boundary must authenticate authors and roster indices before dispatching
  * events into the reducer.
+ *
+ * Pipeline role: stage 2 of the dispute pipeline (paper §5) — the
+ * commit/reveal vote that produces the tally the court attests. Followed by
+ * the confirmation machine (`courtConfirmationMachine.ts`, paper §6) and the
+ * FROST signing machine (`courtSigningMachine.ts`).
+ *
+ * Purity: both factory and reducer are pure functions of (state, event) with
+ * an injected clock — every time-bearing event carries its own `now`, and no
+ * I/O, randomness, or wall-clock read happens anywhere in the module. All
+ * hash inputs go through `CanonicalWriter` (see `courtSession.ts`).
+ *
+ * Invariants: INV-VOTE-1 … INV-VOTE-23 in docs/FORMAL_INVARIANTS.md §4;
+ * verified by exhaustive model checking (`__tests__/modelChecking.test.ts`).
  */
 
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { CanonicalWriter } from './courtSession';
 
+/** Domain string for canonical session-bound vote-commit hashes. */
 export const COURT_VOTE_COMMIT_DOMAIN = 'BAO-Court/VoteCommit/v1';
+/** Domain string for canonical verdict hashes (per-ceremony tally output). */
 export const COURT_VERDICT_DOMAIN = 'BAO-Court/Verdict/v1';
+/** Domain string for canonical dispute-verdict commitments bound into kind-39007 attestations. */
 export const COURT_DISPUTE_VERDICT_DOMAIN = 'BAO-Court/DisputeVerdict/v1';
 
+/**
+ * Phases of the vote ceremony: `commit_open` → `commit_closed` →
+ * `reveal_open` → `reveal_closed` → `tally_final`, with terminal-failure
+ * phases `expired` (reveal deadline passed before finalization) and
+ * `aborted` (explicit operator abort).
+ */
 export type CourtVotePhase =
   | 'commit_open'
   | 'commit_closed'
@@ -43,17 +65,23 @@ export type CourtVotePhase =
   | 'expired'
   | 'aborted';
 
+/**
+ * Terminal failure of a vote ceremony: which deadline-driven phase failed
+ * (`expired`) or an operator abort (`aborted`), with a human-readable reason.
+ */
 export interface CourtVoteFailure {
   readonly phase: 'expired' | 'aborted';
   readonly reason: string;
 }
 
+/** One accepted commit: roster index, canonical commit hash, source event id. */
 export interface CourtVoteCommitRecord {
   readonly idx: number;
   readonly commitHash: string;
   readonly eventId: string;
 }
 
+/** One accepted reveal: roster index, outcome, salt, source event id. */
 export interface CourtVoteRevealRecord {
   readonly idx: number;
   readonly outcome: string;
@@ -61,6 +89,10 @@ export interface CourtVoteRevealRecord {
   readonly eventId: string;
 }
 
+/**
+ * Final tally output: winning outcome, the sorted supporting reveal event ids
+ * it was computed from, and the canonical {@link COURT_VERDICT_DOMAIN} hash.
+ */
 export interface CourtVerdict {
   readonly outcome: string;
   /** Supporting reveal event ids, sorted lexicographically for canonical hashing. */
@@ -68,6 +100,11 @@ export interface CourtVerdict {
   readonly verdictHash: string;
 }
 
+/**
+ * Immutable state of one vote ceremony. All fields are deep-frozen by the
+ * factory and reducer; `latestTimestamp` is the monotonic-clock ledger
+ * (INV-VOTE monotonicity) used to reject clock rollback.
+ */
 export interface CourtVoteMachineState {
   readonly sessionHash: string;
   readonly participantIndices: readonly number[];
@@ -83,6 +120,12 @@ export interface CourtVoteMachineState {
   readonly failure?: CourtVoteFailure;
 }
 
+/**
+ * Input events for the vote reducer: `accept_commit`, `close_commits`,
+ * `open_reveals`, `accept_reveal`, `close_reveals`, `finalize_tally`, `tick`
+ * (deadline expiry check), and `abort`. Every time-bearing event carries its
+ * own `now` (injected clock); `abort` carries none.
+ */
 export type CourtVoteMachineEvent =
   | {
       readonly type: 'accept_commit';
@@ -106,6 +149,10 @@ export type CourtVoteMachineEvent =
   | { readonly type: 'tick'; readonly now: number }
   | { readonly type: 'abort'; readonly reason: string };
 
+/**
+ * Error thrown for any illegal vote-machine transition or malformed input.
+ * Code: `VOTE_TRANSITION` (docs/FORMAL_INVARIANTS.md §15).
+ */
 export class CourtVoteTransitionError extends CourtError {
   constructor(message: string, options?: CourtErrorOptions) {
     super('VOTE_TRANSITION', message, options);
@@ -385,6 +432,28 @@ function assertValidRevealLedger(state: CourtVoteMachineState): void {
   }
 }
 
+/**
+ * Create the initial state of a vote ceremony (phase `commit_open`).
+ *
+ * Validates and freezes the configuration: a 32-byte-hex session hash, a
+ * canonical roster (indices `[1..n]`, n ≤ 10 000), 2–256 unique non-empty
+ * UTF-8 outcomes of ≤ 256 bytes each (canonical round-trip checked so no two
+ * distinct outcomes share a byte form), and strictly ordered deadlines.
+ *
+ * @returns A deep-frozen initial {@link CourtVoteMachineState}.
+ * @throws {@link CourtVoteTransitionError} on any malformed parameter.
+ *
+ * @example
+ * ```ts
+ * let state = createCourtVoteMachine({
+ *   sessionHash, participantIndices: [1, 2, 3],
+ *   allowedOutcomes: ['YES', 'NO'],
+ *   commitDeadline: t0 + 3600, revealDeadline: t0 + 7200,
+ * });
+ * state = reduceCourtVoteMachine(state, { type: 'accept_commit', idx: 1,
+ *   commitHash, eventId, now: t0 + 10 });
+ * ```
+ */
 export function createCourtVoteMachine(params: {
   readonly sessionHash: string;
   readonly participantIndices: readonly number[];
@@ -458,6 +527,19 @@ export function createCourtVoteMachine(params: {
   });
 }
 
+/**
+ * Apply one event to the vote-machine state and return the next state.
+ *
+ * Pure and fail-closed: validates the event shape, the state's array fields
+ * (tamper barrier), and monotonic non-decreasing `now` (INV-VOTE clock
+ * ledger) before any transition. Complexity O(state size) for
+ * commit/reveal acceptance, O(reveals) for close/finalize.
+ *
+ * @returns A new deep-frozen state; the input state is never mutated.
+ * @throws {@link CourtVoteTransitionError} on any illegal transition
+ *         (out-of-phase event, duplicate commit, reveal/commit mismatch,
+ *         clock rollback, event after a terminal phase).
+ */
 export function reduceCourtVoteMachine(
   state: CourtVoteMachineState,
   event: CourtVoteMachineEvent,

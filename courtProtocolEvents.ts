@@ -1,6 +1,22 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
-/** Strict, versioned event boundary for upgraded BAO Court ceremonies. */
+/**
+ * Strict, versioned event boundary for upgraded BAO Court ceremonies.
+ *
+ * Pipeline role: the authenticated ingress between the Nostr relay layer and
+ * the ceremony machines. "Bound" v1 events carry a session binding
+ * (session hash, suite, attempt, dispute id, juror index) in tags, are
+ * signature-verified, and are cross-checked against the canonical session
+ * parameters — only then may their payloads be dispatched into
+ * `reduceCourtVoteMachine` / `reduceCourtDkgMachine` / etc. Legacy
+ * (pre-binding) events parse via `parseLegacyCourtEventForHistory` for
+ * history reads only, never for ceremony input (paper §5, §11).
+ *
+ * Purity: parsing and verification are pure (signature verification is CPU
+ * work only); no I/O, no randomness, no clock. All errors are
+ * {@link CourtProtocolEventError} with a code from
+ * {@link CourtProtocolEventErrorCode}.
+ */
 
 import { CourtError } from './errors';
 import {
@@ -30,8 +46,21 @@ import {
 import { isValidSecp256k1Point, type DkgProofOfKnowledge } from './crypto';
 import { HEX_32, isRecord } from './courtEventParseCore';
 
+/**
+ * Classification of an inbound event at the protocol boundary:
+ * `bound-v1` (carries a valid v1 session binding), `legacy`
+ * (pre-binding format, history reads only), or `invalid`.
+ */
 export type CourtProtocolEventClassification = 'bound-v1' | 'legacy' | 'invalid';
 
+/**
+ * Machine-readable failure codes for the protocol-event boundary:
+ * signature, kind, content, tag, session-binding, and participant-binding
+ * violations (`invalid_signature`, `unexpected_kind`, `invalid_content`,
+ * `reserved_content`, `missing_tag`, `duplicate_tag`, `invalid_tag`,
+ * `tag_content_mismatch`, `wrong_session`, `wrong_suite`,
+ * `wrong_attempt`, `wrong_dispute`, `participant_binding_mismatch`).
+ */
 export type CourtProtocolEventErrorCode =
   | 'invalid_signature'
   | 'unexpected_kind'
@@ -47,6 +76,11 @@ export type CourtProtocolEventErrorCode =
   | 'wrong_dispute'
   | 'participant_binding_mismatch';
 
+/**
+ * Error thrown when an event fails the protocol-boundary checks. `code` is
+ * always one of {@link CourtProtocolEventErrorCode}; see
+ * docs/FORMAL_INVARIANTS.md §15 for the taxonomy entry.
+ */
 export class CourtProtocolEventError extends CourtError {
   declare readonly code: CourtProtocolEventErrorCode;
 
@@ -55,6 +89,11 @@ export class CourtProtocolEventError extends CourtError {
   }
 }
 
+/**
+ * The session binding carried (in tags) by every bound-v1 protocol event:
+ * schema version, session hash, crypto suite, attempt number, dispute id,
+ * juror index, and the juror's Nostr + host keys.
+ */
 export interface CourtProtocolBinding {
   readonly version: typeof COURT_SESSION_VERSION;
   readonly session: string;
@@ -66,6 +105,11 @@ export interface CourtProtocolBinding {
   readonly hostPubkey: string;
 }
 
+/**
+ * A fully authenticated bound-v1 event: the signature-verified Nostr event,
+ * its parsed binding, the matching session participant record, and the
+ * JSON payload object.
+ */
 export interface ParsedCourtProtocolEvent {
   readonly event: VerifiedEvent;
   readonly binding: CourtProtocolBinding;
@@ -73,11 +117,16 @@ export interface ParsedCourtProtocolEvent {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * A signature-verified legacy (pre-binding) event, retained for history
+ * reads. Legacy events must never be dispatched into ceremony machines.
+ */
 export interface ParsedLegacyCourtEvent {
   readonly event: VerifiedEvent;
   readonly legacy: true;
 }
 
+/** Parsed bound-v1 DKG commitment: threshold, phase nonce, PoK, VSS commitments. */
 export interface ParsedBoundDkgCommitment extends ParsedCourtProtocolEvent {
   readonly threshold: number;
   readonly phaseNonce: string;
@@ -85,15 +134,18 @@ export interface ParsedBoundDkgCommitment extends ParsedCourtProtocolEvent {
   readonly commitments: readonly string[];
 }
 
+/** Parsed bound-v1 vote commit: the canonical commit hash. */
 export interface ParsedBoundVoteCommit extends ParsedCourtProtocolEvent {
   readonly commitHash: string;
 }
 
+/** Parsed bound-v1 vote reveal: plaintext outcome + salt. */
 export interface ParsedBoundVoteReveal extends ParsedCourtProtocolEvent {
   readonly outcome: string;
   readonly salt: string;
 }
 
+/** Parsed bound-v1 FROST signing commitment: the binder/hidden nonce package. */
 export interface ParsedBoundFrostCommit extends ParsedCourtProtocolEvent {
   readonly commitmentPackage: {
     readonly idx: number;
@@ -102,6 +154,7 @@ export interface ParsedBoundFrostCommit extends ParsedCourtProtocolEvent {
   };
 }
 
+/** Parsed bound-v1 FROST signing reveal: public nonce, partial sig, FROST pubkey. */
 export interface ParsedBoundFrostReveal extends ParsedCourtProtocolEvent {
   readonly frostPubkey: string;
   readonly publicNonce: {

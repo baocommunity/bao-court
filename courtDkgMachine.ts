@@ -1,6 +1,26 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
-/** Pure fail-closed state machine for one BAO Court DKG attempt. */
+/**
+ * Pure fail-closed state machine for one BAO Court DKG attempt.
+ *
+ * Pipeline role: stage 1 of the ceremony (paper §3, §7) — the distributed
+ * key generation that certifies the cohort's group public key before any
+ * dispute can be attested. Epoch cohorts amortize this step across disputes
+ * (paper §7); `epochCohort.ts` consumes the certified output.
+ *
+ * Phases: parameters_confirmed → dkg_round_1 → dkg_round_2 →
+ * transcript_signing → certified → backed_up, with failure phases for
+ * deadline expiry, share-delivery failure, peer/coordinator/network aborts,
+ * and crypto-suite incompatibility.
+ *
+ * Purity: factory and reducer are pure functions of (state, event) with an
+ * injected clock (`now` on each event); no I/O, no randomness, no wall
+ * clock. The machine tracks participation and transcript certification, not
+ * the cryptography itself — the boundary must verify VSS shares, proofs of
+ * knowledge, and the transcript before dispatching events.
+ *
+ * Invariants: INV-DKG-1 … INV-DKG-12 in docs/FORMAL_INVARIANTS.md §7.
+ */
 
 import { CourtError, CourtErrorOptions } from './errors';
 import {
@@ -14,6 +34,12 @@ import {
   normalizeCeremonyRoster,
 } from './courtCeremonyCore';
 
+/**
+ * Phases of one DKG attempt: `parameters_confirmed` → `dkg_round_1` →
+ * `dkg_round_2` → `transcript_signing` → `certified` → `backed_up`, with
+ * failure phases `expired`, `delivery_failed`, `aborted_peer`,
+ * `aborted_coordinator`, `aborted_network`, and `incompatible_suite`.
+ */
 export type CourtDkgPhase =
   | 'parameters_confirmed'
   | 'dkg_round_1'
@@ -28,6 +54,11 @@ export type CourtDkgPhase =
   | 'aborted_network'
   | 'incompatible_suite';
 
+/**
+ * The DKG abort-family phases: share-delivery failure, peer/coordinator/
+ * network aborts, and crypto-suite incompatibility. These phases may only be
+ * entered through a validated `abort` event.
+ */
 export type CourtDkgFailurePhase = Extract<
   CourtDkgPhase,
   | 'delivery_failed'
@@ -37,12 +68,22 @@ export type CourtDkgFailurePhase = Extract<
   | 'incompatible_suite'
 >;
 
+/**
+ * Terminal failure of a DKG attempt: deadline expiry or one of the abort
+ * phases, a human-readable reason, and optionally the blamed roster index.
+ */
 export interface CourtDkgFailure {
   readonly phase: CourtDkgFailurePhase | 'expired';
   readonly reason: string;
   readonly blamedIdx?: number;
 }
 
+/**
+ * Immutable state of one DKG attempt. Deep-frozen by factory and reducer;
+ * `latestTimestamp` is the monotonic-clock ledger (INV-DKG monotonicity);
+ * `certifiedGroupPubkey` stays unavailable until every participant certifies
+ * the exact transcript.
+ */
 export interface CourtDkgMachineState {
   readonly sessionHash: string;
   readonly participantIndices: readonly number[];
@@ -61,6 +102,13 @@ export interface CourtDkgMachineState {
   readonly failure?: CourtDkgFailure;
 }
 
+/**
+ * Input events for the DKG reducer: `start`, `accept_round_1`,
+ * `accept_round_2`, `finalize_transcript`, `accept_certification`,
+ * `confirm_backup`, `tick`, and `abort` (with failure phase, reason, and
+ * optional blamed index). Every time-bearing event carries its own `now`
+ * (injected clock).
+ */
 export type CourtDkgMachineEvent =
   | { readonly type: 'start'; readonly now: number }
   | { readonly type: 'accept_round_1'; readonly idx: number; readonly now: number }
@@ -86,6 +134,10 @@ export type CourtDkgMachineEvent =
       readonly blamedIdx?: number;
     };
 
+/**
+ * Error thrown for any illegal DKG-machine transition or malformed input.
+ * Code: `DKG_TRANSITION` (docs/FORMAL_INVARIANTS.md §15).
+ */
 export class CourtDkgTransitionError extends CourtError {
   constructor(message: string, options?: CourtErrorOptions) {
     super('DKG_TRANSITION', message, options);
@@ -156,6 +208,16 @@ function expire(state: CourtDkgMachineState, now: number): CourtDkgMachineState 
   };
 }
 
+/**
+ * Create the initial state of one DKG attempt (phase
+ * `parameters_confirmed`).
+ *
+ * Validates and freezes the configuration: a 32-byte-hex session hash, a
+ * canonical roster (indices `[1..n]`, n ≤ 10 000), and a positive deadline.
+ *
+ * @returns A deep-frozen initial {@link CourtDkgMachineState}.
+ * @throws {@link CourtDkgTransitionError} on any malformed parameter.
+ */
 export function createCourtDkgMachine(params: {
   readonly sessionHash: string;
   readonly participantIndices: readonly number[];
@@ -183,6 +245,20 @@ export function createCourtDkgMachine(params: {
   });
 }
 
+/**
+ * Apply one event to the DKG-machine state and return the next state.
+ *
+ * Pure and fail-closed: validates event shape, state array fields (tamper
+ * barrier), monotonic non-decreasing `now`, transcript-hash binding
+ * (certifications must name the finalized transcript hash), and phase
+ * legality before any transition.
+ *
+ * @returns A new deep-frozen state; the input state is never mutated.
+ * @throws {@link CourtDkgTransitionError} on any illegal transition
+ *         (out-of-phase event, duplicate participation, certification of a
+ *         different transcript, clock rollback, event after a terminal
+ *         phase).
+ */
 export function reduceCourtDkgMachine(
   state: CourtDkgMachineState,
   event: CourtDkgMachineEvent,

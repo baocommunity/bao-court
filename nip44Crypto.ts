@@ -10,6 +10,14 @@ import { hexToBytes } from '@noble/hashes/utils.js';
  * Implementations may be backed by a raw secret key (e.g. nsec stored locally)
  * or by an external signer such as a browser extension or NIP-46 bunker that
  * never exposes the private key.
+ *
+ * Pipeline role: the crypto seam beneath the NIP-59 transport
+ * (`nip59.ts`, `courtSigner.ts`) and the share-backup/recovery envelopes —
+ * wherever gift-wrapped confidentiality is needed.
+ *
+ * Purity: implementations perform key derivation + symmetric crypto only;
+ * they MUST NOT perform I/O or network access. Secret keys are copied at the
+ * boundary and never aliased.
  */
 export interface Nip44Crypto {
   encrypt(plaintext: string, peerPubkey: string): Promise<string> | string;
