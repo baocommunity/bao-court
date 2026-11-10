@@ -31,6 +31,26 @@ section).
 verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 [`docs/GLOSSARY.md`](docs/GLOSSARY.md).
 
+**Documentation map.** Everything else lives under `docs/`:
+
+| Doc | What it is |
+|---|---|
+| [`FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md) | the protocol paper — architecture, math, security analysis, evaluation, production gates |
+| [`FAQ.md`](docs/FAQ.md) | short answers to common questions |
+| [`GLOSSARY.md`](docs/GLOSSARY.md) | normative domain vocabulary |
+| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 145 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
+| [`THREAT_MODEL.md`](docs/THREAT_MODEL.md) | threat model and security argument |
+| [`CRYPTO_AUDIT.md`](docs/CRYPTO_AUDIT.md) | cryptography literature audit — design choices vs the FROST literature, dispositions |
+| [`CROSS_CHECK.md`](docs/CROSS_CHECK.md) | the claim→proof index: every documented claim mapped to the test/bench/model-check/fixture that proves it (`scripts/cross-check.mjs` machine-verifies it) |
+| [`EVALUATION.md`](docs/EVALUATION.md) | the paper's evaluation chapter as a standalone artifact (parity, model checking, benchmarks, audit program) |
+| [`REVIEW_SIMULATION.md`](docs/REVIEW_SIMULATION.md) | external-review simulation: reviewer findings and dispositions |
+| [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
+| [`REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) | one-command reproduction contract (`scripts/reproduce.sh`), variance bounds, committed repro record |
+| [`ESCROW-SLASHING.md`](docs/ESCROW-SLASHING.md) | escrow lifecycle and slashing math |
+| [`SETTLEMENT-RAILS.md`](docs/SETTLEMENT-RAILS.md) | settlement-rail contracts (Panel A Lightning, Panel B Liquid) |
+| [`COMPLAINT-PROTOCOL.md`](docs/COMPLAINT-PROTOCOL.md) | the DKG complaint/possession-binding contract |
+| [`FIXES-2026-08-15.md`](docs/FIXES-2026-08-15.md), [`FIXES-2026-08-18.md`](docs/FIXES-2026-08-18.md), [`FIXES-2026-08-21.md`](docs/FIXES-2026-08-21.md) | historical hardening memos (dated fix records) |
+| `adr/` | architecture decision records |
 
 ---
 
@@ -44,7 +64,7 @@ cannot resolve the package's extensionless internal imports; see
 [§11](#11-testing-and-gates) for details.
 
 ```bash
-npm install github:baocommunity/bao-court#v0.10.1
+npm install github:baocommunity/bao-court#v0.10.2
 npx tsx your-script.ts
 ```
 
@@ -446,7 +466,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (787 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (1,492 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit

@@ -1,6 +1,9 @@
 # V12 Audit — Suggested Fixes Report
 
-> Generated from `docs/f12_fiiixes_export.md`
+> Generated from `docs/f12_fiiixes_export.md` (in the
+> `baocommunity/bao.markets` reference repository). Superseded by
+> [`v12-suggested_fixes_v2.md`](v12-suggested_fixes_v2.md) — the evaluated
+> per-finding report.
 
 > **All 35 actionable findings include V12-provided code patches.**
 

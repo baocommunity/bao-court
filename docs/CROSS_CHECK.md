@@ -1,6 +1,6 @@
 # BAO Court — Cross-Check: every claim, verified in one place
 
-**Version:** tracks `@bao/court` v0.10.2 · **Date:** 2026-11-10 · **Round:** 14
+**Version:** tracks `@bao/court` v0.10.2 · **Date:** 2026-11-10 · **Round:** 14 (re-verified round 17 — final polish)
 (symposium deep cross-check)
 
 This is the single artifact a reviewer uses to verify any claim about the
@@ -48,9 +48,9 @@ Conventions for evidence refs:
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,491 passed / 1 skipped (61 files)** — includes the 5 gap-closing tests added this round |
-| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean |
-| Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (output in the PR body) |
+| Full suite | `npm test` | **1,492 passed / 1 skipped (61 files)** — re-verified 2026-11-10, round 17 (final polish); 1,491 at rounds 14–16 (one test added by the round-16 merge) |
+| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified round 17) |
+| Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (re-verified round 17; output in the PR body) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (17 min): **13 instances, 3,145,632 states, 128,522,740 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
 
 ---

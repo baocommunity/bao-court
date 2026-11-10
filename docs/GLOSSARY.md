@@ -1,4 +1,4 @@
-# BAO Court — Domain Glossary (v0.10.1)
+# BAO Court — Domain Glossary (v0.10.2)
 
 Shared vocabulary for reviewers, auditors, and implementers. Terms are
 defined as they are used **in this codebase**; where a term has a broader
