@@ -2,7 +2,7 @@
 
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
-import { finalizeEvent, type Event as NostrEvent, type EventTemplate } from 'nostr-tools/pure';
+import { finalizeEvent, getEventHash, type Event as NostrEvent, type EventTemplate } from 'nostr-tools/pure';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -513,7 +513,11 @@ describe('CourtInbox drain', () => {
 
   it('drops tampered wraps without throwing and marks them drained', async () => {
     const good = await wrapTo(rumorTemplate(SESSION_CREATED + 100, 'good'), MY_PUBKEY);
+    // Shape-valid wrap with undecryptable content; the id commits to the
+    // tampered content (ingest verifies the commitment since R8), and the
+    // unwrap fails at the NIP-44/seal layer.
     const tampered: NostrEvent = { ...good, content: 'AA'.repeat(64) };
+    tampered.id = getEventHash(tampered);
     const inbox = createCourtInbox({ myPubkey: MY_PUBKEY });
     inbox.ingest(tampered, 'wss://relay-a.example', 1_000);
 

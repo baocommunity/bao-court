@@ -40,6 +40,7 @@
  */
 
 import type { Event as NostrEvent } from 'nostr-tools/pure';
+import { getEventHash } from 'nostr-tools/pure';
 import {
   assertCourtSessionParameters,
   hashCourtSessionParameters,
@@ -531,6 +532,23 @@ function assertWrapShape(value: unknown): asserts value is NostrEvent {
   assertHex32(value.pubkey, 'wrap.pubkey');
   if (typeof value.sig !== 'string' || !HEX_64.test(value.sig)) {
     fail('malformed', 'wrap.sig must be 64-byte lowercase hex');
+  }
+  // The wrap id is the dedupe identity across every relay in the group, so it
+  // must commit to the exact ingested bytes (NIP-01 serialization). Without
+  // this check a hostile relay could serve a same-id different-content wrap
+  // that (a) poisons the stored record when it wins the delivery race, or
+  // (b) dedupes the real wrap away on redelivery — and drain permanently
+  // drops junk, so the message would be lost either way.
+  if (
+    getEventHash({
+      pubkey: value.pubkey,
+      created_at: value.created_at,
+      kind: value.kind,
+      tags: value.tags,
+      content: value.content,
+    } as NostrEvent) !== value.id
+  ) {
+    fail('malformed', 'wrap.id does not commit to the wrap contents');
   }
   if (!Number.isSafeInteger(value.created_at) || (value.created_at as number) < 0) {
     fail('malformed', 'wrap.created_at must be a non-negative Unix timestamp');

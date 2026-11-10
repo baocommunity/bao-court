@@ -180,15 +180,27 @@ function jsonRoundTrip<T>(value: T): unknown {
 
 /** Structural fake wrap: shape-valid, no crypto. Ingest is shape-only. */
 function fakeWrap(overrides: Record<string, unknown> = {}): NostrEvent {
-  return {
+  const base = {
     kind: COURT_GIFT_WRAP_KIND,
-    id: 'ab'.repeat(32),
     pubkey: 'cd'.repeat(32),
     sig: 'ef'.repeat(64),
     created_at: 0,
     content: 'payload',
     tags: [['p', MY_PUBKEY]],
     ...overrides,
+  };
+  // R8 adversarial round: ingest verifies the NIP-01 id commitment at the
+  // boundary, so this helper derives the id from the exact fields it hands
+  // to the inbox (an explicit `id` override is ignored).
+  return {
+    ...base,
+    id: getEventHash({
+      pubkey: base.pubkey,
+      created_at: base.created_at,
+      kind: base.kind,
+      tags: base.tags,
+      content: base.content,
+    } as NostrEvent),
   } as unknown as NostrEvent;
 }
 
@@ -436,13 +448,14 @@ describe('forge: a relay that rewrites wrap address tags cannot reach plaintext'
     const foreign = await wrapTo(rumorTemplate(SESSION_CREATED + 5, 'foreign'), nostrPubkey(3));
     const forged: NostrEvent = {
       kind: COURT_GIFT_WRAP_KIND,
-      id: 'ab'.repeat(32),
+      id: '',
       pubkey: foreign.pubkey,
       sig: 'cd'.repeat(64),
       created_at: foreign.created_at,
       content: foreign.content,
       tags: [...foreign.tags, ['p', MY_PUBKEY]],
     };
+    forged.id = getEventHash(forged);
 
     // Classification is structural only: the p-tag is present, so the wrap
     // category applies — acceptance here is never protocol acceptance.
@@ -601,6 +614,9 @@ describe('replay: inbox ingest dedupe cannot be used to overwrite or re-deliver'
     inbox.ingest(wrap, 'wss://relay-a.example', 1_000);
 
     // Relay B delivers a different wrap object carrying the SAME wrap id.
+    // R8 adversarial round: ingest verifies the id commitment, so a same-id
+    // different-content spoof is now rejected as malformed outright — it can
+    // neither poison the stored record nor merge provenance onto it.
     const spoof: NostrEvent = {
       kind: COURT_GIFT_WRAP_KIND,
       id: wrap.id,
@@ -610,12 +626,14 @@ describe('replay: inbox ingest dedupe cannot be used to overwrite or re-deliver'
       content: 'attacker-controlled-bytes',
       tags: [['p', MY_PUBKEY]],
     } as unknown as NostrEvent;
-    const second = inbox.ingest(spoof, 'wss://relay-b.example', 1_050);
-    expect(second.duplicate).toBe(true);
+    expectInboxError(
+      () => inbox.ingest(spoof, 'wss://relay-b.example', 1_050),
+      'malformed',
+    );
 
     const record = inbox.getRecord(wrap.id);
     expect(record?.wrap.content).toBe(wrap.content);
-    expect(record?.relays).toEqual(['wss://relay-a.example', 'wss://relay-b.example']);
+    expect(record?.relays).toEqual(['wss://relay-a.example']);
 
     const messages = await inbox.drain(new SeckeyCourtSigner(secret(MY_BYTE)));
     expect(messages).toHaveLength(1);
@@ -752,19 +770,22 @@ describe('forge: ingest input hygiene', () => {
     );
   });
 
-  it('accepts MAX_RECORDS distinct wraps and rejects the next new wrap id', () => {
+  // R8: ingest now verifies the NIP-01 id commitment per wrap, so the
+  // 100k-record capacity sweep does 100k id hashes — give it room.
+  it('accepts MAX_RECORDS distinct wraps and rejects the next new wrap id', { timeout: 60_000 }, () => {
     const inbox = createCourtInbox({ myPubkey: MY_PUBKEY });
     for (let i = 0; i < 100_000; i += 1) {
-      inbox.ingest(fakeWrap({ id: i.toString(16).padStart(64, '0') }), 'wss://relay-a.example', i);
+      // Distinct created_at ⇒ distinct committed ids (fakeWrap derives id).
+      inbox.ingest(fakeWrap({ created_at: i }), 'wss://relay-a.example', i);
     }
     expect(inbox.listRecords()).toHaveLength(100_000);
     // The 100_001st distinct wrap id exceeds capacity.
     expectInboxError(
-      () => inbox.ingest(fakeWrap({ id: 'ff'.repeat(32) }), 'wss://relay-a.example', 100_000),
+      () => inbox.ingest(fakeWrap({ created_at: 100_000 }), 'wss://relay-a.example', 100_000),
       'capacity_exceeded',
     );
     // Idempotent redelivery of a known id is not capacity-gated.
-    const dupe = inbox.ingest(fakeWrap({ id: (0).toString(16).padStart(64, '0') }), 'wss://relay-b.example', 100_001);
+    const dupe = inbox.ingest(fakeWrap({ created_at: 0 }), 'wss://relay-b.example', 100_001);
     expect(dupe.duplicate).toBe(true);
   });
 });
@@ -874,12 +895,14 @@ describe('forge: drain verifies every wrap and contains failures per record', ()
       nip44Decrypt: () => Promise.reject(new Error('decrypt blew up')),
     };
     const inbox = createCourtInbox({ myPubkey: MY_PUBKEY });
-    inbox.ingest(fakeWrap({ id: 'aa'.repeat(32) }), 'wss://relay-a.example', 1_000);
-    inbox.ingest(fakeWrap({ id: 'bb'.repeat(32) }), 'wss://relay-b.example', 1_001);
+    const wrapA = fakeWrap({ created_at: 1 });
+    const wrapB = fakeWrap({ created_at: 2 });
+    inbox.ingest(wrapA, 'wss://relay-a.example', 1_000);
+    inbox.ingest(wrapB, 'wss://relay-b.example', 1_001);
 
     await expect(inbox.drain(throwingSigner)).resolves.toEqual([]);
-    expect(inbox.getRecord('aa'.repeat(32))?.drained).toBe(true);
-    expect(inbox.getRecord('bb'.repeat(32))?.drained).toBe(true);
+    expect(inbox.getRecord(wrapA.id)?.drained).toBe(true);
+    expect(inbox.getRecord(wrapB.id)?.drained).toBe(true);
   });
 });
 
@@ -1132,7 +1155,7 @@ describe('store tamper: inbox snapshot restore re-validates everything', () => {
     }
   });
 
-  it('rejects a snapshot with more than MAX_RECORDS records', () => {
+  it('rejects a snapshot with more than MAX_RECORDS records', { timeout: 60_000 }, () => {
     const records = [];
     for (let i = 0; i < 100_001; i += 1) {
       const id = i.toString(16).padStart(64, '0');
@@ -1210,12 +1233,16 @@ describe('store tamper: inbox snapshot restore re-validates everything', () => {
     expect(restoredSig.getRecord(wrap.id)?.drained).toBe(true);
 
     // The load-bearing layers (address tag, encrypted content, seal, rumor
-    // commitment) are verified at drain: a tampered content drops the record.
+    // commitment) are verified at drain; and since R8 the ingest boundary
+    // also verifies the NIP-01 id commitment, so a snapshot record whose
+    // content was tampered (id no longer commits) is rejected at RESTORE —
+    // fail-closed, before drain can ever mark it drained.
     const contentTampered = jsonRoundTrip(good) as MutableInboxSnapshot;
     (contentTampered.records[0] as { wrap: Record<string, unknown> }).wrap.content = '00'.repeat(64);
-    const restoredContent = CourtInbox.fromSnapshot(jsonRoundTrip(contentTampered), MY_PUBKEY);
-    await expect(restoredContent.drain(new SeckeyCourtSigner(secret(MY_BYTE)))).resolves.toEqual([]);
-    expect(restoredContent.getRecord(wrap.id)?.drained).toBe(true);
+    expectInboxError(
+      () => CourtInbox.fromSnapshot(jsonRoundTrip(contentTampered), MY_PUBKEY),
+      'corrupt_snapshot',
+    );
   });
 
   it('restore deep-copies: mutating the snapshot input cannot corrupt the inbox', async () => {

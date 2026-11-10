@@ -225,7 +225,16 @@ export class FrostAppealWatcher {
         return null;
       }
 
-      const outcome = event.tags.find((t) => t[0] === 'o' || t[0] === 'outcome')?.[1];
+      // R8 adversarial-nostr round: the reported outcome must be the tag the
+      // validator authenticated. The previous read preferred the single-letter
+      // `o` tag, which is NOT part of any kind-39007 builder's tag set — a
+      // hostile re-publisher of a valid attestation could append an extra
+      // ['o', <anything>] tag and steer the reported resolution outcome away
+      // from the FROST-certified one (the event's own signature only proves
+      // the untrusted publisher signed it). validation.outcome is
+      // uniqueTag-checked, mirrored in content, and bound into the signed
+      // attestation message.
+      const outcome = validation.outcome;
       if (!outcome) return null;
 
       const disputeEventId = event.tags.find((t) => t[0] === 'dispute')?.[1] ?? '';

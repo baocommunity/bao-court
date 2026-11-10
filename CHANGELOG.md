@@ -9,7 +9,37 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
-## [0.9.3] — 2026-11-10
+## [0.9.4] — 2026-11-10
+
+### Fixed (round-8 adversarial-nostr round — hostile relay data)
+
+- **`appealWatcher` — resolution outcome binding:** `handleEvent` read the
+  reported outcome from the single-letter `o` tag BEFORE the validated
+  `outcome` tag. The `o` tag is not part of any kind-39007 builder's tag set,
+  so a hostile re-publisher of a valid attestation could append an extra
+  `['o', <anything>]` tag and steer the reported resolution outcome away from
+  the FROST-certified one (the event's own Schnorr signature only proves the
+  untrusted publisher signed it). The resolution now carries
+  `validation.outcome` — uniqueTag-checked, content-mirrored, and bound into
+  the signed attestation message. **Consumer impact: none for honest
+  events** (builders never emit `o` on 39007); hostile alias tags can no
+  longer steer resolutions.
+- **`courtInbox` — dedupe-key integrity:** `ingest` accepted any shape-valid
+  64-hex wrap id without verifying the NIP-01 id commitment. A hostile relay
+  could serve a same-id different-content wrap that (a) poisoned the stored
+  record when it won the delivery race, or (b) deduped the real wrap away on
+  redelivery — drain permanently drops junk, so the message was lost either
+  way. `ingest` now recomputes the event hash and rejects non-committing ids
+  as `malformed`. **Consumer impact: none** — every real wrap id commits by
+  construction (`finalizeEvent`); hand-crafted test wraps must derive ids via
+  `getEventHash`.
+- New adversarial suite `__tests__/adversarialNostr.test.ts`: kind confusion
+  (filter drift), tag abuse (duplicates/nesting/empty/100k-mention-tags/
+  MB-scale values), NIP-59 seal games (self-wrapped seals, cross-session
+  replay, algorithm confusion), inbox flooding (dedupe-key poisoning,
+  capacity fail-closed, provenance), watcher outcome binding.
+
+
 
 ### Fixed (round-7 cryptographic literature audit — docs/CRYPTO_AUDIT.md)
 
