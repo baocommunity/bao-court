@@ -1,0 +1,111 @@
+# Mechanical verification run — proofs/mechanized/court.qnt
+# tool: 0.33.1
+# date: 2026-11-10T22:16:22Z
+
+═══ 1/5 quint typecheck ═══
+[ok] typecheck clean
+
+═══ 2/5 quint test --main voteTests ═══
+
+  voteTests
+    ok voteHappyPathTest passed 1 test(s)
+    ok voteTieBreaksLexicographicTest passed 1 test(s)
+    ok voteIdempotentCommitRedeliveryTest passed 1 test(s)
+    ok voteConflictingCommitRejectedTest passed 1 test(s)
+    ok voteLegacyCommitRejectedTest passed 1 test(s)
+    ok voteCommitAtDeadlineRejectedTest passed 1 test(s)
+    ok voteCommitAfterDeadlineRejectedTest passed 1 test(s)
+    ok voteNonRosterCommitRejectedTest passed 1 test(s)
+    ok voteRevealWithoutCommitRejectedTest passed 1 test(s)
+    ok voteRevealMismatchRejectedTest passed 1 test(s)
+    ok voteIdempotentRevealRedeliveryTest passed 1 test(s)
+    ok voteConflictingRevealRejectedTest passed 1 test(s)
+    ok voteUnknownOutcomeRejectedTest passed 1 test(s)
+    ok voteTickExpiresAtRevealDeadlineTest passed 1 test(s)
+    ok voteTickBeforeDeadlineKeepsPhaseTest passed 1 test(s)
+    ok voteTickDoesNotExpireRevealClosedTest passed 1 test(s)
+    ok voteAbortAndTerminalAbsorptionTest passed 1 test(s)
+    ok voteFinalizeWithoutRevealsRejectedTest passed 1 test(s)
+    ok voteVerdictReachableTest passed 1 test(s)
+
+  19 passing (956ms)
+═══ 2/5 quint test --main confirmTests ═══
+
+  confirmTests
+    ok confirmHappyPathNoChallengeTest passed 1 test(s)
+    ok confirmWrongHashRejectedTest passed 1 test(s)
+    ok confirmNonRosterRejectedTest passed 1 test(s)
+    ok confirmAfterWindowRejectedTest passed 1 test(s)
+    ok confirmChallengeIdempotentTest passed 1 test(s)
+    ok confirmChallengeOverturnClawbackTest passed 1 test(s)
+    ok confirmFlipFlopClawbackTest passed 1 test(s)
+    ok confirmRoundMustBeConsecutiveTest passed 1 test(s)
+    ok confirmFirstRoundOpensTest passed 1 test(s)
+    ok confirmLadderCapEnforcedTest passed 1 test(s)
+    ok confirmTickExpiresConfirmClosedTest passed 1 test(s)
+    ok confirmTickExemptsWaitingPhasesTest passed 1 test(s)
+    ok confirmRecordFeeIdempotentAnywhereTest passed 1 test(s)
+    ok confirmFlagClawbackDisciplineTest passed 1 test(s)
+    ok confirmFlagClawbackOutsideFeeSettlementTest passed 1 test(s)
+    ok confirmUpheldRoundBackedByRoundVotesTest passed 1 test(s)
+    ok confirmTerminalAbsorptionTest passed 1 test(s)
+    ok confirmAbortFromNonTerminalTest passed 1 test(s)
+    ok confirmLadderOverturnReachableTest passed 1 test(s)
+
+  19 passing (1039ms)
+═══ 2/5 quint test --main confirmQuorumTests ═══
+
+  confirmQuorumTests
+    ok confirmQuorumNotMetCloseRejectedTest passed 1 test(s)
+    ok confirmQuorumMetCloseAcceptedTest passed 1 test(s)
+    ok confirmUnformedQuorumExpiresTest passed 1 test(s)
+
+  3 passing (172ms)
+═══ 2/5 quint test --main confirmCapOneTests ═══
+
+  confirmCapOneTests
+    ok confirmSingleRoundSettlesDirectlyTest passed 1 test(s)
+
+  1 passing (63ms)
+
+═══ 3/5 quint run voteSim — 10 000 seeded random runs, invariants on ═══
+}
+
+[ok] No violation found (2595ms at 3854 traces/second).
+Trace length statistics: max=16, min=2, average=3.48
+You may increase --max-samples and --max-steps.
+Use --verbosity to produce more (or less) output.
+Witnesses:
+wTallyFinal was witnessed in 25 trace(s) out of 10000 explored (0.25%)
+wFullLedger was witnessed in 1 trace(s) out of 10000 explored (0.01%)
+wExpired was witnessed in 3845 trace(s) out of 10000 explored (38.45%)
+wAborted was witnessed in 6130 trace(s) out of 10000 explored (61.30%)
+Use --seed=0xc8f1d --backend=rust to reproduce.
+
+═══ 4/5 quint run confirmSim — 10 000 seeded random runs, invariants on ═══
+[ok] No violation found (2675ms at 3738 traces/second).
+Trace length statistics: max=21, min=2, average=3.65
+You may increase --max-samples and --max-steps.
+Use --verbosity to produce more (or less) output.
+Witnesses:
+wFinal was witnessed in 75 trace(s) out of 10000 explored (0.75%)
+wOverturned was witnessed in 2 trace(s) out of 10000 explored (0.02%)
+wFlip was witnessed in 0 trace(s) out of 10000 explored (0.00%)
+wTwoRounds was witnessed in 0 trace(s) out of 10000 explored (0.00%)
+wExpired was witnessed in 4516 trace(s) out of 10000 explored (45.16%)
+wAborted was witnessed in 5409 trace(s) out of 10000 explored (54.09%)
+Use --seed=0x143784 --backend=rust to reproduce.
+
+═══ 5/5 quint verify (Apalache symbolic model checking, exhaustive to depth 10) ═══
+--- voteSim ---
+The outcome is: NoError                                           I@22:29:05.153
+[ok] No violation found (741311ms).
+You may increase --max-steps.
+Use --verbosity to produce more (or less) output.
+--- confirmSim ---
+The outcome is: NoError                                           I@22:37:10.569
+[ok] No violation found (482107ms).
+You may increase --max-steps.
+Use --verbosity to produce more (or less) output.
+
+═══ ALL CHECKS COMPLETED ═══
