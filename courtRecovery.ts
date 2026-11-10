@@ -42,6 +42,7 @@
  * randomness source directly.
  */
 
+import { CourtError } from './errors';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
@@ -107,13 +108,11 @@ export type CourtRecoveryErrorCode =
   | 'certificate_mismatch';
 
 /** Error thrown by every fail-closed recovery gate. */
-export class CourtRecoveryError extends Error {
-  readonly code: CourtRecoveryErrorCode;
+export class CourtRecoveryError extends CourtError {
+  declare readonly code: CourtRecoveryErrorCode;
 
   constructor(code: CourtRecoveryErrorCode, message: string) {
-    super(message);
-    this.name = 'CourtRecoveryError';
-    this.code = code;
+    super(code, message);
   }
 }
 

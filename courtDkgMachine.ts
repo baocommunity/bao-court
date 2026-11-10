@@ -2,6 +2,7 @@
 
 /** Pure fail-closed state machine for one BAO Court DKG attempt. */
 
+import { CourtError, CourtErrorOptions } from './errors';
 import {
   HEX_32,
   assertBeforeDeadline as assertBeforeDeadlineCore,
@@ -85,10 +86,9 @@ export type CourtDkgMachineEvent =
       readonly blamedIdx?: number;
     };
 
-export class CourtDkgTransitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CourtDkgTransitionError';
+export class CourtDkgTransitionError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('DKG_TRANSITION', message, options);
   }
 }
 

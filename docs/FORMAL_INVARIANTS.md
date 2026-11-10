@@ -1119,14 +1119,9 @@ Executable pins for this section live in
   constants are pairwise distinct. Guard: the constants themselves (§1.3); test:
   `invariantAssertions.test.ts` › hash-domain family tests.
 - **INV-X-2 (typed error family).** Every exported machine/module error class
-  extends `Error` and sets `name` to its own class name:
-  `CourtVoteTransitionError`, `CourtConfirmationTransitionError`,
-  `CourtSigningTransitionError`, `CourtDkgTransitionError`,
-  `CourtSessionValidationError`, `BatchAttestationError`,
-  `CourtSignerSetError` (plus the boundary-layer families
-  `CourtProtocolEventError`, `CourtInboxError`, `CourtOutboxError`,
-  `CourtKeeperError`, `CourtHostKeyError`, `CourtRecoveryError`,
-  `CourtCapabilityError`, `CourtEpochCohortError`). Test:
+  extends `CourtError` (which extends `Error`) and sets `name` to its own
+  class name; every instance carries a `code` (and `invariant` when it
+  enforces a documented invariant). The full class list is §15 below. Test:
   `invariantAssertions.test.ts` › error-family test.
 - **INV-X-3 (terminal-state closure).** For each machine, the terminal phase
   set is a subset of the exported phase union, and every terminal state is
@@ -1436,3 +1431,73 @@ lack an enforcing test. Ordered by audit significance.
   F-12 are CLOSED (enforced guards + regression tests), and F-10/F-11 remain
   documented-only (F-10 guards are unreachable defense-in-depth, F-11 is
   harmless redundancy).
+
+---
+
+## 15. Error taxonomy (v0.10.1)
+
+Every error thrown across the package boundary is a `CourtError` (`errors.ts`)
+— no plain `Error` escapes. The model has three axes, each independently
+holdable:
+
+1. **Class** — how to `catch`. All 30 exported classes extend `CourtError`.
+2. **`code`** — what happened, machine-readable. New codes are
+   SCREAMING_SNAKE; the pre-existing per-class code unions keep their
+   historical lowercase values (compat is additive — existing `err.code`
+   consumers are unaffected).
+3. **`invariant`** — the INV-* id the error enforces, when it enforces one
+   (populated on selected sites; available on every class via
+   `CourtErrorOptions`).
+
+Cause-chaining is preserved: `{ cause }` flows into `Error(message, { cause })`.
+
+`errors.ts` holds the whole hierarchy; domain modules import their class.
+Legacy classes keep their names, constructors, and code-union values — the
+graft is behavior-preserving except that `instanceof CourtError` is now also
+true.
+
+### 15.1 Base classes
+
+| Class | Constructor | Meaning |
+|---|---|---|
+| `CourtError` | `(code, message, { cause?, invariant? }?)` | Abstract base of the taxonomy: `code` always present |
+| `CourtArgumentError` | `(code, message, options?)` | Caller-bug argument validation (shape/range/encoding of caller-supplied input) |
+
+### 15.2 Code registry
+
+| Code | Class | Thrown from | Invariants enforced |
+|---|---|---|---|
+| `ARGUMENT_INVALID` | `CourtArgumentError` | default code (rarely used; sites pass a domain-prefixed code) | — |
+| `BATCH_ATTESTATION` | `BatchAttestationError` | batchAttestation.ts (14 sites) | INV-BATCH-3 (duplicate verdicts) |
+| `CONFIRMATION_TRANSITION` | `CourtConfirmationTransitionError` | courtConfirmationMachine.ts | INV-CONF-3/5/6/7/9… (illegal edges, deadlines, ledgers) |
+| `SIGNING_TRANSITION` | `CourtSigningTransitionError` | courtSigningMachine.ts | INV-SIGN-3/10/12/13 (edges, deadlines, aborts) |
+| `DKG_TRANSITION` | `CourtDkgTransitionError` | courtDkgMachine.ts | INV-DKG-3/4/9/10/11 (edges, deadlines, aborts) |
+| `VOTE_TRANSITION` | `CourtVoteTransitionError` | courtVoteMachine.ts | INV-VOTE-3/5/6/7/8/11… (edges, windows, ledgers) |
+| `EPOCH_COHORT` | `CourtEpochCohortError` | epochCohort.ts | epoch cohort well-formedness |
+| `SIGNER_SET` | `CourtSignerSetError` | validator.ts | INV-VAL signer-set commitments |
+| `DKG_ARGUMENT` / `DKG_STATE` | `CourtDkgError` | dkg.ts (30 sites) | refresh preserves the group key; transcript well-formedness |
+| `IDKG_ARGUMENT` / `IDKG_STATE` | `IndependentDkgError` | independentDkg.ts (27 sites) | mirror of dkg.ts (differential-parity twin) |
+| `ISIGN_ARGUMENT` / `ISIGN_STATE` | `IndependentSigningError` | independentSigning.ts (6 sites) | mirror of signing.ts |
+| `FROST_SIGNING` | `FrostSigningError` | signing.ts (7 sites) | nonce-reuse guard, signature verification |
+| `SELECTION_ARGUMENT` / `SELECTION_STATE` | `CourtSelectionError` | selection.ts (7 sites) | INV-SEL-4 (weight fail-closed), INV-SEL-6 (pool sufficiency) |
+| `ESCROW_ARGUMENT` / `ESCROW_LEDGER` | `EscrowLedgerError` | escrow.ts (13 sites) | ledger status machine + snapshot integrity |
+| `LN_LEDGER` | `LnHoldLedgerError` | lnSettlement.ts (10 sites) | hold status machine + witness binding |
+| `LN_RAIL` | `LnRailError` | lnRail.ts (6 sites) | rail wiring + injected-fault honesty |
+| `LIQUID_ARGUMENT` / `LIQUID_STATE` | `LiquidEscrowError` | liquidEscrow.ts (21 sites) | covenant script well-formedness, curve lift |
+| `TAPROOT_ARGUMENT` / `TAPROOT_STATE` | `TaprootSpendError` | taprootSpend.ts (21 sites) | control-block/tapleaf integrity, curve lift |
+| `CRYPTO_ARGUMENT` / `CRYPTO_STATE` | `CourtCryptoError` | crypto.ts (7), nip44Crypto.ts (1) | attestation message field languages |
+| `DISPUTE_ARGUMENT` | — (`CourtArgumentError`) | dispute.ts (4 sites) | commit salt/outcome languages |
+| `NOSTR_EVENT_ARGUMENT` | — (`CourtArgumentError`) | events.ts (3 sites) | event tag capacity limits |
+| `SIGNER_ARGUMENT` / `SIGNER_STATE` | `CourtSignerError` | courtSigner.ts (3 sites) | NIP-59 seal well-formedness |
+| `UNWRAP_ARGUMENT` | — (`CourtArgumentError`) | courtUnwrapCore.ts (2 sites) | unwrap filter + batch bounds |
+| `APPEAL_STATE` | `AppealError` | appealCoordinator.ts (5), appealWatcher.ts (2) | reselection fail-closed records, signer/CSPRNG availability |
+| `invalid_*` etc. (legacy, lowercase) | `CourtSessionValidationError`, `CourtInboxError`, `CourtHostKeyError`, `CourtKeeperError`, `CourtCapabilityError`, `CourtOutboxError`, `CourtProtocolEventError`, `CourtRecoveryError` | per-module code unions | see each union's machine section (§3–§8) |
+
+### 15.3 Boundary law
+
+No `throw new Error(...)` remains in package sources (176 sites converted in
+v0.10.1; one internal control-flow throw in `courtProtocolEvents.ts`
+`parseContent` is thrown-and-immediately-caught in the same function and is
+typed too). Malformed-but-well-typed caller input surfaces as
+`CourtArgumentError` (or a domain class), never as a raw `TypeError` escaping
+the boundary — pinned by `__tests__/errorTaxonomy.test.ts`.

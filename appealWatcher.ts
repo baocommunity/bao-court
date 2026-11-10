@@ -14,6 +14,7 @@
  * (`handleEvent`/`handleEvents`) works without any pool.
  */
 
+import { AppealError } from './errors';
 import type { Event as NostrEvent, Filter } from 'nostr-tools';
 import { validateAttestationEvent } from './validator';
 
@@ -219,7 +220,7 @@ export class FrostAppealWatcher {
       const validation = validateAttestationEvent(event, groupPubkey);
       if (!validation.valid) {
         this.callbacks.onError?.(
-          new Error(validation.error ?? 'Invalid FROST attestation'),
+          new AppealError(validation.error ?? 'Invalid FROST attestation'),
           event,
         );
         return null;
@@ -265,7 +266,7 @@ export class FrostAppealWatcher {
     }
     if (this.marketGroupPubkeys.size === 0 && !this.watchAllMarkets) return;
     if (!this.pool) {
-      throw new Error(
+      throw new AppealError('APPEAL_STATE', 
         'FrostAppealWatcher: live subscriptions require a host-injected SimplePool (config.pool)',
       );
     }

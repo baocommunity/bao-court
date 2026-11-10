@@ -25,6 +25,7 @@
  * rebroadcast the exact same gift wrap after a crash.
  */
 
+import { CourtError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { verifyEvent } from 'nostr-tools/pure';
@@ -76,13 +77,11 @@ export type CourtOutboxErrorCode =
   | 'corrupt_snapshot';
 
 /** Error thrown by every fail-closed outbox gate. */
-export class CourtOutboxError extends Error {
-  readonly code: CourtOutboxErrorCode;
+export class CourtOutboxError extends CourtError {
+  declare readonly code: CourtOutboxErrorCode;
 
   constructor(code: CourtOutboxErrorCode, message: string) {
-    super(message);
-    this.name = 'CourtOutboxError';
-    this.code = code;
+    super(code, message);
   }
 }
 

@@ -103,6 +103,7 @@ import { COURT_SIGNER_CAPABILITY_DOMAIN } from '../courtNip46';
 import { BOND_OWNERSHIP_DOMAIN } from '../escrow';
 import { LN_AUDIT_DOMAIN, LN_PREIMAGE_DOMAIN } from '../lnSettlement';
 import { HEX_32 } from '../courtCeremonyCore';
+import { CourtError } from '../errors';
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -302,8 +303,10 @@ describe('INV-X-2: every exported machine error class extends Error with the rig
     for (const Ctor of ERRORS) {
       const err = new Ctor('probe message');
       expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(CourtError);
       expect(err.name).toBe(Ctor.name);
       expect(String(err)).toContain(Ctor.name);
+      expect((err as Error & { code: string }).code.length).toBeGreaterThan(0);
     }
     // CourtSessionValidationError uniquely carries a machine-readable code.
     const sessionErr = new CourtSessionValidationError('invalid_hex', 'probe message');

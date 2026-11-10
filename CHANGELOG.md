@@ -9,6 +9,63 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.10.1] — 2026-11-10
+
+### Added (round-11 error-taxonomy unification — additive only, no behaviour change)
+
+- **Unified error taxonomy (`errors.ts`):** every error thrown across the
+  package boundary is now a `CourtError extends Error` carrying a
+  machine-readable `code` (SCREAMING_SNAKE for new codes; the pre-existing
+  per-class code unions keep their historical lowercase values) and — when
+  the error enforces a documented invariant — an `invariant` field with the
+  INV-* id from docs/FORMAL_INVARIANTS.md §15. Cause-chaining is supported
+  everywhere via `CourtErrorOptions.cause` → `Error(message, { cause })`.
+  Full class/code registry with invariant column: docs/FORMAL_INVARIANTS.md
+  §15.
+- **15 legacy classes grafted** onto `CourtError` (names, constructors, code
+  values, and messages unchanged — `instanceof CourtError` is additionally
+  true): `BatchAttestationError`, `CourtVoteTransitionError`,
+  `CourtConfirmationTransitionError`, `CourtSigningTransitionError`,
+  `CourtDkgTransitionError`, `CourtEpochCohortError`,
+  `CourtSignerSetError`, `CourtSessionValidationError`,
+  `CourtInboxError`, `CourtHostKeyError`, `CourtKeeperError`,
+  `CourtCapabilityError`, `CourtOutboxError`, `CourtProtocolEventError`,
+  `CourtRecoveryError`.
+- **13 new domain classes** (base-constructor style
+  `(code, message, options?)`): `CourtDkgError`, `IndependentDkgError`,
+  `IndependentSigningError`, `FrostSigningError`, `CourtSelectionError`,
+  `EscrowLedgerError`, `LnHoldLedgerError`, `LnRailError`,
+  `LiquidEscrowError`, `TaprootSpendError`, `CourtCryptoError`,
+  `CourtSignerError`, `AppealError`; plus the `CourtArgumentError`
+  caller-bug base (argument-shape failures carry domain-prefixed codes,
+  e.g. `DKG_ARGUMENT`, `TAPROOT_ARGUMENT`).
+- **176 plain `throw new Error(...)` sites converted** across 19 modules —
+  argument-shape failures to `CourtArgumentError`, protocol/ledger/state
+  failures to the domain class. No plain `Error` throw remains in package
+  sources (one internal throw-and-catch control-flow site in
+  `courtProtocolEvents.ts` `parseContent` is typed too). Messages are
+  byte-identical to pre-0.10.1 everywhere.
+- **Boundary hardening found by the new suite:** `SeckeyCourtSigner`'s
+  constructor decoded malformed hex strings before validation (raw
+  decoder `Error` escaped); likewise `taprootSpend.ts` /
+  `liquidEscrow.ts` decoded caller hex via the noble decoder before their
+  length checks. All three now surface `CourtArgumentError` (with
+  `cause` preserved) for malformed-but-typed inputs.
+- **`invariant` traceability:** the base field is populated on selected
+  enforcing sites (e.g. duplicate batch verdicts → `INV-BATCH-3`,
+  selection pool sufficiency → `INV-SEL-6`); the registry table in
+  docs/FORMAL_INVARIANTS.md §15.2 maps every class/code family to the
+  invariants it enforces.
+- **New test suite `__tests__/errorTaxonomy.test.ts` (19 tests):** full
+  registry walk (30 classes extend the base, names survive, codes present,
+  SCREAMING_SNAKE convention), cause-chaining, invariant field, and the
+  boundary law — 15 malformed-but-typed public-API probes assert a typed
+  `CourtError`, never a raw `TypeError`/decoder error.
+  `invariantAssertions.test.ts` INV-X-2 extended: machine error classes must
+  extend `CourtError` and carry a code. **Consumer impact: additive only** —
+  existing catch sites (`instanceof`, message, name, legacy `code` values)
+  are unaffected.
+
 ## [0.10.0] — 2026-11-10
 
 ### Added (round-9 performance optimization — no byte output or behaviour changes)

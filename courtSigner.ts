@@ -23,6 +23,7 @@
  * trusted.
  */
 
+import { CourtArgumentError, CourtSignerError } from './errors';
 import {
   finalizeEvent,
   generateSecretKey,
@@ -53,7 +54,7 @@ function randomNowSeconds(): number {
 
 function assertHex64(value: string, label: string): void {
   if (!HEX_64.test(value)) {
-    throw new Error(`${label} must be a 64-character lowercase hex string`);
+    throw new CourtArgumentError('SIGNER_ARGUMENT', `${label} must be a 64-character lowercase hex string`);
   }
 }
 
@@ -107,9 +108,20 @@ export class SeckeyCourtSigner implements CourtEventSigner {
     // Copy at the boundary: caller-supplied buffers must never alias our
     // secret, or later mutation/zeroization of the source silently corrupts
     // (or "destroys") this signer.
-    this.seckey = typeof seckey === 'string' ? hexToBytes(seckey) : new Uint8Array(seckey);
+    this.seckey =
+      typeof seckey === 'string'
+        ? // Boundary law: a malformed hex string must surface as a typed
+          // CourtArgumentError, not as the underlying hex decoder's raw Error.
+          (() => {
+            try {
+              return hexToBytes(seckey);
+            } catch (cause) {
+              throw new CourtArgumentError('SIGNER_ARGUMENT', 'seckey must be 64-character lowercase hex', { cause });
+            }
+          })()
+        : new Uint8Array(seckey);
     if (this.seckey.length !== 32) {
-      throw new Error('seckey must be 32 bytes');
+      throw new CourtArgumentError('SIGNER_ARGUMENT', 'seckey must be 32 bytes');
     }
     this.crypto = new Nip44SeckeyCrypto(this.seckey);
   }
@@ -191,7 +203,7 @@ export async function wrapProtocolEventWithSigner(
     || sealCandidate.pubkey !== senderPubkey
     || !verifyEvent(sealCandidate)
   ) {
-    throw new Error('external signer returned an invalid NIP-59 seal');
+    throw new CourtSignerError('SIGNER_STATE', 'external signer returned an invalid NIP-59 seal');
   }
 
   // Wrap: kind 1059 under a locally generated ephemeral key.

@@ -12,6 +12,7 @@
  * No credentials, no secrets, no node URLs live here.
  */
 
+import { LnRailError } from './errors';
 import type { LnDecision, LnHoldRecord } from './lnSettlement';
 
 export interface LnRailCreateInvoiceParams {
@@ -56,7 +57,7 @@ export async function applyLnDecision(
   hold: LnHoldRecord,
   decision: LnDecision,
 ): Promise<void> {
-  if (!hold.invoiceId) throw new Error(`applyLnDecision: hold ${hold.id} has no invoiceId`);
+  if (!hold.invoiceId) throw new LnRailError('LN_RAIL', `applyLnDecision: hold ${hold.id} has no invoiceId`);
   if (decision === 'settle') {
     await rail.settleHold(hold.invoiceId, hold.preimage);
   } else {
@@ -110,16 +111,16 @@ export function createFakeLnRail(options: FakeLnRailOptions = {}): { rail: LnRai
     async settleHold(invoiceId, preimageHex) {
       state.calls.push(`settle:${invoiceId}:${preimageHex.slice(0, 8)}`);
       const inv = state.invoices.get(invoiceId);
-      if (!inv) throw new Error(`fake rail: unknown invoice ${invoiceId}`);
-      if (options.failSettle) throw new Error('fake rail: settle failure');
+      if (!inv) throw new LnRailError('LN_RAIL', `fake rail: unknown invoice ${invoiceId}`);
+      if (options.failSettle) throw new LnRailError('LN_RAIL', 'fake rail: settle failure');
       inv.settled = true;
       inv.releasedPreimage = preimageHex;
     },
     async cancelHold(invoiceId) {
       state.calls.push(`cancel:${invoiceId}`);
       const inv = state.invoices.get(invoiceId);
-      if (!inv) throw new Error(`fake rail: unknown invoice ${invoiceId}`);
-      if (options.failCancel) throw new Error('fake rail: cancel failure');
+      if (!inv) throw new LnRailError('LN_RAIL', `fake rail: unknown invoice ${invoiceId}`);
+      if (options.failCancel) throw new LnRailError('LN_RAIL', 'fake rail: cancel failure');
       inv.cancelled = true;
     },
     async getStatus(invoiceId) {
@@ -133,7 +134,7 @@ export function createFakeLnRail(options: FakeLnRailOptions = {}): { rail: LnRai
     async waitForPayment(invoiceId) {
       state.calls.push(`wait:${invoiceId}`);
       const inv = state.invoices.get(invoiceId);
-      if (!inv) throw new Error(`fake rail: unknown invoice ${invoiceId}`);
+      if (!inv) throw new LnRailError('LN_RAIL', `fake rail: unknown invoice ${invoiceId}`);
       if (!payOnCreate && !inv.paid) {
         // one-shot: mark paid (simulates the payer paying a hold)
         inv.paid = true;

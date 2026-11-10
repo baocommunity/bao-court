@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { CourtError, CourtErrorOptions } from './errors';
 import {
   HEX_32,
   assertBeforeDeadline as assertBeforeDeadlineCore,
@@ -118,10 +119,9 @@ export type CourtSigningMachineEvent =
       readonly blamedIdx?: number;
     };
 
-export class CourtSigningTransitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'CourtSigningTransitionError';
+export class CourtSigningTransitionError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('SIGNING_TRANSITION', message, options);
   }
 }
 

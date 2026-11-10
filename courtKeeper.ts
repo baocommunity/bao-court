@@ -19,6 +19,7 @@
  * deterministically by iterating the seed-derived candidate stream.
  */
 
+import { CourtError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { CanonicalWriter } from './courtSession';
@@ -38,13 +39,11 @@ export type CourtKeeperErrorCode =
   | 'reveal_mismatch'
   | 'wrong_branch';
 
-export class CourtKeeperError extends Error {
-  readonly code: CourtKeeperErrorCode;
+export class CourtKeeperError extends CourtError {
+  declare readonly code: CourtKeeperErrorCode;
 
   constructor(code: CourtKeeperErrorCode, message: string) {
-    super(message);
-    this.name = 'CourtKeeperError';
-    this.code = code;
+    super(code, message);
   }
 }
 

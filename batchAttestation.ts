@@ -21,6 +21,7 @@
  * tampered or malformed protocol data — only malformed call arguments throw).
  */
 
+import { CourtError, CourtErrorOptions } from './errors';
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -74,10 +75,9 @@ export interface BatchAttestationValidationContext {
   readonly now?: number;
 }
 
-export class BatchAttestationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'BatchAttestationError';
+export class BatchAttestationError extends CourtError {
+  constructor(message: string, options?: CourtErrorOptions) {
+    super('BATCH_ATTESTATION', message, options);
   }
 }
 
@@ -245,6 +245,7 @@ export function buildBatchMerkleTree(verdictHashes: readonly string[]): {
     if (seen.has(hash)) {
       throw new BatchAttestationError(
         'duplicate verdictHash makes batch proofs ambiguous',
+        { invariant: 'INV-BATCH-3' },
       );
     }
     seen.add(hash);

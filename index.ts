@@ -610,3 +610,24 @@ export {
   buildAttestationMessageV2,
   type AttestationV2Field,
 } from './crypto';
+
+// ─── Unified error taxonomy (v0.10.1) ────────────────────────────────────────
+
+export {
+  CourtError,
+  CourtArgumentError,
+  CourtDkgError,
+  IndependentDkgError,
+  IndependentSigningError,
+  FrostSigningError,
+  CourtSelectionError,
+  EscrowLedgerError,
+  LnHoldLedgerError,
+  LnRailError,
+  LiquidEscrowError,
+  TaprootSpendError,
+  CourtCryptoError,
+  CourtSignerError,
+  AppealError,
+} from './errors';
+export type { CourtErrorOptions } from './errors';

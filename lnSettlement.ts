@@ -22,6 +22,7 @@
  * @see ADR-001 (docs/architecture/adr/001-juror-escrow-design.md in bao.markets)
  */
 
+import { LnHoldLedgerError } from './errors';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { CanonicalWriter } from './courtSession';
@@ -171,7 +172,7 @@ export class LnHoldLedger {
     const seen = new Set<string>();
     for (const h of initial) {
       if (seen.has(h.id)) {
-        throw new Error(`LnHoldLedger: duplicate hold id ${h.id} in snapshot`);
+        throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: duplicate hold id ${h.id} in snapshot`);
       }
       seen.add(h.id);
       this.byId.set(h.id, h);
@@ -198,7 +199,7 @@ export class LnHoldLedger {
   offer(c: LnHoldConstruction): LnHoldRecord {
     const rec = constructHoldOffer(c);
     if (this.byId.has(rec.id)) {
-      throw new Error(`LnHoldLedger: duplicate hold id ${rec.id}`);
+      throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: duplicate hold id ${rec.id}`);
     }
     this.byId.set(rec.id, rec);
     return rec;
@@ -214,8 +215,8 @@ export class LnHoldLedger {
    */
   hold(id: string, now = Math.floor(Date.now() / 1000)): LnHoldRecord {
     const r = this.require(id);
-    if (r.status !== 'offer') throw new Error(`LnHoldLedger: cannot hold ${r.status} ${id}`);
-    if (now > r.expiresAt) throw new Error(`LnHoldLedger: hold ${id} already expired at ${r.expiresAt}`);
+    if (r.status !== 'offer') throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: cannot hold ${r.status} ${id}`);
+    if (now > r.expiresAt) throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: hold ${id} already expired at ${r.expiresAt}`);
     const next: LnHoldRecord = { ...r, status: 'held', heldAt: now };
     this.byId.set(id, next);
     return next;
@@ -224,8 +225,8 @@ export class LnHoldLedger {
   /** Decision path: settle (release preimage) or cancel. */
   decide(id: string, decision: LnDecision, now = Math.floor(Date.now() / 1000)): LnHoldRecord {
     const r = this.require(id);
-    if (r.status !== 'held') throw new Error(`LnHoldLedger: cannot decide ${r.status} ${id}`);
-    if (now > r.expiresAt) throw new Error(`LnHoldLedger: hold ${id} expired; refund path, not ${decision}`);
+    if (r.status !== 'held') throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: cannot decide ${r.status} ${id}`);
+    if (now > r.expiresAt) throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: hold ${id} expired; refund path, not ${decision}`);
     const status: LnHoldStatus = decision === 'settle' ? 'settled' : 'cancelled';
     const next: LnHoldRecord = { ...r, status, decision, resolvedAt: now };
     this.byId.set(id, next);
@@ -236,7 +237,7 @@ export class LnHoldLedger {
   expire(id: string, now = Math.floor(Date.now() / 1000)): LnHoldRecord {
     const r = this.require(id);
     if (r.status !== 'held' && r.status !== 'offer') {
-      throw new Error(`LnHoldLedger: cannot expire ${r.status} ${id}`);
+      throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: cannot expire ${r.status} ${id}`);
     }
     const next: LnHoldRecord = { ...r, status: 'expired', resolvedAt: now };
     this.byId.set(id, next);
@@ -245,7 +246,7 @@ export class LnHoldLedger {
 
   private require(id: string): LnHoldRecord {
     const r = this.byId.get(id);
-    if (!r) throw new Error(`LnHoldLedger: unknown hold ${id}`);
+    if (!r) throw new LnHoldLedgerError('LN_LEDGER', `LnHoldLedger: unknown hold ${id}`);
     return r;
   }
 }
@@ -303,7 +304,7 @@ export function planDecisionsForHolds(
     // tampered record would otherwise settle/cancel a DIFFERENT invoice.
     const { paymentHash: expectedPaymentHash } = deriveHoldInvoicePair(h.witness);
     if (h.paymentHash !== expectedPaymentHash) {
-      throw new Error(`LnSettlement: hold ${h.id} payment hash does not match its witness`);
+      throw new LnHoldLedgerError('LN_LEDGER', `LnSettlement: hold ${h.id} payment hash does not match its witness`);
     }
     // Bond holds: only the plan's disputer may be decided by the bond
     // outcome — a hold from any other "disputer" pubkey is out of scope.
@@ -323,7 +324,7 @@ export function planDecisionsForHolds(
       continue;
     }
     if (h.amountSats !== rec.stakeAmount) {
-      throw new Error(
+      throw new LnHoldLedgerError('LN_LEDGER', 
         `LnSettlement: hold ${h.id} amount ${h.amountSats} does not match the plan stake ${rec.stakeAmount}`,
       );
     }
