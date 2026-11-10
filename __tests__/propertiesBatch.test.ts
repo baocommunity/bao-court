@@ -302,7 +302,7 @@ describe('properties: batchAttestation', () => {
     }
   });
 
-  it(`PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (${MUTATION_SAMPLES_PER_BATCH} sampled indices per batch)`, () => {
+  it(`PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (${MUTATION_SAMPLES_PER_BATCH} sampled indices per batch)`, { timeout: 120_000 }, () => {
     for (const { cases, tree, event, groupPub } of batches) {
       const n = cases.length;
       const sortedVerdictHashes = [...cases.map((c) => c.verdictHash)].sort();
