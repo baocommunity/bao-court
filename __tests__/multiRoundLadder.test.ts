@@ -469,3 +469,42 @@ describe('multi-round ladder: v0.8.5 backward compatibility', () => {
     expect(modern.clawbackFlags).toEqual(legacy.clawbackFlags);
   });
 });
+
+describe('multi-round ladder: F-4 — machine-written clawback reasons are protocol reasons only', () => {
+  it('every clawback flag the REDUCER writes across overturn + flip scenarios carries only overturned_confirmation / round_flip reasons', () => {
+    // Scenario 1 — overturn: round 1 majority NO against proposal YES flags
+    // every confirming juror (overturned_confirmation).
+    const overturned = ladderToResolved(
+      [{ votes: [[1, 'NO', 'a1'], [2, 'NO', 'a2'], [3, 'YES', 'a3']] }],
+      { maxLadderRounds: 2 },
+    );
+    // Scenario 2 — flip: round 1 YES (upheld), round 2 flips to NO → both
+    // an overturned_confirmation sweep AND round_flip flags on round 1's
+    // majority.
+    const flipped = ladderToResolved(
+      [
+        { votes: [[1, 'YES', 'c1'], [2, 'YES', 'c2'], [3, 'YES', 'c3']] },
+        { votes: [[1, 'NO', 'd1'], [2, 'NO', 'd2'], [3, 'NO', 'd3']] },
+      ],
+      { maxLadderRounds: 2 },
+    );
+    // Scenario 1 parks in round_resolved (round 1 < cap) — the overturn flags
+    // are already written at resolve_round; scenario 2 settles (round 2 == cap).
+    expect(overturned.phase).toBe('round_resolved');
+    expect(flipped.phase).toBe('fee_settlement');
+    for (const s of [overturned, flipped]) {
+      const reasons = s.clawbackFlags.map((f) => f.reason);
+      for (const reason of reasons) {
+        expect(['overturned_confirmation', 'round_flip']).toContain(reason);
+      }
+      // No foreign reason (e.g. 'manual', 'host_policy') was injected by the
+      // machine itself — host-added reasons may only enter via the explicit
+      // flag_clawback event (INV-CONF-31), never as a side effect.
+    }
+    // Both protocol reasons are actually exercised by the two scenarios —
+    // the pin is not vacuous.
+    const allReasons = new Set([...overturned.clawbackFlags, ...flipped.clawbackFlags].map((f) => f.reason));
+    expect(allReasons.has('overturned_confirmation')).toBe(true);
+    expect(allReasons.has('round_flip')).toBe(true);
+  });
+});
