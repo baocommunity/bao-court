@@ -18,26 +18,8 @@ import type { DkgComplaint, EncryptedShareBackup, SelectedJuror } from '../types
 
 const Point = secp256k1.Point;
 
-function makeJurors(count: number): { juror: SelectedJuror; seckey: Uint8Array; pubkey: string }[] {
-  return Array.from({ length: count }, (_, i) => {
-    const seckey = generateSecretKey();
-    const pubkey = getPublicKey(seckey);
-    return {
-      juror: {
-        idx: i + 1,
-        nostrPubkey: pubkey,
-        stakeCapacitySats: 10_000,
-        stakeCommitment: { amountSats: 10_000, bondAddress: 'bc1q', status: 'confirmed', committedAt: 1 },
-        wotScore: 80,
-        categories: ['world'],
-        registeredAt: 1,
-        priority: i + 1,
-      } as SelectedJuror,
-      seckey,
-      pubkey,
-    };
-  });
-}
+import { jurorWithKeys as makeJurors } from './helpers/fixtures';
+
 
 const DISPUTE = 'd'.repeat(64);
 const SHARE_EVENT = 'f'.repeat(64);

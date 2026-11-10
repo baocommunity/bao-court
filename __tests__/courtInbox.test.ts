@@ -1,7 +1,5 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
-import { bytesToHex } from '@noble/hashes/utils.js';
 import { finalizeEvent, getEventHash, type Event as NostrEvent, type EventTemplate } from 'nostr-tools/pure';
 import { describe, expect, it } from 'vitest';
 
@@ -34,19 +32,7 @@ import {
 } from '../courtSigner';
 import { BAO_COURT_VOTE_COMMIT_KIND, buildVoteCommitEvent } from '../events';
 
-function secret(byte: number): Uint8Array {
-  const value = new Uint8Array(32);
-  value[31] = byte;
-  return value;
-}
-
-function nostrPubkey(byte: number): string {
-  return bytesToHex(schnorr.getPublicKey(secret(byte)));
-}
-
-function hostPubkey(byte: number): string {
-  return bytesToHex(secp256k1.getPublicKey(secret(byte), true));
-}
+import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
 
 const OUTSIDER_BYTE = 9;
 const SESSION_CREATED = 1_787_000_000;

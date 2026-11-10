@@ -22,7 +22,6 @@
 
 import { describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { finalizeEvent, getEventHash, type Event as NostrEvent, type EventTemplate } from 'nostr-tools/pure';
 
@@ -67,19 +66,7 @@ import type { SelectedJuror, StakeCommitment } from '../types';
 /* Fixtures (mirrors courtRelayAdversary.test.ts)                             */
 /* ------------------------------------------------------------------------- */
 
-function secret(byte: number): Uint8Array {
-  const value = new Uint8Array(32);
-  value[31] = byte;
-  return value;
-}
-
-function nostrPubkey(byte: number): string {
-  return bytesToHex(schnorr.getPublicKey(secret(byte)));
-}
-
-function hostPubkey(byte: number): string {
-  return bytesToHex(secp256k1.getPublicKey(secret(byte), true));
-}
+import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
 
 const MY_BYTE = 2;
 const MY_PUBKEY = nostrPubkey(MY_BYTE);

@@ -10,8 +10,7 @@ import {
 import { CanonicalWriter } from '../courtSession';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
-
-const hex = (c: string): string => c.repeat(64);
+import { hexId as hex } from './helpers/ids';
 
 function manualV2(fields: {
   marketId: string;

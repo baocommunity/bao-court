@@ -1,10 +1,8 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
 import { describe, expect, it } from 'vitest';
-import { schnorr } from '@noble/curves/secp256k1.js';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { randomBytes } from 'node:crypto';
-import { finalizeEvent, generateSecretKey, type Event as NostrEvent } from 'nostr-tools/pure';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { finalizeEvent, type Event as NostrEvent } from 'nostr-tools/pure';
 import { BAO_COURT_ATTESTATION_KIND } from '../events';
 import { buildAttestationMessageV2 } from '../crypto';
 import { hashDisputeVerdict } from '../courtVoteMachine';
@@ -16,79 +14,10 @@ import {
 } from '../validator';
 import { CanonicalWriter } from '../courtSession';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { hexId as hex } from './helpers/ids';
+import { schnorrKeypair as kp } from './helpers/keys';
+import { buildV2AttestationEvent as buildV2Event, type V2Fields } from './helpers/fixtures';
 
-const hex = (c: string): string => c.repeat(64);
-
-const kp = (): { sec: Uint8Array; pub: string } => {
-  const sec = randomBytes(32);
-  return { sec, pub: bytesToHex(schnorr.getPublicKey(sec)) };
-};
-
-interface V2Fields {
-  marketId: string;
-  outcome: string;
-  round: string;
-  disputeEventId?: string;
-  verdictHash?: string;
-  epochId: number;
-  tier: number;
-  threshold: number;
-  signerSetRoot: string;
-  attempt?: number;
-  batchMerkleRoot?: string;
-}
-
-function buildV2Event(fields: V2Fields, signer: { sec: Uint8Array; pub: string }, publisherSecret: Uint8Array = generateSecretKey()): NostrEvent {
-  const message = buildAttestationMessageV2({
-    marketId: fields.marketId,
-    outcome: fields.outcome,
-    round: Number(fields.round),
-    disputeEventId: fields.disputeEventId,
-    verdictHash: fields.verdictHash,
-    epochId: fields.epochId,
-    tier: fields.tier,
-    threshold: fields.threshold,
-    signerSetRoot: fields.signerSetRoot,
-    attempt: fields.attempt,
-    batchMerkleRoot: fields.batchMerkleRoot,
-  });
-  const signature = bytesToHex(schnorr.sign(hexToBytes(message), signer.sec));
-  const tags: string[][] = [
-    ['m', fields.marketId],
-    ['p', signer.pub],
-    ['outcome', fields.outcome],
-    ['round', fields.round],
-    ['nonce', signature.slice(0, 64)],
-    ['sig', signature],
-    ['epoch', String(fields.epochId)],
-    ['tier', String(fields.tier)],
-    ['threshold', String(fields.threshold)],
-    ['signers', fields.signerSetRoot],
-  ];
-  if (fields.disputeEventId) tags.push(['dispute', fields.disputeEventId]);
-  if (fields.verdictHash) tags.push(['verdict', fields.verdictHash]);
-  if (fields.attempt !== undefined) tags.push(['attempt', String(fields.attempt)]);
-  if (fields.batchMerkleRoot) tags.push(['batch', fields.batchMerkleRoot]);
-  return finalizeEvent({
-    kind: 89,
-    created_at: 1,
-    tags,
-    content: JSON.stringify({
-      marketId: fields.marketId,
-      outcome: fields.outcome,
-      round: fields.round,
-      message,
-      disputeEventId: fields.disputeEventId,
-      verdictHash: fields.verdictHash,
-      epoch: String(fields.epochId),
-      tier: String(fields.tier),
-      threshold: String(fields.threshold),
-      signerSetRoot: fields.signerSetRoot,
-      attempt: fields.attempt !== undefined ? String(fields.attempt) : undefined,
-      batchMerkleRoot: fields.batchMerkleRoot,
-    }),
-  }, publisherSecret);
-}
 
 const SIGNERS = [1, 2, 3];
 const SIGNERS_ROOT = hashSignerSetRoot(SIGNERS);

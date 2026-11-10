@@ -13,23 +13,7 @@ import { runNormalSigningRound } from '../signing';
 import { hashDisputeVerdict } from '../courtVoteMachine';
 import type { SelectedJuror } from '../types';
 
-function makeJuror(idx: number): SelectedJuror {
-  return {
-    idx,
-    nostrPubkey: '0'.repeat(63) + String(idx),
-    stakeCapacitySats: 10_000,
-    stakeCommitment: {
-      amountSats: 10_000,
-      bondAddress: 'bc1q...',
-      status: 'confirmed',
-      committedAt: 1_700_000_000,
-    },
-    wotScore: 80,
-    categories: ['world'],
-    registeredAt: 1_700_000_000,
-    priority: idx,
-  };
-}
+import { juror as makeJuror } from './helpers/fixtures';
 
 describe('validateAttestationEvent', () => {
   const publisherSecret = generateSecretKey();

@@ -45,23 +45,7 @@ import { secp256k1 } from '@noble/curves/secp256k1.js';
 
 const Point = secp256k1.Point;
 
-function makeJuror(idx: number, pubkey?: string): SelectedJuror {
-  return {
-    idx,
-    nostrPubkey: pubkey ?? '0'.repeat(63) + String(idx),
-    stakeCapacitySats: 10_000,
-    stakeCommitment: {
-      amountSats: 10_000,
-      bondAddress: 'bc1q...',
-      status: 'confirmed',
-      committedAt: 1_700_000_000,
-    },
-    wotScore: 80,
-    categories: ['world'],
-    registeredAt: 1_700_000_000,
-    priority: idx,
-  };
-}
+import { juror as makeJuror } from './helpers/fixtures';
 
 describe('regression: DKG refresh with non-contiguous juror indices', () => {
   it('refreshShares works after a disqualification leaves gaps in the index set', () => {

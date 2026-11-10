@@ -104,6 +104,12 @@ import { BOND_OWNERSHIP_DOMAIN } from '../escrow';
 import { LN_AUDIT_DOMAIN, LN_PREIMAGE_DOMAIN } from '../lnSettlement';
 import { HEX_32 } from '../courtCeremonyCore';
 import { CourtError } from '../errors';
+import {
+  voteMachine as sharedVoteMachine,
+  confirmationMachine as sharedConfirmationMachine,
+  signingMachine as sharedSigningMachine,
+  dkgMachine as sharedDkgMachine,
+} from './helpers/machines';
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -116,22 +122,13 @@ const POINT = (n: number): string =>
   secp256k1.Point.BASE.multiply(BigInt(n)).toHex(true);
 
 function voteMachine(): CourtVoteMachineState {
-  return createCourtVoteMachine({
-    sessionHash: SESSION,
-    participantIndices: [1, 2, 3],
-    allowedOutcomes: ['NO', 'YES'],
-    commitDeadline: 100,
-    revealDeadline: 200,
-  });
+  return sharedVoteMachine({ allowedOutcomes: ['NO', 'YES'] });
 }
 
 function confirmationMachine(): CourtConfirmationMachineState {
-  return createCourtConfirmationMachine({
-    sessionHash: SESSION,
+  return sharedConfirmationMachine({
     proposalHash: PROPOSAL,
-    proposedOutcome: 'YES',
     allowedOutcomes: ['NO', 'YES'],
-    participantIndices: [1, 2, 3],
     confirmQuorum: 2,
     confirmDeadline: 100,
     challengeDeadline: 300,
@@ -139,23 +136,11 @@ function confirmationMachine(): CourtConfirmationMachineState {
 }
 
 function signingMachine(): CourtSigningMachineState {
-  return createCourtSigningMachine({
-    sessionHash: SESSION,
-    verdictHash: PROPOSAL,
-    outcome: 'YES',
-    participantIndices: [1, 2, 3],
-    threshold: 2,
-    attempt: 0,
-    deadline: 500,
-  });
+  return sharedSigningMachine({ verdictHash: PROPOSAL, outcome: 'YES' });
 }
 
 function dkgMachine(): CourtDkgMachineState {
-  return createCourtDkgMachine({
-    sessionHash: SESSION,
-    participantIndices: [1, 2, 3],
-    deadline: 500,
-  });
+  return sharedDkgMachine({ participantIndices: [1, 2, 3], deadline: 500 });
 }
 
 /** Drive the vote machine to `tally_final` (INV-X-3 fixture). */
