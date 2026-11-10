@@ -4,7 +4,7 @@ Every artifact the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`) and
 `docs/CROSS_CHECK.md` cite is regenerable from a clean clone with ONE command:
 
 ```bash
-bash scripts/reproduce.sh                 # full contract (~19 min measured)
+bash scripts/reproduce.sh                 # full contract (~17 min measured)
 # or: npm run reproduce
 bash scripts/reproduce.sh --quick         # skip model-check + bench (~3.5 min)
 bash scripts/reproduce.sh --full-model-check  # exhaustive sweep, no --fast
@@ -41,7 +41,10 @@ exact pre-run bytes restored afterwards).
   16-thread host; single-pass bench under concurrent agent load routinely
   lands here.
 - `REGRESSION` — slower by **>3×**: unambiguous regression or wrong machine
-  class → stage fails.
+  class → stage fails. The gate is **load-aware**: it is enforced only on a
+  quiet box (`loadAvg1m < 2`, read from the bench's own meta); under load,
+  REGRESSION rows are downgraded to `OVER-BOUND-LOADED` warnings, because the
+  baselines were taken on a shared host with documented ×30 load swings.
 - `FASTER` / `no-baseline` — informational.
 
 Rationale: the contract's hard claims are **correctness** (tests, typechecks,
@@ -59,10 +62,11 @@ taken on a shared box with documented ×30 load swings.
 | Clock | `process.hrtime.bigint` only — no `Date.now` in measured paths | — |
 | Network | only stage (b) `npm ci` touches the registry | all measurement stages are offline and CPU-bound |
 
-Measured wall time, full-contract reproduction run of 2026-11-10 (16-thread
+Measured wall times, full-contract reproduction pair of 2026-11-10 (16-thread
 shared host, moderate load, VERDICT in `docs/benchmarks/repro-log-2026-11-10.txt`):
-**total 999.9s ≈ 16.7 min** (stage f ≈ 9.6 min and stage c ≈ 2.6 min dominate).
-`--quick` skips f and g (≈ 12.5 min of the measured total).
+**total 999.9 s / 1015.1 s ≈ 17 min** (stage f `model-check --fast` ≈ 9.6–11.3 min
+and stage c `npm test` ≈ 2.6–3.1 min dominate; bench ≈ 4.2 min).
+`--quick` skips f and g (≈ 14 min of the measured total).
 
 ## Artifacts produced (`.repro-artifacts/`, git-ignored)
 
