@@ -606,6 +606,22 @@ policy; their correctness obligations (append-only money records,
 fail-closed over-debit, network-namespaced epoch ids) are pinned by the
 host's own adversarial suite (the round-10 mechanism audit).
 
+**Consumption obligations for the composite (round-16 external review,
+finding C-2).** The 0.5 farmer floor is a *cap*, not a pass mark: the
+soundness of the composite depends on two host-side obligations that must
+travel with every deployment that uses it. (i) **The retainer/retention
+threshold MUST be set strictly above 0.5** — at a threshold ≤ 0.5 the floor
+is decorative and a zero-participation ack farm passes. (ii) **The
+"participation" definition is a pinned host duty** — the composite is only
+as game-resistant as the event rule that counts a participation, and
+because the metric is linear, published, and monotone, a threshold-sitting
+juror will optimize participation to exactly the cheapest clearing rate
+(Goodhart). The composite prices *attendance*, not coherence: a juror who
+acks and votes in everything but votes wrong keeps SLA 1.0, with wrongness
+priced only by the slashing layer when an overturn materializes — that
+residual is named rather than closed, and its equilibrium analysis is
+registered with PO-1 (docs/REVIEW_SIMULATION.md RS-9).
+
 ---
 
 ## 8. Escrow lifecycle and slashing
@@ -929,8 +945,17 @@ Abstraction limits are stated honestly: explored rosters are small
 (n ≤ 3–4, reduced clocks), because the state space grows combinatorially —
 but the explored transitions are the machines' *own* reducer code paths, so
 the properties are checked on the production guards, not on a model of
-them. Methodology and abstraction limits: the header of
-`__tests__/modelCheckingCore.ts`.
+them. **Scope note (round-16 external review, finding A-1):** the DKG
+machine (`courtDkgMachine.ts`, INV-DKG-1…12) is *not* in the exhaustive
+sweep, by design: its peer events carry cryptographic payloads (encrypted
+shares, PoKs) whose validity is decided outside the reducer, so state-space
+exploration would mostly exercise typed rejection of material the machine
+cannot inspect internally; its structural invariants (unanimity,
+single-transcript certification, clock ledger, terminal absorption) are
+pinned by the invariant/adversarial suites instead, and extending the
+explorer to the DKG's structural event space is a registered follow-up
+(docs/REVIEW_SIMULATION.md RS-1). Methodology and abstraction limits: the
+header of `__tests__/modelCheckingCore.ts`.
 
 ### 11.3 Differential parity — the spec-pinning methodology
 

@@ -153,9 +153,14 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**145 first-order invariants** (`INV-<machine>-<n>`), each extracted from the
+**145 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
-enforcement pointer (`file:line`) and the pinning test. The
+enforcement pointer (`file:line`) and the pinning test. Precision note
+(round-16 external review, finding A-3): the family is *predominantly*
+first-order and machine-checked; INV-CORE-1…8 are the language definitions
+the invariant family is stated over, INV-SEL-3 is statistical by nature
+(pinned by a paired-derivation statistical differential), and INV-VOTE-14
+is pinned as defense-in-depth only (F-10). The
 invariant↔guard↔test traceability matrix (§12 of that doc) is machine-checked
 via docs/CROSS_CHECK.md: **144/145 (99.3%) carry executable proof** (the one
 open entry, INV-VOTE-14, is a defense-in-depth capacity guard, FINDING-F-10).
@@ -346,7 +351,7 @@ so the before/after table is one artifact, not two methodologies.
 | Proof obligations (honest-gap register) | **14** (PO-1…PO-14, each with stage-acceptability + closure path) | THREAT_MODEL §6 |
 | MUST-pin trust boundaries | 12 (P1–P12, each unpinned consequence reproduced by a named adversarial test) | THREAT_MODEL §5 |
 | Claims indexed | **272** across the four claim sources | CROSS_CHECK §2 |
-| **Claim coverage** | **94.9%** with executable proof at PR #63 (258/272), refreshed to **95.2%** (259/272) in PR #64 after four in-round gap closures; **14 open gaps** each registered with a planned proof | CROSS_CHECK §2 + Gap register |
+| **Claim coverage** | **94.9%** with executable proof at PR #63 (258/272), refreshed to **95.2%** (259/272) in PR #64 after four in-round gap closures; **13 open gaps** each registered with a planned proof | CROSS_CHECK §2 + Gap register |
 
 The 94.9% number is itself machine-checked: `node scripts/cross-check.mjs`
 parses the index, verifies all 492 evidence refs resolve against the tree

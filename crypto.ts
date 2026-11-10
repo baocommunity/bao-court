@@ -469,6 +469,15 @@ export function createProofOfKnowledge(
  * window, not an ambiguity: the v1 encoding's aliasing only matters when a
  * hostile peer crafts colliding `domain` strings, and every DKG session also
  * binds commitments to the roster and dispute at the event boundary.
+ *
+ * SUNSET OBLIGATION (round-16 review, finding B-3): this dual acceptance is
+ * permanent only by omission — there is no gate, flag, or deadline that
+ * retires v1. Until the v1 path is removed (or gated behind an explicit
+ * mixed-fleet parameter, registered as RS-6 in docs/REVIEW_SIMULATION.md),
+ * every verifier accepts the aliased v1 encoding, so the
+ * ceremony-binding-confusion class the v2 fix closed remains reachable
+ * against v1-verifying peers. Sunset trigger: the juror-kit v2-uniform
+ * rollout milestone.
  */
 export function verifyProofOfKnowledge(
   pubkeyHex: string,

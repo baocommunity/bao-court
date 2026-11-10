@@ -91,6 +91,13 @@ export const COURT_INBOX_PUBLIC_KINDS = [
 const HEX_32 = /^[0-9a-f]{64}$/;
 const HEX_64 = /^[0-9a-f]{128}$/;
 const MAX_NOSTR_KIND = 65_535;
+// Memory sizing note (round-16 review, finding C-3): the capacity bounds are
+// in RECORDS, not bytes — worst case is MAX_RECORDS × MAX_WRAP_CONTENT_BYTES
+// ≈ 100_000 × 256 KB ≈ 25.6 GB of in-memory record content, plus a transient
+// ~2× during snapshot()'s JSON deep-copy. Hosts must size memory by BYTES
+// (relay-served wraps can legitimately approach the 256 KB per-wrap cap), not
+// by record count, and should prefer incremental persistence over whole-map
+// snapshots at scale.
 const MAX_RECORDS = 100_000;
 const MAX_RELAYS_PER_RECORD = 64;
 const MAX_RELAY_URL_BYTES = 512;
