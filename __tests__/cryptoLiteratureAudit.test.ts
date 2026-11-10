@@ -23,7 +23,9 @@ import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
-import { createProofOfKnowledge, dkgPokDomain, verifyProofOfKnowledge, verifyFinalSignature } from '../crypto';
+import { createProofOfKnowledge, dkgPokDomain, verifyProofOfKnowledge, verifyFinalSignature, buildAttestationMessage, seededScalar } from '../crypto';
+import { runNormalSigningRound } from '../signing';
+import * as frost from '@vbyte/frost';
 import { deriveDisputeGroupPubkey } from '../dispute';
 import { IndependentDkgSession } from '../independentDkg';
 import { IndependentSigningSession } from '../independentSigning';
@@ -308,5 +310,86 @@ describe('AUDIT-3: reveal set must equal commitment set (@vbyte/frost 1.1.5)', (
       expect(session.canAggregate()).toBe(false);
       expect(() => session.aggregate()).toThrow(/reveal set must equal the commitment set/);
     }
+  });
+});
+
+describe('AUDIT-4: binding factors and challenge are message-bound (anti-Drijvers pin)', () => {
+  it('the signing context over the SAME commitment set differs for different messages', { timeout: 120_000 }, async () => {
+    const jurors = makeJurors(3);
+    const disputeId = 'a'.repeat(64);
+    const entries = await runDkg(jurors, disputeId, 'market-audit-4');
+    const first = [...entries.values()][0]!.record;
+    const shares = [...entries.values()].map((e) => e.share);
+    const pnonces = shares.map((share) => {
+      const pkg = frost.Lib.create_commit_pkg(share);
+      return { idx: pkg.idx, binder_pn: pkg.binder_pn, hidden_pn: pkg.hidden_pn };
+    });
+    const groupPk = hexToBytes(first.groupPubkey);
+    const msgA = buildAttestationMessage('market-audit-4', 'yes', 1, disputeId);
+    const msgB = buildAttestationMessage('market-audit-4', 'no', 1, disputeId);
+    expect(msgA).not.toBe(msgB);
+
+    const ctxA = frost.Lib.get_group_signing_ctx(groupPk, pnonces, msgA);
+    const ctxB = frost.Lib.get_group_signing_ctx(groupPk, pnonces, msgB);
+    // Same commitment set, different message ⇒ different binding prefix,
+    // different binding factors, different challenge. The Drijvers/Wagner
+    // k-tree attack requires exactly the opposite (message-independent
+    // nonces); this pin makes that regression visible across a library
+    // upgrade.
+    expect(ctxA.bind_prefix).not.toBe(ctxB.bind_prefix);
+    expect(ctxA.challenge).not.toBe(ctxB.challenge);
+    expect(ctxA.bind_factors.map((f) => f.factor)).not.toEqual(ctxB.bind_factors.map((f) => f.factor));
+    // Determinism: the SAME message over the SAME set derives the SAME context.
+    const ctxA2 = frost.Lib.get_group_signing_ctx(groupPk, pnonces, msgA);
+    expect(ctxA2.challenge).toBe(ctxA.challenge);
+    expect(ctxA2.bind_factors.map((f) => f.factor)).toEqual(ctxA.bind_factors.map((f) => f.factor));
+  });
+
+  it('a group signature over message A does not verify over message B (no cross-message replay)', { timeout: 120_000 }, async () => {
+    const jurors = makeJurors(3);
+    const disputeId = 'b'.repeat(64);
+    const entries = await runDkg(jurors, disputeId, 'market-audit-4b');
+    const record = [...entries.values()][0]!.record;
+    const shares = [...entries.values()].map((e) => e.share);
+    const attestation = runNormalSigningRound({
+      marketId: 'market-audit-4b',
+      outcome: 'yes',
+      round: 1,
+      disputeEventId: disputeId,
+      dkg: record,
+      shares,
+      nonceGuard: { consume: () => true }, // test-isolated guard
+    });
+    const msgA = attestation.message;
+    const msgB = buildAttestationMessage('market-audit-4b', 'no', 1, disputeId);
+    expect(msgA).not.toBe(msgB);
+    expect(verifyFinalSignature(record.groupPubkeyXOnly, msgA, attestation.signature)).toBe(true);
+    expect(verifyFinalSignature(record.groupPubkeyXOnly, msgB, attestation.signature)).toBe(false);
+  });
+});
+
+describe('AUDIT-5: seededScalar counter/bias contract (CRYPTO_AUDIT §5.1)', () => {
+  it('is deterministic and sensitive to both seed and info', () => {
+    const seed = hexToBytes(hex(32));
+    const infoA = new TextEncoder().encode('domain-a');
+    const infoB = new TextEncoder().encode('domain-b');
+    expect(seededScalar(seed, infoA)).toBe(seededScalar(seed, infoA));
+    expect(seededScalar(seed, infoA)).not.toBe(seededScalar(seed, infoB));
+    expect(seededScalar(seed, infoA)).not.toBe(seededScalar(hexToBytes(hex(32)), infoA));
+  });
+
+  it('stays in [1, N-1] and derives independent pseudorandom functions per (seed, info) pair', () => {
+    const N = secp256k1.Point.Fn.ORDER;
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i += 1) {
+      const s = seededScalar(hexToBytes(hex(32)), new TextEncoder().encode(`info-${i}`));
+      expect(s).toBeGreaterThan(0n);
+      expect(s).toBeLessThan(N);
+      seen.add(s.toString(16));
+    }
+    // No collision across 200 distinct (seed, info) pairs (birthday space is
+    // ~2^128 — a collision would indicate the counter/domain are not in the
+    // HKDF info field as documented).
+    expect(seen.size).toBe(200);
   });
 });

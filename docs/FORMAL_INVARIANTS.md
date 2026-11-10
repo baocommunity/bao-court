@@ -1419,6 +1419,10 @@ lack an enforcing test. Ordered by audit significance.
 
 ## 14. Verification
 
+- **Cross-check:** `docs/CROSS_CHECK.md` is the per-claim verification index
+  for every invariant in this document (file + exact test name / bench id /
+  model-check instance), machine-verified by `scripts/cross-check.mjs` —
+  the pointers below are re-verified against the tree there.
 - Full suite: `npm test` (vitest) — all green including
   `__tests__/invariantAssertions.test.ts` (27 always-on global assertions).
 - Typecheck: `npm run typecheck && npm run typecheck:tests`.

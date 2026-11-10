@@ -98,6 +98,31 @@ frozen.
   are unaffected.
 ## [Unreleased]
 
+### Added (docs — symposium round 14: deep cross-check)
+
+- **`docs/CROSS_CHECK.md`** — the single claim→proof artifact: every claim
+  from the three claim sources (145 `INV-*` invariants; the paper's
+  technical claims, ceremony/escrow/rails + universal-confirmation/§6–§7;
+  `CRYPTO_AUDIT.md` §7 security-argument skeleton + §8 dispositions) with
+  the exact verification pointer that proves it today (test file + name,
+  bench id, model-check instance, committed-fixture key, or an explicit Gap
+  register entry). 272 claims indexed, 492 evidence refs, multiple proofs
+  listed where they exist.
+- **`scripts/cross-check.mjs`** — machine-checks the doc: parses the
+  Machine-checkable index and verifies every cited test name exists in the
+  cited file, every bench id / model-check instance / fixture key-value
+  resolves, and every gap-typed claim is registered. `node
+  scripts/cross-check.mjs` exits non-zero on any dangling pointer.
+- **Gap-closing pinning tests** (3 gaps closed): AUDIT-4 (binding
+  factors/challenge are message-bound over a fixed commitment set — the
+  anti-Drijvers pin claimed by CRYPTO_AUDIT §1.1 but absent from the suite),
+  F-4 (machine-written clawback flags carry only protocol reasons), A-11
+  (`seededScalar` counter/bias contract). 14 gaps remain open, each with a
+  planned proof in the Gap register.
+- **Drift corrections:** paper abstract suite count and §11.2 model-check
+  table updated to the regenerated full-sweep fixture (machines changed in
+  v0.10.x); `docs/FORMAL_INVARIANTS.md` §14 now points at the cross-check.
+
 ### Changed (docs)
 
 - **Paper alignment (symposium round 11):** `docs/FROST_COURT_ORACLE_PAPER.md`

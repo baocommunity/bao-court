@@ -46,7 +46,7 @@ plus a deterministic end-to-end simulation harness that runs the entire
 pipeline — selection, DKG, voting, threshold signing, attestation validation,
 slashing, and both settlement rails — in one process with no network. The
 evaluation methodology is itself part of the design: exhaustive finite-state
-model checking of the ceremony machines (1.78M states, zero raw throws),
+model checking of the ceremony machines (3.15M states, zero raw throws),
 differential parity against independent reimplementations of every critical
 pure function, a regenerable performance baseline, and a round-by-round
 cryptographic literature audit (§11).
@@ -912,17 +912,17 @@ at every step:
   instance.
 
 The committed sweep fixture (`__fixtures__/model-check-summary.json`,
-regenerable by `npx tsx scripts/model-check.mjs`) covers 12 instances:
+regenerable by `npx tsx scripts/model-check.mjs`) covers 13 instances:
 
 | Metric | Value |
 |---|---|
-| Concrete states explored | **1,779,778** |
-| Event applications | **70,759,039** |
-| Illegal-event checks (typed rejection exercised) | 43,387,060 |
-| Typed throws | 64,384,858 |
+| Concrete states explored | **3,145,632** |
+| Event applications | **128,522,740** |
+| Illegal-event checks (typed rejection exercised) | 68,077,138 |
+| Typed throws | 112,076,252 |
 | **Raw throws (`TypeError`/`RangeError`)** | **0** |
-| Progress edges / idempotent self-loops | 3,861,229 / 2,512,952 |
-| Determinism paths replayed | 2,400 (all byte-identical) |
+| Progress edges / idempotent self-loops | 11,716,954 / 4,729,534 |
+| Determinism paths replayed | 2,600 (all byte-identical) |
 
 Abstraction limits are stated honestly: explored rosters are small
 (n ≤ 3–4, reduced clocks), because the state space grows combinatorially —
