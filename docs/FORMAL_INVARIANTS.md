@@ -9,6 +9,19 @@ pointer (`file:line`) and the test that pins it. Invariants that could not be
 stated formally, or whose enforcement is partial, are listed explicitly as
 findings (§12).
 
+**Exhaustive model checking (v0.9.3):** beyond the pinning tests, the three
+ceremony phase machines (vote, confirmation, signing) are now verified by
+exhaustive finite-state-space exploration — every reachable state × every
+event application, with properties P1–P5 (phase legality, data invariants
+incl. the A-1 signer-set contract and the F-12 monotonic clock ledger,
+no-dead-ends biconditional, acyclic progress graph, replay determinism) and
+typed-error discipline asserted at every step. The vitest suite
+(`__tests__/modelChecking.test.ts`) runs reduced instances; the full
+multi-million-state sweep runs via `scripts/model-check.mjs` and its
+per-instance numbers are committed in
+`__fixtures__/model-check-summary.json`. Methodology and abstraction limits:
+the header of `__tests__/modelCheckingCore.ts`.
+
 Modules in scope:
 
 | Module | File | Role |

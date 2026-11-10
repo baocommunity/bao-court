@@ -1,0 +1,318 @@
+{
+  "tool": "scripts/model-check.mjs",
+  "description": "Exhaustive finite-state-space model checking of the BAO Court phase machines (courtVoteMachine, courtConfirmationMachine, courtSigningMachine). Regenerate with: npx tsx scripts/model-check.mjs",
+  "generatedAt": "2026-11-10T04:27:01.047Z",
+  "mode": "fast",
+  "totalWallMs": 5422137,
+  "propertiesChecked": [
+    "P1 phase legality — phase ∈ the machine's declared phase set, at every reachable state",
+    "P2 data invariants — ledger ⊆ roster with unique indices, reveals ⊆ commits, ballot closure, real SHA-256 commit-reveal / canonical confirmation-hash / signing-session-hash re-derivation, real secp256k1 nonce points, signer-set freeze == distinct commitment set (A-1), partials ⊆ finalized signer set (A-1), verdict⇔phase coherence, failure⇔expired/aborted, configuration immutability, deep-frozen states, monotonic clock on every edge, tally re-derivation at terminal phases",
+    "P3 no dead ends — biconditional: a non-terminal state can reach a non-aborted terminal IFF it is not one of the machine's own probe-derived parking states",
+    "P4 termination — the progress graph (legal, state-changing, non-abort edges) is acyclic (Kahn); idempotent re-applications are counted self-loops, not cycles",
+    "P5 determinism — ≥ 200 sampled paths per instance replayed from creation, twice, byte-identical states",
+    "typed-error discipline — every illegal event application throws the machine's OWN error class (CourtVoteTransitionError / CourtConfirmationTransitionError / CourtSigningTransitionError); any raw TypeError/RangeError fails the instance"
+  ],
+  "totals": {
+    "instances": 12,
+    "states": 1779778,
+    "abstractStates": 951893,
+    "progressEdges": 3861229,
+    "selfLoops": 2512952,
+    "applications": 70759039,
+    "typedThrows": 64384858,
+    "rawThrows": 0,
+    "illegalEventChecks": 43387060,
+    "determinismPathsReplayed": 2400
+  },
+  "instances": [
+    {
+      "name": "vote n=1 k=2",
+      "states": 334,
+      "abstractStates": 28,
+      "progressEdges": 2341,
+      "selfLoops": 362,
+      "applications": 15224,
+      "typedThrows": 12521,
+      "rawThrows": 0,
+      "illegalChecks": 5824,
+      "terminalStates": 152,
+      "terminalPhaseCounts": {
+        "expired": 30,
+        "aborted": 110,
+        "tally_final": 12
+      },
+      "parkingStates": 18,
+      "parkingKinds": {
+        "reveal_closed:finalize-refuses": 18
+      },
+      "tallyReachableStates": 164,
+      "determinismPathsReplayed": 200,
+      "wallMs": 117
+    },
+    {
+      "name": "vote n=2 k=2",
+      "states": 2650,
+      "abstractStates": 258,
+      "progressEdges": 16959,
+      "selfLoops": 3318,
+      "applications": 117289,
+      "typedThrows": 97012,
+      "rawThrows": 0,
+      "illegalChecks": 46448,
+      "terminalStates": 1424,
+      "terminalPhaseCounts": {
+        "expired": 294,
+        "aborted": 914,
+        "tally_final": 216
+      },
+      "parkingStates": 78,
+      "parkingKinds": {
+        "reveal_closed:finalize-refuses": 78
+      },
+      "tallyReachableStates": 1148,
+      "determinismPathsReplayed": 200,
+      "wallMs": 875
+    },
+    {
+      "name": "vote n=3 k=2",
+      "states": 42646,
+      "abstractStates": 4584,
+      "progressEdges": 254745,
+      "selfLoops": 61650,
+      "applications": 1843302,
+      "typedThrows": 1526907,
+      "rawThrows": 0,
+      "illegalChecks": 750368,
+      "terminalStates": 25544,
+      "terminalPhaseCounts": {
+        "expired": 5406,
+        "aborted": 15206,
+        "tally_final": 4932
+      },
+      "parkingStates": 474,
+      "parkingKinds": {
+        "reveal_closed:finalize-refuses": 474
+      },
+      "tallyReachableStates": 16628,
+      "determinismPathsReplayed": 200,
+      "wallMs": 17891
+    },
+    {
+      "name": "vote n=2 k=3",
+      "states": 5482,
+      "abstractStates": 540,
+      "progressEdges": 34797,
+      "selfLoops": 6942,
+      "applications": 246757,
+      "typedThrows": 205018,
+      "rawThrows": 0,
+      "illegalChecks": 96128,
+      "terminalStates": 2984,
+      "terminalPhaseCounts": {
+        "expired": 618,
+        "aborted": 1898,
+        "tally_final": 468
+      },
+      "parkingStates": 150,
+      "parkingKinds": {
+        "reveal_closed:finalize-refuses": 150
+      },
+      "tallyReachableStates": 2348,
+      "determinismPathsReplayed": 200,
+      "wallMs": 2189
+    },
+    {
+      "name": "confirm n=3 q=3 r=1 challengers=all [clock 6/12/14]",
+      "states": 362046,
+      "abstractStates": 225852,
+      "progressEdges": 672074,
+      "selfLoops": 501186,
+      "applications": 14231718,
+      "typedThrows": 13058458,
+      "rawThrows": 0,
+      "illegalChecks": 8923150,
+      "terminalStates": 234078,
+      "terminalPhaseCounts": {
+        "expired": 21744,
+        "aborted": 128022,
+        "final": 84312
+      },
+      "parkingStates": 360,
+      "parkingKinds": {
+        "ladder_pending:clock-universe-exhausted": 90,
+        "ladder_vote_closed:resolve-refuses": 270
+      },
+      "tallyReachableStates": 127608,
+      "determinismPathsReplayed": 200,
+      "wallMs": 252468
+    },
+    {
+      "name": "confirm n=3 q=1 r=1 dup-event-ids [clock 6/12/14]",
+      "states": 1010820,
+      "abstractStates": 593409,
+      "progressEdges": 1893188,
+      "selfLoops": 1489458,
+      "applications": 41952186,
+      "typedThrows": 38569540,
+      "rawThrows": 0,
+      "illegalChecks": 24927904,
+      "terminalStates": 668382,
+      "terminalPhaseCounts": {
+        "expired": 116307,
+        "aborted": 392523,
+        "final": 159552
+      },
+      "parkingStates": 25512,
+      "parkingKinds": {
+        "ladder_pending:clock-universe-exhausted": 78,
+        "ladder_vote_closed:resolve-refuses": 25074,
+        "fee_settlement:finalize-refuses": 360
+      },
+      "tallyReachableStates": 316926,
+      "determinismPathsReplayed": 200,
+      "wallMs": 654389
+    },
+    {
+      "name": "confirm n=3 q=1 r=2 [clock 6/12/14]",
+      "states": 108405,
+      "abstractStates": 80118,
+      "progressEdges": 179228,
+      "selfLoops": 147078,
+      "applications": 4136817,
+      "typedThrows": 3810511,
+      "rawThrows": 0,
+      "illegalChecks": 2667187,
+      "terminalStates": 65499,
+      "terminalPhaseCounts": {
+        "expired": 6114,
+        "aborted": 35805,
+        "final": 23580
+      },
+      "parkingStates": 2430,
+      "parkingKinds": {
+        "ladder_pending:clock-universe-exhausted": 2355,
+        "ladder_vote_closed:resolve-refuses": 75
+      },
+      "tallyReachableStates": 40476,
+      "determinismPathsReplayed": 200,
+      "wallMs": 41770
+    },
+    {
+      "name": "confirm n=3 q=1 r=1 roundRoster [clock 6/12/14]",
+      "states": 61455,
+      "abstractStates": 37878,
+      "progressEdges": 117113,
+      "selfLoops": 84828,
+      "applications": 2431062,
+      "typedThrows": 2229121,
+      "rawThrows": 0,
+      "illegalChecks": 1514557,
+      "terminalStates": 39669,
+      "terminalPhaseCounts": {
+        "expired": 3744,
+        "aborted": 21705,
+        "final": 14220
+      },
+      "parkingStates": 60,
+      "parkingKinds": {
+        "ladder_pending:clock-universe-exhausted": 15,
+        "ladder_vote_closed:resolve-refuses": 45
+      },
+      "tallyReachableStates": 21726,
+      "determinismPathsReplayed": 200,
+      "wallMs": 24705
+    },
+    {
+      "name": "signing n=2 t=1 [clock 10/25]",
+      "states": 2532,
+      "abstractStates": 127,
+      "progressEdges": 9283,
+      "selfLoops": 2802,
+      "applications": 78588,
+      "typedThrows": 66503,
+      "rawThrows": 0,
+      "illegalChecks": 60830,
+      "terminalStates": 2232,
+      "terminalPhaseCounts": {
+        "expired": 464,
+        "aborted_peer": 754,
+        "aborted_coordinator": 754,
+        "attestation_published": 260
+      },
+      "parkingStates": 0,
+      "parkingKinds": {},
+      "tallyReachableStates": 300,
+      "determinismPathsReplayed": 200,
+      "wallMs": 27006
+    },
+    {
+      "name": "signing n=3 t=2 [clock 10/25]",
+      "states": 19822,
+      "abstractStates": 989,
+      "progressEdges": 73460,
+      "selfLoops": 23272,
+      "applications": 617139,
+      "typedThrows": 520407,
+      "rawThrows": 0,
+      "illegalChecks": 476113,
+      "terminalStates": 17552,
+      "terminalPhaseCounts": {
+        "expired": 3616,
+        "aborted_peer": 5876,
+        "aborted_coordinator": 5876,
+        "attestation_published": 2184
+      },
+      "parkingStates": 0,
+      "parkingKinds": {},
+      "tallyReachableStates": 2270,
+      "determinismPathsReplayed": 200,
+      "wallMs": 404757
+    },
+    {
+      "name": "signing n=3 t=2 commitment-equivocation [clock 6/12]",
+      "states": 143764,
+      "abstractStates": 7121,
+      "progressEdges": 534581,
+      "selfLoops": 168784,
+      "applications": 4464858,
+      "typedThrows": 3761493,
+      "rawThrows": 0,
+      "illegalChecks": 3442438,
+      "terminalStates": 127844,
+      "terminalPhaseCounts": {
+        "expired": 25456,
+        "aborted_peer": 44798,
+        "aborted_coordinator": 41366,
+        "attestation_published": 16224
+      },
+      "parkingStates": 0,
+      "parkingKinds": {},
+      "tallyReachableStates": 15920,
+      "determinismPathsReplayed": 200,
+      "wallMs": 3574269
+    },
+    {
+      "name": "signing n=3 t=2 partial-equivocation [clock 6/12]",
+      "states": 19822,
+      "abstractStates": 989,
+      "progressEdges": 73460,
+      "selfLoops": 23272,
+      "applications": 624099,
+      "typedThrows": 527367,
+      "rawThrows": 0,
+      "illegalChecks": 476113,
+      "terminalStates": 17552,
+      "terminalPhaseCounts": {
+        "expired": 3616,
+        "aborted_peer": 5876,
+        "aborted_coordinator": 5876,
+        "attestation_published": 2184
+      },
+      "parkingStates": 0,
+      "parkingKinds": {},
+      "tallyReachableStates": 2270,
+      "determinismPathsReplayed": 200,
+      "wallMs": 421675
+    }
+  ]
+}
