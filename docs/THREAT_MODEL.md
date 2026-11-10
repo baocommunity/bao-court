@@ -65,7 +65,7 @@ assumption A1 of the paper §10.1).
 | **ADV-COORD** | Malicious coordinator / host | Drives every machine (creates states, closes phases, dispatches); can withhold, reorder, delay, or replay events to peers; can attempt the paper's vector I (phase-timing manipulation); runs restored-snapshot recovery. Cannot sign (no shares), cannot alter frozen machine states undetected. | Running machines it does not host; spending escrow. |
 | **ADV-PROP** | Hostile proposer / oracle | Supplies the proposed outcome, evidence-id set, ballot, deadlines, and anchoring block hash; can grind selection by timing dispute opening and by adaptive reselection (`appealCoordinator.maybeReselect`, CRYPTO_AUDIT §2.4). | Fabricating block hashes at required depth (A5). |
 | **ADV-ECON** | Economic adversaries (two sub-species, the round-10 findings) | **(a) Ack-farming:** maximize measured SLA (ack rate) without participating — pre-fix the SLA was ack-rate-only. **(b) Bond-gaming:** challenge with a bonded but bad-faith dispute to farm overturn clawbacks or to launder a losing position through the ladder; exploit bond-escrow edges (witness-vs-UTXO duty, dust fungibility, redelivery rules). | Stealing sats directly; breaking the ledger state machine. |
-| **ADV-LLM** | External LLM advisor (hermes-juror trust boundary) | Fully controls the advisory LLM's outputs (prompt injection, model compromise, outage, adversarial reasoning text). Controls **no** keys. | Signing anything; overriding the mechanical policy. |
+| **ADV-LLM** | External LLM advisor (hermes-juror trust boundary) | Fully controls the advisory LLM's outputs (prompt injection, model compromise, outage, adversarial reasoning text). Controls **no** keys. Additionally — see §4.7 — influences the *inputs*: dispute evidence TEXT is attacker-influenced and flows into the advisory prompt. | Signing anything; overriding the mechanical policy; moving value. |
 | **ADV-KEY** | Key compromise | Steals one or more juror share files over time (mobile/backup theft); collects shares toward $t$ across epochs; replays stale material; attempts nonce-reuse extraction (paper vector H). | Threshold collection against a refreshed group without stale-share value. |
 | **ADV-NET** | Network-level adversary (eclipse) | Eclipse an individual juror (feed it a partitioned relay view: dropped peers' events + replayed old ones); junction control of a juror's relay list. Honest statement of what Nostr gives: events are **self-authenticating** (id + Schnorr over the NIP-01 serialization, recomputed at ingest — the round-8 fix), but Nostr gives **no** membership, **no** consensus, and **no** eclipse resistance; a partitioned juror may honestly act on a stale view. | Forging events; breaking TLS/transport. |
 
@@ -289,7 +289,10 @@ Stall or kill a ceremony
 ├─ Y3: ladder exhaustion / challenge spam ... maxLadderRounds ≤ 5 (INV-CONF-6/19),
 │   round re-open cost carried by bonds (§4.6)
 └─ Y4: wedge the epoch layer ................ soak-verified: zero lost deadlines at
-    10k/day (R9b), reconcile cursor F6 fix (spurious redelivery 96.6% → 0.00%, R10a)
+    10k/day (R9b) — measured on an in-memory FAKE-pg engine + virtual clock
+    (EVALUATION §6.2): logic-level evidence, not production DB performance
+    (round-16 review, finding C-1; real-pg soak = RS-8), reconcile cursor F6
+    fix (spurious redelivery 96.6% → 0.00%, R10a)
 ```
 
 **Invariants + crypto.** Every awaiting-input phase has a tick deadline
@@ -360,6 +363,48 @@ the two protocol ones — the "machine-generated ⇒ protocol reasons" property
 holds by construction but is untested (PO-9). And as everywhere: a ≥t
 majority can *win* the ladder legitimately and steer slashing through honest
 majorities — economics again (PO-1).
+
+### 4.7 A-LLM — the LLM-advisor boundary (round-16 review, finding B-1)
+
+The ADV-LLM row above was, before this round, the *entire* treatment — one
+table entry with no per-asset argument, no evidence pointer, and no analysis
+of the attack surface that matters most: **evidence TEXT is untrusted and
+flows INTO the advisory LLM's prompt.**
+
+```
+Steer a juror's vote through the advisory channel
+├─ L1: evidence-text prompt injection ........... the dispute author controls
+│   prose that the host renders into the juror-LLM prompt
+├─ L2: sanitizer bypass ......................... the shared guard is a regex
+│   BLACKLIST of English injection phrases — bypassable in other languages,
+│   paraphrase, or markdown structure even after Unicode normalization
+├─ L3: advisory-model compromise / outage ....... ADV-LLM by definition
+└─ L4: mechanical-policy steering ............... a systematically injected
+    advisor can bias the advice INSIDE whatever the mechanical policy allows
+```
+
+**What "LLM advises, key signs" actually buys — stated precisely.** The
+boundary is sound *as a forgery boundary*: no LLM output is ever a signing
+input to FROST (the signed message is the frozen verdict hash — INV-SIGN-1),
+the LLM holds no keys, and every vote a juror casts is an attributable,
+slashable signed event. Prompt injection through evidence text **cannot**
+forge an attestation, cannot move sats, and cannot override a machine
+invariant. What it CAN do is degrade advice quality and, if the
+advice→vote mapping is loose, *steer within* the mechanical policy — waste
+signing attempts, bias vote text, or coordinate a slashable-but-majority
+voting bloc.
+
+**Residual (honest).** The mechanical policy that turns advice into a vote
+is host-side and — before this review — unspecified in both repos; the
+shared sanitizer is a phrase blacklist, a class with known bypasses
+(verified against the host's `sanitizeMarketText`). The boundary's strength
+is therefore *conditional*: it holds exactly as tightly as the mechanical
+policy is narrow and pinned. **[REGISTERED RS-4,
+docs/REVIEW_SIMULATION.md]** the advice→vote mapping specified + a
+prompt-injection repro suite in the host repo. The hermes *report* channel
+(distinct from per-dispute evidence) already carries fail-closed
+network-marker + BIP-340 signature verification host-side — that boundary
+is real and pinned (host `hermesAdvisor.ts`).
 
 ---
 

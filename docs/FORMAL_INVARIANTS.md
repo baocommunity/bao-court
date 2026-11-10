@@ -156,6 +156,15 @@ Each ceremony machine is a tuple `(S, s₀, E, →)` where:
 > states otherwise; the v0.9.2 insertions (signing/DKG clock-ledger blocks,
 > the confirmation outcome-history barrier, the validator/batch empty-pin
 > guards) shift some downstream line numbers slightly in exactly those files.
+> **Round-16 review note (finding A-4):** the v0.10.x suite/module
+> reorganization shifted *many* more pointers (e.g. INV-CONF-2's guard now
+> sits at ~line 188 of `courtConfirmationMachine.ts`, not 586; INV-VOTE-3's
+> `accept_commit` guard at ~line 630 of `courtVoteMachine.ts`, not 526). The
+> line pointers are therefore **advisory**: the binding reference for every
+> invariant is its INV-* ID plus the pinning test, both machine-verified by
+> `scripts/cross-check.mjs` via docs/CROSS_CHECK.md (which carries the
+> current file + test name). Re-resolving line pointers mechanically is
+> registered as RS-2 (docs/REVIEW_SIMULATION.md).
 
 "Reachable" below always means: reachable from `s₀` by a finite sequence of
 defined transitions. Every returned state is deeply frozen (freeze discipline,
@@ -907,6 +916,13 @@ transcript_signing → certified → backed_up`, sinks `expired`, `delivery_fail
   yields `false` (lines 294-313).
   Test: `selection.test.ts` › 'verifyJurySelection confirms a valid selection';
   `regressions.test.ts` › 'selection is reproducible…' (anchored time).
+  *Precision note (round-16 review, finding A-5):* the 1e-12 float tolerance
+  admits a narrow re-ranking window — two *distinct* u32 draws give
+  priorities differing by ≈ 2.33e-10/√rate, so the window opens only when
+  the rate exceeds ~2.3×10⁵: unreachable at quadratic-mode stakes (rate =
+  √stake ⟹ stake > ~5.4×10¹⁰ sats) but reachable in `weightFn` reputation
+  mode with very large weights. Exact-integer comparison is registered as
+  RS-3 (docs/REVIEW_SIMULATION.md).
 
 ---
 

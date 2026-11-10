@@ -194,6 +194,11 @@ Schnorr equation). The domain itself is now the canonical
 tuple — in both `dkg.ts` and `independentDkg.ts`, killing the delimiter aliasing
 at the source. Tests: AUDIT-1 (round-trip, cross-domain rejection, tuple
 distinctness, legacy-v1 acceptance, legacy-v1 cross-domain rejection).
+**Sunset obligation (round-16 review, finding B-3):** v1 acceptance has no
+gate or deadline — until it is removed or parameter-gated (RS-6), every
+verifier accepts the aliased v1 encoding, so this class remains reachable
+against v1-verifying peers; see the `verifyProofOfKnowledge` docstring for
+the sunset trigger.
 
 ### 2.4 Selection seed: what it binds, and what it doesn't — **M, spec'd**
 
@@ -292,9 +297,9 @@ across implementations.
 **Code.** `@noble/curves` 2.4.0 `schnorrVerify` (verified by reading the
 installed source): rejects `x ≥ p`/`x = 0` (r), `s ≥ n` **and** `s = 0`
 (deliberately stricter than BIP-340 — honest signing reaches s = 0 with
-probability ~2⁻²⁵⁶; uniform since every verifier links the same noble), lifts
-x with on-curve checks, and enforces even-y R. All seven `schnorr.verify` call
-sites are exception-guarded and return a typed false:
+probability ~2⁻²⁵⁶; uniform since every verifier links the same noble),
+lifts x with on-curve checks, and enforces even-y R. All seven
+`schnorr.verify` call sites are exception-guarded and return a typed false:
 
 - `crypto.ts:278` `verifySchnorr` (try/catch → false)
 - `validator.ts:226,249,603` (v1, raw, v2 paths — try/catch → invalid)
@@ -318,6 +323,16 @@ ctx, rejects duplicates, requires ≥ threshold distinct indices, and finally
 re-verifies the aggregate with `verify_final_sig` (which delegates to noble's
 strict BIP-340 verifier) — so a hostile coordinator's malleated partials or
 sums fail closed at the aggregator, and independently again at every validator.
+
+**Uniformity correction (round-16 review, finding B-4).** The "every verifier
+links the same noble" claim is **false as stated on this tree**: `nostr-tools`
+carries its own *nested* `@noble/curves@2.0.1` alongside the court's 2.4.0 —
+two copies, two verifiers (the NIP-01 id path vs the attestation path).
+Empirical probe (2026-11-10, this tree, both versions): `schnorr.verify`
+accepts a valid signature and rejects `s = n` on **both** 2.4.0 and 2.0.1 —
+uniform *today*, by upstream behavior, not by the tree's construction. A
+nostr-tools bump can change this silently; it is added to the §6 upgrade
+triggers, and the `^`-range caveat below (§6, finding B-2) compounds it.
 
 ### 4.2 x-only pubkey edge cases — **OK**
 
@@ -368,6 +383,13 @@ counter, never the share alone).
 
 ## 6. `@vbyte/frost` 1.1.5 — verdict
 
+> **Range caveat (round-16 review, finding B-2):** the versions below are the
+> *audited lockfile state*, not what a fresh install resolves — `package.json`
+> declares `^1.1.5` / `^2.2.0` / `^2.13.0` caret ranges. Exact-pinning the
+> crypto-relevant deps (or a CI dependency-audit gate diffing `npm ls` against
+> the audited versions) is registered as RS-5 (docs/REVIEW_SIMULATION.md);
+> the "pin" language in this section should be read as "lockfile-pinned".
+
 Repo: `cmdruid/frost` (MIT, ~43 commits; npm 1.1.4 under `@cmdcode/frost`, 1.1.5
 under `@vbyte/frost`). Findings:
 
@@ -399,7 +421,10 @@ under `@vbyte/frost`). Findings:
   al.'s CRYPTO-2025 adaptive proof, (b) a ChillDKG 1.0/BIP-445 final spec (the
   existing suite slot anticipates it), (c) any change to noble's `schnorrVerify`
   strictness (our validators inherit it — the consensus argument in §4.1 assumes
-  this exact behaviour; pin it in the upgrade checklist).
+  this exact behaviour; pin it in the upgrade checklist — and note finding B-4:
+  the nostr-tools-nested noble copy must be re-probed on every nostr-tools
+  bump, not just the direct dep), (d) any resolved-version change under the
+  `^` ranges of finding B-2.
 
 ## 7. Security-argument skeleton (per invariant)
 

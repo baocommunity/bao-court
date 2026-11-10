@@ -204,6 +204,29 @@ describe('model checking — committed full-sweep fixture (__fixtures__/model-ch
     expect(fixture.totals.instances).toBe(fixture.instances.length);
   });
 
+  it('vacuity guard (round-16 review, finding A-2): instance state counts are pairwise distinct', () => {
+    // Finding F7 (PR #58) showed a variant instance whose fabricated
+    // conflicts collapsed onto its base — identical state spaces, so the
+    // variant exercised nothing it claimed while the suite stayed green.
+    // This guard systematizes that lesson: a variant instance whose state
+    // count equals another instance's is vacuous by the F7 criterion and
+    // must be re-tuned (or its distinctness argument documented HERE before
+    // this assertion is relaxed).
+    const fixture = loadModelCheckSummary();
+    const byStates = new Map<number, string[]>();
+    for (const instance of fixture.instances) {
+      const names = byStates.get(instance.states) ?? [];
+      names.push(instance.name);
+      byStates.set(instance.states, names);
+    }
+    const collisions = [...byStates.entries()].filter(([, names]) => names.length > 1);
+    expect(
+      collisions,
+      `F7 vacuity: instances sharing a state space are not exercising what they claim — ` +
+        `re-tune or justify: ${collisions.map(([s, names]) => `${s}: ${names.join(' / ')}`).join('; ')}`,
+    ).toEqual([]);
+  });
+
   it(
     'cross-check: re-exploring the cheap instances reproduces the fixture numbers exactly',
     () => {
