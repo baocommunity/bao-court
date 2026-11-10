@@ -4,7 +4,7 @@ How the test suite is organized, what each category verifies, and how to add
 a test the house way. Read this before writing your first test here.
 
 ```
-npm test                        # full suite (~60 files, ~1486 tests)
+npm test                        # full suite (60 files, 1,492 tests + 1 env-gated live test)
 npx vitest run <file>           # one file
 npx vitest run -t "name"        # by test name
 npm run typecheck:tests         # tsc over __tests__ (CI gate, same as tests)

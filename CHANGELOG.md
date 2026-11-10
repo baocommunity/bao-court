@@ -9,6 +9,81 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [Unreleased]
+
+### Fixed (docs — symposium round 17: final coherence polish)
+
+- **Version story made coherent at v0.10.2:** README quickstart install pin
+  `v0.10.1` → `v0.10.2`; the paper header now tracks `@bao/court` v0.10.2
+  (was "0.10.0"); `docs/GLOSSARY.md` header bumped to v0.10.2.
+- **Suite-count drift cleared (all counts re-baselined against the current
+  suite: 1,492 passed / 1 skipped, 61 files, verified 2026-11-10):** README
+  §11 ("787 passing") and `TESTING_GUIDE.md` ("~1486 tests") corrected; the
+  paper abstract count 1,491 → 1,492; `REPRODUCIBILITY.md` stage-c
+  expectation re-pinned with the per-round mechanism named; CROSS_CHECK §1
+  re-verified at round 17 (cross-check: 272 claims, 493 evidence refs, OK;
+  `reproduce.sh --quick` REPRODUCED). Round-14/15/16 recorded runs are kept
+  as historical records.
+- **Changelog narrative:** the `[Unreleased]` section moved to the top of
+  `CHANGELOG.md` (it sat between 0.10.1 and 0.10.0); version ladder now
+  reads Unreleased → 0.10.2 → 0.10.1 → 0.10.0 → 0.9.4 → … → 0.8.0.
+- **README documentation map:** new table listing every `docs/` artifact —
+  paper, FAQ, glossary, FORMAL_INVARIANTS, THREAT_MODEL, CRYPTO_AUDIT,
+  CROSS_CHECK, EVALUATION, REVIEW_SIMULATION, TESTING_GUIDE,
+  REPRODUCIBILITY, ESCROW-SLASHING, SETTLEMENT-RAILS, COMPLAINT-PROTOCOL,
+  the hardening memos, and `adr/` — with one-line descriptions; all
+  relative doc links verified to resolve.
+- **Dead-doc/stale-pointer sweep:** `FIXES-2026-08-21.md` no longer calls
+  `v12-suggested_fixes_v2.md` "untracked" (it is tracked); the V12 audit
+  reports now state their source export lives in the
+  `baocommunity/bao.markets` reference repository; `FIXES-2026-08-18.md`
+  round sub-headings demoted from H1 to H2 (heading-hierarchy fix).
+
+### Added (docs — symposium round 14: deep cross-check)
+
+- **`docs/CROSS_CHECK.md`** — the single claim→proof artifact: every claim
+  from the three claim sources (145 `INV-*` invariants; the paper's
+  technical claims, ceremony/escrow/rails + universal-confirmation/§6–§7;
+  `CRYPTO_AUDIT.md` §7 security-argument skeleton + §8 dispositions) with
+  the exact verification pointer that proves it today (test file + name,
+  bench id, model-check instance, committed-fixture key, or an explicit Gap
+  register entry). 272 claims indexed, 492 evidence refs, multiple proofs
+  listed where they exist.
+- **`scripts/cross-check.mjs`** — machine-checks the doc: parses the
+  Machine-checkable index and verifies every cited test name exists in the
+  cited file, every bench id / model-check instance / fixture key-value
+  resolves, and every gap-typed claim is registered. `node
+  scripts/cross-check.mjs` exits non-zero on any dangling pointer.
+- **Gap-closing pinning tests** (3 gaps closed): AUDIT-4 (binding
+  factors/challenge are message-bound over a fixed commitment set — the
+  anti-Drijvers pin claimed by CRYPTO_AUDIT §1.1 but absent from the suite),
+  F-4 (machine-written clawback flags carry only protocol reasons), A-11
+  (`seededScalar` counter/bias contract). 14 gaps remain open, each with a
+  planned proof in the Gap register.
+- **Drift corrections:** paper abstract suite count and §11.2 model-check
+  table updated to the regenerated full-sweep fixture (machines changed in
+  v0.10.x); `docs/FORMAL_INVARIANTS.md` §14 now points at the cross-check.
+
+### Changed (docs)
+
+- **Paper alignment (symposium round 11):** `docs/FROST_COURT_ORACLE_PAPER.md`
+  updated from v0.5.4-era text to describe exactly what ships in v0.10.0 —
+  new sections for universal confirmation and the escalation ladder (§6),
+  epoch cohorts + kind-39018 batch attestations + the v2 finality binding
+  (§7), exhaustive model checking (§11.2), differential parity (§11.3), the
+  performance baseline (§11.4), and the audit program as evaluation
+  methodology (§11.5); new attack vectors L (stale-artifact replay) and M
+  (hostile relay data); stale claims (v1-only attestation format, JIT-only
+  empanelment, test counts) corrected; sections renumbered with
+  cross-references updated.
+
+### Fixed (test-infra)
+
+- `__tests__/propertiesBatch.test.ts` PB2 now carries the same explicit
+  `{ timeout: 120_000 }` as PB1 — under full-suite parallel load the
+  default 5 s test timeout flaked the property sweep (deterministic
+  assertions; no behaviour change).
+
 ## [0.10.2] — 2026-11-10
 
 ### Documentation (API-surface documentation round — comments only, zero behavior change)
@@ -96,52 +171,6 @@ frozen.
   extend `CourtError` and carry a code. **Consumer impact: additive only** —
   existing catch sites (`instanceof`, message, name, legacy `code` values)
   are unaffected.
-## [Unreleased]
-
-### Added (docs — symposium round 14: deep cross-check)
-
-- **`docs/CROSS_CHECK.md`** — the single claim→proof artifact: every claim
-  from the three claim sources (145 `INV-*` invariants; the paper's
-  technical claims, ceremony/escrow/rails + universal-confirmation/§6–§7;
-  `CRYPTO_AUDIT.md` §7 security-argument skeleton + §8 dispositions) with
-  the exact verification pointer that proves it today (test file + name,
-  bench id, model-check instance, committed-fixture key, or an explicit Gap
-  register entry). 272 claims indexed, 492 evidence refs, multiple proofs
-  listed where they exist.
-- **`scripts/cross-check.mjs`** — machine-checks the doc: parses the
-  Machine-checkable index and verifies every cited test name exists in the
-  cited file, every bench id / model-check instance / fixture key-value
-  resolves, and every gap-typed claim is registered. `node
-  scripts/cross-check.mjs` exits non-zero on any dangling pointer.
-- **Gap-closing pinning tests** (3 gaps closed): AUDIT-4 (binding
-  factors/challenge are message-bound over a fixed commitment set — the
-  anti-Drijvers pin claimed by CRYPTO_AUDIT §1.1 but absent from the suite),
-  F-4 (machine-written clawback flags carry only protocol reasons), A-11
-  (`seededScalar` counter/bias contract). 14 gaps remain open, each with a
-  planned proof in the Gap register.
-- **Drift corrections:** paper abstract suite count and §11.2 model-check
-  table updated to the regenerated full-sweep fixture (machines changed in
-  v0.10.x); `docs/FORMAL_INVARIANTS.md` §14 now points at the cross-check.
-
-### Changed (docs)
-
-- **Paper alignment (symposium round 11):** `docs/FROST_COURT_ORACLE_PAPER.md`
-  updated from v0.5.4-era text to describe exactly what ships in v0.10.0 —
-  new sections for universal confirmation and the escalation ladder (§6),
-  epoch cohorts + kind-39018 batch attestations + the v2 finality binding
-  (§7), exhaustive model checking (§11.2), differential parity (§11.3), the
-  performance baseline (§11.4), and the audit program as evaluation
-  methodology (§11.5); new attack vectors L (stale-artifact replay) and M
-  (hostile relay data); stale claims (v1-only attestation format, JIT-only
-  empanelment, test counts) corrected; sections renumbered with
-  cross-references updated.
-
-### Fixed (test-infra)
-
-- `__tests__/propertiesBatch.test.ts` PB2 now carries the same explicit
-  `{ timeout: 120_000 }` as PB1 — under full-suite parallel load the
-  default 5 s test timeout flaked the property sweep (deterministic
-  assertions; no behaviour change).
 
 ## [0.10.0] — 2026-11-10
 

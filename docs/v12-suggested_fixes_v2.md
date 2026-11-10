@@ -16,7 +16,8 @@
 | Rejected | 0 — all 35 were judged valid; 3 ship with a documented different shape |
 
 Reconciled against the original V12 export (`docs/f12_fiiixes_export.md` +
-`docs/export-findings.json`, 81 findings): all 35 `valid` findings appear in
+`docs/export-findings.json` in the `baocommunity/bao.markets` reference
+repository, 81 findings): all 35 `valid` findings appear in
 this report exactly once; the 46 `invalid` findings were re-checked and remain
 un-actioned. No valid finding was dropped in the filtering.
 
