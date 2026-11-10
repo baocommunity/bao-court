@@ -7,7 +7,10 @@ repo + file:line; where a value lives in a merged design document rather
 than in TypeScript, it is marked **spec-pinned** (the distinction is kept
 honest throughout — see §7). Sibling files: [`01-farming.tex.md`](01-farming.tex.md),
 [`02-ladder.tex.md`](02-ladder.tex.md), [`03-collusion.tex.md`](03-collusion.tex.md),
-[`04-goodhart.tex.md`](04-goodhart.tex.md). The parallel mechanization branch
+[`04-goodhart.tex.md`](04-goodhart.tex.md),
+[`05-review-gapfills.tex.md`](05-review-gapfills.tex.md) (the review-response
+round: capture probabilities, per-rail cost of corruption, P+ε, seed grinding,
+the √stake splitting result). The parallel mechanization branch
 (`proofs/mechanized`, this round's companion track) machine-checks the
 protocol theorems as `docs/proofs/mechanized/`; the economics theorems here
 are analytic and bind to the same code lines.
@@ -49,7 +52,7 @@ table), not an incentive-design problem.
 | Phase | Player | Actions | Enforcement |
 |---|---|---|---|
 | propose | $P$ | propose $(o, \text{evidence})$; bond escrowed **before** validity | spec L197, L226 fatal-mistake (1); `BaoCourtService.ts:340–373` (bond computed + lock proof attached, bao.markets) |
-| confirm (round 0) | seated $i$, $n_0 = 5$, quorum 3 | confirm / abstain | paper §6.1; `confirmationMachineTypes.ts:141–172` (bao-court) |
+| confirm (round 0) | seated $i$, $n_0 = 5$, quorum 3 | confirm / abstain | paper §6.1; `confirmationMachineTypes.ts:141–172` (bao-court). **Honest parameter note (05 §1.3):** the quorum is caller-supplied and the *code* default is **1** (`courtConfirmationMachine.ts:223`, `params.confirmQuorum ?? 1`); the spec's 3-of-5 is a host duty, and at 3-of-5 the capture probability is 0.21 at $\rho = 1/3$ versus 0.045 at the $\lceil 2N/3\rceil$ the threat model names |
 | ack (any summons) | any $i \in \mathcal{N}$ | ack / not (kind 39008) | `SummonsAckService.ts` (bao.markets) |
 | challenge | $X$ | challenge (bond-witnessed) / not | INV-CONF-17 bond witness; `escrow.ts:114–131` (`calculateBondAmount`) |
 | vote (ladder round $r$) | seated $i$, $n_r = 5\cdot 3^r$ | commit → reveal / abstain | paper §6.2; `courtVoteMachine.ts` commit–reveal |
@@ -77,7 +80,11 @@ table), not an incentive-design problem.
    $(\text{disputeEventId}, \text{blockHash}, \text{reputationRoot})$ but
    unpredictable ex ante (A5): no one knows the seated set when bribe
    contracts would have to be written. Residual seed-grinding is PO-2
-   (`THREAT_MODEL.md:453`), accepted and priced there.
+   (`THREAT_MODEL.md` §6 PO-2), accepted and priced there — and quantified in
+   [`05-review-gapfills.tex.md`](05-review-gapfills.tex.md) §4: the
+   block-withholding re-draw is viable only above
+   $V > R_{\text{blk}}/\Pr[X = t-1]$, i.e. $\ge 2.2\cdot10^{10}$ sats
+   ($\approx 223$ BTC) in the most attacker-favourable shipped configuration.
 
 ## 5. Payoff functions — reconstructed from the shipped code
 
@@ -157,6 +164,12 @@ $$w \;=\; w_0 \cdot g \cdot \Big(\prod_e \pen_e\Big) \cdot \Big(1 + \lambda \tex
 Selection probability ∝ $w/\Sigma w$ via the exponential-clock draw
 (`selection.ts:221–229`, `weightedPriority`; default stake path
 $\sqrt{\text{stake}}$, `:204–209`; 1%-of-volume eligibility gate `:275`).
+**Concavity is per-identity, not per-capital-holder:** splitting $w$ across $k$
+eligible identities multiplies the weight by exactly $\sqrt{k}$, and at the
+1%-gate ceiling $k_{\max} = \lfloor w/(0.01V_m)\rfloor$ the achievable weight
+$w/\sqrt{0.01V_m}$ is **linear** in stake — so the plutocracy price is carried
+by the admission gates, not by the exponent
+([`05-review-gapfills.tex.md`](05-review-gapfills.tex.md) §5, Lemmas 5.5–5.6).
 
 ### 5.5 SLA composite (the retainer metric)
 
@@ -195,8 +208,7 @@ to a threshold set strictly above 0.5 (paper §7.4 lines 605–618; finding C-2
 | **A2** | Dispute value $V \sim F$, median $m$, bounded tail $V \le V_{\max}$; the operator gates deep rounds by value (bond ≥ 25% of $V$ for $r\ge3$, spec L119), so theorems are stated per-$V$ and the aggregate reads over $F$. | Theorem 2's $r^*$ and Theorem 3's $\kappa^*(V)$ are functions of $V$; $F$ matters only when integrating. |
 | **A3** | Collusion coordination: a bribe contract over the pool costs $\kappa_0$ per contracted member per attack (communication, contingent-contract enforcement across pseudonymous keys); threshold coverage requires $m^* = q^*\,N$ members, $q^*$ from the hypergeometric tail (§5 of 03). | Theorem 3's $\kappa^*$. |
 | **A4** | Juror accuracy: a seated jury returns the true outcome with probability $a \ge a^* = 0.9$ per round (LLM-assisted jurors with evidence bundles; independence across rounds conditional on truth). On *manufactured* (frivolous) disputes accuracy $a_f \ge a^*$ a fortiori — the true outcome is well-defined and uncontroversial. | Theorems 1 and 2. The boundary forms (§2 of 01, §3 of 02) hold for any $a$; $a^*$ only selects the operating point. |
-| **A5** | Selection unpredictability: the seed
-$H(\text{disputeEventId} \|\text{blockHash})$ is ungrindable ex ante at attack cost; seated-set membership is a hypergeometric-style draw w.r.t. any briber's information. | `selection.ts:163–173` (seed derivation); grind residual is PO-2, priced in `THREAT_MODEL.md:453`. |
+| **A5** | Selection unpredictability: the seed $H(\text{disputeEventId} \|\text{blockHash})$ is ungrindable ex ante at attack cost; seated-set membership is a hypergeometric-style draw w.r.t. any briber's information. | `selection.ts:163–173` (seed derivation); grind residual is PO-2, priced in `THREAT_MODEL.md` §6 PO-2 and bounded in 05 §4 (Theorem 5.4: viable only for $V \gtrsim R_{\text{blk}}/\Pr[X{=}t{-}1]$). |
 | **A6** | Closed budget: juror income exists only as `fee_accrual` / `bond_forfeit` / `case_credit` inflows; no minting; venue zero float. | `JurorPoolLedger.ts:1–62`; L-0 above. |
 | **A7** | Detection: commit–reveal and outcome history are public, and the retention monitors fire mechanically ($O_j > 20\% \Rightarrow$ demote, $>35\% \Rightarrow$ cooldown 30d, $>50\% \Rightarrow$ 100% standing-bond slash; 2 consecutive SLA-miss epochs ⇒ ejection — spec L191, L253–254). Modelled as per-epoch detection probability $p_{\det} \to 1$ for sustained collusion. | Theorem 3's stream-loss term. |
 | **A8** | Jurors risk-neutral over sats at demo/testnet stake sizes; effort cost $c_p > 0$ per participation; no liquidity constraints on bonds (escrow-before-validity makes bonds prepaid, never leveraged). | Standard; relaxed in remarks. |

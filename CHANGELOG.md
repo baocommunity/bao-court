@@ -41,6 +41,57 @@ frozen.
   hosts an exact-equality check against the persisted descriptor instead of a
   substring search. Exported from the package root with its types.
 
+### Added (docs — symposium review-response round: the quantitative gap-fills)
+
+- **`docs/proofs/economics/05-review-gapfills.tex.md`** — the five items three
+  external reviews asked for, each with reviewer attribution, derivation and
+  honest residual; every number reproduced by
+  `node scripts/review-quant/economics.mjs` (exact BigInt rational arithmetic,
+  no deps):
+  - **Claude #5, jury capture:** exact binomial tail, $N \in \{15,45,105,201\}$
+    at $\lceil 2N/3\rceil$: **0.850427 %** ($N{=}15$, $\rho{=}⅓$) and
+    **5.001·10⁻⁶** ($N{=}45$) — both reviewer figures confirmed. Extended to the
+    shipped panels, and two findings added: the spec's **3-of-5 round-0 quorum**
+    captures at 0.2099 ($\rho{=}⅓$) / 0.4813 ($\rho{=}0.49$) because 0.6 < 2/3,
+    and `confirmQuorum`'s **code default of 1** (`courtConfirmationMachine.ts:223`)
+    makes it 0.8683 / 0.9655 if a host omits the parameter.
+  - **Claude #4 + Gemini A, per-rail cost of corruption:** $V_{\max}$ derived
+    and tabulated — staked (Liquid) 369k (N=15) → 1.425M (N=45) → 29.9M (N=135)
+    → **unbounded once $t \ge 1/(\alpha\sigma) = 100$ seats**; the Lightning
+    rail has $\alpha = 0$ (no seizure), so condition (C-i) **fails there** and
+    Gemini's $V_{\max} \le \gamma\sum_i S_i$ is *unsatisfiable* on that rail
+    ($\gamma = 0$) — the reduction must be a value cap. Guardian arithmetic
+    included ($\gamma = \alpha p_{\text{flip}} = 0.5$; 2M sats bonded per 1M-sat
+    dispute). New finding: the invariant **fails at the shipped round-2 panel**
+    (0.45·V) and first holds at round 3 (1.35·V).
+  - **Claude #4 + Gemini A, P+ε:** corrected from "costs ε" to a discount
+    factor — the cheapest accepted losing-branch contract costs
+    $\max(0,\,1-2\pi)\cdot X$ per juror, i.e. **exactly zero for $\pi \ge ½$** and
+    full price at $\pi = 0$; resistance requires an *act-contingent* forfeit
+    $tD \ge V - \kappa_0m$ (Theorem 5.2), which the shipped outcome-contingent $\alpha_I$ is
+    not. Pure-pay rails confirmed defenceless at $\varepsilon = 0$ (Cor. 5.3).
+  - **Claude #2, seed grinding:** viability bound
+    $V > R_{\text{blk}}/\Pr[X{=}t{-}1]$; cheapest shipped case (45 seats,
+    $\rho{=}0.49$) needs **≈ 223 BTC**, i.e. ≥ 220× above any BAO market. Fix
+    stated as an *ordering* (derived seed height from the candidate-freeze
+    height, candidates committed before any hash is visible) and the residual
+    named (the tip-block option survives multi-block beacons).
+  - **Claude #3, √stake splitting:** $\sqrt{k}$ gain proved
+    ($k\sqrt{w/k} = \sqrt{k}\sqrt{w}$), ceiling $k_{\max} = \lfloor w/0.01V_m\rfloor$
+    from the 1 % gate, and **saturation to linear-in-stake** — so the paper's
+    "anti-plutocracy" sentence is corrected to a per-identity claim with the
+    admission filters named as the real defence.
+- **Corrected in `docs/FROST_COURT_ORACLE_PAPER.md`:** §4.2 anti-plutocracy
+  paragraph (per-identity scope + √k splitting + the linear ceiling), §4.1 seed
+  ordering requirements + grinding bound, §10.2-B rail separation (Panel A's
+  sanction is social slashing, Panel B's is seizable stake), §10.2-F Sybil
+  scope.
+- **Cross-references:** `docs/proofs/economics/00-model.tex.md` (sibling list,
+  A5, §3 confirm row's `confirmQuorum=1` honesty note, §5.4 splitting),
+  `03-collusion.tex.md` (§2.1 per-rail addendum + PO-1 status rows),
+  `docs/proofs/economics/README.md` (index row 5, dependency graph, reading
+  order, honest ledger).
+
 ### Fixed (docs — symposium round 17: final coherence polish)
 
 - **Version story made coherent at v0.10.2:** README quickstart install pin
