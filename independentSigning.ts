@@ -307,6 +307,16 @@ export class IndependentSigningSession {
 
   /**
    * True once enough commitments have been collected to reveal.
+   *
+   * FROST binding factors are computed over the ENTIRE commitment list passed
+   * to the signing context, and the Lagrange coefficients (`interpolate_x`)
+   * are indexed by that same list. A partial signature is therefore only
+   * aggregatable within the exact commitment set it was computed against —
+   * verified empirically for @vbyte/frost 1.1.5: aggregating threshold
+   * reveals over a LARGER commitment set yields a final signature that fails
+   * `verify_final_sig` (fail-closed liveness loss, not a forgery). This
+   * session signs against the full qualified roster, so every roster member
+   * who commits must also reveal before aggregation is possible.
    */
   hasEnoughCommitments(): boolean {
     const qualified = this.dkg.verificationShares.map((v) => v.idx);
@@ -427,9 +437,20 @@ export class IndependentSigningSession {
 
   /**
    * True once threshold reveals have been collected.
+   *
+   * Additionally requires the reveal set to EQUAL the commitment set: the
+   * signing context (and therefore every partial's Lagrange coefficient) was
+   * built over the full commitment list, and @vbyte/frost 1.1.5 produces a
+   * final signature that fails verification when the revealing subset is
+   * strictly smaller than the commitment set (see
+   * {@link hasEnoughCommitments}). Without this guard a juror whose peer
+   * commits but never reveals would aggregate a signature that only fails at
+   * the final check, wasting a nonce commitment; failing here is the same
+   * outcome, earlier and with a precise reason.
    */
   canAggregate(): boolean {
-    return this.reveals.size >= this.dkg.threshold;
+    if (this.reveals.size < this.dkg.threshold) return false;
+    return this.reveals.size === this.commitments.size;
   }
 
   /**
@@ -443,7 +464,9 @@ export class IndependentSigningSession {
     void marketEventId;
     if (!this.canAggregate()) {
       throw new Error(
-        `Cannot aggregate: ${this.reveals.size} reveals, threshold ${this.dkg.threshold}`,
+        `Cannot aggregate: ${this.reveals.size} reveals vs ${this.commitments.size} commitments ` +
+          `(threshold ${this.dkg.threshold}). The reveal set must equal the commitment set — ` +
+          `every juror that committed must reveal, or the attempt must restart with a new signer set.`,
       );
     }
 

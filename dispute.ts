@@ -104,11 +104,27 @@ export function tallyVotes(
  * attestation signatures — anyone could sign for it. It exists for demo
  * contracts that need a deterministic dispute key; keep it out of any path
  * that authenticates real value.
+ *
+ * Domain separation note (crypto literature audit 2026-11): the digest input
+ * is the raw concatenation `groupPubkey ‖ disputeId` — deliberately outside
+ * the CanonicalWriter grammar for demo-data continuity. Injectivity of the
+ * concatenation is guaranteed by CONTRACT, not by encoding: the group pubkey
+ * is enforced to be exactly 64 chars (any bytes — hex-ness is not required
+ * for injectivity, only the fixed width) below, so the boundary between the
+ * two fields is fixed and no (groupPubkey, disputeId) pair can alias
+ * another. The v1 attestation validator never trusts this key (the
+ * docstring's warning), so a misbinding here cannot forge attestations.
  */
 export function deriveDisputeGroupPubkey(
   normalGroupPubkey: string,
   disputeId: string,
 ): string {
+  if (typeof normalGroupPubkey !== 'string' || normalGroupPubkey.length !== 64) {
+    throw new Error('normalGroupPubkey must be exactly 64 chars (fixed-width concat boundary)');
+  }
+  if (typeof disputeId !== 'string' || disputeId.length === 0 || disputeId.length > 512) {
+    throw new Error('disputeId must be a non-empty string of at most 512 chars');
+  }
   const order = secp256k1.Point.Fn.ORDER;
   let digest = sha256(new TextEncoder().encode(normalGroupPubkey + disputeId));
   let scalar = bytesToNumberBE(digest) % order;

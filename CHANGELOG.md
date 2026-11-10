@@ -9,6 +9,57 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.9.3] — 2026-11-10
+
+### Fixed (round-7 cryptographic literature audit — docs/CRYPTO_AUDIT.md)
+
+- **`crypto` — DKG proof-of-knowledge challenge encoding (A-2):** the PoK
+  challenge was a delimiter-joined string (`prefix|pk|nonce|domain`) whose
+  `domain` (`market=…|dispute=…|juror=…`) is attacker-influenced and contains
+  the separators — tuples like (market `"x"`, dispute `"y|dispute=z"`) and
+  (market `"x|dispute=y"`, dispute `"z"`) rendered identically, aliasing a
+  proof across DKG ceremony bindings. The challenge is now CanonicalWriter
+  length-prefixed under `bao-frost-court/dkg-pok-challenge-v2`, and the
+  domain itself is canonical: new export `dkgPokDomain(marketId, disputeId,
+  jurorIdx)` (hex of the length-prefixed tuple), used by both
+  `PedersenDkgAdapter.proofDomain` and `IndependentDkgSession`.
+  `verifyProofOfKnowledge` accepts v2 (created) and — one documented
+  mixed-fleet rollout window — the legacy v1 encoding. **Consumer impact:
+  none** within a single-version fleet; mixed-version DKG attempts fail
+  closed at the PoK check (attempt restarts, no state corruption).
+- **`dispute` — `deriveDisputeGroupPubkey` concat boundary (A-3):** the raw
+  `groupPubkey ‖ disputeId` digest input had no fixed-width contract, so
+  (pk, disputeId) pairs could alias when a caller passed a short pubkey.
+  Creation now enforces exactly-64-char group pubkey and a non-empty ≤512-char
+  dispute id; **the digest formula is unchanged** — every previously derived
+  key that satisfied the (now explicit) width contract derives identically.
+- **`independentSigning` — commitment-set/reveal-set equality guard (A-1):**
+  empirically verified for `@vbyte/frost` 1.1.5: FROST Lagrange coefficients
+  are indexed by the FULL commitment list, so aggregating threshold reveals
+  over a larger commitment set yields a final signature that fails
+  `verify_final_sig` (fail-closed liveness trap — every committed-but-silent
+  juror burned a nonce commitment per attempt with no diagnostic).
+  `canAggregate()` now requires the reveal set to EQUAL the commitment set
+  and `aggregate()` throws a precise reason
+  (`reveal set must equal the commitment set`). Full-coverage flows are
+  unchanged (pinned by new tests, including the fail-early subset case).
+  `aggregateAttestation` documents the same contract for direct callers.
+
+### Added
+
+- **`docs/CRYPTO_AUDIT.md`** — the round-7 cryptographic literature audit:
+  per-finding literature anchors (FROST/Drijvers, RFC 9591, Crites et al.
+  CRYPTO 2025 / ms-FROST 2025, ChillDKG/BIP-445, CVE-2025-58359, RFC 6962),
+  code locations, exploitability sketches, and the security-argument
+  skeleton (§7) the paper's security chapter builds on. Verdict: keep the
+  `@vbyte/frost` 1.1.5 pin, with documented upgrade triggers.
+- **Tests:** `__tests__/cryptoLiteratureAudit.test.ts` (9 tests) — PoK
+  round-trip/cross-domain/legacy-v1 acceptance, PoK domain tuple
+  distinctness, `deriveDisputeGroupPubkey` boundary validation, the
+  full-coverage independent signing aggregation, and the library
+  binding-factor message-dependence pin (anti-Drijvers property cannot
+  silently regress in a dependency upgrade).
+
 ## [0.9.2] — 2026-11-10
 
 ### Fixed (formal-audit findings F-12, F-2, F-3)
