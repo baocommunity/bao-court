@@ -9,7 +9,7 @@ escalation ladder (Theorem 2).
 **Status:** Theorem 3.1 proved (resistance region, closed form); Theorem 3.2
 proved (the amortized-cartel limit is NOT covered — stated, not hidden).
 **PO-1 verdict: CONDITION-BOUNDED** — the honest outcome the task anticipated.
-This file upgrades `THREAT_MODEL.md:452` from "equilibrium unmodeled" to a
+This file upgrades `THREAT_MODEL.md` §6 PO-1 from "equilibrium unmodeled" to a
 precise resistance condition with a numeric region; it does **not** claim an
 unconditional discharge.
 
@@ -144,6 +144,31 @@ it is bought at coordination cost only.
   bribery; it is self-hiding precisely because nobody with standing
   disagrees. Stated, not closed.
 
+### 2.1 Per-rail addendum — where condition (IR) has teeth (05 §2–§3)
+
+Theorem 3.1's (IR) floor assumes the colluder's own capital is at risk. That is
+a *rail* property, not a protocol one, and it is the one gap the review round
+demanded be closed explicitly — now done in
+[`05-review-gapfills.tex.md`](05-review-gapfills.tex.md):
+
+| Rail | Seizure | $\alpha$ | Does (IR) bite? | $V_{\max}$ |
+|---|---|---|---|---|
+| Liquid P2WSH/Taproot escrow (Panel B, `liquidEscrow.ts:6`, `liquidRail.ts:37` `multisig_slash`) | on-chain script branch, objective | 0.5 / 1 | **yes** | (5.3): 1.425M sats at $N{=}45$; **unbounded at $t \ge 1/(\alpha\sigma) = 100$ seats** |
+| Lightning hold-invoice (Panel A, `lnSettlement.ts:3–10` — "denial of reward + reputation, *social slashing*") | none — a cancelled hold returns the payer's money | **0** | **no** | stream term only (997.5k sats at $N{=}45$) — reputational, exit-evadable |
+| Phase-0 zero-stake (`weightFn`) | none | **0** | **no** | stream term only |
+
+Two consequences for this theorem, both stated in 05 and neither hidden here:
+**(a)** the shipped round-2 panel *fails* Gemini's market-cap invariant
+$V \le \gamma\sum_i S_i$ (0.45·$V$ at $N{=}45$; 1.35·$V$ at $N{=}135$), so
+above $N{=}45$ the theorem's resistance is carried by the stream term — the one
+a hit-and-run cartel (Theorem 3.2) does not hold; **(b)** the P+ε variant of the
+bribe (05 Theorem 5.2) prices an *outcome*-contingent slash at
+$\max(0,1-2\pi)$ of its face value — exactly zero for a cartel that is already
+likely to win — so the shipped $\alpha_I$ is P+ε-neutral and the resistance in
+the tables above is supplied by the ladder (making $\pi$ tiny) and by $\kappa_0$,
+not by the slash. Closing (b) needs an **act-contingent** forfeit
+$t\,D \ge V - \kappa_0 m$, which no shipped artefact provides (05 GAP-5e).
+
 ## 3. Theorem 3.2 — the amortized-cartel limit (honest non-discharge)
 
 > **Theorem 3.2 (Amortized cartels escape the coordination term).** A cartel
@@ -186,7 +211,7 @@ epoch scale*; a sub-epoch campaign finishes first). ∎
 > sub-epoch-detection-scale hit-and-run cartels on high-value disputes, the
 > shipped mechanism's resistance is an open region**, and the closure paths
 > are the threat model's own: raise $t$/jury size per market value
-> (`THREAT_MODEL.md:452`, closure column) and per-market value gating
+> (`THREAT_MODEL.md` §6 PO-1, closure column) and per-market value gating
 > (spec L118–119's bond ≥ 25% for $r \ge 3$).
 
 ## 4. PO-1 status, precisely
@@ -194,9 +219,10 @@ epoch scale*; a sub-epoch campaign finishes first). ∎
 | Regime | Status |
 |---|---|
 | Demo/testnet stakes ($V \lesssim 10^6$ sats), contested verdicts | **Discharged with $\kappa = 0$** (Thm 3.1: $V^{*} \approx 157$k–752k sats by victim confidence; bottom row covers typical disputes) |
-| Weakly-contested verdicts (no standing escalator) | **$\kappa$-bounded only** ($V^{*} \approx 0$) — self-hiding residual, see the honest remark |
-| High-value disputes, one-off bribery | **Condition-bounded**: resistant iff $\kappa \ge 0.8155\,V - 613.5\text{k}$ (worst case) |
+| Weakly-contested verdicts (no standing escalator) | **$\kappa$-bounded only** ($V^{*} \approx 0$) — self-hiding residual, see the honest remark. **Now quantified:** at the spec's 3-of-5 round-0 quorum the capture probability is 0.2099 at $\rho = 1/3$ and 0.4813 at $\rho = 0.49$ (05 §1.3, Finding 1.1) — and 0.8683 / 0.9655 if the host leaves `confirmQuorum` at its code default of 1 |
+| High-value disputes, one-off bribery | **Condition-bounded**: resistant iff $\kappa \ge 0.8155\,V - 613.5\text{k}$ (worst case). Per-rail form in 05 §2: on the Lightning rail the $\alpha s$ term is absent, so only the stream term remains |
 | High-value disputes, amortized/hit-and-run cartel | **Open region** (Thm 3.2) — mitigations bounded, not closed (Remark 3.3) |
+| P+ε / losing-branch-only bribe contract | **Open on any rail whose only sanction is outcome-contingent** (05 Theorem 5.2): the cheapest accepted contract costs $\max(0,1-2\pi)X$ — free for a cartel with $\pi \ge \tfrac12$; on the Lightning rail free at every value above the fee mass (Cor. 5.3) |
 
 `THREAT_MODEL.md` PO-1 should be read as upgraded to: *"bribery-resistant
 iff $V \le V^{*}(\delta, J, a, \text{cap})$ or $\kappa \ge \kappa^{*}(V)$;

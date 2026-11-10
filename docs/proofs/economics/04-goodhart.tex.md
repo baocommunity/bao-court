@@ -6,7 +6,7 @@ pins `mechanismAdversarial.test.ts:347–362` (0.5 / 0.75 / 1.0 exactly),
 target 0.95, floor 0.5·$w_0$, idle expiry 6 epochs → $w_0$),
 `SummonsAckService.ts:1093–1096` (ackRate = acked ÷ published),
 paper §7.4 lines 593–627 (the two consumption obligations), findings R10b /
-C-2 (`REVIEW_SIMULATION.md:443–467`), PO-12 (`THREAT_MODEL.md:463`).
+C-2 (`REVIEW_SIMULATION.md:443–467`), PO-12 (`THREAT_MODEL.md` §6 PO-12).
 **Status:** proof complete; the R10/R16 holes are upgraded from TODOs to
 **proven conditions** (Corollary 4.1 and Theorem 4.3), and PO-12's reset loop
 is quantified (Theorem 4.4).
@@ -145,7 +145,7 @@ deployment obligation rather than a protocol constant.
 > $$\bar w_{\mathsf{cycle}} \;=\; \frac{(0.8 + 0.64 + 0.512 + 0.5 + 0.5 + 0.5) + 6 \times 0.5 + 1}{13}\,w_0 \;=\; \frac{7.452}{13}\,w_0 \;\approx\; 0.573\,w_0 .$$
 >
 > Under the **documented fix** (expiry preserves the penalized record —
-> decay instead of reset; `THREAT_MODEL.md:463` closure column), the same
+> decay instead of reset; `THREAT_MODEL.md` §6 PO-12 closure column), the same
 > farmer's long-run weight converges to the floor, $0.5\,w_0$: the reset
 > loop is worth **+14.6% of sustained selection weight to a penalized,
 > non-participating farmer** — the loop launders penalty history exactly as

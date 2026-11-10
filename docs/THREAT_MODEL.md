@@ -145,7 +145,14 @@ mitigation is economic and reputational, not cryptographic: unpredictable
 selection (INV-SEL-3), commit-reveal observability before signing (collusion
 is visible), overturn/flip-flop clawbacks (INV-CONF-27/28), and dual-panel
 evidence (paper §10.2-B). The bribe equilibrium for a $2N/3$-of-$N$ jury is
-**not** modeled — PO-1. The single-share extraction route (T1b) assumes
+**modeled and condition-bounded** — PO-1: Theorem 3.1
+(`docs/proofs/economics/03-collusion.tex.md`) gives the resistance condition
+with $V^{*} \approx 157$k–752k sats, and
+`docs/proofs/economics/05-review-gapfills.tex.md` supplies the exact capture
+tail (0.8504 % at $N{=}15$/$\rho{=}\tfrac13$; $5.0\cdot10^{-6}$ at $N{=}45$), the
+per-rail $V_{\max}$ (the Lightning rail has no seizable stake) and the P+ε
+correction. Hit-and-run cartels above the payment-mass region remain open
+(Theorem 3.2). The single-share extraction route (T1b) assumes
 Shamir privacy and no nonce-reuse leak (vector H; closed by NonceGuard +
 RFC 9591 §4.1 aux randomness — CRYPTO_AUDIT §1.4, S-3 caveat for Node
 restarts).

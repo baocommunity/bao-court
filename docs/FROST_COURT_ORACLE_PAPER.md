@@ -352,6 +352,19 @@ infeasible to bias without a deep reorg. The selection event publishes the
 exact seed and block hash used, so **anyone recompute the draw**
 (`verifyJurySelection`) — selection is a proof, not a claim.
 
+Two ordering requirements, and their residual (`docs/proofs/economics/05-review-gapfills.tex.md`
+§4): **(a)** the seed block **height** must be *derived* from the candidate-set
+freeze height ($h^{*} = h_{\text{freeze}} + \Delta$ with $\Delta \ge 6$), never
+selected after a hash is visible — otherwise whoever picks the height picks the
+jury; **(b)** the candidate set must be committed before the seed exists. The
+irreducible residual is the tip-block option: the miner of block $h^{*}$ can
+compute the panel and withhold at the cost of one block reward, so a re-draw is
+viable only for disputes above $R_{\text{blk}}/\Pr[X = t-1]$ — in the most
+attacker-favourable shipped configuration (45-seat panel, 49 % weight share) that
+is $\approx 223$ BTC, i.e. two orders of magnitude above any BAO market. A
+$k$-block beacon narrows who can attempt it ($\beta_{\text{mine}}^{\,k}$) but does
+not remove the tip's one-block option.
+
 ### 4.2 Stake-weighted quadratic lottery
 
 For each eligible candidate $j$ with stake $w_j$:
@@ -372,10 +385,21 @@ $\sqrt{w_j} / \sum_k \sqrt{w_k}$; the race repeats memorylessly for each
 subsequent rank — precisely sampling without replacement at rates
 $\sqrt{w_j}$. ∎
 
-Quadratic weighting is a deliberate anti-plutocracy choice: a juror with
-$4\times$ stake is only $2\times$ as likely to serve. Stake still prices
-Sybils (each identity must lock capital and pass eligibility), but raw
-capital cannot buy deterministic control of the jury.
+Quadratic weighting makes a **single identity's** selection probability
+concave in its own stake: a juror with $4\times$ stake is only $2\times$ as
+likely to serve. That is a real price on *concentrated* capital, but it is not
+a price on *partitions* of it. A capital holder who splits $w$ across $k$
+eligible identities has aggregate weight $k\sqrt{w/k} = \sqrt{k}\sqrt{w}$ —
+exactly a $\sqrt{k}$ gain for the same capital — and because the
+$1\%$-of-volume eligibility floor (§4.3) caps $k$ at
+$\lfloor w / 0.01V_m \rfloor$, the achievable weight at that ceiling,
+$w/\sqrt{0.01V_m}$, is **linear** in stake. Quadratic weighting is therefore
+anti-plutocratic only while identities are indivisible; **the Sybil price is
+carried by the admission filters of §4.3** (web-of-trust score, account age,
+confirmed stake commitment, category match), whose per-identity cost is
+non-purchasable, not by the exponent. Exponents are a transaction cost on
+splitting; the filters are the defence. Full derivation and the corrected
+statement: `docs/proofs/economics/05-review-gapfills.tex.md` §5.
 
 ### 4.3 Eligibility filters
 
@@ -847,7 +871,14 @@ $f(0)$ (perfect privacy of Shamir sharing [2]); forgery needs $M$ shares.
 $M \approx \lceil 2N/3 \rceil$ with unpredictable selection; public
 commit–reveal voting makes collusion observable; slashing punishes
 overturned attestations; the dual-panel design forces compromise of both
-rails' evidence trails.
+rails' evidence trails. **Honest scope on the economic half:** the slashing
+that gives the bribery bound its teeth is the **Liquid escrow panel's**
+seizable on-chain stake. The **Lightning panel's** sanction is denial of the
+reward plus reputation — *social* slashing — which seizes no capital, so a
+bribery bound expressed as "colluders risk their stake" holds on Panel B and
+not on Panel A; there the resistance is coordination cost and detection, and
+the operator must cap the values it routes to that rail
+(`docs/proofs/economics/05-review-gapfills.tex.md` §2.2–2.5).
 
 **C. Censorship / oracle stall.** The refund path (Path C) activates after
 $T$. *Mitigated by construction.*
@@ -861,8 +892,12 @@ is required (§3.2), and the cohort's own signature commits to one exact
 sighash. The host, however, can *choose* which verge of the flow runs: see
 §10.1's host-adversary table.
 
-**F. Sybil / stake concentration.** Quadratic lottery (§4.2), WoT /
-account-age floors, escrowed pledges.
+**F. Sybil / stake concentration.** Quadratic lottery (§4.2) priced against a
+*single* identity's stake; the load-bearing Sybil price is the admission
+filter set of §4.3 (WoT, account age, confirmed pledge). Honest scope: with
+splitting to the $1\%$-of-volume floor the achievable weight is linear in
+stake, so the exponent is a transaction cost on splitting, not a plutocracy
+bound (`docs/proofs/economics/05-review-gapfills.tex.md` §5).
 
 **G. Single-process ceremony (prototype).** Demo coordinators run the DKG and
 signing in one process; compromising it observes all shares in memory.
