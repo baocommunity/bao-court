@@ -37,7 +37,7 @@ with executable proof (§5). What the numbers do **not** prove is stated in
 
 **Recorded verification state at v0.10.2 `main` (2026-11-10, PR #64):** full
 suite **1,491 passed / 1 skipped (61 files)**; `npm run typecheck` +
-`typecheck:tests` clean; `node scripts/cross-check.mjs` verifies all 492
+`typecheck:tests` clean; `node scripts/cross-check.mjs` verifies all 493
 evidence pointers, exit 0.
 
 ---
@@ -263,7 +263,7 @@ never "expire":
 
 Any future change that reopens a closed finding fails a named test — the
 round-14 cross-check (PR #63/#64) additionally makes the *documentation* of
-those pins machine-verified (`node scripts/cross-check.mjs`, 492 refs, 0
+those pins machine-verified (`node scripts/cross-check.mjs`, 493 refs, 0
 dangling).
 
 ---
