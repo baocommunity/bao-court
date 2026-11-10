@@ -46,6 +46,8 @@ export interface CourtDkgMachineState {
   readonly sessionHash: string;
   readonly participantIndices: readonly number[];
   readonly deadline: number;
+  /** Greatest caller-supplied timestamp accepted by the reducer. */
+  readonly latestTimestamp: number;
   readonly phase: CourtDkgPhase;
   readonly round1Participants: readonly number[];
   readonly round2Participants: readonly number[];
@@ -172,6 +174,7 @@ export function createCourtDkgMachine(params: {
     sessionHash: params.sessionHash,
     participantIndices: participants,
     deadline: params.deadline,
+    latestTimestamp: 0,
     phase: 'parameters_confirmed',
     round1Participants: [],
     round2Participants: [],
@@ -197,6 +200,20 @@ export function reduceCourtDkgMachine(
     ['participantIndices', 'round1Participants', 'round2Participants', 'transcriptCertifiers'],
     CourtDkgTransitionError,
   );
+  // Monotonic clock ledger (finding F-12): every time-bearing event must be
+  // monotonically non-decreasing, exactly as the vote/confirmation machines
+  // enforce — a restored snapshot cannot admit an old-timestamped replay that
+  // a still-live ceremony would have rejected. `abort` carries no clock and
+  // leaves the ledger unchanged. Restore semantics (minor-compat): v0.9.1
+  // snapshots predate this field; `?? 0` initializes the ledger to 0 on
+  // restore and the first time-bearing event writes it.
+  if (event.type !== 'abort') {
+    assertNow(event.now, CourtDkgTransitionError);
+    if (event.now < (state.latestTimestamp ?? 0)) {
+      throw new CourtDkgTransitionError('now must not precede a previously observed timestamp');
+    }
+    state = { ...state, latestTimestamp: event.now };
+  }
   if (event.type === 'tick') return freezeCourtDkgMachineState(expire(state, event.now));
   if (event.type === 'abort') {
     if (TERMINAL_PHASES.has(state.phase) || state.phase === 'certified') {

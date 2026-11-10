@@ -513,6 +513,7 @@ export {
   deriveSelectionSeed,
   jurorRandomValue,
   quadraticPriority,
+  weightedPriority,
   filterEligibleJurors,
   selectJury,
   selectJuryWithBackups,

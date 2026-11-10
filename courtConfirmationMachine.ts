@@ -429,14 +429,95 @@ function freezeState(state: CourtConfirmationMachineState): CourtConfirmationMac
 }
 
 /**
+ * Restore-time barrier for the append-only outcome history (finding F-3):
+ * every persisted round record must re-verify before it locks value in —
+  the history is a consecutive 1..k round sequence (append-only, one record
+  per resolved round, never reordered or gapped), each outcome is a member of
+  the frozen ballot, winner event ids are unique well-formed hex, and winner
+  indices are unique valid ceremony participant indices. Used at
+  `resolve_round` (a hand-restored history would otherwise direct
+  `round_flip` clawbacks at arbitrary indices via `previous.winnerIndices`)
+  and at `finalize`, the two points where the history feeds the machine's
+  outputs.
+ */
+function assertValidOutcomeHistory(state: CourtConfirmationMachineState): void {
+  const history = state.outcomeHistory;
+  if (!Array.isArray(history)) {
+    throw new CourtConfirmationTransitionError('outcome history must be an array');
+  }
+  // Cross-check: history records are produced only by resolve_round, which is
+  // reachable only through the challenge path — a never-challenged case with
+  // a non-empty history is a forged snapshot.
+  if (history.length > 0 && (!Array.isArray(state.challenges) || state.challenges.length === 0)) {
+    throw new CourtConfirmationTransitionError(
+      'outcome history records exist but the case was never challenged',
+    );
+  }
+  for (let offset = 0; offset < history.length; offset += 1) {
+    const record: unknown = history[offset];
+    if (typeof record !== 'object' || record === null) {
+      throw new CourtConfirmationTransitionError('outcome history contains a malformed record');
+    }
+    const { round, outcome, winnerEventIds, winnerIndices } = record as CourtRoundOutcomeRecord;
+    // Append-only + consecutive: the record at offset i must be round i+1 —
+    // a restored snapshot with a gap, reorder, or forged round number is
+    // rejected here instead of steering clawbacks.
+    if (!Number.isSafeInteger(round) || round !== offset + 1) {
+      throw new CourtConfirmationTransitionError(
+        'outcome history rounds must be a consecutive 1..k sequence',
+      );
+    }
+    if (typeof outcome !== 'string' || !state.allowedOutcomes.includes(outcome)) {
+      throw new CourtConfirmationTransitionError(
+        'outcome history names an outcome outside the frozen allowlist',
+      );
+    }
+    if (!Array.isArray(winnerEventIds) || winnerEventIds.length === 0) {
+      throw new CourtConfirmationTransitionError(
+        'outcome history record has no winning event ids',
+      );
+    }
+    const seenEventIds = new Set<string>();
+    for (const eventId of winnerEventIds) {
+      assertHex32(eventId, 'outcome history winner event ids must be 32-byte lowercase hex');
+      if (seenEventIds.has(eventId)) {
+        throw new CourtConfirmationTransitionError('outcome history winner event ids must be unique');
+      }
+      seenEventIds.add(eventId);
+    }
+    if (!Array.isArray(winnerIndices) || winnerIndices.length === 0) {
+      throw new CourtConfirmationTransitionError(
+        'outcome history record has no winner indices',
+      );
+    }
+    const seenIndices = new Set<number>();
+    for (const idx of winnerIndices) {
+      if (
+        typeof idx !== 'number'
+        || !Number.isSafeInteger(idx)
+        || idx < 1
+        || idx > MAX_CEREMONY_PARTICIPANTS
+      ) {
+        throw new CourtConfirmationTransitionError(
+          'outcome history winner indices must be valid ceremony participant indices',
+        );
+      }
+      if (seenIndices.has(idx)) {
+        throw new CourtConfirmationTransitionError('outcome history winner indices must be unique');
+      }
+      seenIndices.add(idx);
+    }
+  }
+}
+
+/**
  * Ledger barrier: every mass vote must identify a roster participant, name an
  * allowed outcome, carry well-formed ids, and be unique per index and event
  * id. Used before close_ladder_round and resolve_round so a tampered (or
  * hand-restored) ledger is caught before the outcome is locked in.
  */
 function assertValidMassVoteLedger(state: CourtConfirmationMachineState): void {
-  const ladder = state.ladder;
-  if (!ladder || !Array.isArray(ladder.votes)) {
+  const ladder = state.ladder;  if (!ladder || !Array.isArray(ladder.votes)) {
     throw new CourtConfirmationTransitionError('ladder state is missing or malformed');
   }
   // A hand-restored round roster must re-verify (sequential 1..N, N ≥ 3)
@@ -962,6 +1043,10 @@ export function reduceCourtConfirmationMachine(
     }
     assertValidMassVoteLedger(state);
     assertValidConfirmationLedger(state);
+    // Outcome-history barrier (finding F-3): the flip-flop rule below steers
+    // `round_flip` clawbacks from `previous.winnerIndices` — a hand-restored
+    // (forged) history must be re-verified before it directs clawbacks.
+    assertValidOutcomeHistory(state);
     if (state.ladder.votes.length === 0) {
       throw new CourtConfirmationTransitionError('cannot resolve a round without any valid mass vote');
     }
@@ -1138,6 +1223,10 @@ export function reduceCourtConfirmationMachine(
     // snapshot with a different flag history yields the identical
     // verdictHash (deterministic double-finalize protection).
     assertValidConfirmationLedger(state);
+    // Outcome-history barrier (finding F-3): the restored history must
+    // re-verify (consecutive rounds, ballot closure, well-formed winners)
+    // before the machine reaches `final` on top of it.
+    assertValidOutcomeHistory(state);
     const pending = state.verdict;
     if (!pending) {
       throw new CourtConfirmationTransitionError('cannot finalize without a resolved round');

@@ -572,3 +572,118 @@ interface CourtConfirmationRecordMutable {
   confirmHash: string;
   eventId: string;
 }
+
+describe('outcome-history restore barrier (finding F-3)', () => {
+  /** Challenge path: round 1 resolves YES, escalates, round 2 closes with a NO majority. */
+  function challengedToRound2VoteClosed(): CourtConfirmationMachineState {
+    let s = create();
+    for (const [idx, ev] of [[1, 'a'], [2, 'b'], [3, 'c']] as const) {
+      s = reduceCourtConfirmationMachine(s, {
+        type: 'accept_confirmation',
+        idx,
+        confirmHash: hashCourtConfirmation({ sessionHash: SESSION, proposalHash: PROPOSAL, idx }),
+        eventId: id(ev),
+        now: 1000 + idx,
+      });
+    }
+    s = reduceCourtConfirmationMachine(s, { type: 'close_confirmations', now: 2000 });
+    s = reduceCourtConfirmationMachine(s, { type: 'open_challenge_window', now: 2100 });
+    s = reduceCourtConfirmationMachine(s, {
+      type: 'accept_challenge',
+      idx: 2,
+      bondTxid: id('d'),
+      bondProofHash: id('e'),
+      eventId: id('f'),
+      now: 2500,
+    });
+    s = reduceCourtConfirmationMachine(s, { type: 'close_challenge_window', now: 3000 });
+    // Round 1: YES holds (idx 1, 2).
+    s = reduceCourtConfirmationMachine(s, { type: 'open_ladder_round', round: 1, voteDeadline: 4000, now: 3100 });
+    s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 1, outcome: 'YES', eventId: id('1'), now: 3201 });
+    s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 2, outcome: 'YES', eventId: id('2'), now: 3202 });
+    s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 3, outcome: 'NO', eventId: id('3'), now: 3203 });
+    s = reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 4000 });
+    s = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 4050 });
+    expect(s.phase).toBe('round_resolved');
+    s = reduceCourtConfirmationMachine(s, { type: 'escalate', now: 4100 });
+    // Round 2: NO wins (idx 2, 3).
+    s = reduceCourtConfirmationMachine(s, { type: 'open_ladder_round', round: 2, voteDeadline: 5000, now: 4200 });
+    s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 1, outcome: 'YES', eventId: id('4'), now: 4301 });
+    s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 2, outcome: 'NO', eventId: id('5'), now: 4302 });
+    s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 3, outcome: 'NO', eventId: id('6'), now: 4303 });
+    return reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 5000 });
+  }
+
+  /** Replace the (frozen) outcome history on a JSON clone of the state. */
+  function tamper(s: CourtConfirmationMachineState, history: unknown): CourtConfirmationMachineState {
+    const clone = JSON.parse(JSON.stringify(s)) as Record<string, unknown>;
+    clone.outcomeHistory = history;
+    return clone as unknown as CourtConfirmationMachineState;
+  }
+
+  it('a well-formed restored history resolves cleanly (round_flip intact)', () => {
+    const s = challengedToRound2VoteClosed();
+    const resolved = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 5100 });
+    expect(resolved.phase).toBe('fee_settlement');
+    expect(resolved.outcomeHistory).toHaveLength(2);
+    // Round 2's winner (NO) differs from round 1's (YES): round 1's majority
+    // (idx 1, 2) is flagged round_flip at round 1 — from the VERIFIED history.
+    const flips = resolved.clawbackFlags.filter((f) => f.reason === 'round_flip');
+    expect(flips.map((f) => f.idx).sort()).toEqual([1, 2]);
+    expect(flips.every((f) => f.round === 1)).toBe(true);
+  });
+
+  it('a forged round sequence (gap / forged round number) is rejected at resolve_round', () => {
+    const s = challengedToRound2VoteClosed();
+    const gapped = [{ round: 2, outcome: 'YES', winnerEventIds: [id('1'), id('2')], winnerIndices: [1, 2] }];
+    expect(() =>
+      reduceCourtConfirmationMachine(tamper(s, gapped), { type: 'resolve_round', now: 5100 }),
+    ).toThrow(/consecutive 1..k sequence/);
+  });
+
+  it('a forged history cannot direct round_flip clawbacks at arbitrary indices', () => {
+    const s = challengedToRound2VoteClosed();
+    // Out-of-language indices: 0 is not a roster index, 10_001 is beyond the
+    // ceremony-participant bound — neither can steer a clawback.
+    for (const bad of [0, 10_001]) {
+      const forged = [{ round: 1, outcome: 'YES', winnerEventIds: [id('1'), id('2')], winnerIndices: [bad] }];
+      expect(() =>
+        reduceCourtConfirmationMachine(tamper(s, forged), { type: 'resolve_round', now: 5100 }),
+      ).toThrow(/winner indices/);
+    }
+  });
+
+  it('an outcome outside the frozen allowlist and malformed winner records are rejected', () => {
+    const s = challengedToRound2VoteClosed();
+    expect(() =>
+      reduceCourtConfirmationMachine(
+        tamper(s, [{ round: 1, outcome: 'MAYBE', winnerEventIds: [id('1')], winnerIndices: [1] }]),
+        { type: 'resolve_round', now: 5100 },
+      ),
+    ).toThrow(/outside the frozen allowlist/);
+    expect(() =>
+      reduceCourtConfirmationMachine(
+        tamper(s, [{ round: 1, outcome: 'YES', winnerEventIds: [], winnerIndices: [1] }]),
+        { type: 'resolve_round', now: 5100 },
+      ),
+    ).toThrow(/no winning event ids/);
+    expect(() =>
+      reduceCourtConfirmationMachine(
+        tamper(s, [{ round: 1, outcome: 'YES', winnerEventIds: ['nothex'], winnerIndices: [1] }]),
+        { type: 'resolve_round', now: 5100 },
+      ),
+    ).toThrow(/32-byte lowercase hex/);
+  });
+
+  it('finalize re-verifies the restored history before reaching final', () => {
+    const s = happyToFeeSettlement();
+    // A never-challenged case can have no resolved rounds — a non-empty
+    // history on this snapshot is forged.
+    const forged = [{ round: 1, outcome: 'YES', winnerEventIds: [id('a')], winnerIndices: [1] }];
+    expect(() =>
+      reduceCourtConfirmationMachine(tamper(s, forged), { type: 'finalize', now: 3100 }),
+    ).toThrow(/never challenged/);
+    // The genuine (empty, never-challenged) history finalizes cleanly.
+    expect(reduceCourtConfirmationMachine(s, { type: 'finalize', now: 3100 }).phase).toBe('final');
+  });
+});

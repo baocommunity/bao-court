@@ -12,8 +12,8 @@
  *              with its own name
  *   - INV-X-3  terminal-state closure: every terminal phase absorbs (behavioural)
  *   - INV-X-4  freeze discipline: every create/reduce result deeply frozen
- *   - INV-X-5  universal deadline precedence (monotonic ledger clock on the
- *              machines that keep one — see finding F-12 for the asymmetry)
+ *   - INV-X-5  universal deadline precedence + universal monotonic ledger
+ *              clock (F-12 closed in v0.9.2 — all four machines)
  *   - INV-X-6  roster closure on every machine
  *   - INV-X-7  quorum/threshold ∈ [1, panel] at creation
  *   - INV-X-8  CanonicalWriter totality + prefix-freeness
@@ -503,7 +503,7 @@ describe('INV-X-4: freeze discipline holds on every exported state shape', () =>
 
 // ─── INV-X-5 / INV-X-6: deadline precedence + roster closure ─────────────────
 
-describe('INV-X-5: universal deadline precedence (and the F-12 monotonic-clock asymmetry)', () => {
+describe('INV-X-5: universal deadline precedence + universal monotonic ledger clock (F-12 closed)', () => {
   it('a rolled-back clock is rejected on the machines that keep a monotonic ledger clock', () => {
     // vote machine (latestTimestamp ledger)
     const v = reduceCourtVoteMachine(voteMachine(), { type: 'close_commits', now: 100 });
@@ -521,23 +521,24 @@ describe('INV-X-5: universal deadline precedence (and the F-12 monotonic-clock a
       .toThrow(/must not precede a previously observed timestamp/);
   });
 
-  it('F-12 (documented asymmetry): signing/DKG enforce per-event deadline precedence only', () => {
-    // The signing and DKG machines keep NO monotonic clock ledger — an event
-    // whose timestamp precedes the previous event's is accepted as long as it
-    // is still strictly before the attempt deadline. Pinned here so the
-    // asymmetry with the vote/confirmation machines is explicit and
-    // intentional-looking changes get caught.
+  it('F-12 (CLOSED in v0.9.2): signing/DKG keep the monotonic ledger clock too', () => {
+    // The signing and DKG machines now keep the same monotonic clock ledger
+    // as the vote/confirmation machines (finding F-12, fixed in v0.9.2): an
+    // event whose timestamp precedes an earlier-observed one is rejected
+    // with the machine's typed error, on all four machines.
     const g = reduceCourtSigningMachine(signingMachine(), { type: 'start', now: 50 });
-    const accepted = reduceCourtSigningMachine(g, {
-      type: 'accept_commitment', idx: 1, binderPn: POINT(11), hiddenPn: POINT(111), now: 40,
-    });
-    expect(accepted.commitments.map((c) => c.idx)).toEqual([1]);
+    expect(() =>
+      reduceCourtSigningMachine(g, {
+        type: 'accept_commitment', idx: 1, binderPn: POINT(11), hiddenPn: POINT(111), now: 40,
+      }),
+    ).toThrow(/must not precede a previously observed timestamp/);
 
     const d = reduceCourtDkgMachine(dkgMachine(), { type: 'start', now: 10 });
-    const acceptedDkg = reduceCourtDkgMachine(d, { type: 'accept_round_1', idx: 1, now: 5 });
-    expect(acceptedDkg.round1Participants).toEqual([1]);
+    expect(() =>
+      reduceCourtDkgMachine(d, { type: 'accept_round_1', idx: 1, now: 5 }),
+    ).toThrow(/must not precede a previously observed timestamp/);
 
-    // …but the deadline itself still binds everywhere (strict precedence).
+    // …and the deadline itself still binds everywhere (strict precedence).
     expect(() =>
       reduceCourtSigningMachine(signingMachine(), { type: 'start', now: 500 }),
     ).toThrow(CourtSigningTransitionError);

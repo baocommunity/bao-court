@@ -98,6 +98,20 @@ describe('validateAttestationEvent', () => {
     expect(result.outcome).toBe('YES');
   });
 
+  it('F-2: an empty-string group-key pin is INVALID, not "no pin"', () => {
+    const event = buildValidEvent();
+    const groupPubkey = event.tags.find((t) => t[0] === 'p')![1]!;
+    // Present-but-empty pin (string form and context form) fails closed…
+    expect(validateAttestationEvent(event, '').valid).toBe(false);
+    expect(validateAttestationEvent(event, { expectedGroupPubkey: '' }).valid).toBe(false);
+    // …a real pin matching the group key still validates…
+    expect(validateAttestationEvent(event, { expectedGroupPubkey: groupPubkey }).valid).toBe(true);
+    // …a real pin mismatch is still enforced…
+    expect(validateAttestationEvent(event, { expectedGroupPubkey: 'f'.repeat(64) }).valid).toBe(false);
+    // …and the absent pin is unchanged.
+    expect(validateAttestationEvent(event).valid).toBe(true);
+  });
+
   it('accepts a kind-89 normal-market attestation with no dispute material', () => {
     const attestation = runNormalSigningRound({
       marketId: 'demo-market',

@@ -157,3 +157,57 @@ describe('Court DKG state machine', () => {
     })).toThrow(CourtDkgTransitionError);
   });
 });
+
+describe('monotonic clock ledger (finding F-12)', () => {
+  it('rejects timestamp rollback on any time-bearing event', () => {
+    const state = reduceCourtDkgMachine(initial(), { type: 'start', now: 100 });
+    expect(state.latestTimestamp).toBe(100);
+    // A peer event behind an already-observed clock is rejected…
+    expect(() =>
+      reduceCourtDkgMachine(state, { type: 'accept_round_1', idx: 1, now: 90 }),
+    ).toThrow(/must not precede a previously observed timestamp/);
+    // …including the tick.
+    expect(() => reduceCourtDkgMachine(state, { type: 'tick', now: 99 })).toThrow(
+      /must not precede a previously observed timestamp/,
+    );
+    // Equal timestamps are monotonic (non-decreasing) and accepted.
+    const same = reduceCourtDkgMachine(state, { type: 'accept_round_1', idx: 1, now: 100 });
+    expect(same.latestTimestamp).toBe(100);
+    expect(same.round1Participants).toEqual([1]);
+  });
+
+  it('abort carries no clock and leaves the ledger unchanged', () => {
+    const state = reduceCourtDkgMachine(initial(), { type: 'start', now: 100 });
+    const aborted = reduceCourtDkgMachine(state, {
+      type: 'abort', phase: 'aborted_network', reason: 'relay loss',
+    });
+    expect(aborted.phase).toBe('aborted_network');
+    expect(aborted.latestTimestamp).toBe(100);
+  });
+
+  it('a v0.9.1 snapshot without latestTimestamp restores with the ledger at 0', () => {
+    // Restore semantics (minor-compat): the additive field initializes to 0
+    // on restore; the first time-bearing event writes it. Pre-upgrade
+    // sequences keep working — they are only rejected if they genuinely roll
+    // the clock backwards.
+    const legacy = JSON.parse(JSON.stringify(initial())) as Record<string, unknown>;
+    delete legacy.latestTimestamp;
+    const restored = legacy as unknown as CourtDkgMachineState;
+    const next = reduceCourtDkgMachine(restored, { type: 'start', now: 100 });
+    expect(next.phase).toBe('dkg_round_1');
+    expect(next.latestTimestamp).toBe(100);
+    // Once initialized, rollback is rejected as usual.
+    expect(() =>
+      reduceCourtDkgMachine(next, { type: 'accept_round_1', idx: 1, now: 99 }),
+    ).toThrow(/must not precede a previously observed timestamp/);
+  });
+
+  it('terminal tick stays phase-preserving and may only advance the clock', () => {
+    const expired = reduceCourtDkgMachine(initial(), { type: 'tick', now: 500 });
+    expect(expired.phase).toBe('expired');
+    const ticked = reduceCourtDkgMachine(expired, { type: 'tick', now: 600 });
+    expect(ticked.phase).toBe('expired');
+    expect(ticked.failure?.phase).toBe('expired');
+    expect(ticked.latestTimestamp).toBe(600);
+  });
+});

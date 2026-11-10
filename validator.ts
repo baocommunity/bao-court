@@ -61,6 +61,17 @@ export function validateAttestationEvent(
   const context = typeof expected === 'string'
     ? { expectedGroupPubkey: expected }
     : (expected ?? {});
+  // F-2: a present-but-empty pin is a caller misconfiguration (e.g. an unset
+  // config value joined into ''), NOT "no pin" — treating it as absent would
+  // silently disable the group-key pin (fail-open by omission). Fail closed:
+  // a pin must be a real pubkey or absent.
+  if (context.expectedGroupPubkey !== undefined && context.expectedGroupPubkey.length === 0) {
+    return {
+      valid: false,
+      pubkey: '',
+      error: 'expectedGroupPubkey pin must be a non-empty group pubkey',
+    };
+  }
   if (event.kind !== 89 && event.kind !== BAO_COURT_ATTESTATION_KIND) {
     return { valid: false, pubkey: '', error: `Not a Kind 89 or ${BAO_COURT_ATTESTATION_KIND} attestation` };
   }
@@ -386,6 +397,15 @@ export function validateAttestationEventV2(
   event: NostrEvent,
   context: AttestationV2ValidationContext = {},
 ): ValidationResult {
+  // F-2: a present-but-empty pin is a caller misconfiguration, NOT "no pin"
+  // — fail closed instead of silently disabling the group-key pin.
+  if (context.expectedGroupPubkey !== undefined && context.expectedGroupPubkey.length === 0) {
+    return {
+      valid: false,
+      pubkey: '',
+      error: 'expectedGroupPubkey pin must be a non-empty group pubkey',
+    };
+  }
   if (event.kind !== 89 && event.kind !== BAO_COURT_ATTESTATION_KIND) {
     return { valid: false, pubkey: '', error: `Not a Kind 89 or ${BAO_COURT_ATTESTATION_KIND} attestation` };
   }

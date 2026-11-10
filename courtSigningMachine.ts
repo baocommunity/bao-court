@@ -80,6 +80,8 @@ export interface CourtSigningMachineState {
   readonly threshold: number;
   readonly attempt: number;
   readonly deadline: number;
+  /** Greatest caller-supplied timestamp accepted by the reducer. */
+  readonly latestTimestamp: number;
   readonly phase: CourtSigningPhase;
   readonly commitments: readonly CourtSigningCommitmentRecord[];
   /** Frozen, sorted signer set whose commitments define the signing context. */
@@ -364,6 +366,7 @@ export function createCourtSigningMachine(params: {
     threshold: params.threshold,
     attempt: params.attempt,
     deadline: params.deadline,
+    latestTimestamp: 0,
     phase: 'intent',
     commitments: [],
     partials: [],
@@ -381,6 +384,21 @@ export function reduceCourtSigningMachine(
   }
   assertSigningRecordInvariants(state);
 
+  // Monotonic clock ledger (finding F-12): every time-bearing event must be
+  // monotonically non-decreasing, exactly as the vote/confirmation machines
+  // enforce — a restored snapshot cannot admit an old-timestamped replay that
+  // a still-live ceremony would have rejected. `abort` carries no clock and
+  // leaves the ledger unchanged. Restore semantics (minor-compat): v0.9.1
+  // snapshots predate this field; `?? 0` initializes the ledger to 0 on
+  // restore and the first time-bearing event writes it.
+  if (event.type !== 'abort') {
+    assertNow(event.now, CourtSigningTransitionError);
+    if (event.now < (state.latestTimestamp ?? 0)) {
+      throw new CourtSigningTransitionError('now must not precede a previously observed timestamp');
+    }
+    state = { ...state, latestTimestamp: event.now };
+  }
+
   if (event.type === 'tick') {
     // Validate the deadline hasn't been tampered with — if state is restored
     // from an unsafe spread of a corrupted snapshot, catch it here.
@@ -390,7 +408,9 @@ export function reduceCourtSigningMachine(
       );
     }
     assertNow(event.now, CourtSigningTransitionError);
-    if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) return state;
+    if (TERMINAL_PHASES.has(state.phase) || event.now < state.deadline) {
+      return freezeCourtSigningMachineState(state);
+    }
     return freezeCourtSigningMachineState({
       ...state,
       phase: 'expired',
@@ -444,7 +464,8 @@ export function reduceCourtSigningMachine(
     const existing = state.commitments.find((c) => c.idx === event.idx);
     if (existing) {
       if (existing.binderPn === event.binderPn && existing.hiddenPn === event.hiddenPn) {
-        return state;
+        // `state` is the clock-advanced copy — freeze it (INV-SIGN-15).
+        return freezeCourtSigningMachineState(state);
       }
       return freezeCourtSigningMachineState({
         ...state,
@@ -500,7 +521,8 @@ export function reduceCourtSigningMachine(
     }
     const existing = state.partials.find((p) => p.idx === event.idx);
     if (existing) {
-      if (existing.psig === event.psig) return state;
+      // `state` is the clock-advanced copy — freeze it (INV-SIGN-15).
+      if (existing.psig === event.psig) return freezeCourtSigningMachineState(state);
       return freezeCourtSigningMachineState({
         ...state,
         phase: 'aborted_peer',

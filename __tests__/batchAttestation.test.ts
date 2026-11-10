@@ -340,6 +340,14 @@ describe('Batch attestation validation', () => {
     expect(result.reason).toMatch(/Group pubkey mismatch/);
   });
 
+  it('F-2: an empty-string group-key pin is INVALID, not "no pin"', () => {
+    expect(
+      validateBatchAttestationEvent(validEvent(), { expectedGroupPubkey: '' }).valid,
+    ).toBe(false);
+    // The absent pin is unchanged.
+    expect(validateBatchAttestationEvent(validEvent()).valid).toBe(true);
+  });
+
   it('rejects a wrong epoch pin', () => {
     const result = validateBatchAttestationEvent(validEvent(), { expectedEpoch: 6 });
     expect(result.valid).toBe(false);

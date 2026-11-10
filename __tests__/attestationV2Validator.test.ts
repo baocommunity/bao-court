@@ -142,6 +142,14 @@ describe('validateAttestationEventV2', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('F-2: an empty-string group-key pin is INVALID, not "no pin" (v2)', () => {
+    const signer = kp();
+    const event = buildV2Event(BASE, signer);
+    expect(validateAttestationEventV2(event, { expectedGroupPubkey: '' }).valid).toBe(false);
+    // The absent pin is unchanged.
+    expect(validateAttestationEventV2(event).valid).toBe(true);
+  });
+
   it('enforces finality policy pins', () => {
     const signer = kp();
     const event = buildV2Event(BASE, signer);

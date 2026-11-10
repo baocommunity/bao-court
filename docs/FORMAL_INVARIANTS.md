@@ -1,9 +1,10 @@
-# BAO Court — Formal Invariants (v0.9.1)
+# BAO Court — Formal Invariants (v0.9.2)
 
 **Status:** normative reference for the ceremony machines, selection, batch
 attestation, and validator modules.
 **Method:** every invariant below was extracted from the *actual guards* in the
-v0.9.1 source (an audit by another name). Each invariant carries an enforcement
+v0.9.1 source (an audit by another name) and updated for the v0.9.2
+hardening (F-2, F-3, F-12). Each invariant carries an enforcement
 pointer (`file:line`) and the test that pins it. Invariants that could not be
 stated formally, or whose enforcement is partial, are listed explicitly as
 findings (§12).
@@ -134,8 +135,14 @@ Each ceremony machine is a tuple `(S, s₀, E, →)` where:
   function, which *is* the only declared producer of `s₀`);
 - `E` is the exported event union;
 - `→ : S × E ⇀ S` is the exported `reduce*` function, a *partial* function:
-  undefined transitions throw the machine's own typed error class (§2 fail-closed
-  law), never an uncaught `TypeError` and never a silently-accepted bad event.
+  undefined transitions throw the machine's own typed error class (§2
+  fail-closed law), never an uncaught `TypeError` and never a
+  silently-accepted bad event.
+
+> **Line numbers:** cite the v0.9.1 source except where a v0.9.2-hardening row
+> states otherwise; the v0.9.2 insertions (signing/DKG clock-ledger blocks,
+> the confirmation outcome-history barrier, the validator/batch empty-pin
+> guards) shift some downstream line numbers slightly in exactly those files.
 
 "Reachable" below always means: reachable from `s₀` by a finite sequence of
 defined transitions. Every returned state is deeply frozen (freeze discipline,
@@ -158,20 +165,20 @@ These apply to every machine; they are stated once and referenced by ID.
 - **FC-2 (unknown event types fail closed):** the trailing branch of every
   reducer throws on a hostile `type` instead of returning an unfrozen or
   unchanged state (`courtVoteMachine.ts:696-699`,
-  `courtConfirmationMachine.ts:1187-1191`, `courtSigningMachine.ts:556-560`,
-  `courtDkgMachine.ts:320-324`).
+  `courtConfirmationMachine.ts:1276-1279`, `courtSigningMachine.ts:577-581`,
+  `courtDkgMachine.ts:336-340`).
   Tests: `adversarialMachines.test.ts` › 'unknown event types fail closed
   instead of returning an unfrozen state' (vote), 'unknown event types and
   non-object events fail closed' (confirmation, signing).
 - **FC-3 (non-object events fail closed):** `event === null ∨ typeof event ≠
   object` throws before property access (`courtVoteMachine.ts:466-469`,
-  `courtConfirmationMachine.ts:676-680`, `courtSigningMachine.ts:377-381`,
-  `courtDkgMachine.ts:188-191`).
+  `courtConfirmationMachine.ts:758-762`, `courtSigningMachine.ts:380-384`,
+  `courtDkgMachine.ts:191-195`).
 - **FC-4 (state-shape barrier):** every reducer re-validates that configuration
   and ledger fields are arrays before any `.includes`/`.find`/`.map`
   (`assertStateArrays`, `courtCeremonyCore.ts:79-89`; call sites
-  `courtVoteMachine.ts:474-478`, `courtConfirmationMachine.ts:685-689`,
-  `courtDkgMachine.ts:195-199`, `courtSigningMachine.ts:205-214`). A string
+  `courtVoteMachine.ts:474-478`, `courtConfirmationMachine.ts:766-770`,
+  `courtDkgMachine.ts:198-202`, `courtSigningMachine.ts:212-216`). A string
   allowlist (substring admission) and uncaught TypeErrors on restored state are
   both excluded.
   Tests: `adversarialMachines.test.ts` › 'a STRING allowlist cannot admit
@@ -564,12 +571,19 @@ ladder_pending → ladder_vote_open → ladder_vote_closed → resolve paths)` w
   proposedOutcome` (987).
   Tests: `courtConfirmationMachine.test.ts` › 'accepts mass votes, closes, and
   resolves a majority'; `… › 'breaks tallies deterministically on ties'`.
-- **INV-CONF-26 (outcomeHistory append-only).** Each `resolve_round` appends
+- **INV-CONF-26 (outcomeHistory append-only + restore barrier — F-3 CLOSED in
+  v0.9.2).** Each `resolve_round` appends
   exactly one `{round, outcome, winnerEventIds, winnerIndices}` record; no
-  transition ever removes or rewrites history; records are frozen (lines
-  996-999, 408-415).
+  transition ever removes or rewrites history; records are frozen. As of
+  v0.9.2 the history is ALSO barrier-verified (`assertValidOutcomeHistory`)
+  at `resolve_round` and `finalize`: consecutive 1..k round sequence, ballot
+  closure, unique well-formed winner event ids, unique valid winner indices —
+  a hand-restored snapshot with a forged history cannot direct `round_flip`
+  clawbacks at arbitrary indices.
   Test: `multiRoundLadder.test.ts` › 'records append-only frozen {round,
-  outcome, winnerEventIds, winnerIndices} per resolved round'.
+  outcome, winnerEventIds, winnerIndices} per resolved round';
+  `courtConfirmationMachine.test.ts` › 'outcome-history restore barrier
+  (finding F-3)' tests.
 - **INV-CONF-27 (overturn clawback — economic, append-only idempotent).** If a
   round overturns the proposal (`upheld = false`), every confirming juror is
   flagged `overturned_confirmation`, idempotent per `(idx, reason)`: later
@@ -711,16 +725,21 @@ expired, aborted_peer, aborted_coordinator, aborted_network}` (lines 137-143).
   545-553).
   Test: `courtSigningMachine.test.ts` › 'runs the full attempt to a published
   attestation'.
-- **INV-SIGN-12 (deadline precedence — per event).** All peer-facing events
-  require `now ∈ 𝕋 ∧ now < deadline` (INV-CORE-3 via `assertBeforeDeadline`,
-  lines 297-304); tick expires when `now ≥ deadline` unless terminal (384-399)
-  and re-validates the persisted deadline (386-391). The signing machine keeps
-  NO monotonic clock ledger (`latestTimestamp`) — cross-event monotonicity is
-  NOT enforced, only per-event deadline precedence (asymmetry with the
-  vote/confirmation machines: finding F-12, pinned in
-  `invariantAssertions.test.ts`).
+- **INV-SIGN-12 (deadline precedence + monotonic clock ledger — F-12 CLOSED in
+  v0.9.2).** All peer-facing events require `now ∈ 𝕋 ∧ now < deadline`
+  (INV-CORE-3 via `assertBeforeDeadline`); tick expires when
+  `now ≥ deadline` unless terminal and re-validates the persisted deadline.
+  As of v0.9.2 the signing machine ALSO keeps the monotonic clock ledger
+  (`latestTimestamp` in state, initialized to 0 at creation; restored v0.9.1
+  snapshots initialize it to 0 on first observation): every time-bearing
+  event requires `now ≥ state.latestTimestamp` and advances the ledger, and
+  `abort` carries no clock — the exact vote-machine pattern (INV-VOTE-4), so
+  old-timestamped replays into a restored signing state are no longer
+  admissible. The two idempotent-redelivery paths return the clock-advanced
+  state frozen (INV-SIGN-15 preserved).
   Test: `courtSigningMachine.test.ts` › 'expires without publishing and rejects
-  out-of-roster signers'; `invariantAssertions.test.ts` › INV-X-5 tests.
+  out-of-roster signers'; `… › 'monotonic clock ledger (finding F-12)'` tests;
+  `invariantAssertions.test.ts` › INV-X-5 tests.
 - **INV-SIGN-13 (abort phase whitelist + blame).** `abort` accepts only
   reducer-defined failure phases (`ABORT_PHASES`, lines 131-135, checked
   406-408) and validates `blamedIdx` against the roster (line 411).
@@ -788,13 +807,18 @@ transcript_signing → certified → backed_up`, sinks `expired`, `delivery_fail
   machine can always still reach `backed_up`.
   Test: `invariantAssertions.test.ts` (cross-machine tick discipline) +
   deadline tests in `courtDkgMachine.test.ts`.
-- **INV-DKG-9 (deadline precedence — per event).** For every non-terminal
-  phase, tick with `now ≥ deadline` → `expired` with the standard reason (lines
-  146-155); all peer events require `now ∈ 𝕋 ∧ now < deadline`. Like the
-  signing machine, the DKG machine keeps NO monotonic clock ledger — only
-  per-event deadline precedence (finding F-12, pinned in
-  `invariantAssertions.test.ts`).
+- **INV-DKG-9 (deadline precedence + monotonic clock ledger — F-12 CLOSED in
+  v0.9.2).** For every non-terminal phase, tick with `now ≥ deadline` →
+  `expired` with the standard reason; all peer events require
+  `now ∈ 𝕋 ∧ now < deadline`. As of v0.9.2 the DKG machine ALSO keeps the
+  monotonic clock ledger (`latestTimestamp` in state, initialized to 0 at
+  creation; restored v0.9.1 snapshots initialize it to 0 on first
+  observation): every time-bearing event requires
+  `now ≥ state.latestTimestamp` and advances the ledger, and `abort` carries
+  no clock — the exact vote-machine pattern (INV-VOTE-4), closing the v0.9.1
+  asymmetry (finding F-12) where only per-event deadline precedence held.
   Test: `courtDkgMachine.test.ts` › 'expires without exposing a group key';
+  `… › 'monotonic clock ledger (finding F-12)'` tests;
   `invariantAssertions.test.ts` › INV-X-5 tests.
 - **INV-DKG-10 (abort whitelist + blame).** As INV-SIGN-13 with the DKG
   `ABORT_PHASES` (lines 96-102, checked 207-209, blame at 212); abort from
@@ -1103,14 +1127,14 @@ Executable pins for this section live in
   ledger records. Test: `invariantAssertions.test.ts` › freeze sweep across all
   four machines; per-machine tests cited in §4-§7.
 - **INV-X-5 (deadline precedence is universal; the monotonic ledger clock is
-  not).** Every time-bearing event on every machine satisfies
+  too, as of v0.9.2).** Every time-bearing event on every machine satisfies
   `now ∈ 𝕋 ∧ now < (the event's governing deadline)` (INV-CORE-3 applied at
   every peer-facing handler). A monotonic *ledger* clock
   (`latestTimestamp`, non-decreasing, `abort` clock-less) is kept and enforced
-  by exactly two machines — vote (INV-VOTE-4) and confirmation (INV-CONF-10);
-  the signing and DKG machines enforce per-event deadline precedence only
-  (asymmetry: finding F-12). Test: per-machine rollback tests +
-  `invariantAssertions.test.ts` › INV-X-5 tests (both sides of the asymmetry).
+  by all four machines — vote (INV-VOTE-4), confirmation (INV-CONF-10),
+  signing (INV-SIGN-12), and DKG (INV-DKG-9); the v0.9.1 asymmetry (finding
+  F-12, signing/DKG deadline-precedence-only) is closed. Test: per-machine
+  rollback tests + `invariantAssertions.test.ts` › INV-X-5 tests.
 - **INV-X-6 (roster closure is universal).** Every participant index admitted by
   any machine event is a member of the machine's frozen roster (INV-CORE-4
   applied at every accept path). Test: `invariantAssertions.test.ts` ›
@@ -1202,7 +1226,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-CONF-23 | mass-vote ledger barrier | courtConfirmationMachine.ts:955,963 | adversarialMachines.test.ts › ABORTED machine…ladder phases… |
 | INV-CONF-24 | non-empty round | courtConfirmationMachine.ts:965-967 | courtConfirmationMachine.test.ts › fails closed when closing a round with zero votes |
 | INV-CONF-25 | round majority + shared tie-break | courtConfirmationMachine.ts:968-987 | courtConfirmationMachine.test.ts › resolves a majority; breaks tallies deterministically… |
-| INV-CONF-26 | outcomeHistory append-only | courtConfirmationMachine.ts:996-999,408-415 | multiRoundLadder.test.ts › records append-only frozen… |
+| INV-CONF-26 | outcomeHistory append-only + restore barrier (F-3 closed v0.9.2) | courtConfirmationMachine.ts resolve_round/finalize + assertValidOutcomeHistory | multiRoundLadder.test.ts › records append-only frozen…; courtConfirmationMachine.test.ts › outcome-history restore barrier… |
 | INV-CONF-27 | overturn clawback idempotent | courtConfirmationMachine.ts:1001-1015 | courtConfirmationMachine.test.ts › flags every confirming juror…; multiRoundLadder.test.ts › does not duplicate… |
 | INV-CONF-28 | flip-flop clawback idempotent | courtConfirmationMachine.ts:1016-1033 | multiRoundLadder.test.ts › flags the previous round's majority… |
 | INV-CONF-29 | escalation gating | courtConfirmationMachine.ts:1039-1042,1062-1066 | multiRoundLadder.test.ts › escalate/concede decision matrix |
@@ -1224,7 +1248,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-SIGN-9 | partial form | courtSigningMachine.ts:493-500 | courtFuzz.test.ts › frost-reveal with oversized psig… |
 | INV-SIGN-10 | aggregate threshold over distinct signers | courtSigningMachine.ts:534-541 | courtSigningMachine.test.ts › runs the full attempt…; rejects restored state with duplicate… |
 | INV-SIGN-11 | publish requires aggregate | courtSigningMachine.ts:545-553 | courtSigningMachine.test.ts › runs the full attempt… |
-| INV-SIGN-12 | per-event deadline precedence (no clock ledger — F-12) | courtSigningMachine.ts:297-304,384-399 | courtSigningMachine.test.ts › expires without publishing…; invariantAssertions.test.ts › INV-X-5 |
+| INV-SIGN-12 | deadline precedence + monotonic clock ledger (F-12 closed v0.9.2) | courtSigningMachine.ts reducer clock-ledger block | courtSigningMachine.test.ts › monotonic clock ledger (finding F-12)…; invariantAssertions.test.ts › INV-X-5 |
 | INV-SIGN-13 | abort whitelist + blame | courtSigningMachine.ts:406-411 | courtSigningMachine.test.ts › rejects abort events with a non-failure phase |
 | INV-SIGN-14 | terminal absorption | courtSigningMachine.ts:418-420 | invariantAssertions.test.ts |
 | INV-SIGN-15 | freeze discipline | courtSigningMachine.ts:150-159 | adversarialMachines.test.ts › deep-freezes every returned state (signing) |
@@ -1236,7 +1260,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-DKG-6 | single-transcript unanimity | courtDkgMachine.ts:284-304 | courtDkgMachine.test.ts › aborts with blame…; expires without exposing a group key |
 | INV-DKG-7 | backup local + post-certification | courtDkgMachine.ts:307-318 | invariantAssertions.test.ts › certified tick-exempt |
 | INV-DKG-8 | certified is tick-exempt | courtDkgMachine.ts:148 | invariantAssertions.test.ts |
-| INV-DKG-9 | per-event deadline precedence (no clock ledger — F-12) | courtDkgMachine.ts:146-155 | courtDkgMachine.test.ts › expires without exposing a group key; invariantAssertions.test.ts › INV-X-5 |
+| INV-DKG-9 | deadline precedence + monotonic clock ledger (F-12 closed v0.9.2) | courtDkgMachine.ts reducer clock-ledger block | courtDkgMachine.test.ts › monotonic clock ledger (finding F-12)…; invariantAssertions.test.ts › INV-X-5 |
 | INV-DKG-10 | abort whitelist + blame | courtDkgMachine.ts:207-212 | courtDkgMachine.test.ts › rejects abort events with a non-failure phase |
 | INV-DKG-11 | terminal absorption + typed unknowns | courtDkgMachine.ts:219-221,320-324 | invariantAssertions.test.ts |
 | INV-DKG-12 | freeze discipline | courtDkgMachine.ts:119-126 | invariantAssertions.test.ts › freeze sweep |
@@ -1273,7 +1297,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-VAL-6 | tag/content consistency | validator.ts:180-203,549-566 | validator.test.ts › rejects a verdict whose outcome was changed…; propertiesValidator.test.ts PV2 |
 | INV-VAL-7 | signed message reconstruction | validator.ts:204-213,567-582; crypto.ts:219-234,122-196 | propertiesValidator.test.ts PV1/PV2; regressions.test.ts › buildAttestationMessage separates… |
 | INV-VAL-8 | signature verification | validator.ts:215-222,583-590 | validator.test.ts › accepts a valid FROST attestation event |
-| INV-VAL-9 | context pins (v1+v2) | validator.ts:151-166,495-510 | validator.test.ts › validates against an expected group pubkey; propertiesValidator.test.ts PV1 |
+| INV-VAL-9 | context pins (v1+v2) | validator.ts:162-177,515-530 | validator.test.ts › validates against an expected group pubkey; propertiesValidator.test.ts PV1 |
 | INV-VAL-10 | v2 required tags + bounds | validator.ts:420-433,473-481,357-360 | propertiesValidator.test.ts PV1/PV2; attestationV2Validator.test.ts |
 | INV-VAL-11 | signer-set commitment | validator.ts:287-312 | propertiesValidator.test.ts PV3 |
 | INV-VAL-12 | signerSet pin ⇒ size = threshold | validator.ts:526-539 | propertiesValidator.test.ts PV3 |
@@ -1285,7 +1309,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-X-2 | typed error family | per-module classes | invariantAssertions.test.ts › error family |
 | INV-X-3 | terminal-state closure | TERMINAL_PHASES per machine | invariantAssertions.test.ts › terminal absorption |
 | INV-X-4 | freeze discipline (all machines) | per-machine freeze fns | invariantAssertions.test.ts › freeze sweep |
-| INV-X-5 | universal deadline precedence; ledger clock on 2/4 machines | per-machine clock guards | invariantAssertions.test.ts › INV-X-5 (both sides of F-12) |
+| INV-X-5 | universal deadline precedence + universal ledger clock (F-12 closed v0.9.2) | per-machine clock guards | invariantAssertions.test.ts › INV-X-5 |
 | INV-X-6 | universal roster closure | assertRosterMember call sites | invariantAssertions.test.ts › off-roster sweep |
 | INV-X-7 | quorum/threshold ≤ panel | courtConfirmationMachine.ts:621-630; courtSigningMachine.ts:331-342; courtSession.ts:353-358 | invariantAssertions.test.ts › threshold sweep |
 | INV-X-8 | CanonicalWriter totality | courtSession.ts:389-451 | invariantAssertions.test.ts › writer tests; courtSession.test.ts › length prefixes… |
@@ -1306,24 +1330,26 @@ lack an enforcing test. Ordered by audit significance.
   reputation is enforced only by convention (INV-BATCH-16,
   `batchAttestation.ts:220-229`). A consumer that skips the dedup double-counts
   silently. No structural guard is possible without changing the leaf format.
-- **F-2 (group-key pin is opt-in and falsy-fragile).** Both validators and the
-  batch validator enforce `expectedGroupPubkey` only when truthy
-  (`validator.ts:151`, `495`; `batchAttestation.ts:484`). A consumer that
-  computes the pin as `''` (e.g. an unset config joined into an empty string)
-  silently disables the pin — the guard is `if (ctx?.expectedGroupPubkey && …)`,
-  not `if (ctx?.expectedGroupPubkey !== undefined && …)`. Fail-open by omission;
-  recommended: treat a *present but empty* pin as a validation error.
-- **F-3 (outcomeHistory is not barrier-verified on restore).** The confirmation
-  machine's ledger barriers re-verify `confirmations`, `challenges`, mass votes,
-  and (implicitly) round rosters — but `outcomeHistory` records (round numbers,
-  winnerIndices) are trusted as-is on a restored snapshot
-  (`courtConfirmationMachine.ts:1020-1033` consumes `previous.winnerIndices`
-  without re-deriving them). A hand-restored snapshot with a forged
-  `outcomeHistory` can direct `round_flip` clawbacks at arbitrary indices.
-  Mitigation: states are frozen at every transition and produced only by the
-  reducer; the exposure requires an attacker-crafted snapshot. Recommended: a
-  restore-time barrier that re-checks `outcomeHistory` round monotonicity and
-  winnerIndices ⊆ roster.
+- **F-2 (group-key pin is opt-in and falsy-fragile — CLOSED in v0.9.2).** Both
+  validators and the batch validator enforced `expectedGroupPubkey` only when
+  truthy, so a present-but-empty pin (`''`, e.g. an unset config joined into
+  an empty string) silently disabled the pin. Fixed: a present-but-empty pin
+  is now INVALID on all four entry points (`validateAttestationEvent`,
+  `validateAttestationEventV2`, `validateCourtAttestation`,
+  `validateBatchAttestationEvent`) — typed-invalid
+  (`expectedGroupPubkey pin must be a non-empty group pubkey`), never treated
+  as "no pin". The absent case is unchanged. Enforced by
+  `validator.test.ts` / `batchAttestation.test.ts` › empty-pin tests. No
+  remaining gap.
+- **F-3 (outcomeHistory is not barrier-verified on restore — CLOSED in
+  v0.9.2).** The confirmation machine's ledger barriers re-verified
+  `confirmations`, `challenges`, mass votes, and round rosters — but
+  `outcomeHistory` records were trusted as-is on a restored snapshot, and
+  `resolve_round` consumes `previous.winnerIndices` to direct `round_flip`
+  clawbacks, so a forged history could aim clawbacks at arbitrary indices.
+  Fixed: `assertValidOutcomeHistory` (consecutive 1..k round sequence, ballot
+  closure, unique well-formed winner event ids, unique valid winner indices)
+  now runs at `resolve_round` and `finalize` (INV-CONF-26). No remaining gap.
 - **F-4 (clawback reason language is open).** `flag_clawback` accepts any
   non-empty reason ≤ 64 bytes (`courtConfirmationMachine.ts:1102-1108`); the two
   protocol reasons (`overturned_confirmation`, `round_flip`) are not enforced as
@@ -1368,19 +1394,18 @@ lack an enforcing test. Ordered by audit significance.
   `courtSigningMachine.ts:493-500` checks `/^[0-9a-fA-F]{64}$/` and then
   `HEX_32`; the first check is subsumed by the second (the error messages
   differ, so both are observable). Harmless; noted for precision.
-- **F-12 (the monotonic clock ledger exists on only two of four machines).**
-  The vote and confirmation machines keep a `latestTimestamp` ledger and reject
-  any event whose clock precedes an earlier-observed one (INV-VOTE-4,
-  INV-CONF-10). The signing and DKG machines keep NO such ledger: an event
-  whose timestamp precedes the previous event's is accepted as long as it is
-  still strictly before the attempt deadline (INV-SIGN-12, INV-DKG-9). The
-  practical exposure is narrow — every peer event remains deadline-bound, and
-  ledger appends remain set-idempotent — but a replay of an old-timestamped
-  event into a restored signing/DKG state is admissible where the vote
-  machines would reject it. Pinned as intentional-looking behaviour in
-  `invariantAssertions.test.ts` (INV-X-5). Recommended: either add the
-  monotonic ledger to both remaining machines or document the asymmetry as a
-  protocol decision.
+- **F-12 (the monotonic clock ledger existed on only two of four machines —
+  CLOSED in v0.9.2).** The vote and confirmation machines kept a
+  `latestTimestamp` ledger and rejected any event whose clock precedes an
+  earlier-observed one (INV-VOTE-4, INV-CONF-10); the signing and DKG
+  machines enforced per-event deadline precedence only, so an
+  old-timestamped replay into a restored state was admissible where the vote
+  machines would reject it. Fixed: both machines now keep the identical
+  ledger — `latestTimestamp` in state, `assertNow` + non-decreasing check on
+  every time-bearing event, `abort` clock-less, tick/terminal semantics
+  unchanged (INV-SIGN-12, INV-DKG-9, INV-X-5). Minor-compatible: v0.9.1
+  snapshots without the field initialize it to 0 on restore. No remaining
+  asymmetry.
 
 ---
 
@@ -1394,6 +1419,7 @@ lack an enforcing test. Ordered by audit significance.
   **145 stated invariants**, each with an enforcement pointer; 137 pinned by a
   pre-existing named test, and the cross-machine/global set pinned by the 27
   executable assertions of `invariantAssertions.test.ts`. Twelve findings
-  (F-1…F-12) record documented conventions, test gaps, and one genuine
-  cross-machine asymmetry (F-12); F-9 was closed by this round's new test
-  file.
+  (F-1…F-12) were recorded against v0.9.1; as of v0.9.2, F-2, F-3, F-9, and
+  F-12 are CLOSED (enforced guards + regression tests), and F-10/F-11 remain
+  documented-only (F-10 guards are unreachable defense-in-depth, F-11 is
+  harmless redundancy).

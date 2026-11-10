@@ -201,3 +201,70 @@ describe('Court signing state machine', () => {
     );
   });
 });
+
+describe('monotonic clock ledger (finding F-12)', () => {
+  it('rejects timestamp rollback on any time-bearing event', () => {
+    const state = reduceCourtSigningMachine(create(), { type: 'start', now: 50 });
+    expect(state.latestTimestamp).toBe(50);
+    // A peer event behind an already-observed clock is rejected…
+    expect(() =>
+      reduceCourtSigningMachine(state, {
+        type: 'accept_commitment', idx: 1, binderPn: BINDER('a1'), hiddenPn: HIDDEN('a1'), now: 40,
+      }),
+    ).toThrow(/must not precede a previously observed timestamp/);
+    // …including the tick.
+    expect(() => reduceCourtSigningMachine(state, { type: 'tick', now: 49 })).toThrow(
+      /must not precede a previously observed timestamp/,
+    );
+    // Equal timestamps are monotonic (non-decreasing) and accepted.
+    const same = reduceCourtSigningMachine(state, {
+      type: 'accept_commitment', idx: 1, binderPn: BINDER('a1'), hiddenPn: HIDDEN('a1'), now: 50,
+    });
+    expect(same.latestTimestamp).toBe(50);
+    expect(same.commitments.map((c) => c.idx)).toEqual([1]);
+  });
+
+  it('abort carries no clock and leaves the ledger unchanged', () => {
+    const state = reduceCourtSigningMachine(create(), { type: 'start', now: 50 });
+    const aborted = reduceCourtSigningMachine(state, {
+      type: 'abort', phase: 'aborted_coordinator', reason: 'host restart',
+    });
+    expect(aborted.phase).toBe('aborted_coordinator');
+    expect(aborted.latestTimestamp).toBe(50);
+  });
+
+  it('a v0.9.1 snapshot without latestTimestamp restores with the ledger at 0', () => {
+    // Restore semantics (minor-compat): the additive field initializes to 0
+    // on restore; the first time-bearing event writes it. Pre-upgrade
+    // sequences keep working — they are only rejected if they genuinely roll
+    // the clock backwards.
+    const legacy = JSON.parse(JSON.stringify(started())) as Record<string, unknown>;
+    delete legacy.latestTimestamp;
+    const restored = legacy as unknown as CourtSigningMachineState;
+    const next = reduceCourtSigningMachine(restored, commit(1, 'a1'));
+    expect(next.commitments.map((c) => c.idx)).toEqual([1]);
+    expect(next.latestTimestamp).toBe(100);
+    // Once initialized, rollback is rejected as usual.
+    expect(() =>
+      reduceCourtSigningMachine(next, {
+        type: 'accept_commitment', idx: 2, binderPn: BINDER('a2'), hiddenPn: HIDDEN('a2'), now: 99,
+      }),
+    ).toThrow(/must not precede a previously observed timestamp/);
+  });
+
+  it('idempotent redelivery returns the clock-advanced state frozen', () => {
+    const first = reduceCourtSigningMachine(started(), commit(1, 'a1'));
+    const redelivered = reduceCourtSigningMachine(first, commit(1, 'a1'));
+    expect(redelivered).toEqual(first);
+    expect(Object.isFrozen(redelivered)).toBe(true);
+  });
+
+  it('terminal tick stays phase-preserving and may only advance the clock', () => {
+    const expired = reduceCourtSigningMachine(create(), { type: 'tick', now: 600 });
+    expect(expired.phase).toBe('expired');
+    const ticked = reduceCourtSigningMachine(expired, { type: 'tick', now: 700 });
+    expect(ticked.phase).toBe('expired');
+    expect(ticked.failure?.phase).toBe('expired');
+    expect(ticked.latestTimestamp).toBe(700);
+  });
+});
