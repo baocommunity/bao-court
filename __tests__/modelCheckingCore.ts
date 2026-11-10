@@ -179,6 +179,17 @@
  *       with the right blame, and every non-terminal state can still reach
  *       `attestation_published` or `expired` via tick (no parking states —
  *       tick expiry is expressible from every non-terminal state).
+ *   F7 (caught by cross-instance comparison, fixed) The first
+ *       `partial-equivocation` instance was VACUOUS: its conflict psigs were
+ *       128 hex chars (`hex('c1')` = `'c1'.repeat(64)`), so every
+ *       conflict-partial application failed the machine's 64-char shape
+ *       guard and the instance explored exactly the base instance's space
+ *       (identical 19,822 concrete / 989 abstract states). With real 64-char
+ *       conflict psigs the instance now explores the genuine partial-
+ *       equivocation interleavings — conflicting-second-partial aborts with
+ *       peer blame, identical-psig re-submissions as self-loops. Lesson:
+ *       when a variant instance's state space equals its base instance's,
+ *       the variant is not exercising what it claims.
  */
 
 /* eslint-disable no-console */
@@ -1261,8 +1272,8 @@ export const SIGNING_ATTESTATION_EVENT_ID = hex('7');
 const signingPoint = (scalarHex: string): string =>
   secp256k1.Point.BASE.multiply(BigInt(`0x${scalarHex}`)).toHex(true);
 
-const OWN_PSIG = (idx: number): string => hex(String(idx)); // first char = the idx digit
-const CONFLICT_PSIG = (idx: number): string => hex(`c${idx}`); // first char 'c'
+const OWN_PSIG = (idx: number): string => hex(String(idx)); // 64 chars, first char = the idx digit
+const CONFLICT_PSIG = (idx: number): string => 'c'.repeat(63) + String(idx); // exactly 64 chars, distinct per idx, tagged by leading 'c'
 
 export interface SigningInstanceSpec {
   readonly name: string;
@@ -1558,6 +1569,12 @@ export const SIGNING_INSTANCES_FULL: readonly SigningInstanceSpec[] = [
   // application than the vote machine (measured ≈ 1.2K applications/s vs
   // ≈ 45K/s), so n = 4 and full-clock equivocation sweeps do not fit the
   // runtime budget (same documented trade-off as confirmation n = 4, L3/L7).
+  // NOTE (psig fix): the conflict partial signature MUST be a real 64-char
+  // psig — an over-long one fails the machine's shape guard at every
+  // application and the instance degenerates to the base instance's space
+  // (exactly what the first landed version did: identical 19,822-state
+  // exploration, zero conflict states — caught by comparing instance
+  // counts). `CONFLICT_PSIG` is 64 chars, distinct per idx.
   { name: 'signing n=3 t=2 commitment-equivocation [clock 6/12]', n: 3, threshold: 2, commitmentVariants: ['own', 'conflict'] },
   { name: 'signing n=3 t=2 partial-equivocation [clock 6/12]', n: 3, threshold: 2, partialVariants: ['own', 'conflict'] },
 ];
