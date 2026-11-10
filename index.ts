@@ -471,6 +471,8 @@ export {
 export {
   buildMultisigScript,
   buildTaprootLeaves,
+  buildCourtJudgeLeaf,
+  isCourtJudgeLeaf,
   p2wshProgram,
   p2wshAddress,
   taprootProgram,
@@ -485,6 +487,9 @@ export {
   pushHex,
   type MultiSigParams,
   type TaprootEscrowParams,
+  type CourtJudgeLeafParams,
+  type CourtJudgeLeaf,
+  type JudgeLeafSecondSignature,
   type LiquidNetworkParams,
   type LiquidUtxo,
   type LiquidRecipient,

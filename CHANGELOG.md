@@ -11,6 +11,36 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (settlement binding — what the FROST judge key actually signs)
+
+- **New doc `docs/SETTLEMENT-BINDING.md`** (normative): the three achievable
+  bindings between a threshold verdict and a spend — **attested-spend** (shipped:
+  the cohort signs the spend's taproot sighash in a second session),
+  **CHECKSIGFROMSTACK** (Liquid-only, specified with its four gates, not
+  shipped), and **host-mediated** (v1 status quo, documented as the trust point
+  it is) — plus the **cohort-lifetime constraint**
+  (`resolveBy + slack ≤ cohort.endsAtSec`, with the market-creation policy
+  ladder: refuse / shorten / pre-commit the next cohort / degrade explicitly).
+- **Correction:** the judge leaf `<winner> CHECKSIGVERIFY <oracle> CHECKSIG`
+  verifies a *transaction* signature, while the court produces a signature over
+  a *Nostr* attestation message (`buildAttestationMessage`). "Path B = FROST
+  attestation + winner signature, verified on-chain" did not describe the
+  shipped rail, and "no single party — including the platform — can release"
+  was an overclaim: v1 is host-mediated (the host cannot fabricate or alter a
+  verdict, and cannot redirect funds, but it can release without one). Paper
+  §1.2/§3.2/§3.4/§9.2/§10.1–10.2/§12, `THREAT_MODEL.md` (ADV-COORD capability
+  row, asset A7, §4.8, P13/P14, PO-15), `FORMAL_INVARIANTS.md` (named
+  assumption **A6** in §1.5, **INV-SETTLE-1**, finding **F-13**) and
+  `SETTLEMENT-RAILS.md` corrected to match the code.
+- **New `liquidEscrow.ts › buildCourtJudgeLeaf({winnerXOnly, groupXOnly})`** —
+  the attested-spend judge leaf as a typed contract: 32-byte x-only keys only,
+  and a shared winner/group key is refused (one key in both roles collapses the
+  two-signature conjunction to a single party). Byte-identical to the legacy
+  judge leaf for the same keys (pinned by a test) and byte-compatible builder
+  `buildTaprootLeaves` is untouched. `isCourtJudgeLeaf(scriptHex, keys)` gives
+  hosts an exact-equality check against the persisted descriptor instead of a
+  substring search. Exported from the package root with its types.
+
 ### Fixed (docs — symposium round 17: final coherence polish)
 
 - **Version story made coherent at v0.10.2:** README quickstart install pin

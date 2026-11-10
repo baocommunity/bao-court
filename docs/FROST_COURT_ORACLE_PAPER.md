@@ -37,8 +37,9 @@ enforced by a deterministic escrow ledger
 with Kleros-style slashing (coherent jurors share the slashed pool; incoherent
 jurors lose 50%; non-reveal and double-voting jurors lose 100%), and settlement
 is specified for two rails — Lightning hold invoices (social slashing) and
-Liquid P2WSH/Taproot escrow (script-enforced) — as pure, host-executed
-protocol math. The jury forms only when a dispute exists (or, for standing
+Liquid P2WSH/Taproot escrow (the *spend* is script-enforced; the *verdict* is
+attested-spend bound, i.e. procedurally bound and publicly auditable in v1 —
+§9.2) — as pure, host-executed protocol math. The jury forms only when a dispute exists (or, for standing
 cohorts, once per epoch), so juror capital is
 never locked for the lifetime of a market. The reference implementation is
 this repository: platform-neutral TypeScript, a 1,492-test-strong suite
@@ -71,8 +72,9 @@ disputes. Both are single points of failure and compromise.
 
 | Property | Meaning |
 |----------|---------|
-| **Threshold security** | No single party — including the platform — can unilaterally release dispute funds. |
-| **Self-custody** | Winners claim payouts with their own keys; jurors only sign attestations. |
+| **Threshold attestation** | No single party — including the platform — can *produce* a dispute verdict: the verdict is a threshold signature over a group key born in DKG, never held in one place. |
+| **Settlement binding** | *Who can release funds once the threshold has spoken.* Three bindings exist and they are not equivalent; v1 is **host-mediated** (the cohort authorises, the host releases — a documented trust point). Full analysis: `docs/SETTLEMENT-BINDING.md`. On-chain verdict enforcement (CHECKSIGFROMSTACK on Liquid) is specified there and not yet shipped. |
+| **Self-custody** | Winners claim payouts with their own keys; the cohort's signature is never sufficient on its own. |
 | **Censorship resistance** | A timelock refund path exists if the dispute oracle stalls. |
 | **Privacy** | On-chain artifacts reveal no threshold structure. |
 | **Verifiability** | Jury selection, voting, and attestations are publicly auditable and recomputable. |
@@ -103,7 +105,11 @@ Schnorr constructions.
 3. A **dual-rail settlement specification** (Lightning hold invoices; Liquid
    P2WSH/Taproot escrow) in which every value an observer needs is
    recomputable from public inputs, while key custody and broadcasting stay
-   with the host.
+   with the host. The **settlement binding** between a threshold verdict and the
+   spend that releases funds is analysed separately (`docs/SETTLEMENT-BINDING.md`):
+   three achievable bindings, one shipped (attested-spend), one specified and
+   gated (CHECKSIGFROMSTACK), and the cohort-lifetime constraint that decides
+   whether the key in a judge leaf is still alive at resolution.
 4. A **reference implementation and whole-court simulation harness** with an
    adversarial-review record (§12) and a formal evaluation methodology:
    exhaustive model checking, differential parity, and a regenerable
@@ -211,14 +217,34 @@ hardening).
 
 Every market locks funds with three mutually exclusive paths:
 
-- **Path A — normal.** Primary-oracle attestation **and** winner signature.
-- **Path B — dispute.** FROST attestation under $P_{\mathrm{dispute}}$
-  **and** winner signature.
+- **Path A — normal.** Primary-oracle attestation **and** winner signature
+  (host-mediated: the oracle co-signs the spend against its own resolution
+  record).
+- **Path B — dispute.** FROST attestation under the cohort's group key, then a
+  **second** signing session in which that same key signs the *spending
+  transaction*; the script requires the winner's signature as well:
+
+  ```
+  judge  : <winner> CHECKSIGVERIFY <group> CHECKSIG      (attested-spend)
+  refund : <T> CLTV DROP <funder> CHECKSIG
+  ```
+
+  The on-chain signature is over the taproot sighash — **not** over the
+  attestation message. Binding the verdict to the spend is therefore
+  *procedural* in v1: the cohort contributes a spend signature only against a
+  valid published attestation whose plan it can reproduce, and every
+  `(attestation, planHash, sighash, txid)` tuple is published so the binding is
+  auditable. The platform therefore **is** a trust point for release (never for
+  the verdict). On-chain verdict enforcement needs CHECKSIGFROMSTACK and a
+  creation-time settlement commitment; it is specified, gated, and not shipped.
+  See `docs/SETTLEMENT-BINDING.md` §2 for all three bindings, side by side.
 - **Path C — refund.** After absolute timelock $T$, the funder reclaims.
 
-The conjunction in Path B is the critical safety property: **jurors attest;
-they cannot spend.** The FROST aggregate key is an oracle key, not a spending
-key — an attestation without the winner's signature is worthless on-chain.
+The conjunction in Path B still says something important — **the cohort cannot
+redirect the money**: a threshold signature without the winner's key spends
+nothing, and the cohort's signature commits to one exact transaction. What it
+does *not* say is that the verdict is checked by consensus. Whoever validates
+the attestation before requesting the spend signature is part of the trust base.
 
 ### 3.3 Attestation format
 
@@ -249,7 +275,13 @@ The signed message is exactly
 
 $$m \;=\; H(\texttt{BAO-Court/AttestationMessage/v1} \;\|\; \texttt{marketId} \;\|\; \texttt{outcome} \;\|\; \texttt{round} \;\|\; \texttt{disputeEventId} \;\|\; \texttt{verdictHash})$$
 
-where each field is UTF-8 **length-prefixed** under a domain tag
+This is a **Nostr message, not a transaction signature**. It proves the verdict;
+it cannot by itself move funds (a tapscript `OP_CHECKSIG` verifies a sighash, and
+no shipped script verifies an attestation — `docs/SETTLEMENT-BINDING.md` §1). The
+spend is authorised by a *second* signing session under the same group key whose
+message is the sighash.
+
+Each field is UTF-8 **length-prefixed** under a domain tag
 (`CanonicalWriter`; `buildAttestationMessage`). Delimiter-joined
 concatenation is deliberately rejected: an attacker-controlled `marketId` or
 `outcome` could embed the delimiter and alias another field or the dispute
@@ -292,10 +324,19 @@ Universal confirmation (§6) adds a second empanelment mode without
 reintroducing the standing-committee cost the JIT design avoids: a
 *standing epoch cohort* (§7.1) runs the DKG **once per epoch** and reuses
 the group key across every confirmation in the cohort's signed validity
-window. The cohort key is still an oracle key only (§3.2), cohort members
-are escrowed and slashed under the same ledger rules (§8), and rotation is
-enforced by the signed handoff chain — a stale cohort cannot outlive its
-validity window (§7.3).
+window. The cohort key is an oracle key only (§3.2) — it authorises, it never
+redirects — cohort members are escrowed and slashed under the same ledger
+rules (§8), and rotation is enforced by the signed handoff chain — a stale
+cohort cannot outlive its validity window (§7.3).
+
+**The cohort is the only key that can be in a judge leaf.** A JIT dispute key
+does not exist at market creation, so a script cannot name it
+(`docs/SETTLEMENT-BINDING.md` §1.2). That forces a lifetime constraint that is
+easy to get wrong: *the market window must fit inside the cohort's epoch* —
+formally `resolveBy + settlementSlack ≤ cohort.endsAtSec` — because rotating the
+cohort destroys its shares and a script-bound escrow cannot follow the
+handoff chain. The market-creation rule and the refusal / shorten /
+pre-commit-next-cohort policy ladder are in `docs/SETTLEMENT-BINDING.md` §3.
 
 ---
 
@@ -716,14 +757,20 @@ slashing*: coherent jurors get paid, incoherent jurors get nothing.
 
 ### 9.2 Panel B — Liquid P2WSH / Taproot escrow
 
-Panel B is script-enforced:
+Panel B enforces the **spend** in script (threshold, destination, timelock); the
+verdict reaches it through the cohort's attestation and, in v1, the host's
+release step:
 
 - `OP_<M> <pk_1> … <pk_N> OP_<N> OP_CHECKMULTISIG` P2WSH escrows (1–15 keys;
   x-only inputs lifted to compressed with correct parity; the standard
   `OP_FALSE` witness bug element).
 - Taproot judge/refund trees: a judge leaf
-  `<winner> CHECKSIGVERIFY <oracle> CHECKSIG` (jurors attest, the winner
-  spends — §3.2) and a CLTV refund leaf.
+  `<winner> CHECKSIGVERIFY <judge> CHECKSIG` and a CLTV refund leaf. The judge
+  slot holds the **standing cohort** key and the signature it verifies is over
+  the spend's taproot sighash — an *attested-spend* binding, not an on-chain
+  attestation check (§3.2, `docs/SETTLEMENT-BINDING.md`). `buildCourtJudgeLeaf`
+  serializes this leaf and refuses a shared winner/judge key;
+  `buildTaprootLeaves` remains the byte-compatible single-oracle builder.
 - BIP-173/BIP-350 address derivation (bech32 v0 / bech32m v1; the witness
   version is a 5-bit word prepended to program words — byte-concatenation
   would silently corrupt it, covered by tests), BIP-341 tweaked programs with
@@ -733,7 +780,11 @@ Panel B is script-enforced:
 
 The script does not read the tally — the court's plan decides **which branch
 to sign**, and the public builders construct exactly the transaction that
-realizes the court's decision.
+realizes the court's decision. Nor does it read the attestation: a Liquid
+`CHECKSIGFROMSTACK` leaf that would verify the verdict on-chain is specified in
+`docs/SETTLEMENT-BINDING.md` §2.2 and is **not** shipped (it needs a
+consensus-tested opcode, a creation-time settlement commitment, and one leaf
+per outcome).
 
 ### 9.3 End-to-end determinism
 
@@ -758,9 +809,33 @@ and the random-oracle model for $H$; (A2) at least $M$ honest jurors opt in
 and participate; (A3) honest jurors share authenticated, encrypted channels
 (§2.5); (A4) for the complaint bound of §2.4, an honest majority in the
 corruption sense $m+1 \le t$; (A5) the block-hash seed is unbiased at the
-required confirmation depth. **Prototype deployments satisfy none of A2–A4 by
-construction** (single-process ceremonies); see the honest status section of
-the README.
+required confirmation depth; **(A6) the settlement binding** — the release path
+either (a) runs a spend-signing session whose participants enforce the
+attestation and the plan (attested-spend, §3.2), or (b) verifies the verdict in
+script (CHECKSIGFROMSTACK, specified but not shipped), or (c) is a *named*
+trust point whose operator is inside the threat model. A6 is **not** discharged
+by the FROST signature itself: a threshold signature over an attestation
+message says nothing about what happens to the escrow
+(`docs/SETTLEMENT-BINDING.md` §5 keeps the open items).
+
+**Prototype deployments satisfy none of A2–A4 by construction** (single-process
+ceremonies), and **A6 is discharged by (c) today** (host-mediated release); see
+the honest status section of the README.
+
+**The host as an adversary (explicit).** In the shipped v1 the platform is a
+release authority, not merely an executor:
+
+| Capability | Cryptographically prevented? | Control |
+|---|---|---|
+| Fabricate a verdict | yes — needs $M$ shares | threshold |
+| Alter an attested outcome | yes — the validator recomputes the tally commitment, market id, outcome whitelist and signature under the pinned group key | validator |
+| Move escrow funds to an arbitrary destination | yes — the cohort signature commits to one sighash and the winner must also sign | two-signature leaf |
+| **Release with no verdict at all** | **no** | none at the signer; post-hoc audit (§9.2) |
+| **Choose among several valid verdicts** | **no** | one attestation per `(market, round)`, monotone round, published trail |
+| Refuse to release (censorship) | — | CLTV refund path |
+
+Authority confusion — "the court approved this" when in fact "the host asked for
+a signature" — is the failure this table makes impossible to state by accident.
 
 ### 10.2 Attack vectors
 
@@ -782,7 +857,9 @@ independent juror keys. Proactive refresh (share re-randomization) further
 bounds the value of stale shares.
 
 **E. Front-running.** The attestation alone cannot spend — the winner's key
-is required (§3.2).
+is required (§3.2), and the cohort's own signature commits to one exact
+sighash. The host, however, can *choose* which verge of the flow runs: see
+§10.1's host-adversary table.
 
 **F. Sybil / stake concentration.** Quadratic lottery (§4.2), WoT /
 account-age floors, escrowed pledges.
@@ -819,6 +896,19 @@ and the dispatcher's downgrade refusal (§7.3): epoch, tier, threshold, and
 signer-set root are inside the signed message, and a v1-shaped event cannot
 satisfy v2 policy at all. Pinned by the adversarial validator suite (30
 reproduction cases).
+
+**M. Release without a verdict (authority confusion).** The host holds the
+signer credential and the settlement binding is procedural in v1, so a
+compromised or misdeployed host can obtain the cohort's spend signature for a
+transaction no verdict authorises — and can select among multiple valid
+verdicts. *Not mitigated cryptographically today.* Controls: two-signature
+leaves (the winner must also sign), one-signature-per-`(kind, escrow, rail,
+action, planId)` at the signer, and the published
+`(attestation, planHash, sighash, txid)` tuple that makes every release
+re-checkable after the fact. The fix is a signer that requires the attestation
+in the signature request (`docs/SETTLEMENT-BINDING.md` §4.2), and — for Liquid
+binary/escrow rails — the CHECKSIGFROMSTACK leaf (§2.2).
+
 
 **M. Hostile relay data.** Kind confusion (filter drift), tag abuse
 (duplicate/nested tags, 100k-mention tags, MB-scale values), NIP-59 seal
@@ -1088,6 +1178,16 @@ Remains **host-side or pre-production** (engineering, not design):
    reimplementations; a cross-implementation FROST differential is the
    remaining half of this gate. The upgrade triggers that gate the
    `@vbyte/frost` 1.1.5 pin are documented in `docs/CRYPTO_AUDIT.md` §6.
+6. **Settlement binding (A6).** v1 is host-mediated: the cohort authorises,
+   the host releases. Two pieces are specified and not shipped — the
+   spend-session binding (the signing-session hash extended with
+   `marketId ‖ attestationDigest ‖ planHash ‖ sighash`, and a signer that
+   refuses a spend partial without a valid attestation) and, for Liquid
+   binary/escrow rails, the `CHECKSIGFROMSTACK` judge leaf. Both, plus the
+   market-creation coverage rule that a market must not outlive its cohort,
+   are in `docs/SETTLEMENT-BINDING.md` §2 and §4. Until they land, the
+   correct description of the rail is "threshold attestation + host-mediated
+   release", never "no single party can release".
 
 ---
 

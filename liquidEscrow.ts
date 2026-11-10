@@ -5,14 +5,26 @@
  *
  * ADR-001 Panel B: juror stakes / challenger bonds are locked in a Liquid
  * P2WSH M-of-N CHECKMULTISIG (script-enforced threshold), with a Taproot
- * variant for the single-oracle judge path
- * (`<winner> CHECKSIGVERIFY <oracle> CHECKSIG`, paper §6.1) and a timelock
+ * judge path (`<winner> CHECKSIGVERIFY <judge> CHECKSIG`) and a timelock
  * refund leaf. The court's RedistributionPlan decides WHICH branch to spend;
  * this module builds the script trees, addresses, and transaction skeletons —
  * pure math, no keys, no node access.
  *
+ * Two judge-leaf builders exist and they are NOT interchangeable:
+ *
+ *  - `buildCourtJudgeLeaf({winnerXOnly, groupXOnly})` — the **settlement
+ *    binding** for a FROST/cohort judge: the slot holds the standing cohort
+ *    key and that key signs the SPEND's taproot sighash in a second signing
+ *    session. Correct for markets whose judge is a threshold group.
+ *  - `buildTaprootLeaves({winnerXOnly, oracleXOnly, …})` — the legacy
+ *    single-oracle builder (kept byte-compatible). It serializes the identical
+ *    script shape; it does NOT assert which key belongs in the slot.
+ *
  * The script does NOT read the tally (ADR-001 negative): enforcement is
- * economic — the court signs the branch matching its verdict, hosts execute.
+ * economic — the judge signs the branch matching its verdict, hosts execute.
+ * The full analysis of what that means for FROST (three candidate bindings,
+ * what is cryptographic vs procedural, and the cohort-lifetime rule) is
+ * `docs/SETTLEMENT-BINDING.md`.
  *
  * @see docs/SETTLEMENT-RAILS.md
  * @see ADR-001 (docs/architecture/adr/001-juror-escrow-design.md in bao.markets)
@@ -189,6 +201,115 @@ export function buildTaprootLeaves(params: TaprootEscrowParams): {
     new Uint8Array([OP.CHECKSIG]),
   ));
   return { judgeLeaf, refundLeaf };
+}
+
+// ── Court (FROST / standing-cohort) judge leaf ──────────────────────────────
+
+const XONLY_32 = /^[0-9a-f]{64}$/;
+
+/** Which message the judge leaf's second signature commits to. */
+export type JudgeLeafSecondSignature = 'taproot-sighash';
+
+export interface CourtJudgeLeafParams {
+  /** Winner / beneficiary pubkey (32-byte x-only hex) — signs the spend. */
+  readonly winnerXOnly: string;
+  /**
+   * The standing FROST cohort's group pubkey (32-byte x-only hex) — the key
+   * that must still be alive at resolution (see docs/SETTLEMENT-BINDING.md
+   * §3). NEVER a JIT per-dispute key: that key does not exist at lock time.
+   */
+  readonly groupXOnly: string;
+}
+
+export interface CourtJudgeLeaf {
+  /** Leaf script serialization (hex). */
+  readonly script: string;
+  /** The binding this leaf realizes: cohort signs the SPEND, not the verdict. */
+  readonly binding: 'attested-spend';
+  /** The group signature is over the rail-native taproot sighash. */
+  readonly secondSignatureMessage: JudgeLeafSecondSignature;
+}
+
+/**
+ * Court judge leaf — the **attested-spend** settlement binding.
+ *
+ * Script (deliberately byte-identical in shape to the legacy single-oracle
+ * judge leaf):
+ *
+ *   L1 (judge path): `<winner> CHECKSIGVERIFY <group> CHECKSIG`
+ *
+ * The bytes do not change because the oracle slot already verified a
+ * transaction signature; what changes is the KEY CONTRACT this function
+ * enforces, and it is the contract the paper used to get wrong:
+ *
+ *  - the slot holds the STANDING COHORT key, pinned at market creation — a
+ *    key that can still sign when the dispute is resolved months later;
+ *  - the signature over that key is over the rail-native TAPROOT SIGHASH of
+ *    this exact spend — never over the Nostr attestation message
+ *    (`buildAttestationMessage`), which is a different message under a
+ *    different scheme context;
+ *  - the court attestation is the AUTHORISATION for opening the spend-signing
+ *    session, not the message that signature certifies. Binding the two is
+ *    procedural (both signatures exist; the attestation and the signed plan
+ *    are published together) — see the doc for what is and is not enforced
+ *    on-chain.
+ *
+ * Witness (bottom → top): `[groupSig, winnerSig, leafScript, controlBlock]`
+ * — the winner signs last so `CHECKSIGVERIFY` consumes it first.
+ *
+ * @throws if either key is not 32-byte lowercase hex, or if the group key
+ *   equals the winner key (one key holding both roles collapses the
+ *   conjunction to a single party — the exact overclaim this binding refuses).
+ */
+export function buildCourtJudgeLeaf(params: CourtJudgeLeafParams): CourtJudgeLeaf {
+  const winner = String(params.winnerXOnly ?? '').toLowerCase();
+  const group = String(params.groupXOnly ?? '').toLowerCase();
+  if (!XONLY_32.test(winner)) {
+    throw new Error('buildCourtJudgeLeaf: winnerXOnly must be 32-byte lowercase hex');
+  }
+  if (!XONLY_32.test(group)) {
+    throw new Error('buildCourtJudgeLeaf: groupXOnly must be 32-byte lowercase hex');
+  }
+  if (winner === group) {
+    throw new Error(
+      'buildCourtJudgeLeaf: the cohort group key must differ from the winner key '
+      + '(a shared key collapses the two-signature conjunction to one party)',
+    );
+  }
+  const script = bytesToHex(concatBytes(
+    pushHex(winner),
+    new Uint8Array([OP.CHECKSIGVERIFY]),
+    pushHex(group),
+    new Uint8Array([OP.CHECKSIG]),
+  ));
+  return Object.freeze({
+    script,
+    binding: 'attested-spend' as const,
+    secondSignatureMessage: 'taproot-sighash' as const,
+  });
+}
+
+/**
+ * Assert that a PERSISTED judge leaf is exactly the court leaf for
+ * `(winnerXOnly, groupXOnly)`.
+ *
+ * Hosts store the descriptor (leaf hex + keys) at market creation and re-read
+ * it at settlement. Exact-equality against the canonical serialization is the
+ * only safe check: a parser that merely *finds* the group key in the script
+ * would accept `<group> CHECKSIGVERIFY <group> CHECKSIG` (one key, two roles)
+ * or a leaf whose winner slot was swapped. Bytes in, bytes out, no parsing.
+ *
+ * @returns true when the serialized leaf is the canonical court leaf.
+ */
+export function isCourtJudgeLeaf(
+  scriptHex: string,
+  params: CourtJudgeLeafParams,
+): boolean {
+  try {
+    return String(scriptHex).toLowerCase() === buildCourtJudgeLeaf(params).script;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -54,9 +54,12 @@ implements it against LNbits/CLN/LND on BAO signet — never in this package.
 
 ## 3. Panel B — Liquid P2WSH / Taproot escrow
 
-ADR-001 Panel B is **script-enforced**: the multisig/threshold spend is real
-on-chain. The script does not read the tally — enforcement is the court
-choosing which branch to sign (ADR-001 negative).
+ADR-001 Panel B is **script-enforced for the spend**: the multisig/threshold
+spend is real on-chain. The script does not read the tally — enforcement is the
+court choosing which branch to sign (ADR-001 negative). It does not read the
+attestation either: the verdict→spend binding is analysed in
+`docs/SETTLEMENT-BINDING.md` (attested-spend shipped, CHECKSIGFROMSTACK
+specified and gated).
 
 - `buildMultisigScript({pubkeys, threshold})` — P2WSH M-of-N `CHECKMULTISIG`
   with the leading `OP_FALSE` (script bug), 1..15 pubkeys, compressed or
@@ -65,6 +68,11 @@ choosing which branch to sign (ADR-001 negative).
   `<winner> CHECKSIGVERIFY <oracle> CHECKSIG` and a CLTV refund leaf
   `<refundLocktime> OP_CLTV OP_DROP <funder> CHECKSIG` (the depositor's key,
   never the oracle; locktime is the minimal signed script-number push).
+  **The judge leaf verifies a transaction signature, not a message**: the
+  signature in that slot is over the spend's taproot sighash. A threshold judge
+  is bound with `buildCourtJudgeLeaf({winnerXOnly, groupXOnly})`, which
+  serializes the same bytes but asserts the key contract (standing cohort key,
+  distinct from the winner) — see `docs/SETTLEMENT-BINDING.md`.
 - `p2wshAddress(script, net)` / `taprootAddress(pubkey, merkleRoot, net)` —
   bech32 (v0) / bech32m (v1) addresses. BIP-173/BIP-350 compliant; verified
   against the official vectors. The witness version is a 5-bit word prepended

@@ -62,7 +62,7 @@ assumption A1 of the paper §10.1).
 | **ADV-RELAY** | Hostile Nostr relay | Drop, reorder, delay, duplicate any event; serve partitioned views (over-serve selected clients); replay old events; append hostile tags to re-published events. Cannot forge (NIP-01 id + Schnorr bind content) and cannot read NIP-59 gift-wrap payloads. | Compromising juror hosts; breaking the seal cryptography. |
 | **ADV-JUROR-<t** | Malicious juror minority | Controls < $t$ shares of the active cohort; votes arbitrarily, equivocates commits/nonces/partials, abstains, colludes with the coordinator, publishes its share of evidence. By Shamir privacy learns nothing about $f(0)$ beyond what its own shares give. | Forging an attestation alone; reading others' shares. |
 | **ADV-JUROR-≥t** | Malicious juror majority | Controls ≥ $t$ shares: can produce **valid** attestations for any outcome, steer the signer set, and do all of ADV-JUROR-<t. This is the strongest insider adversary. | Remaining honest jurors' keys. |
-| **ADV-COORD** | Malicious coordinator / host | Drives every machine (creates states, closes phases, dispatches); can withhold, reorder, delay, or replay events to peers; can attempt the paper's vector I (phase-timing manipulation); runs restored-snapshot recovery. Cannot sign (no shares), cannot alter frozen machine states undetected. | Running machines it does not host; spending escrow. |
+| **ADV-COORD** | Malicious coordinator / host | Drives every machine (creates states, closes phases, dispatches); can withhold, reorder, delay, or replay events to peers; can attempt the paper's vector I (phase-timing manipulation); runs restored-snapshot recovery. **In scope in v1: release.** The host holds the settlement-signer credential, so under the host-mediated binding (`docs/SETTLEMENT-BINDING.md` §2.3) it can request the cohort's spend signature, release against no verdict, and pick among several valid verdicts for one market. Cannot sign (no shares), cannot alter frozen machine states undetected, cannot redirect an escrow to an arbitrary destination (the cohort's signature commits to one sighash and the winner must also sign). | Forging an attestation (needs $t$ shares); spending without the winner's key; surviving the published `(attestation, planHash, sighash, txid)` audit trail. |
 | **ADV-PROP** | Hostile proposer / oracle | Supplies the proposed outcome, evidence-id set, ballot, deadlines, and anchoring block hash; can grind selection by timing dispute opening and by adaptive reselection (`appealCoordinator.maybeReselect`, CRYPTO_AUDIT §2.4). | Fabricating block hashes at required depth (A5). |
 | **ADV-ECON** | Economic adversaries (two sub-species, the round-10 findings) | **(a) Ack-farming:** maximize measured SLA (ack rate) without participating — pre-fix the SLA was ack-rate-only. **(b) Bond-gaming:** challenge with a bonded but bad-faith dispute to farm overturn clawbacks or to launder a losing position through the ladder; exploit bond-escrow edges (witness-vs-UTXO duty, dust fungibility, redelivery rules). | Stealing sats directly; breaking the ledger state machine. |
 | **ADV-LLM** | External LLM advisor (hermes-juror trust boundary) | Fully controls the advisory LLM's outputs (prompt injection, model compromise, outage, adversarial reasoning text). Controls **no** keys. Additionally — see §4.7 — influences the *inputs*: dispute evidence TEXT is attacker-influenced and flows into the advisory prompt. | Signing anything; overriding the mechanical policy; moving value. |
@@ -95,6 +95,7 @@ stakes and fees in the $10^3$–$10^4$ range.
 | **A4** | Reputation integrity | Inflate own juror reputation/SLA (ack-farming, batch double-counting, cross-network epoch squat) or deflate rivals | Long-run: control of future jury composition — the compounding asset that converts into A1/A2 capability at threshold. Immediate: fee-pool share misallocation from $S$. |
 | **A5** | Liveness | Kill a ceremony: stall confirmation, poison the ladder, wedge a cohort epoch, eclipse jurors | No theft, but locked escrow (time-value of $V$) and DoS of the appeal path; worst case the Path-C refund after $T$ returns principal and the fee pool $F$ is never distributed. |
 | **A6** | Fee pool & slashing correctness | Misdirect clawbacks/slashing (aim `round_flip`/`overturned_confirmation` flags at arbitrary indices), drain $F$ via fee-ledger replay, or self-deal redistribution | Up to $S + F$: the whole stake/slashing pool plus fee pool per dispute cycle. |
+| **A7** | Release authorisation (the settlement binding — paper §10.1 assumption A6) | Release an escrow with **no** verdict, or with a *stale* one among several valid ones — the host holds the settlement-signer credential and v1 binding is procedural | Up to $V$ per escrow, with **no** verdict forgery required and **no** on-chain trace that the release was unauthorised (the transfer itself is valid). Bounded only by the published `(attestation, planHash, sighash, txid)` trail — a *detective* control. See `docs/SETTLEMENT-BINDING.md`. |
 
 ---
 
@@ -406,6 +407,53 @@ prompt-injection repro suite in the host repo. The hermes *report* channel
 network-marker + BIP-340 signature verification host-side — that boundary
 is real and pinned (host `hermesAdvisor.ts`).
 
+### 4.8 A7 — Release authorisation (the settlement binding)
+
+```
+Release money without a verdict (ADV-COORD, in scope since v1 ships host-mediated)
+├─ W1: forge a verdict
+│   └─ closed: needs t shares (A1/A3), and the validator recomputes the tally
+│      commitment, market id, outcome whitelist and group-key pin (P1, P8)
+├─ W2: alter an attested outcome
+│   └─ closed: verdictHash is inside the signed message (INV-VOTE-19);
+│      tampering fails validateAttestationEvent
+├─ W3: redirect the escrow to an arbitrary destination
+│   └─ closed by construction: the judge leaf is <winner> CHECKSIGVERIFY
+│      <cohort> CHECKSIG — the cohort's signature commits to ONE sighash
+│      (outpoints, amounts, outputs, fee, leaf) and the winner must also sign
+├─ W4: release against NO verdict (authority confusion) ......... OPEN
+│   └─ the signer service signs a structured request bound to
+│      (kind, escrow, rail, action, planId) — no verdict field exists in it,
+│      so "the cohort authorised this" and "the host asked" are
+│      indistinguishable. Controls today: one signature per binding
+│      (no equivocation, NOT an authorisation check), the winner's
+│      signature, and the published audit tuple.
+│      Closure: include attestationDigest/marketId/outcome in the request and
+│      refuse a spend partial without a valid attestation
+│      (docs/SETTLEMENT-BINDING.md §4.2); plus the CSFS leaf (§2.2) on Liquid.
+├─ W5: pick a stale verdict among several valid ones ........... OPEN (partial)
+│   └─ one attestation per (market, round) + monotone rounds + published
+│      trail make it *visible*; the escrow cannot tell them apart
+└─ W6: withhold the release (censorship) ....................... bounded
+    └─ Path-C CLTV refund after T (A5)
+```
+
+**What the host cannot do** — and this is the part that survives the honest
+statement: it cannot fabricate a verdict, cannot alter an attested one, cannot
+choose the destination, and cannot spend without the winner. It *can* choose
+whether and when to release, and which valid verdict to honour.
+
+**Detective control.** Publish `(marketId, outcome, attestationEventId,
+planHash, sighash, txid)` per release; re-verify out-of-band that each release is
+covered by a valid attestation and that the plan pays the attested beneficiary.
+Post-hoc only: funds have moved by the time it fires.
+
+**Residual (honest).** The platform is a release authority in v1. Describing the
+rail as "no single party can release" is an A6 claim that this binding does not
+support — the correct sentence is **"the court decides, the host releases"**.
+`docs/SETTLEMENT-BINDING.md` §2 compares all three bindings and §5 keeps the
+open items.
+
 ---
 
 ## 5. Trust-boundary inventory — the MUST-pin table
@@ -433,6 +481,8 @@ docs/CROSS_CHECK.md.
 | P10 | No v1 downgrade under v2 policy — a v1-shaped event with any v2-only policy field is refused (INV-VAL-13) | format ambiguity | Stale-artifact replay (paper vector L) closed | A round-0 confirmation or old-epoch attestation satisfies v2 policy |
 | P11 | Host-side: challenge bond witness-vs-UTXO check before dispatch (INV-CONF-17 boundary note) | witness hash binding only | Bond actually exists on chain | A challenge backed by a witness hash over a spent/nonexistent UTXO enters the ladder |
 | P12 | Host-side: dedup by `verdictHash` before reputation derivation (INV-BATCH-16, F-1) | batch membership scope | Reputation counts each verdict once | Silent double-count across epochs' batches |
+| P13 | Host-side: verdict validation *before* requesting the settlement signature, and publication of `(marketId, outcome, attestationEventId, planHash, sighash, txid)` (A7 / `docs/SETTLEMENT-BINDING.md` §2.3) | "the cohort signed, so a verdict exists" | The release is covered by a verdict and is re-checkable after the fact | A7: release with no verdict, or against a stale one — a valid transfer with no authorising verdict anywhere in the record |
+| P14 | Host-side: the escrow descriptor's judge leaf must be the canonical court leaf for `(winner, cohort key)` — exact bytes, not a substring match (`isCourtJudgeLeaf`, INV-SETTLE-1) | "the key appears in the script" | The leaf cannot be `<group> CHECKSIGVERIFY <group> CHECKSIG` (role collapse) or have its winner slot swapped | One key holding both roles releases with a single signature — the two-signature conjunction silently becomes one |
 
 Design rule the table formalizes (paper §587): **caller-pins-not-the-event**
 is a documented trust assumption, not a mechanism — the event cannot carry
@@ -463,6 +513,7 @@ CROSS_CHECK.md finding-class row where evidence exists.
 | PO-12 | Idle-expiry reset loop (floor → unsummoned → expire → full w0 reputation restore) — R10b flagged, design fix documented | Reputation floor prevents *negative* farming; loop restores full weight over time | Requires sustained non-participation to exploit; SLA composite already caps farmers at 0.5 | Implement the documented design fix (expiry must not reset to w0; decay instead) |
 | PO-13 | External-assumption watch: FROST adaptive security rests on the LDVR assumption (Crites et al., CRYPTO 2025); noble/vbyte pins carry upgrade triggers (CRYPTO_AUDIT §6) | Binding-factor structure is the RFC one; no published attack on LDVR; pins verbatim-audited | The proof-level assumption postdates the deployed construction and has no known weakness | Track LDVR attack literature; ChillDKG 1.0 / BIP-445 final as the upgrade trigger |
 | PO-14 | Prototype assumption gap: paper A2–A4 (honest juror opt-in mass, authenticated channels, complaint-bound majority) are unmet by single-process demo ceremonies (paper vector G) | Documented as a production gate, not a protocol change; every ceremony invariant holds *within* the single process | Demo/testnet are stated as prototypes; cross-client deployment is the planned gate | Cross-client rollout (juror-kit + independent sessions — already code-supported via `IndependentDkg/SigningSession`) |
+| PO-15 | Settlement binding (paper A6 / asset A7): v1 release is host-mediated — the cohort authorises, the host releases; no verdict is required by the signer, and the cohort's consent is a signature over the sighash, not over the verdict | Two-signature leaves (the cohort cannot redirect), one-signature-per-binding at the signer (no equivocation), validator pinning (no verdict forgery or alteration), and the published `(attestation, planHash, sighash, txid)` tuple (detective) | Stakes are small, the operator is the deployment, and the honest description ("the court decides, the host releases") is now in the paper, this model, and `docs/SETTLEMENT-BINDING.md` | Spend-session binding (`marketId ‖ attestationDigest ‖ planHash ‖ sighash` in the signing-session hash + a signer that refuses a partial without a valid attestation) and, for Liquid binary/escrow rails, the `CHECKSIGFROMSTACK` leaf — both gated in `docs/SETTLEMENT-BINDING.md` §2.2 and §4.2 |
 
 ---
 
@@ -472,6 +523,12 @@ CROSS_CHECK.md finding-class row where evidence exists.
   — FROST/RFC 9591 binding factors, Shamir privacy, PoK-fenced DKG, strict
   BIP-340 verification at every site, all pinned executably (145 invariants;
   3M-state model checking; differential parity with zero disagreements).
+- **Settlement binding (A7 = paper A6, PO-15):** *not* cryptographic in v1. The
+  court attests, the host releases; the winner must co-sign, so the cohort
+  cannot redirect funds, but the host can release without a verdict and choose
+  among valid ones. This is the one place where the honest claim is weaker than
+  the protocol's design target, and it is stated as an assumption (§1.5 of
+  `docs/FORMAL_INVARIANTS.md`) rather than implied away.
 - **Boundary integrity (A2, §5):** carries one deliberate, documented trust
   shape — *caller-pins-not-the-event* — with every unpinned consequence
   reproduced by a named adversarial test.
