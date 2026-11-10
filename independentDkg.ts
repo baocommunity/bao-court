@@ -11,7 +11,7 @@
 
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import * as frost from '@vbyte/frost';
-import { randomScalar, scalarToHex, createProofOfKnowledge, verifyProofOfKnowledge } from './crypto';
+import { randomScalar, scalarToHex, createProofOfKnowledge, dkgPokDomain, verifyProofOfKnowledge } from './crypto';
 import { buildDkgCommitmentEvent } from './events';
 import { Nip44SeckeyCrypto, type Nip44Crypto } from './nip44Crypto';
 import {
@@ -160,11 +160,11 @@ export class IndependentDkgSession {
   }
 
   private get domain(): string {
-    return `market=${this.marketId}|dispute=${this.disputeId}|juror=${this.myIdx}`;
+    return dkgPokDomain(this.marketId, this.disputeId, this.myIdx);
   }
 
   private proofDomain(idx: number): string {
-    return `market=${this.marketId}|dispute=${this.disputeId}|juror=${idx}`;
+    return dkgPokDomain(this.marketId, this.disputeId, idx);
   }
 
   private getJuror(idx: number): SelectedJuror | undefined {

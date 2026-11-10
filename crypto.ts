@@ -312,6 +312,60 @@ export interface DkgProofOfKnowledge {
 }
 
 /**
+ * Challenge domain for the DKG proof-of-knowledge (canonical encoding).
+ *
+ * v2 replaces the v1 delimiter-joined challenge encoding. The v1 encoding
+ * joined `[prefix, pubkey, nonce, domain].join('|')` — the first three fields
+ * are fixed-length hex so the join was injective there, but the trailing
+ * `domain` string (`market=…|dispute=…|juror=…`) is attacker-influenced and
+ * itself contains the separators, so two distinct (market, dispute) pairs can
+ * render the same domain string (e.g. market "x" + dispute "y|dispute=z"
+ * vs market "x|dispute=y" + dispute "z") and alias a proof across DKG
+ * ceremony bindings. v2 length-prefixes every field via CanonicalWriter under
+ * an explicit domain tag, making the challenge injective in all fields.
+ */
+const DKG_POK_CHALLENGE_DOMAIN_V2 = 'bao-frost-court/dkg-pok-challenge-v2';
+/** Legacy v1 challenge prefix — still VERIFIED (never created) for mixed-fleet compat. */
+const DKG_POK_CHALLENGE_PREFIX_V1 = 'bao-frost-court/dkg-pok-v1';
+
+/**
+ * Canonical DKG proof-of-knowledge domain string: hex of the
+ * CanonicalWriter-encoded `(marketId, disputeId, jurorIdx)` tuple.
+ *
+ * The legacy renderer (`market=…|dispute=…|juror=…`) was ambiguous whenever a
+ * hostile market/dispute id embeds the delimiters — e.g. tuple
+ * (market "x", dispute "y|dispute=z") and tuple (market "x|dispute=y",
+ * dispute "z") render identically, aliasing a proof across DKG ceremony
+ * bindings. Length-prefixing every field makes the tuple injective.
+ */
+export function dkgPokDomain(marketId: string, disputeId: string, jurorIdx: number): string {
+  const writer = new CanonicalWriter();
+  writer.text(marketId);
+  writer.text(disputeId);
+  writer.u32(jurorIdx);
+  return bytesToHex(writer.finish());
+}
+
+function pokChallengeV2(pubkeyHex: string, nonceHex: string, domain: string): string {
+  const writer = new CanonicalWriter();
+  writer.text(DKG_POK_CHALLENGE_DOMAIN_V2);
+  writer.text(pubkeyHex);
+  writer.text(nonceHex);
+  writer.text(domain);
+  return bytesToHex(sha256(writer.finish()));
+}
+
+function pokChallengeV1(pubkeyHex: string, nonceHex: string, domain: string): string {
+  return bytesToHex(
+    sha256(
+      new TextEncoder().encode(
+        [DKG_POK_CHALLENGE_PREFIX_V1, pubkeyHex, nonceHex, domain].join('|'),
+      ),
+    ),
+  );
+}
+
+/**
  * Create a Schnorr proof of knowledge of the discrete log of `pubkeyPoint`.
  * The challenge binds `pubkey`, the nonce, and an optional domain string.
  */
@@ -324,17 +378,10 @@ export function createProofOfKnowledge(
   const pubkey = Point.fromHex(pubkeyHex);
   const r = randomScalar();
   const noncePoint = Point.BASE.multiply(r);
-  const challenge = bytesToHex(
-    sha256(
-      new TextEncoder().encode(
-        [
-          'bao-frost-court/dkg-pok-v1',
-          pubkey.toHex(true),
-          noncePoint.toHex(true),
-          domain ?? '',
-        ].join('|'),
-      ),
-    ),
+  const challenge = pokChallengeV2(
+    pubkey.toHex(true),
+    noncePoint.toHex(true),
+    domain ?? '',
   );
   const e = modN(bytesToNumberBE(hexToBytes(challenge)));
   const z = modN(r + e * secret);
@@ -346,6 +393,13 @@ export function createProofOfKnowledge(
 
 /**
  * Verify a Schnorr proof of knowledge of the discrete log of `pubkeyHex`.
+ *
+ * Accepts the canonical v2 challenge encoding (what {@link createProofOfKnowledge}
+ * now emits) and — for mixed-version fleets during rollout — the legacy v1
+ * delimiter-joined encoding. v1 acceptance is a documented compatibility
+ * window, not an ambiguity: the v1 encoding's aliasing only matters when a
+ * hostile peer crafts colliding `domain` strings, and every DKG session also
+ * binds commitments to the roster and dispute at the event boundary.
  */
 export function verifyProofOfKnowledge(
   pubkeyHex: string,
@@ -355,23 +409,20 @@ export function verifyProofOfKnowledge(
   try {
     const pubkey = Point.fromHex(pubkeyHex);
     const noncePoint = Point.fromHex(proof.nonce);
-    const challenge = bytesToHex(
-      sha256(
-        new TextEncoder().encode(
-          [
-            'bao-frost-court/dkg-pok-v1',
-            pubkey.toHex(true),
-            noncePoint.toHex(true),
-            domain ?? '',
-          ].join('|'),
-        ),
-      ),
-    );
-    const e = modN(bytesToNumberBE(hexToBytes(challenge)));
+    const compressed = pubkey.toHex(true);
+    const nonce = noncePoint.toHex(true);
+    const domainStr = domain ?? '';
     const z = bytesToNumberBE(hexToBytes(proof.response));
-    const lhs = Point.BASE.multiply(z);
-    const rhs = noncePoint.add(pubkey.multiply(e));
-    return lhs.equals(rhs);
+    for (const challengeHex of [
+      pokChallengeV2(compressed, nonce, domainStr),
+      pokChallengeV1(compressed, nonce, domainStr),
+    ]) {
+      const e = modN(bytesToNumberBE(hexToBytes(challengeHex)));
+      const lhs = Point.BASE.multiply(z);
+      const rhs = noncePoint.add(pubkey.multiply(e));
+      if (lhs.equals(rhs)) return true;
+    }
+    return false;
   } catch {
     return false;
   }

@@ -32,7 +32,7 @@ import { secp256k1 } from '@noble/curves/secp256k1.js';
 import * as frost from '@vbyte/frost';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
-import { createProofOfKnowledge, deriveXOnlyPubkey, randomScalar, scalarToHex, seededScalar, verifyProofOfKnowledge } from './crypto';
+import { createProofOfKnowledge, deriveXOnlyPubkey, dkgPokDomain, randomScalar, scalarToHex, seededScalar, verifyProofOfKnowledge } from './crypto';
 import type { DkgRecord, SelectedJuror } from './types';
 
 const Point = secp256k1.Point;
@@ -231,7 +231,7 @@ export class PedersenDkgAdapter implements DkgAdapter {
   private proofDomain(idx: number): string {
     const marketId = this.paramsForProofDomain?.marketId ?? '';
     const disputeId = this.paramsForProofDomain?.disputeId ?? '';
-    return `market=${marketId}|dispute=${disputeId}|juror=${idx}`;
+    return dkgPokDomain(marketId, disputeId, idx);
   }
 
   run(params: KeygenParams): KeygenResult {

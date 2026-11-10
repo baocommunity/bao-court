@@ -248,6 +248,12 @@ export function aggregateAttestation(
   commitments: readonly SigningCommitment[],
   reveals: readonly SigningReveal[],
 ): FrostAttestation {
+  // CONTRACT (crypto literature audit 2026-11): `commitments` must be EXACTLY
+  // the set of jurors that produced `reveals`. FROST binding factors and the
+  // Lagrange coefficients are indexed by the commitment list, so a reveal
+  // subset over a larger commitment set yields a final signature that fails
+  // `verify_final_sig` below (fail-closed). Callers that collected extra
+  // commitments MUST filter them out before calling this function.
   const message = buildAttestationMessage(
     params.marketId,
     params.outcome,

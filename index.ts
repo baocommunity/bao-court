@@ -36,6 +36,7 @@ export {
   verifyFinalSignature,
   verifySchnorr,
   createProofOfKnowledge,
+  dkgPokDomain,
   verifyProofOfKnowledge,
   frost,
 } from './crypto';
