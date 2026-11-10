@@ -9,6 +9,28 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [Unreleased]
+
+### Changed (docs)
+
+- **Paper alignment (symposium round 11):** `docs/FROST_COURT_ORACLE_PAPER.md`
+  updated from v0.5.4-era text to describe exactly what ships in v0.10.0 —
+  new sections for universal confirmation and the escalation ladder (§6),
+  epoch cohorts + kind-39018 batch attestations + the v2 finality binding
+  (§7), exhaustive model checking (§11.2), differential parity (§11.3), the
+  performance baseline (§11.4), and the audit program as evaluation
+  methodology (§11.5); new attack vectors L (stale-artifact replay) and M
+  (hostile relay data); stale claims (v1-only attestation format, JIT-only
+  empanelment, test counts) corrected; sections renumbered with
+  cross-references updated.
+
+### Fixed (test-infra)
+
+- `__tests__/propertiesBatch.test.ts` PB2 now carries the same explicit
+  `{ timeout: 120_000 }` as PB1 — under full-suite parallel load the
+  default 5 s test timeout flaked the property sweep (deterministic
+  assertions; no behaviour change).
+
 ## [0.10.0] — 2026-11-10
 
 ### Added (round-9 performance optimization — no byte output or behaviour changes)
