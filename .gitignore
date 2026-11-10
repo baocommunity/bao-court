@@ -4,3 +4,4 @@ dist/
 *.log
 .pi-subagents/
 SETTLEMENT_RAILS_PLAN.md
+.repro-artifacts/

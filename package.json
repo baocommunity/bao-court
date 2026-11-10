@@ -154,6 +154,7 @@
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "simulate:court": "tsx scripts/simulateCourt.ts",
     "bench": "tsx bench/court.bench.mjs",
+    "reproduce": "bash scripts/reproduce.sh",
     "preview": "vitest --ui --api.host 0.0.0.0 --api.port ${PORT:-4173} --open false"
   },
   "devDependencies": {

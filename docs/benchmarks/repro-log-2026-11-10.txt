@@ -1,0 +1,448 @@
+BAO COURT REPRODUCTION — 2026-11-10T08:59:11Z
+commit: 7ab0d441f182bde7e537681be4bff7a29d12abae  (nearest tag: v0.10.1-6-g7ab0)
+host: Linux x86_64, cpus=16, load: load average: 3.12, 4.51, 5.19
+
+=== [a] clean-environment check ===
+node v22.23.2 — OK (baselines: v22.x)
+WARNING: working tree is not clean — the contract is defined from a
+         CLEAN CLONE at the release tag; numbers may not match the tag.
+         (idempotent re-runs on a used tree are supported; the fixture
+         comparison is against the tree's own pre-run fixture copy)
+network policy: only stage (b) npm ci touches the registry; every
+measurement stage below is offline and CPU-bound.
+
+=== [b] npm ci (only network-dependent stage) ===
+
+added 73 packages in 887ms
+--- [b] exit=0 (0.959s) ---
+
+=== [c] npm test (full suite) → json + junit ===
+
+ RUN  v4.1.12 /home/bob/Documents/bao-court--docs-reproducibility
+
+ ✓ __tests__/taprootSpend.test.ts (40 tests) 115ms
+ ✓ __tests__/courtConfirmationMachine.test.ts (41 tests) 85ms
+ ✓ __tests__/adversarialMachines.test.ts (440 tests) 213ms
+ ✓ __tests__/adversarialCrossModule.test.ts (23 tests) 523ms
+ ✓ __tests__/courtOutbox.test.ts (30 tests) 304ms
+ ✓ __tests__/multiRoundLadder.test.ts (20 tests) 110ms
+ ✓ __tests__/courtHostKey.test.ts (30 tests) 1087ms
+ ✓ __tests__/invariantAssertions.test.ts (27 tests) 1079ms
+     ✓ every index of n = 2..32 plus 63/64/65/100/127/128 has the oracle path length  864ms
+ ✓ __tests__/attestationValidator.adversarial.test.ts (30 tests) 1379ms
+ ✓ __tests__/escrow.test.ts (48 tests) 186ms
+ ↓ __tests__/taprootSpend-live.test.ts (1 test | 1 skipped)
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtVoteMachine (reduced inline instances) > explores every reachable state: vote n=1 k=2
+[model-checking] vote n=1 k=2
+  states=334 (abstract=28)  progressEdges=2341  selfLoops=362  applications=15224
+  terminal: expired=30 aborted=110 tally_final=12  parking: reveal_closed:finalize-refuses=18
+  typedThrows=12521  rawThrows=0  illegalEventChecks=5824
+  non-aborted-terminal-reachable (incl. terminals)=164/334  determinismPaths=200  wallMs=390
+
+ ✓ __tests__/courtInbox.test.ts (26 tests) 1296ms
+ ✓ __tests__/regressions.test.ts (26 tests) 2230ms
+     ✓ refreshShares works after a disqualification leaves gaps in the index set  725ms
+ ✓ __tests__/batchAttestation.test.ts (31 tests) 526ms
+ ✓ __tests__/courtNip46.test.ts (33 tests) 48ms
+ ✓ __tests__/events.test.ts (12 tests) 53ms
+ ✓ __tests__/courtVoteMachine.test.ts (15 tests) 51ms
+ ✓ __tests__/courtProtocolEvents.test.ts (12 tests) 1069ms
+     ✓ builds, signs, and strictly parses one session-bound event  357ms
+ ✓ __tests__/courtRecovery.test.ts (50 tests) 4023ms
+     ✓ accepts a matching certificate reference and restores without one (legacy anchor)  359ms
+     ✓ rejects records spliced from foreign DKG runs  496ms
+ ✓ __tests__/courtKeeper.test.ts (23 tests) 88ms
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtVoteMachine (reduced inline instances) > explores every reachable state: vote n=2 k=2
+[model-checking] vote n=2 k=2
+  states=2650 (abstract=258)  progressEdges=16959  selfLoops=3318  applications=117289
+  terminal: expired=294 aborted=914 tally_final=216  parking: reveal_closed:finalize-refuses=78
+  typedThrows=97012  rawThrows=0  illegalEventChecks=46448
+  non-aborted-terminal-reachable (incl. terminals)=1148/2650  determinismPaths=200  wallMs=2105
+
+ ✓ __tests__/lnSettlement.test.ts (22 tests) 73ms
+ ✓ __tests__/appealCoordinator.test.ts (11 tests) 3826ms
+     ✓ progresses a manually added appeal through all phases  1254ms
+     ✓ tallies only signed commit/reveal events from the selected roster (never the challenger claim)  349ms
+     ✓ reselects from backups when the initial DKG fails  1011ms
+     ✓ rejects settlement under a group key that is neither local nor empaneled  472ms
+     ✓ signs the tally verdict, not the challenger proposed outcome  338ms
+ ✓ __tests__/hardening20260815.test.ts (7 tests) 1447ms
+     ✓ still restores a genuine backup  505ms
+ ✓ __tests__/courtSigningMachine.test.ts (14 tests) 277ms
+ ✓ __tests__/liquidEscrow.test.ts (18 tests) 175ms
+ ✓ __tests__/courtSession.test.ts (23 tests) 422ms
+ ✓ __tests__/cryptoLiteratureAudit.test.ts (13 tests) 2854ms
+     ✓ full-coverage flow (3 commit, 3 reveal) aggregates a valid attestation  880ms
+     ✓ canAggregate is false while a committed peer has not revealed (fail-early)  502ms
+     ✓ the signing context over the SAME commitment set differs for different messages  462ms
+     ✓ a group signature over message A does not verify over message B (no cross-message replay)  668ms
+ ✓ __tests__/independentSigning.test.ts (7 tests) 4404ms
+     ✓ aggregates partial signatures into a valid dispute attestation  1171ms
+     ✓ binds the dispute verdict commitment into the signed message  630ms
+     ✓ prevents double reveal with the same nonce commitment  510ms
+     ✓ restores a snapshot and aggregates without re-collecting events  747ms
+     ✓ validates snapshot message and ignores orphan reveals  447ms
+     ✓ rejects nonce equivocation: a conflicting second commitment is refused  384ms
+     ✓ rejects a reveal whose public nonce does not match the committed nonce  502ms
+ ✓ __tests__/errorTaxonomy.test.ts (19 tests) 62ms
+ ✓ __tests__/confirmationPipeline.test.ts (4 tests) 255ms
+ ✓ __tests__/attestationV2Validator.test.ts (12 tests) 565ms
+ ✓ __tests__/courtDkgMachine.test.ts (12 tests) 41ms
+ ✓ __tests__/selectionWeights.test.ts (15 tests) 276ms
+ ✓ __tests__/courtSigner.test.ts (14 tests) 1139ms
+ ✓ __tests__/liquidAddress.test.ts (11 tests) 27ms
+ ✓ __tests__/courtCores.test.ts (16 tests) 42ms
+ ✓ __tests__/r3Findings.test.ts (5 tests) 39ms
+ ✓ __tests__/propertiesValidator.test.ts (6 tests) 3185ms
+     ✓ PV1: 120 random well-formed field combos — valid signature validates on the v2 path, the dispatcher, and under matching policy pins  1967ms
+     ✓ PV3: signer-set root pin equivalence — root pin, full-set pin (any order), and both are equivalent; wrong root/set/size rejected  414ms
+     ✓ PV4: V2_ONLY_POLICY_FIELDS downgrade refusal — v1-shaped events validate on the frozen v1 path but are refused under any v2-only policy pin  511ms
+ ✓ __tests__/bondVerification.test.ts (11 tests) 24ms
+ ✓ __tests__/dkgMessages.test.ts (7 tests) 16ms
+ ✓ __tests__/epochCohort.test.ts (11 tests) 40ms
+ ✓ __tests__/attestationMessageV2.test.ts (5 tests) 16ms
+ ✓ __tests__/selection.test.ts (8 tests) 35ms
+ ✓ __tests__/courtRelayAdversary.test.ts (80 tests) 7929ms
+     ✓ accepts MAX_RECORDS distinct wraps and rejects the next new wrap id  3485ms
+     ✓ rejects a snapshot with more than MAX_RECORDS records  1539ms
+ ✓ __tests__/settlementE2E.test.ts (4 tests) 22ms
+ ✓ __tests__/dkg.test.ts (13 tests) 3633ms
+     ✓ produces a valid DkgRecord and secret shares  377ms
+     ✓ produces shares that can sign and verify an attestation  332ms
+     ✓ produces the same group key and shares when a seed is provided  455ms
+     ✓ produces different keys for different seeds  473ms
+     ✓ produces shares that can sign a dispute attestation deterministically  381ms
+     ✓ refreshed shares can sign and verify a message  327ms
+     ✓ fails when old and refreshed shares are mixed in one signing round  315ms
+ ✓ __tests__/lnRail.test.ts (6 tests) 29ms
+ ✓ __tests__/dispute.test.ts (6 tests) 72ms
+ ✓ __tests__/nip59.test.ts (4 tests) 201ms
+ ✓ __tests__/appealTiming.test.ts (3 tests) 7ms
+ ✓ __tests__/signing.test.ts (7 tests) 769ms
+ ✓ __tests__/validator.test.ts (12 tests) 2845ms
+     ✓ rejects a verdict whose outcome was changed without a new FROST signature  375ms
+     ✓ validates against an expected group pubkey  366ms
+ ✓ __tests__/adversarialNostr.test.ts (20 tests) 8772ms
+     ✓ 100k `e` mention tags: the v1 validator bounds at 10k AFTER a bounded scan — parse cost stays linear and completes  2197ms
+     ✓ ingest is fail-closed at capacity: the flooding relay cannot evict seen wraps (no LRU to lose track of)  3186ms
+     ✓ R8 FIX: a hostile re-publisher appending an extra `o` tag cannot steer the reported outcome away from the FROST-certified one  1036ms
+     ✓ an extra `market` alias tag cannot override the validated `m` tag  958ms
+     ✓ the certified path is unchanged: the honest event resolves with the certified outcome  738ms
+ ✓ __tests__/independentDkg.test.ts (11 tests) 9614ms
+     ✓ runs a 3-of-5 independent DKG and produces matching group keys  2669ms
+     ✓ produces a self-backup that can be decrypted  397ms
+     ✓ restores a share from a Kind 39100 self-backup  631ms
+     ✓ supports an async NIP-44 signer without exposing the secret key  450ms
+     ✓ runs a networked refresh that preserves the group public key  4609ms
+     ✓ fails when original and refreshed shares are mixed  524ms
+ ✓ __tests__/propertiesConfirmation.test.ts (4 tests) 10244ms
+     ✓ P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen  5680ms
+     ✓ P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run  4558ms
+ ✓ __tests__/adversarialParserFuzz.test.ts (19 tests) 2671ms
+     ✓ 200 random-tag mutations never crash untyped  2218ms
+ ✓ __tests__/appealWatcher.test.ts (6 tests) 5548ms
+     ✓ validates a Kind 39007 attestation and emits a resolution  1528ms
+     ✓ dedups concurrent duplicate deliveries racing through the async pubkey resolver  1108ms
+     ✓ rejects an attestation signed by the wrong group  996ms
+     ✓ resolves the group pubkey from a configured resolver instead of watchMarket  767ms
+     ✓ ingests a batch of events and returns valid resolutions  658ms
+     ✓ supports watchAll mode for resolver-backed ingestion  486ms
+ ✓ __tests__/simulateCourt.test.ts (3 tests) 3729ms
+     ✓ runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid  1095ms
+     ✓ is reproducible: same seed → same pipeline result (no cross-run drift)  1313ms
+     ✓ fast: completes the full pipeline well under the default 5s budget  1317ms
+ ✓ __tests__/differentialParity.test.ts (39 tests) 15196ms
+     ✓ exhaustive n=1..128: reference root and leaves identical to production  562ms
+     ✓ exhaustive n=1..128: every production proof verifies under the reference verifier  8045ms
+     ✓ exhaustive n=1..128: production roots equal an independent full-tree rebuild  367ms
+     ✓ batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)  4998ms
+ ✓ __tests__/propertiesBatch.test.ts (8 tests) 13631ms
+     ✓ PB1/PB4: across 48 random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones  13020ms
+     ✓ PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (12 sampled indices per batch)  437ms
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtVoteMachine (reduced inline instances) > explores every reachable state: vote n=3 k=2
+[model-checking] vote n=3 k=2
+  states=42646 (abstract=4584)  progressEdges=254745  selfLoops=61650  applications=1843302
+  terminal: expired=5406 aborted=15206 tally_final=4932  parking: reveal_closed:finalize-refuses=474
+  typedThrows=1526907  rawThrows=0  illegalEventChecks=750368
+  non-aborted-terminal-reachable (incl. terminals)=16628/42646  determinismPaths=200  wallMs=15012
+
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtVoteMachine (reduced inline instances) > explores every reachable state: vote n=2 k=3
+[model-checking] vote n=2 k=3
+  states=5482 (abstract=540)  progressEdges=34797  selfLoops=6942  applications=246757
+  terminal: expired=618 aborted=1898 tally_final=468  parking: reveal_closed:finalize-refuses=150
+  typedThrows=205018  rawThrows=0  illegalEventChecks=96128
+  non-aborted-terminal-reachable (incl. terminals)=2348/5482  determinismPaths=200  wallMs=1266
+
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtConfirmationMachine (reduced inline instances) > explores every reachable state: confirm n=3 q=3 r=1 challengers=all [inline clock 4/8/10]
+[model-checking] confirm n=3 q=3 r=1 challengers=all [inline clock 4/8/10]
+  states=361534 (abstract=225852)  progressEdges=668120  selfLoops=500212  applications=14197458
+  terminal: expired=21712 aborted=127778 final=84312  parking: ladder_pending:clock-universe-exhausted=90 ladder_vote_closed:resolve-refuses=270
+  typedThrows=13029126  rawThrows=0  illegalEventChecks=8910586
+  non-aborted-terminal-reachable (incl. terminals)=127372/361534  determinismPaths=200  wallMs=99231
+
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtConfirmationMachine (reduced inline instances) > explores every reachable state: confirm n=3 q=1 r=2 [inline clock 4/8/10]
+[model-checking] confirm n=3 q=1 r=2 [inline clock 4/8/10]
+  states=108157 (abstract=80118)  progressEdges=177380  selfLoops=146734  applications=4120107
+  terminal: expired=6082 aborted=35711 final=23580  parking: ladder_pending:clock-universe-exhausted=2355 ladder_vote_closed:resolve-refuses=75
+  typedThrows=3795993  rawThrows=0  illegalEventChecks=2661109
+  non-aborted-terminal-reachable (incl. terminals)=40354/108157  determinismPaths=200  wallMs=28133
+
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtSigningMachine (reduced inline instances) > explores every reachable state: signing n=2 t=1 [inline clock 4/8]
+[model-checking] signing n=2 t=1 [inline clock 4/8]
+  states=877 (abstract=127)  progressEdges=3231  selfLoops=985  applications=27217
+  terminal: expired=145 aborted_peer=261 aborted_coordinator=261 attestation_published=90  parking: none
+  typedThrows=23001  rawThrows=0  illegalEventChecks=20986
+  non-aborted-terminal-reachable (incl. terminals)=120/877  determinismPaths=200  wallMs=456
+
+stdout | __tests__/modelChecking.test.ts > exhaustive model checking — courtSigningMachine (reduced inline instances) > explores every reachable state: signing n=3 t=2 [inline clock 4/8]
+[model-checking] signing n=3 t=2 [inline clock 4/8]
+  states=6862 (abstract=989)  progressEdges=25532  selfLoops=8242  applications=213759
+  terminal: expired=1130 aborted_peer=2034 aborted_coordinator=2034 attestation_published=756  parking: none
+  typedThrows=179985  rawThrows=0  illegalEventChecks=164191
+  non-aborted-terminal-reachable (incl. terminals)=908/6862  determinismPaths=200  wallMs=2823
+
+ ✓ __tests__/modelChecking.test.ts (18 tests) 151504ms
+     ✓ explores every reachable state: vote n=1 k=2  397ms
+     ✓ explores every reachable state: vote n=2 k=2  2106ms
+     ✓ explores every reachable state: vote n=3 k=2  15012ms
+     ✓ explores every reachable state: vote n=2 k=3  1267ms
+     ✓ explores every reachable state: confirm n=3 q=3 r=1 challengers=all [inline clock 4/8/10]  99232ms
+     ✓ explores every reachable state: confirm n=3 q=1 r=2 [inline clock 4/8/10]  28133ms
+     ✓ explores every reachable state: signing n=2 t=1 [inline clock 4/8]  485ms
+     ✓ explores every reachable state: signing n=3 t=2 [inline clock 4/8]  2831ms
+     ✓ cross-check: re-exploring the cheap instances reproduces the fixture numbers exactly  2020ms
+
+ Test Files  60 passed | 1 skipped (61)
+      Tests  1491 passed | 1 skipped (1492)
+   Start at  08:59:12
+   Duration  154.27s (transform 7.52s, setup 0ms, import 26.19s, tests 270.12s, environment 9ms)
+
+JSON report written to /home/bob/Documents/bao-court--docs-reproducibility/.repro-artifacts/test-results.json
+JUNIT report written to /home/bob/Documents/bao-court--docs-reproducibility/.repro-artifacts/junit.xml
+--- [c] exit=0 (155.712s) ---
+
+=== [d] typechecks ×3 (impl / scripts / tests) ===
+
+> @bao/court@0.10.2 typecheck
+> tsc --noEmit
+
+
+> @bao/court@0.10.2 typecheck:scripts
+> tsc --noEmit -p scripts/tsconfig.json
+
+
+> @bao/court@0.10.2 typecheck:tests
+> tsc --noEmit -p tsconfig.test.json
+
+typecheck ×3: all green
+--- [d] exit=0 (6.321s) ---
+
+=== [e] simulate:court (end-to-end whole-court deterministic sim) ===
+
+> @bao/court@0.10.2 simulate:court
+> tsx scripts/simulateCourt.ts
+
+
+===== BAO COURT SIMULATION =====
+  [ ✔ ] selection: selected 5/12 (2 backups)
+  [ ✔ ] dkg: threshold 4/5, group d243bcb9d57e…
+  [ ✔ ] vote: winner=YES, supporting=4, invalid=0
+  [ ✔ ] sign: attestation sig 9ff709b32dc47542… (kind 39007)
+  [ ✔ ] validate: attestation valid=true
+  [ ✔ ] escrow: slashPool=5000 sats, integrity=true
+  [ ✔ ] ln: settled=4 coherent, cancelled=1 incoherent
+  [ ✔ ] liquid: branch=judge, addr=tex1qdzh32c0…, fee=10000sats, tx=fake-txid-1
+RESULT: ALL GREEN
+  selected=5 group=d243bcb9d57e… attestation=true slashPool=5000
+  LN settled=4 cancelled=1 liquid=tex1qdzh32c00ch3s89udh9mutnevfwdzppj8pg9dnf69pz45umn34vgq4rerfv tx=fake-txid-1
+simulation verdict: ALL GREEN
+--- [e] exit=0 (1.052s) ---
+
+=== [f] model-check + digit-identical fixture comparison ===
+
+=== [f1] model-check --fast (deterministic state-space sweep) ===
+[model-check] mode=fast instances=12
+[model-checking] vote n=1 k=2
+  states=334 (abstract=28)  progressEdges=2341  selfLoops=362  applications=15224
+  terminal: expired=30 aborted=110 tally_final=12  parking: reveal_closed:finalize-refuses=18
+  typedThrows=12521  rawThrows=0  illegalEventChecks=5824
+  non-aborted-terminal-reachable (incl. terminals)=164/334  determinismPaths=200  wallMs=90
+[model-checking] vote n=2 k=2
+  states=2650 (abstract=258)  progressEdges=16959  selfLoops=3318  applications=117289
+  terminal: expired=294 aborted=914 tally_final=216  parking: reveal_closed:finalize-refuses=78
+  typedThrows=97012  rawThrows=0  illegalEventChecks=46448
+  non-aborted-terminal-reachable (incl. terminals)=1148/2650  determinismPaths=200  wallMs=570
+[model-checking] vote n=3 k=2
+  states=42646 (abstract=4584)  progressEdges=254745  selfLoops=61650  applications=1843302
+  terminal: expired=5406 aborted=15206 tally_final=4932  parking: reveal_closed:finalize-refuses=474
+  typedThrows=1526907  rawThrows=0  illegalEventChecks=750368
+  non-aborted-terminal-reachable (incl. terminals)=16628/42646  determinismPaths=200  wallMs=10887
+[model-checking] vote n=2 k=3
+  states=5482 (abstract=540)  progressEdges=34797  selfLoops=6942  applications=246757
+  terminal: expired=618 aborted=1898 tally_final=468  parking: reveal_closed:finalize-refuses=150
+  typedThrows=205018  rawThrows=0  illegalEventChecks=96128
+  non-aborted-terminal-reachable (incl. terminals)=2348/5482  determinismPaths=200  wallMs=1160
+[model-checking] confirm n=3 q=3 r=1 challengers=all [clock 6/12/14]
+  states=362046 (abstract=225852)  progressEdges=672074  selfLoops=501186  applications=14231718
+  terminal: expired=21744 aborted=128022 final=84312  parking: ladder_pending:clock-universe-exhausted=90 ladder_vote_closed:resolve-refuses=270
+  typedThrows=13058458  rawThrows=0  illegalEventChecks=8923150
+  non-aborted-terminal-reachable (incl. terminals)=127608/362046  determinismPaths=200  wallMs=99930
+[model-checking] confirm n=3 q=1 r=1 dup-event-ids [clock 6/12/14]
+  states=1010820 (abstract=593409)  progressEdges=1893188  selfLoops=1489458  applications=41952186
+  terminal: expired=116307 aborted=392523 final=159552  parking: ladder_pending:clock-universe-exhausted=78 ladder_vote_closed:resolve-refuses=25074 fee_settlement:finalize-refuses=360
+  typedThrows=38569540  rawThrows=0  illegalEventChecks=24927904
+  non-aborted-terminal-reachable (incl. terminals)=316926/1010820  determinismPaths=200  wallMs=276320
+[model-checking] confirm n=3 q=1 r=2 [clock 6/12/14]
+  states=108405 (abstract=80118)  progressEdges=179228  selfLoops=147078  applications=4136817
+  terminal: expired=6114 aborted=35805 final=23580  parking: ladder_pending:clock-universe-exhausted=2355 ladder_vote_closed:resolve-refuses=75
+  typedThrows=3810511  rawThrows=0  illegalEventChecks=2667187
+  non-aborted-terminal-reachable (incl. terminals)=40476/108405  determinismPaths=200  wallMs=28687
+[model-checking] confirm n=3 q=1 r=1 roundRoster [clock 6/12/14]
+  states=61455 (abstract=37878)  progressEdges=117113  selfLoops=84828  applications=2431062
+  terminal: expired=3744 aborted=21705 final=14220  parking: ladder_pending:clock-universe-exhausted=15 ladder_vote_closed:resolve-refuses=45
+  typedThrows=2229121  rawThrows=0  illegalEventChecks=1514557
+  non-aborted-terminal-reachable (incl. terminals)=21726/61455  determinismPaths=200  wallMs=16412
+[model-checking] signing n=2 t=1 [clock 10/25]
+  states=2532 (abstract=127)  progressEdges=9283  selfLoops=2802  applications=78588
+  terminal: expired=464 aborted_peer=754 aborted_coordinator=754 attestation_published=260  parking: none
+  typedThrows=66503  rawThrows=0  illegalEventChecks=60830
+  non-aborted-terminal-reachable (incl. terminals)=300/2532  determinismPaths=200  wallMs=1244
+[model-checking] signing n=3 t=2 [clock 10/25]
+  states=19822 (abstract=989)  progressEdges=73460  selfLoops=23272  applications=617139
+  terminal: expired=3616 aborted_peer=5876 aborted_coordinator=5876 attestation_published=2184  parking: none
+  typedThrows=520407  rawThrows=0  illegalEventChecks=476113
+  non-aborted-terminal-reachable (incl. terminals)=2270/19822  determinismPaths=200  wallMs=9652
+[model-checking] signing n=3 t=2 commitment-equivocation [clock 6/12]
+  states=143764 (abstract=7121)  progressEdges=534581  selfLoops=168784  applications=4464858
+  terminal: expired=25456 aborted_peer=44798 aborted_coordinator=41366 attestation_published=16224  parking: none
+  typedThrows=3761493  rawThrows=0  illegalEventChecks=3442438
+  non-aborted-terminal-reachable (incl. terminals)=15920/143764  determinismPaths=200  wallMs=71867
+[model-checking] signing n=3 t=2 partial-equivocation [clock 6/12]
+  states=116906 (abstract=5545)  progressEdges=445246  selfLoops=132496  applications=3635665
+  terminal: expired=16768 aborted_peer=49920 aborted_coordinator=27248 attestation_published=12480  parking: none
+  typedThrows=3057923  rawThrows=0  illegalEventChecks=2803743
+  non-aborted-terminal-reachable (incl. terminals)=10490/116906  determinismPaths=200  wallMs=56784
+
+[model-check] WROTE /home/bob/Documents/bao-court--docs-reproducibility/__fixtures__/model-check-summary.json
+[model-check] totals: {"instances":12,"states":1876862,"abstractStates":956449,"progressEdges":4233015,"selfLoops":2622176,"applications":73770605,"typedThrows":66915414,"rawThrows":0,"illegalEventChecks":45714690,"determinismPathsReplayed":2400}
+[model-check] wall time: 573.6s
+--- [f1] exit=0 (574.253s) ---
+
+=== [f2] fixture comparison (regenerated == committed, digit-identical) ===
+[compare-model-check] note: fast mode: skipped committed instances: vote n=4 k=2
+[compare-model-check] OK — 12 regenerated instance(s) digit-identical to committed fixture (timing fields excluded) [fast mode; committed also carries: vote n=4 k=2]
+--- [f2] exit=0 (0.544s) ---
+
+=== [g] bench --json (single pass) vs BASELINE.md ===
+
+=== [g1] bench --json (single pass) ===
+
+== canonical hashing ==
+
+canonicalWriter.encodeHash           fieldGroups=10                                               median    16.774 us  p95    19.642 us  ops/sec 59617
+canonicalWriter.encodeHash           fieldGroups=100                                              median   156.551 us  p95   165.207 us  ops/sec 6388
+canonicalWriter.encodeHash           fieldGroups=1000                                             median    1.2206 ms  p95     1.403 ms  ops/sec 819
+hashCourtSessionParameters           participants=5                                               median   398.822 us  p95   486.597 us  ops/sec 2507
+hashCourtVoteCommit                  session+outcome+salt                                         median    11.294 us  p95    11.573 us  ops/sec 88542
+hashCourtVerdict                     supporting=6                                                 median    11.956 us  p95    13.213 us  ops/sec 83641
+hashDisputeVerdict                   supporting=6                                                 median    12.099 us  p95     13.54 us  ops/sec 82649
+buildAttestationMessageV2            extensions=0                                                 median      7.42 us  p95     8.293 us  ops/sec 134774
+buildAttestationMessageV2            extensions=6                                                 median     12.09 us  p95    12.436 us  ops/sec 82716
+
+== merkle batching ==
+
+buildBatchMerkleTree                 leaves=10                                                    median    93.136 us  p95   103.502 us  ops/sec 10737
+buildBatchMerkleProof                leaves=10 proofsPerSample=10 (full set)                      median    23.988 us  p95    51.746 us  ops/sec 41687
+buildBatchMerkleProofs               leaves=10 full proof set (10 proofs, O(n) shared node table) median       8.8 us  p95    10.147 us  ops/sec 113637
+verifyCaseInBatch                    leaves=10 verificationsPerSample=10                          median    1.2801 ms  p95    1.3656 ms  ops/sec 781
+buildBatchMerkleTree                 leaves=100                                                   median    0.8929 ms  p95    0.9158 ms  ops/sec 1120
+buildBatchMerkleProof                leaves=100 proofsPerSample=100 (full set)                    median   491.869 us  p95    520.99 us  ops/sec 2033
+buildBatchMerkleProofs               leaves=100 full proof set (100 proofs, O(n) shared node table) median     5.185 us  p95     7.538 us  ops/sec 192872
+verifyCaseInBatch                    leaves=100 verificationsPerSample=100                        median     1.267 ms  p95    1.3939 ms  ops/sec 789
+buildBatchMerkleTree                 leaves=1000                                                  median    10.477 ms  p95   12.7683 ms  ops/sec 95
+buildBatchMerkleProof                leaves=1000 proofsPerSample=200 (sampled; full set is O(n^2)) median    5.6545 ms  p95    6.2131 ms  ops/sec 177
+buildBatchMerkleProofs               leaves=1000 full proof set (1000 proofs, O(n) shared node table) median     6.178 us  p95     6.967 us  ops/sec 161872
+verifyCaseInBatch                    leaves=1000 verificationsPerSample=100                       median    1.2904 ms  p95    1.3309 ms  ops/sec 775
+buildBatchMerkleTree                 leaves=10000                                                 median  123.0971 ms  p95  134.3937 ms  ops/sec 8  heapΔ 0.0MB
+buildBatchMerkleProof                leaves=10000 proofsPerSample=32 (sampled; full set is O(n^2)) median   58.9113 ms  p95      64.2 ms  ops/sec 17
+buildBatchMerkleProofs               leaves=10000 full proof set (10000 proofs, O(n) shared node table) median     6.352 us  p95      6.88 us  ops/sec 157425
+verifyCaseInBatch                    leaves=10000 verificationsPerSample=100                      median    1.2728 ms  p95    1.3008 ms  ops/sec 786
+merkleBatchPipeline leaves=10000 heapΔ 26.2MB (retained by tree + proofs + cases)
+
+== validator ==
+
+validateAttestationEvent             kind-39007 supporting=6                                      median    1.2397 ms  p95    1.2877 ms  ops/sec 807
+validateAttestationEventV2           kind-89 ext=6 supporting=6                                   median    1.2315 ms  p95     1.346 ms  ops/sec 812
+
+== state machines ==
+
+reduceCourtVoteMachine               transitions=10000 roster=21                                  median    12.964 us  p95    14.504 us  ops/sec 77135
+reduceCourtConfirmationMachine       transitions=10000 roster=3                                   median     6.966 us  p95     7.418 us  ops/sec 143554
+reduceCourtSigningMachine            transitions=10000 roster=21 threshold=21                     median    88.513 us  p95    91.716 us  ops/sec 11298
+
+== jury selection ==
+
+selectJury                           roster=50 jurySize=5                                         median   129.855 us  p95   142.638 us  ops/sec 7701
+selectJury                           roster=201 jurySize=5                                        median   448.355 us  p95   453.885 us  ops/sec 2230
+selectJury                           roster=1000 jurySize=5                                       median    2.3931 ms  p95    2.4788 ms  ops/sec 418
+selectJury                           roster=10000 jurySize=5                                      median   24.6844 ms  p95   26.6063 ms  ops/sec 41
+
+JSON written to .repro-artifacts/bench.json
+--- [g1] exit=0 (260.658s) ---
+
+=== [g2] bench vs baseline (±20% bound, FAIL at >3x) ===
+[bench-vs-baseline] host loadAvg1m=4.72 — regression gate DOWNgraded to warning (loaded box; re-run on load < 2 to enforce)
+[bench-vs-baseline] bound=±20% regression=3x comparable=34 over-bound=1 regressions=0
+  OVER-BOUND   buildBatchMerkleProofs|leaves=10 full proof set (10 proofs, O(n) shared node table) median=8.8 µs baseline=7.3 µs (+20.5%)
+  no-median    merkleBatchPipeline|leaves=10000 (full pipeline: tree + sampled proofs + verifications)
+[bench-vs-baseline] OK — no regression rows (1 over-bound row(s): load warning and/or baseline-stale, see docs/REPRODUCIBILITY.md)
+--- [g2] exit=0 (0.029s) ---
+
+=== [h] cross-check.mjs (every evidence pointer in docs/CROSS_CHECK.md) ===
+cross-check: 272 claims indexed, 493 evidence refs verified
+claims by kind:   {"invariant":145,"paper":71,"model-check":7,"bench":7,"suite":4,"error-taxonomy":5,"finding":12,"audit":21}
+claims by evidence: {"test":240,"gap":12,"doc":4,"fixture":4,"bench":8,"model-check":1,"script":1,"pkg":2}
+gap register entries: 17
+
+OK — every evidence pointer in docs/CROSS_CHECK.md resolves.
+--- [h] exit=0 (0.082s) ---
+
+=== [i] contract suites (parity / property / invariant / model-checking) ===
+[test-suite-summary] contract suites (inside npm test):
+  differential-parity    39 passed
+  property-based         18 passed
+  invariant-assertions   27 passed
+  model-checking         18 passed
+  adversarial            582 passed
+  regressions            26 passed
+  TOTAL                  1491 passed, 1 skipped in 61 files
+
+==================== VERDICT ====================
+ commit: 7ab0d441f182   node: v22.23.2   date: 2026-11-10T09:15:51Z
+ flags: (default: full contract)
+-------------------------------------------------
+ [a] clean-env check                                      PASS (0.034s)
+ [b] npm ci (only network-dependent stage)                PASS (0.959s)
+ [c] npm test (full suite) → json + junit               PASS (155.712s)
+ [d] typechecks ×3 (impl / scripts / tests)              PASS (6.321s)
+ [e] simulate:court (end-to-end whole-court deterministic sim) PASS (1.052s)
+ [f1] model-check --fast (deterministic state-space sweep) PASS (574.253s)
+ [f2] fixture comparison (regenerated == committed, digit-identical) PASS (0.544s)
+ [f] model-check + fixture comparison                     PASS (574.816s)
+ [g1] bench --json (single pass)                           PASS (260.658s)
+ [g2] bench vs baseline (±20% bound, FAIL at >3x)         PASS (0.029s)
+ [g] bench --json vs BASELINE                             PASS (260.702s)
+ [h] cross-check.mjs (every evidence pointer in docs/CROSS_CHECK.md) PASS (0.082s)
+ [i] suite pass-counts                                    PASS (0.846s)
+-------------------------------------------------
+ artifacts:
+   npm ci ......................... PASS (lockfile-exact install)
+   full test suite ................ PASS (json: .repro-artifacts/test-results.json, junit: .repro-artifacts/junit.xml)
+   simulate:court ................. PASS (ALL GREEN, escrow/LN/liquid coherent)
+   model-check fixture ............ PASS (digit-identical vs committed; stable hash: 35eb7eb8b5c292125bcddd693a4c812b1c55b63f0b341b25ad126148fd7d614d)
+   bench (--json, single pass) .... PASS (variance bound ±20% vs BASELINE.md, FAIL >3x)
+   cross-check evidence refs ...... PASS (count in .repro-artifacts/stage-h.log)
+   parity/property/invariant ...... PASS (pass-counts in .repro-artifacts/stage-i.log)
+-------------------------------------------------
+ RESULT: REPRODUCED — every artifact PASS — total 999.950s
+=================================================
