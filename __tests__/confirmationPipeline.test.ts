@@ -11,7 +11,6 @@
 import { describe, expect, it } from 'vitest';
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { randomBytes } from 'node:crypto';
 import {
   assertEpochRotationOrdering,
   createCourtEpochCohort,
@@ -36,13 +35,10 @@ import {
   verifyCaseInBatch,
 } from '../batchAttestation';
 import { hashCourtVerdict } from '../courtVoteMachine';
+import { hexId as hex } from './helpers/ids';
+import { schnorrKeypairHex as keypair } from './helpers/keys';
 
-const hex = (c: string): string => c.repeat(64);
 const SESSION = hex('1');
-const keypair = (): { sec: string; pub: string } => {
-  const sec = bytesToHex(randomBytes(32));
-  return { sec, pub: bytesToHex(schnorr.getPublicKey(hexToBytes(sec))) };
-};
 
 function runConfirmation(votes: ReadonlyArray<readonly [number, 'YES' | 'NO']>): {
   state: CourtConfirmationMachineState;

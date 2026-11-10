@@ -11,6 +11,7 @@ import {
   reduceCourtVoteMachine,
   type CourtVoteMachineState,
 } from '../courtVoteMachine';
+import { voteMachine as voteMachineShared } from './helpers/machines';
 
 const SESSION = '11'.repeat(32);
 const OTHER_SESSION = '22'.repeat(32);
@@ -45,9 +46,8 @@ function revealFor(idx: number, outcome: string) {
 }
 
 function initial(sessionHash = SESSION): CourtVoteMachineState {
-  return createCourtVoteMachine({
+  return voteMachineShared({
     sessionHash,
-    participantIndices: [1, 2, 3],
     allowedOutcomes: [...OUTCOMES],
     commitDeadline: COMMIT_DEADLINE,
     revealDeadline: REVEAL_DEADLINE,

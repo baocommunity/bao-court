@@ -172,7 +172,7 @@ These apply to every machine; they are stated once and referenced by ID.
   `CourtSigningTransitionError`, `CourtDkgTransitionError`) — never a raw
   `Error`, `TypeError`, or `RangeError`. Enforced structurally: guards take the
   error ctor as a parameter (`courtCeremonyCore.ts:19`).
-  Tests: `__tests__/courtFuzz.test.ts` › '200 random-tag mutations never crash
+  Tests: `__tests__/adversarialParserFuzz.test.ts` › '200 random-tag mutations never crash
   untyped'; `__tests__/adversarialMachines.test.ts` › 'null/undefined/non-object
   EVENTS fail closed instead of crashing untyped'.
 - **FC-2 (unknown event types fail closed):** the trailing branch of every
@@ -724,7 +724,7 @@ expired, aborted_peer, aborted_coordinator, aborted_network}` (lines 137-143).
 - **INV-SIGN-9 (partial well-formedness).** `psig` must be 64-char lowercase hex
   (lines 493-500).
   Test: `courtSigningMachine.test.ts` (malformed-partial coverage); fuzz
-  coverage `courtFuzz.test.ts` › 'frost-reveal with oversized psig fails typed'.
+  coverage `adversarialParserFuzz.test.ts` › 'frost-reveal with oversized psig fails typed'.
 - **INV-SIGN-10 (aggregate threshold — economic).** `aggregate` requires
   `|partials| ≥ threshold` (lines 534-538) and a 64-byte lowercase-hex signature
   (539-541). Because partials are distinct-index (INV-SIGN-8), the count equals
@@ -1253,7 +1253,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-SIGN-6 | commitment set ⇔ threshold | courtSigningMachine.ts:473-478 | courtSigningMachine.test.ts › cannot finalize a commitment set below threshold |
 | INV-SIGN-7 | signer-set closure | courtSigningMachine.ts:259-270,487-491 | courtSigningMachine.test.ts › accepts partial signatures only from… |
 | INV-SIGN-8 | one partial per signer; equivocation aborts | courtSigningMachine.ts:272-294,501-513 | courtSigningMachine.test.ts › aborts with blame on conflicting partials |
-| INV-SIGN-9 | partial form | courtSigningMachine.ts:493-500 | courtFuzz.test.ts › frost-reveal with oversized psig… |
+| INV-SIGN-9 | partial form | courtSigningMachine.ts:493-500 | adversarialParserFuzz.test.ts › frost-reveal with oversized psig… |
 | INV-SIGN-10 | aggregate threshold over distinct signers | courtSigningMachine.ts:534-541 | courtSigningMachine.test.ts › runs the full attempt…; rejects restored state with duplicate… |
 | INV-SIGN-11 | publish requires aggregate | courtSigningMachine.ts:545-553 | courtSigningMachine.test.ts › runs the full attempt… |
 | INV-SIGN-12 | deadline precedence + monotonic clock ledger (F-12 closed v0.9.2) | courtSigningMachine.ts reducer clock-ledger block | courtSigningMachine.test.ts › monotonic clock ledger (finding F-12)…; invariantAssertions.test.ts › INV-X-5 |

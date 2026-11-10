@@ -27,7 +27,7 @@ import {
 import { hashCourtVerdict } from '../courtVoteMachine';
 
 /** Deterministic 32-byte lowercase hex id from a hex-digit string. */
-const id = (c: string): string => c.repeat(Math.ceil(64 / c.length)).slice(0, 64);
+import { repeatHexId as id } from './helpers/ids';
 
 const SESSION = id('1');
 const PROPOSAL = id('2');

@@ -38,31 +38,8 @@ class AsyncNip44Crypto implements Nip44Crypto {
   }
 }
 
-function makeJurors(count: number): { juror: SelectedJuror; seckey: Uint8Array; pubkey: string }[] {
-  return Array.from({ length: count }, (_, i) => {
-    const seckey = generateSecretKey();
-    const pubkey = getPublicKey(seckey);
-    return {
-      juror: {
-        idx: i + 1,
-        nostrPubkey: pubkey,
-        stakeCapacitySats: 10_000,
-        stakeCommitment: {
-          amountSats: 10_000,
-          bondAddress: 'bc1q',
-          status: 'confirmed',
-          committedAt: 1,
-        },
-        wotScore: 80,
-        categories: ['world'],
-        registeredAt: 1,
-        priority: i + 1,
-      } as SelectedJuror,
-      seckey,
-      pubkey,
-    };
-  });
-}
+import { jurorWithKeys as makeJurors } from './helpers/fixtures';
+
 
 describe('IndependentDkgSession', () => {
   it('runs a 3-of-5 independent DKG and produces matching group keys', { timeout: 120_000 }, async () => {

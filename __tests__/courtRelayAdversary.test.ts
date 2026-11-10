@@ -10,8 +10,7 @@
  * Schnorr keys and injected clocks (no Date.now in assertions).
  */
 
-import { schnorr, secp256k1 } from '@noble/curves/secp256k1.js';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+import { hexToBytes } from '@noble/hashes/utils.js';
 import { nip59 } from 'nostr-tools';
 import {
   finalizeEvent,
@@ -65,19 +64,7 @@ import { BAO_COURT_VOTE_COMMIT_KIND, buildVoteCommitEvent } from '../events';
 /* Inbox fixtures (mirrors courtInbox.test.ts)                                */
 /* ------------------------------------------------------------------------- */
 
-function secret(byte: number): Uint8Array {
-  const value = new Uint8Array(32);
-  value[31] = byte;
-  return value;
-}
-
-function nostrPubkey(byte: number): string {
-  return bytesToHex(schnorr.getPublicKey(secret(byte)));
-}
-
-function hostPubkey(byte: number): string {
-  return bytesToHex(secp256k1.getPublicKey(secret(byte), true));
-}
+import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
 
 const OUTSIDER_BYTE = 9;
 const SESSION_CREATED = 1_787_000_000;

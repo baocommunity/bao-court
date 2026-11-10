@@ -33,25 +33,10 @@ import {
   type CourtConfirmationMachineState,
 } from '../courtConfirmationMachine';
 import { hashCourtVerdict, CourtVoteTransitionError } from '../courtVoteMachine';
+import { mulberry32, int, pick, hex32 } from './helpers/rng';
+import { assertConfirmationStateFrozen as assertFullyFrozen } from './helpers/asserts';
 
-// ─── seeded LCG (mulberry32) ────────────────────────────────────────────────
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const HEX_DIGITS = '0123456789abcdef';
-const int = (r: () => number, lo: number, hi: number): number =>
-  lo + Math.floor(r() * (hi - lo + 1));
-const pick = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)]!;
-const hex32 = (r: () => number): string =>
-  Array.from({ length: 64 }, () => HEX_DIGITS[Math.floor(r() * 16)]).join('');
+// ─── seeded LCG: now imported from helpers/rng (mulberry32) ─────────────────
 
 const TERMINAL_PHASES = new Set(['final', 'expired', 'aborted']);
 const ALL_PHASES = [
@@ -60,40 +45,7 @@ const ALL_PHASES = [
   'final', 'expired', 'aborted',
 ];
 
-// ─── P5: freeze discipline ──────────────────────────────────────────────────
-
-function assertFullyFrozen(state: CourtConfirmationMachineState): void {
-  expect(Object.isFrozen(state)).toBe(true);
-  const ledgerKeys = [
-    'confirmations', 'challenges', 'clawbackFlags', 'fees',
-    'participantIndices', 'allowedOutcomes', 'evidenceIds',
-  ] as const;
-  for (const key of ledgerKeys) {
-    const ledger = state[key];
-    expect(Object.isFrozen(ledger)).toBe(true);
-    for (const record of ledger) expect(Object.isFrozen(record)).toBe(true);
-  }
-  // Multi-round ladder ledgers (v0.9.0): outcome history and round rosters.
-  if (state.outcomeHistory) {
-    expect(Object.isFrozen(state.outcomeHistory)).toBe(true);
-    for (const record of state.outcomeHistory) {
-      expect(Object.isFrozen(record)).toBe(true);
-      expect(Object.isFrozen(record.winnerEventIds)).toBe(true);
-      expect(Object.isFrozen(record.winnerIndices)).toBe(true);
-    }
-  }
-  if (state.ladder) {
-    expect(Object.isFrozen(state.ladder)).toBe(true);
-    expect(Object.isFrozen(state.ladder.votes)).toBe(true);
-    for (const vote of state.ladder.votes) expect(Object.isFrozen(vote)).toBe(true);
-    if (state.ladder.roundRoster) expect(Object.isFrozen(state.ladder.roundRoster)).toBe(true);
-  }
-  if (state.verdict) {
-    expect(Object.isFrozen(state.verdict)).toBe(true);
-    expect(Object.isFrozen(state.verdict.supportingEventIds)).toBe(true);
-  }
-  if (state.failure) expect(Object.isFrozen(state.failure)).toBe(true);
-}
+// ─── P5: freeze discipline — assertFullyFrozen now imported from helpers/asserts ──
 
 // ─── P6: hostile probes fail closed with the TYPED error ────────────────────
 

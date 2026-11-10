@@ -38,33 +38,14 @@ import {
   validateAttestationEventV2,
   validateCourtAttestation,
 } from '../validator';
+import { mulberry32, int, pick, hex32, secFrom } from './helpers/rng';
 
-// ─── seeded LCG (mulberry32) ────────────────────────────────────────────────
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// ─── seeded LCG: now imported from helpers/rng (mulberry32) ─────────────────
 
 const HEX_DIGITS = '0123456789abcdef';
 const ALPHANUM = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.:';
-const int = (r: () => number, lo: number, hi: number): number =>
-  lo + Math.floor(r() * (hi - lo + 1));
-const pick = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)]!;
-const hex32 = (r: () => number): string =>
-  Array.from({ length: 64 }, () => HEX_DIGITS[Math.floor(r() * 16)]).join('');
 const asciiText = (r: () => number, maxLen: number): string =>
   Array.from({ length: int(r, 1, maxLen) }, () => ALPHANUM[Math.floor(r() * ALPHANUM.length)]).join('');
-const secFrom = (r: () => number): Uint8Array => {
-  const sec = new Uint8Array(32);
-  for (let i = 0; i < 32; i += 1) sec[i] = Math.floor(r() * 256);
-  return sec;
-};
 
 function flipChar(value: string, r: () => number): string {
   const pos = Math.floor(r() * value.length);

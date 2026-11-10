@@ -15,84 +15,41 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 
 /** Deterministic 32-byte lowercase hex id from a single hex char. */
-const id = (c: string): string => c.repeat(64);
+import { hexId as id } from './helpers/ids';
+import {
+  confirmationMachine as makeConfirmationMachine,
+  confirmHappyPath,
+  confirmChallengedTo,
+} from './helpers/machines';
 
 const SESSION = id('1');
 const PROPOSAL = id('2');
 const OUTCOMES = ['YES', 'NO'];
 const ROSTER = [1, 2, 3];
 
+/** House confirmation-machine defaults for this suite (quorum-3, 2s/3s clocks). */
+const CONFIRM_OPTS = {
+  sessionHash: SESSION,
+  proposalHash: PROPOSAL,
+  allowedOutcomes: OUTCOMES,
+  participantIndices: ROSTER,
+  confirmQuorum: 3,
+  confirmDeadline: 2000,
+  challengeDeadline: 3000,
+} as const;
+
 function create(overrides: Partial<Parameters<typeof createCourtConfirmationMachine>[0]> = {}) {
-  return createCourtConfirmationMachine({
-    sessionHash: SESSION,
-    proposalHash: PROPOSAL,
-    proposedOutcome: 'YES',
-    allowedOutcomes: OUTCOMES,
-    participantIndices: ROSTER,
-    confirmQuorum: 3,
-    confirmDeadline: 2000,
-    challengeDeadline: 3000,
-    ...overrides,
-  });
+  return makeConfirmationMachine({ ...CONFIRM_OPTS, ...overrides });
 }
 
 /** Drive the no-challenge happy path up to fee_settlement. */
 function happyToFeeSettlement(): CourtConfirmationMachineState {
-  let s = create();
-  for (const [idx, ev] of [[1, 'a'], [2, 'b'], [3, 'c']] as const) {
-    s = reduceCourtConfirmationMachine(s, {
-      type: 'accept_confirmation',
-      idx,
-      confirmHash: hashCourtConfirmation({ sessionHash: SESSION, proposalHash: PROPOSAL, idx }),
-      eventId: id(ev),
-      now: 1000 + idx,
-    });
-  }
-  s = reduceCourtConfirmationMachine(s, { type: 'close_confirmations', now: 2000 });
-  s = reduceCourtConfirmationMachine(s, { type: 'open_challenge_window', now: 2100 });
-  s = reduceCourtConfirmationMachine(s, { type: 'close_challenge_window', now: 3000 });
-  return s;
+  return confirmHappyPath(CONFIRM_OPTS);
 }
 
 /** Drive the challenge path up to fee_settlement with the given vote split. */
 function challengedToFeeSettlement(votes: ReadonlyArray<readonly [number, 'YES' | 'NO', string]>): CourtConfirmationMachineState {
-  let s = create();
-  for (const [idx, ev] of [[1, 'a'], [2, 'b'], [3, 'c']] as const) {
-    s = reduceCourtConfirmationMachine(s, {
-      type: 'accept_confirmation',
-      idx,
-      confirmHash: hashCourtConfirmation({ sessionHash: SESSION, proposalHash: PROPOSAL, idx }),
-      eventId: id(ev),
-      now: 1000 + idx,
-    });
-  }
-  s = reduceCourtConfirmationMachine(s, { type: 'close_confirmations', now: 2000 });
-  s = reduceCourtConfirmationMachine(s, { type: 'open_challenge_window', now: 2100 });
-  s = reduceCourtConfirmationMachine(s, {
-    type: 'accept_challenge',
-    idx: 2,
-    bondTxid: id('d'),
-    bondProofHash: id('e'),
-    eventId: id('f'),
-    now: 2500,
-  });
-  s = reduceCourtConfirmationMachine(s, { type: 'close_challenge_window', now: 3000 });
-  s = reduceCourtConfirmationMachine(s, { type: 'open_ladder_round', round: 1, voteDeadline: 4000, now: 3100 });
-  for (const [idx, outcome, ev] of votes) {
-    s = reduceCourtConfirmationMachine(s, {
-      type: 'accept_mass_vote',
-      idx,
-      outcome,
-      eventId: id(ev),
-      now: 3200 + idx,
-    });
-  }
-  s = reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 4000 });
-  s = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 4100 });
-  // Round 1 of a maxLadderRounds=2 case parks in round_resolved; the host
-  // concedes to settle with the round outcome (multi-round ladder, 0.9).
-  s = reduceCourtConfirmationMachine(s, { type: 'concede', now: 4150 });
-  return s;
+  return confirmChallengedTo(votes, CONFIRM_OPTS);
 }
 
 describe('hashCourtConfirmation', () => {
