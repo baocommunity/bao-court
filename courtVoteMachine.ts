@@ -570,213 +570,265 @@ export function reduceCourtVoteMachine(
     state = { ...state, latestTimestamp: event.now };
   }
 
-  if (event.type === 'tick') {
-    // `reveal_closed` means close_reveals already ran at/after the deadline and
-    // finalize_tally remains legal afterwards — a clock tick must not expire a
-    // ceremony that is one step from finalization (mirrors the DKG machine's
-    // exemption of its post-deadline `certified` phase).
-    if (
-      TERMINAL_PHASES.has(state.phase)
-      || state.phase === 'reveal_closed'
-      || event.now < state.revealDeadline
-    ) {
-      return freezeCourtVoteMachineState(state);
-    }
-    return freezeCourtVoteMachineState({
-      ...state,
-      phase: 'expired',
-      failure: { phase: 'expired', reason: 'The reveal deadline passed before tally finalization.' },
-    });
-  }
-  if (event.type === 'abort') {
-    if (TERMINAL_PHASES.has(state.phase)) {
-      throw new CourtVoteTransitionError(`cannot abort voting from ${state.phase}`);
-    }
-    return freezeCourtVoteMachineState({
-      ...state,
-      phase: 'aborted',
-      failure: { phase: 'aborted', reason: event.reason },
-    });
+  switch (event.type) {
+    case 'tick': return onTick(state, event);
+    case 'abort': return onAbort(state, event);
+    default: break;
   }
   if (TERMINAL_PHASES.has(state.phase)) {
     throw new CourtVoteTransitionError(`cannot process ${event.type} after ${state.phase}`);
   }
 
-  if (event.type === 'accept_commit') {
-    assertBeforeDeadline(event.now, state.commitDeadline, 'vote commit arrived at or after the commit deadline');
-    assertParticipant(state, event.idx);
-    if (state.phase !== 'commit_open') {
-      throw new CourtVoteTransitionError(`cannot accept vote commits during ${state.phase}`);
-    }
-    if (
-      typeof event.commitHash !== 'string'
-      || typeof event.eventId !== 'string'
-      || !HEX_32.test(event.commitHash)
-      || !HEX_32.test(event.eventId)
-    ) {
-      throw new CourtVoteTransitionError('vote commit hash and event id must be 32-byte lowercase hex');
-    }
-    // Reject legacy sessionless format commits — they use a different domain
-    // and can never match a reveal against this session-bound verifier.
-    if ((Number.parseInt(event.commitHash[0], 16) & COURT_COMMIT_VERSION_BIT) === 0) {
-      throw new CourtVoteTransitionError(
-        'vote commit uses a legacy sessionless format',
-      );
-    }
-    const existing = state.commits.find((c) => c.idx === event.idx);
-    if (existing) {
-      if (existing.commitHash === event.commitHash && existing.eventId === event.eventId) {
-        return freezeCourtVoteMachineState(state);
-      }
-      throw new CourtVoteTransitionError(
-        `participant ${event.idx} published a conflicting vote commit`,
-      );
-    }
-    return freezeCourtVoteMachineState({
-      ...state,
-      commits: [...state.commits, { idx: event.idx, commitHash: event.commitHash, eventId: event.eventId }],
-    });
-  }
-
-  if (event.type === 'close_commits') {
-    if (state.phase !== 'commit_open') {
-      throw new CourtVoteTransitionError(`cannot close vote commits during ${state.phase}`);
-    }
-    if (event.now < state.commitDeadline) {
-      throw new CourtVoteTransitionError('cannot close vote commits before the commit deadline');
-    }
-    return freezeCourtVoteMachineState({ ...state, phase: 'commit_closed' });
-  }
-
-  if (event.type === 'open_reveals') {
-    assertBeforeDeadline(event.now, state.revealDeadline, 'cannot open vote reveals at or after the reveal deadline');
-    if (state.phase !== 'commit_closed') {
-      throw new CourtVoteTransitionError(`cannot open vote reveals during ${state.phase}`);
-    }
-    return freezeCourtVoteMachineState({ ...state, phase: 'reveal_open' });
-  }
-
-  if (event.type === 'accept_reveal') {
-    assertBeforeDeadline(event.now, state.revealDeadline, 'vote reveal arrived at or after the reveal deadline');
-    assertParticipant(state, event.idx);
-    if (state.phase !== 'reveal_open') {
-      throw new CourtVoteTransitionError(`cannot accept vote reveals during ${state.phase}`);
-    }
-    if (state.reveals.length >= MAX_REVEALS) {
-      throw new CourtVoteTransitionError(
-        `reveal ledger exceeds maximum of ${MAX_REVEALS} entries`,
-      );
-    }
-    if (typeof event.outcome !== 'string' || !state.allowedOutcomes.includes(event.outcome)) {
-      throw new CourtVoteTransitionError('vote reveal names an outcome outside the frozen allowlist');
-    }
-    if (
-      typeof event.salt !== 'string'
-      || typeof event.eventId !== 'string'
-      || !HEX_32.test(event.salt)
-      || !HEX_32.test(event.eventId)
-    ) {
-      throw new CourtVoteTransitionError('vote reveal salt and event id must be 32-byte lowercase hex');
-    }
-    const commit = state.commits.find((c) => c.idx === event.idx);
-    if (!commit) {
-      throw new CourtVoteTransitionError(
-        `participant ${event.idx} revealed without a prior session commit`,
-      );
-    }
-    const expected = hashCourtVoteCommit({
-      sessionHash: state.sessionHash,
-      outcome: event.outcome,
-      salt: event.salt,
-    });
-    if (expected !== commit.commitHash) {
-      throw new CourtVoteTransitionError(
-        `vote reveal from participant ${event.idx} does not match its commit`,
-      );
-    }
-    const existing = state.reveals.find((r) => r.idx === event.idx);
-    if (existing) {
-      if (
-        existing.outcome === event.outcome &&
-        existing.salt === event.salt &&
-        existing.eventId === event.eventId
-      ) {
-        return freezeCourtVoteMachineState(state);
-      }
-      throw new CourtVoteTransitionError(
-        `participant ${event.idx} published a conflicting vote reveal`,
-      );
-    }
-    return freezeCourtVoteMachineState({
-      ...state,
-      reveals: [
-        ...state.reveals,
-        { idx: event.idx, outcome: event.outcome, salt: event.salt, eventId: event.eventId },
-      ],
-    });
-  }
-
-  if (event.type === 'close_reveals') {
-    if (state.phase !== 'reveal_open') {
-      throw new CourtVoteTransitionError(`cannot close vote reveals during ${state.phase}`);
-    }
-    if (event.now < state.revealDeadline) {
-      throw new CourtVoteTransitionError('cannot close vote reveals before the reveal deadline');
-    }
-    // Validate the reveal ledger before freezing it so no caller can tamper
-    // with the verified reveal set before finalization.
-    assertValidRevealLedger(state);
-    return freezeCourtVoteMachineState({ ...state, phase: 'reveal_closed' });
-  }
-
-  if (event.type === 'finalize_tally') {
-    if (state.phase !== 'reveal_closed') {
-      throw new CourtVoteTransitionError(`cannot finalize the tally during ${state.phase}`);
-    }
-    // Re-verify the frozen ledger — if finalize_tally is called on a
-    // corrupted machine (e.g. via unsafe spread of an older state), this
-    // catches it before the verdict is committed.
-    assertValidRevealLedger(state);
-    if (state.reveals.length === 0) {
-      throw new CourtVoteTransitionError('cannot finalize a verdict without any valid reveal');
-    }
-    const counts = new Map<string, string[]>();
-    for (const reveal of state.reveals) {
-      const list = counts.get(reveal.outcome) ?? [];
-      list.push(reveal.eventId);
-      counts.set(reveal.outcome, list);
-    }
-    let winner = '';
-    let winnerCount = -1;
-    for (const [outcome, eventIds] of counts.entries()) {
-      if (
-        eventIds.length > winnerCount ||
-        (eventIds.length === winnerCount && compareOutcomeUtf8(outcome, winner) < 0)
-      ) {
-        winner = outcome;
-        winnerCount = eventIds.length;
-      }
-    }
-    // Canonical sort: lowercase the event IDs before sorting so that
-    // casing differences don't produce different verdicts.
-    const supportingEventIds = [...(counts.get(winner) ?? [])].map(
-      (id) => id.toLowerCase(),
-    );
-    supportingEventIds.sort();
-    const verdict: CourtVerdict = {
-      outcome: winner,
-      supportingEventIds,
-      verdictHash: hashCourtVerdict({
-        sessionHash: state.sessionHash,
-        outcome: winner,
-        supportingEventIds,
-      }),
-    };
-    return freezeCourtVoteMachineState({ ...state, phase: 'tally_final', verdict });
+  switch (event.type) {
+    case 'accept_commit': return onAcceptCommit(state, event);
+    case 'close_commits': return onCloseCommits(state, event);
+    case 'open_reveals': return onOpenReveals(state, event);
+    case 'accept_reveal': return onAcceptReveal(state, event);
+    case 'close_reveals': return onCloseReveals(state, event);
+    case 'finalize_tally': return onFinalizeTally(state, event);
+    default: break;
   }
 
   // Unreachable for well-typed events; fail closed instead of silently
   // returning an unfrozen clock-advanced copy for a hostile unknown type.
   const unknownType = (event as { readonly type?: unknown }).type;
   throw new CourtVoteTransitionError(`unknown vote event type: ${String(unknownType)}`);
+}
+
+/** Apply a `tick`: expire the ceremony when the reveal deadline has passed. */
+function onTick(state: CourtVoteMachineState, event: Extract<CourtVoteMachineEvent, { type: 'tick' }>): CourtVoteMachineState {
+  // `reveal_closed` means close_reveals already ran at/after the deadline and
+  // finalize_tally remains legal afterwards — a clock tick must not expire a
+  // ceremony that is one step from finalization (mirrors the DKG machine's
+  // exemption of its post-deadline `certified` phase).
+  if (
+    TERMINAL_PHASES.has(state.phase)
+    || state.phase === 'reveal_closed'
+    || event.now < state.revealDeadline
+  ) {
+    return freezeCourtVoteMachineState(state);
+  }
+  return freezeCourtVoteMachineState({
+    ...state,
+    phase: 'expired',
+    failure: { phase: 'expired', reason: 'The reveal deadline passed before tally finalization.' },
+  });
+}
+
+/** Apply an `abort`: operator cancel from any non-terminal phase. */
+function onAbort(state: CourtVoteMachineState, event: Extract<CourtVoteMachineEvent, { type: 'abort' }>): CourtVoteMachineState {
+  if (TERMINAL_PHASES.has(state.phase)) {
+    throw new CourtVoteTransitionError(`cannot abort voting from ${state.phase}`);
+  }
+  return freezeCourtVoteMachineState({
+    ...state,
+    phase: 'aborted',
+    failure: { phase: 'aborted', reason: event.reason },
+  });
+}
+
+/** Apply an `accept_commit`: bind one juror's session-bound commit hash. */
+function onAcceptCommit(
+  state: CourtVoteMachineState,
+  event: Extract<CourtVoteMachineEvent, { type: 'accept_commit' }>,
+): CourtVoteMachineState {
+  assertBeforeDeadline(event.now, state.commitDeadline, 'vote commit arrived at or after the commit deadline');
+  assertParticipant(state, event.idx);
+  if (state.phase !== 'commit_open') {
+    throw new CourtVoteTransitionError(`cannot accept vote commits during ${state.phase}`);
+  }
+  if (
+    typeof event.commitHash !== 'string'
+    || typeof event.eventId !== 'string'
+    || !HEX_32.test(event.commitHash)
+    || !HEX_32.test(event.eventId)
+  ) {
+    throw new CourtVoteTransitionError('vote commit hash and event id must be 32-byte lowercase hex');
+  }
+  // Reject legacy sessionless format commits — they use a different domain
+  // and can never match a reveal against this session-bound verifier.
+  if ((Number.parseInt(event.commitHash[0], 16) & COURT_COMMIT_VERSION_BIT) === 0) {
+    throw new CourtVoteTransitionError(
+      'vote commit uses a legacy sessionless format',
+    );
+  }
+  const existing = state.commits.find((c) => c.idx === event.idx);
+  if (existing) {
+    if (existing.commitHash === event.commitHash && existing.eventId === event.eventId) {
+      return freezeCourtVoteMachineState(state);
+    }
+    throw new CourtVoteTransitionError(
+      `participant ${event.idx} published a conflicting vote commit`,
+    );
+  }
+  return freezeCourtVoteMachineState({
+    ...state,
+    commits: [...state.commits, { idx: event.idx, commitHash: event.commitHash, eventId: event.eventId }],
+  });
+}
+
+/** Apply a `close_commits`: close the commit window at/after its deadline. */
+function onCloseCommits(
+  state: CourtVoteMachineState,
+  event: Extract<CourtVoteMachineEvent, { type: 'close_commits' }>,
+): CourtVoteMachineState {
+  if (state.phase !== 'commit_open') {
+    throw new CourtVoteTransitionError(`cannot close vote commits during ${state.phase}`);
+  }
+  if (event.now < state.commitDeadline) {
+    throw new CourtVoteTransitionError('cannot close vote commits before the commit deadline');
+  }
+  return freezeCourtVoteMachineState({ ...state, phase: 'commit_closed' });
+}
+
+/** Apply an `open_reveals`. */
+function onOpenReveals(
+  state: CourtVoteMachineState,
+  event: Extract<CourtVoteMachineEvent, { type: 'open_reveals' }>,
+): CourtVoteMachineState {
+  assertBeforeDeadline(event.now, state.revealDeadline, 'cannot open vote reveals at or after the reveal deadline');
+  if (state.phase !== 'commit_closed') {
+    throw new CourtVoteTransitionError(`cannot open vote reveals during ${state.phase}`);
+  }
+  return freezeCourtVoteMachineState({ ...state, phase: 'reveal_open' });
+}
+
+/** Apply an `accept_reveal`: verify the reveal against its commit, record it. */
+function onAcceptReveal(
+  state: CourtVoteMachineState,
+  event: Extract<CourtVoteMachineEvent, { type: 'accept_reveal' }>,
+): CourtVoteMachineState {
+  assertBeforeDeadline(event.now, state.revealDeadline, 'vote reveal arrived at or after the reveal deadline');
+  assertParticipant(state, event.idx);
+  if (state.phase !== 'reveal_open') {
+    throw new CourtVoteTransitionError(`cannot accept vote reveals during ${state.phase}`);
+  }
+  if (state.reveals.length >= MAX_REVEALS) {
+    throw new CourtVoteTransitionError(
+      `reveal ledger exceeds maximum of ${MAX_REVEALS} entries`,
+    );
+  }
+  if (typeof event.outcome !== 'string' || !state.allowedOutcomes.includes(event.outcome)) {
+    throw new CourtVoteTransitionError('vote reveal names an outcome outside the frozen allowlist');
+  }
+  if (
+    typeof event.salt !== 'string'
+    || typeof event.eventId !== 'string'
+    || !HEX_32.test(event.salt)
+    || !HEX_32.test(event.eventId)
+  ) {
+    throw new CourtVoteTransitionError('vote reveal salt and event id must be 32-byte lowercase hex');
+  }
+  const commit = state.commits.find((c) => c.idx === event.idx);
+  if (!commit) {
+    throw new CourtVoteTransitionError(
+      `participant ${event.idx} revealed without a prior session commit`,
+    );
+  }
+  const expected = hashCourtVoteCommit({
+    sessionHash: state.sessionHash,
+    outcome: event.outcome,
+    salt: event.salt,
+  });
+  if (expected !== commit.commitHash) {
+    throw new CourtVoteTransitionError(
+      `vote reveal from participant ${event.idx} does not match its commit`,
+    );
+  }
+  const existing = state.reveals.find((r) => r.idx === event.idx);
+  if (existing) {
+    if (
+      existing.outcome === event.outcome &&
+      existing.salt === event.salt &&
+      existing.eventId === event.eventId
+    ) {
+      return freezeCourtVoteMachineState(state);
+    }
+    throw new CourtVoteTransitionError(
+      `participant ${event.idx} published a conflicting vote reveal`,
+    );
+  }
+  return freezeCourtVoteMachineState({
+    ...state,
+    reveals: [
+      ...state.reveals,
+      { idx: event.idx, outcome: event.outcome, salt: event.salt, eventId: event.eventId },
+    ],
+  });
+}
+
+/** Apply a `close_reveals`: verify and freeze the reveal ledger. */
+function onCloseReveals(
+  state: CourtVoteMachineState,
+  event: Extract<CourtVoteMachineEvent, { type: 'close_reveals' }>,
+): CourtVoteMachineState {
+  if (state.phase !== 'reveal_open') {
+    throw new CourtVoteTransitionError(`cannot close vote reveals during ${state.phase}`);
+  }
+  if (event.now < state.revealDeadline) {
+    throw new CourtVoteTransitionError('cannot close vote reveals before the reveal deadline');
+  }
+  // Validate the reveal ledger before freezing it so no caller can tamper
+  // with the verified reveal set before finalization.
+  assertValidRevealLedger(state);
+  return freezeCourtVoteMachineState({ ...state, phase: 'reveal_closed' });
+}
+
+/** Apply a `finalize_tally`: commit the canonical verdict hash. */
+function onFinalizeTally(
+  state: CourtVoteMachineState,
+  _event: Extract<CourtVoteMachineEvent, { type: 'finalize_tally' }>,
+): CourtVoteMachineState {
+  if (state.phase !== 'reveal_closed') {
+    throw new CourtVoteTransitionError(`cannot finalize the tally during ${state.phase}`);
+  }
+  // Re-verify the frozen ledger — if finalize_tally is called on a
+  // corrupted machine (e.g. via unsafe spread of an older state), this
+  // catches it before the verdict is committed.
+  assertValidRevealLedger(state);
+  if (state.reveals.length === 0) {
+    throw new CourtVoteTransitionError('cannot finalize a verdict without any valid reveal');
+  }
+  const { winner, supportingEventIds } = tallyReveals(state);
+  const verdict: CourtVerdict = {
+    outcome: winner,
+    supportingEventIds,
+    verdictHash: hashCourtVerdict({
+      sessionHash: state.sessionHash,
+      outcome: winner,
+      supportingEventIds,
+    }),
+  };
+  return freezeCourtVoteMachineState({ ...state, phase: 'tally_final', verdict });
+}
+
+/**
+ * Majority outcome of the reveal ledger with its supporting event ids; ties
+ * break deterministically in lexicographic unsigned UTF-8 byte order.
+ * Canonical sort: lowercase the event IDs before sorting so that casing
+ * differences don't produce different verdicts.
+ */
+function tallyReveals(state: CourtVoteMachineState): { winner: string; supportingEventIds: string[] } {
+  const counts = new Map<string, string[]>();
+  for (const reveal of state.reveals) {
+    const list = counts.get(reveal.outcome) ?? [];
+    list.push(reveal.eventId);
+    counts.set(reveal.outcome, list);
+  }
+  let winner = '';
+  let winnerCount = -1;
+  for (const [outcome, eventIds] of counts.entries()) {
+    if (
+      eventIds.length > winnerCount ||
+      (eventIds.length === winnerCount && compareOutcomeUtf8(outcome, winner) < 0)
+    ) {
+      winner = outcome;
+      winnerCount = eventIds.length;
+    }
+  }
+  const supportingEventIds = [...(counts.get(winner) ?? [])].map(
+    (id) => id.toLowerCase(),
+  );
+  supportingEventIds.sort();
+  return { winner, supportingEventIds };
 }
