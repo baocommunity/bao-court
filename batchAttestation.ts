@@ -277,6 +277,85 @@ export function buildBatchMerkleProof(
 }
 
 /**
+ * Build authentication paths for ALL leaves of an already-hashed (sorted)
+ * leaf array in one pass — O(n) node hashes + O(n log n) path slots, versus
+ * ~O(n²) node hashes for calling {@link buildBatchMerkleProof} per leaf.
+ *
+ * Technique: the RFC-6962 split recursion visits exactly 2n−1 distinct
+ * (lo, hi) subtrees, so hashing the full tree once into a node table (memo)
+ * costs O(n) `batchNode` calls; every proof then reads its O(log n) sibling
+ * hashes straight out of that table. The RFC-6962 unbalanced split means
+ * sibling subtrees have distinct (lo, hi) ranges per proof level, which the
+ * table keys on — no re-hash of any subtree ever happens.
+ *
+ * Memory trade (deliberate, shared): the node table is O(n) entries (2n−1:
+ * leaves + interior nodes) and every proof's path entries REFERENCE the same
+ * string objects (no copies),
+ * so the full proof set for 10k leaves costs ~O(n) retained hash material
+ * (~2n path slots ≈ a few MB) instead of materialising 2n−1 fresh strings
+ * per proof. Callers that keep the full set should treat the returned array
+ * as the proof material cache the BASELINE.md findings recommend building at
+ * batch-attest time.
+ *
+ * Output parity: for every index, the returned proof is identical (same
+ * index, same verdictHash, same path array contents and order) to
+ * {@link buildBatchMerkleProof} — pinned by the differential-parity suite,
+ * which verifies every production proof under the independent reference
+ * verifier for n = 1..128.
+ */
+export function buildBatchMerkleProofs(
+  leaves: readonly string[],
+): BatchMerkleProof[] {
+  assertLeafArray(leaves, 'leaves');
+  const n = leaves.length;
+  // Full node table. Key packs (lo, hi) injectively: lo * (n + 1) + hi ≤
+  // n * (n + 1) + n < 2^53 for every n ≤ MAX_BATCH_VERDICTS, so the packing
+  // is exact integer arithmetic (no float collision possible).
+  const stride = n + 1;
+  const nodes = new Map<number, string>();
+  const subtreeRootAt = (lo: number, hi: number): string => {
+    const key = lo * stride + hi;
+    let root = nodes.get(key);
+    if (root === undefined) {
+      if (hi - lo === 1) {
+        // Leaf level: memoize too, so every sibling lookup in the descent
+        // below hits the table (leaf entries reference the same string as
+        // the leaves array — no extra hash material).
+        root = leaves[lo]!;
+      } else {
+        const k = splitPoint(hi - lo);
+        root = batchNode(subtreeRootAt(lo, lo + k), subtreeRootAt(lo + k, hi));
+      }
+      nodes.set(key, root);
+    }
+    return root;
+  };
+  subtreeRootAt(0, n);
+  const proofs: BatchMerkleProof[] = new Array(n);
+  for (let index = 0; index < n; index += 1) {
+    // The path contract is NEAREST-THE-LEAF-FIRST (see buildPath), while this
+    // descent walks root → leaf — so fill the pre-sized array from the back.
+    const path: string[] = new Array(expectedPathLength(n, index));
+    let pos = path.length - 1;
+    let lo = 0;
+    let hi = n;
+    let target = index;
+    while (hi - lo > 1) {
+      const k = splitPoint(hi - lo);
+      if (target - lo < k) {
+        path[pos--] = nodes.get((lo + k) * stride + hi)!;
+        hi = lo + k;
+      } else {
+        path[pos--] = nodes.get(lo * stride + (lo + k))!;
+        lo += k;
+      }
+    }
+    proofs[index] = { index, verdictHash: leaves[index]!, path };
+  }
+  return proofs;
+}
+
+/**
  * Canonical manifest hash binding the batch to an epoch, cohort, batch index,
  * verdict count, Merkle root, and finalization time:
  *

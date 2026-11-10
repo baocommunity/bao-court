@@ -9,6 +9,71 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.10.0] — 2026-11-10
+
+### Added (round-9 performance optimization — no byte output or behaviour changes)
+
+- **`buildBatchMerkleProofs(leaves): BatchMerkleProof[]` (batch-attestation module):**
+  full proof-set generation in O(n) node hashes + O(n log n) path slots,
+  versus ~O(n²) node hashes for per-leaf `buildBatchMerkleProof` calls
+  (each call re-hashes O(n) sibling-subtree nodes; the full set re-hashes
+  the same subtrees ~log n times over). The RFC-6962 split recursion visits
+  exactly 2n−1 distinct subtrees; hashing the tree once into a node table
+  lets every proof read its O(log n) siblings from the table, with path
+  entries SHARING the table's string objects (memory: O(n) retained hash
+  material, not O(n log n) fresh strings). Output is IDENTICAL — same
+  index/verdictHash/path per leaf as the single-proof API — pinned by the
+  differential-parity suite (every proof verified under the independent
+  reference verifier for n = 1..128, 333, 1000). The single-proof API is
+  unchanged. **Consumer impact: additive only** — new export, existing
+  exports byte-compatible.
+- New benchmarks: `buildBatchMerkleProofs` (full set, n = 10/100/1k/10k) and
+  `reduceCourtSigningMachine` (10k legal transitions, roster=threshold=21 —
+  the heaviest invariant-checking case), added to `bench/court.bench.mjs`
+  and `docs/benchmarks/BASELINE.md`.
+
+### Changed (performance — measured, byte-output-identical)
+
+- **CanonicalWriter — pre-sized growable buffer** replaces the per-field
+  chunk array + finish-time concat: one amortized buffer, in-place writes,
+  a shared DataView, and a hi/lo split replacing the `BigInt` u64 conversion.
+  Byte output identical (differential-parity pinned: byte-identity on 300
+  random sequences + boundary + round-trip + fail-closed ranges).
+  `canonicalWriter.encodeHash` at 1k field groups: 6.46 ms → 1.48 ms (4.4×;
+  5.50 → 1.44 ms on the noise-floor `min`; paired numbers in BASELINE.md).
+- **`isValidSecp256k1Point` — bounded validity memo** (cap 8192, clear-on-
+  full): point validity is a pure mathematical function of the encoding
+  string, so the memo is semantically transparent; it is module-private
+  (never enumerable on machine state, never serialized) per the
+  verified-verdict cache lesson. This removes the signing machine's dominant
+  per-reduce cost — the reducer re-validates EVERY stored nonce commitment
+  (2 `Point.fromHex` decodes ≈ 88 µs each on this host class) on EVERY
+  transition. `reduceCourtSigningMachine` at roster=threshold=21:
+  3340 µs → 110 µs per transition (**30×**; paired numbers in BASELINE.md).
+- **Selection hot path** (`selection.ts`): `bytesFromHex` lookup-table decode
+  (byte-identical, same accept/reject set); `jurorRandomValue` single
+  pre-sized concat instead of two array spreads; `scoreAndSort` ranks light
+  `{juror, priority}` records and materializes `SelectedJuror` objects only
+  for the selected top-k (previously two full object spreads per juror plus
+  idx assignment over the whole pool). Same comparator, same draws, same
+  ranking — exact parity verified against the pre-change algorithm across
+  randomized rosters, and by the differential-parity end-to-end ranking pin.
+  `selectJury` at roster=10k: 88.5 ms → 32.5 ms (**2.7×**; 77.8 → 30.1 ms on
+  `min`; paired numbers in BASELINE.md).
+
+### Refused (measured, not worth the risk/complexity — see BASELINE.md round-9 findings)
+
+- **Heap-based O(n log k) top-k jury selection:** 27× on the ranking step
+  alone (4.0 ms → 0.148 ms, top-k parity confirmed) but only ~1.12×
+  end-to-end at roster=10k — the sha256 draws dominate; below the ≥2× bar.
+- **Cross-call CanonicalWriter buffer pooling:** the per-instance pre-sized
+  buffer already captures the win; shared mutable scratch state on a
+  security-critical encoding primitive for no measured additional benefit.
+- **Memoizing `assertSigningRecordInvariants` on state hash:** couples a
+  cache to the restored-snapshot corruption class the check exists to catch;
+  the point memo captures ~95% of the win. Spec (WeakMap keyed by the frozen
+  state object) recorded in BASELINE.md.
+
 ## [0.9.4] — 2026-11-10
 
 ### Fixed (round-8 adversarial-nostr round — hostile relay data)

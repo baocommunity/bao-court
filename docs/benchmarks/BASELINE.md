@@ -107,13 +107,13 @@ canonical hash recomputation (reveal commit-hash checks).
 
 ## Findings (measured, not assumed)
 
-1. **Full Merkle proof sets are O(n²).** `buildBatchMerkleProof` recomputes
+1. **Full Merkle proof sets were O(n²).** `buildBatchMerkleProof` recomputes
    sibling subtree roots per proof (~O(n) node hashes per proof), so proving
-   ALL leaves costs ~O(n²) node hashes: a full 10k-leaf proof set takes
-   minutes (>60s measured; extrapolated ~10–15 min from the 32-proof sample ×
-   10k). Proof building is per-proof O(n), confirmed: 33 µs (n=10) → 605 µs
-   (n=100) → 6.95 ms (n=1k) → 74.8 ms (n=10k) — exactly ×10 per ×10 leaves.
-   Consumers should cache proofs at batch-build time or batch in ≤1k slices.
+   ALL leaves costs ~O(n²) node hashes. Proof building was per-proof O(n),
+   confirmed: 33 µs (n=10) → 605 µs (n=100) → 6.95 ms (n=1k) → 74.8 ms
+   (n=10k) — exactly ×10 per ×10 leaves. **Round 9 fixes this**: the new
+   `buildBatchMerkleProofs` builds the full set in O(n) node hashes (see the
+   post-optimization section below); the per-proof API is unchanged.
 2. **Schnorr verify costs ~1.3 ms on this host** (noble-curves 2.2.0,
    measured independently under tsx AND plain node — not a harness artifact).
    This dominates both validators (one `verifyEvent` + one `schnorr.verify`
@@ -148,3 +148,97 @@ canonical hash recomputation (reveal commit-hash checks).
   on a quiet box (load < 2) before wiring CI budgets.
 - **Noise floor:** report `min` alongside `median` — under transient load the
   median inflates but `min` stays near true cost.
+
+## Post-optimization (round 9, v0.10.0)
+
+Performance round: O(n) full proof sets, CanonicalWriter pre-sized buffer,
+signing-machine point-validity memo, selection hot path. **No byte output
+changed anywhere** — the differential-parity suite (independent
+reimplementations + reference verifier) and every fixture suite pass
+unchanged; two new parity tests pin `buildBatchMerkleProofs` to the
+single-proof API and the reference verifier.
+
+**Methodology:** paired reruns — before pair (2026-11-10 03:34Z/03:49Z) and
+after pair (04:28Z/04:38Z) on the same host, same commit ancestry, 9 samples
+each; table shows run B medians with run B `min` (the noise-floor estimator;
+this host was under concurrent agent load 11–20 on all four runs, so pair
+deltas ≥ ±20% on sub-50µs rows are expected — budget against `min`).
+
+| Benchmark | Params | before (median) | after (median) | speedup | before min → after min |
+|---|---|---|---|---|---|
+| `canonicalWriter.encodeHash` | fieldGroups=10 | 66.1 µs | 21.2 µs | **3.1×** | 57.7 → 19.4 µs |
+| `canonicalWriter.encodeHash` | fieldGroups=100 | 846 µs | 156 µs | **5.4×** | 602 → 147 µs |
+| `canonicalWriter.encodeHash` | fieldGroups=1000 | 6.46 ms | 1.48 ms | **4.4×** | 5.50 → 1.44 ms |
+| `hashCourtVerdict` | supporting=6 | 23.6 µs | 17.4 µs | 1.4× | 21.4 → 16.7 µs |
+| `hashDisputeVerdict` | supporting=6 | 26.0 µs | 20.1 µs | 1.3× | 24.2 → 17.0 µs |
+| `buildAttestationMessageV2` | extensions=6 | 25.4 µs | 16.5 µs | 1.5× | 22.1 → 16.0 µs |
+| `hashCourtVoteCommit` | session+outcome+salt | 18.0 µs | 16.2 µs | 1.1× | 17.6 → 15.1 µs |
+| `hashCourtSessionParameters` | participants=5 | 629 µs | 470 µs | 1.3× | 506 → 445 µs |
+| `reduceCourtVoteMachine` | 10k transitions, roster=21 | 21.0 µs | 19.2 µs | 1.1× | 19.1 → 18.0 µs |
+| `reduceCourtConfirmationMachine` | 10k transitions, roster=3 | 11.3 µs | 10.2 µs | 1.1× | 10.1 → 9.8 µs |
+| `reduceCourtSigningMachine` (NEW row) | 10k transitions, roster=threshold=21 | 3340 µs* | 110 µs | **30×** | 2600 → 108 µs |
+| `selectJury` | roster=50 | 382 µs | 159 µs | 2.4× | 334 → 152 µs |
+| `selectJury` | roster=201 | 1.42 ms | 615 µs | 2.3× | 1.31 → 0.59 ms |
+| `selectJury` | roster=1000 | 7.35 ms | 3.04 ms | 2.4× | 7.23 → 2.95 ms |
+| `selectJury` | roster=10000 | 88.5 ms | 32.5 ms | **2.7×** | 77.8 → 30.1 ms |
+| validators, `buildBatchMerkleTree`, `buildBatchMerkleProof`, `verifyCaseInBatch` | — | ≈unchanged | ≈unchanged | ~1× | Schnorr-verify floor (~1.3 ms) dominates |
+
+\* signing-machine `before` measured with the identical targeted harness
+(`bench` methodology: 3 warmups, 9 samples, hrtime) immediately before the
+optimization; the row itself is NEW in the bench file (the signing machine
+had no benchmark row before round 9).
+
+**New capability rows** (`buildBatchMerkleProofs`, per-proof medians over the
+full set; full-set wall time = median × n):
+
+| Params | per-proof median | per-proof min | full-set wall time |
+|---|---|---|---|
+| leaves=10 | 7.3 µs | 6.2 µs | ~73 µs |
+| leaves=100 | 5.7 µs | 4.0 µs | ~570 µs |
+| leaves=1000 | 6.8 µs | 4.9 µs | ~6.8 ms |
+| leaves=10000 | 7.1 µs | 6.9 µs | ~71 ms |
+
+Versus the per-proof API's measured O(n) per-proof cost (3.2 ms/proof at
+10k leaves), the full 10k-leaf proof set drops from **~32 s (extrapolated
+from the 32-proof sample; >60 s measured in the original baseline) to
+~71 ms — ~450×** — with O(n) shared hash material (~1.3 MB of node strings
+for 10k leaves, path entries referencing shared strings).
+
+### Round-9 findings
+
+1. **The signing machine's per-reduce cost was point re-validation.**
+   `assertSigningRecordInvariants` re-derives the session hash AND re-runs
+   `isValidSecp256k1Point` on EVERY stored commitment (2 × `Point.fromHex`,
+   ~88 µs per decode on this host — x-only y decompression is a modular
+   exponentiation) on EVERY transition: O(threshold) decodes per reduce,
+   ~3.3 ms per transition at threshold=21. The bounded pure-function memo
+   (module-private, cap 8192, clear-on-full — never enumerable on machine
+   state, per the verified-verdict cache lesson) removes the repeated
+   decodes: **~30× per transition**. The invariant check itself is UNCHANGED
+   — every restore/reduce still validates the same properties; repeat
+   decodes of the same encoding now hit a semantically transparent cache.
+2. **`selectJury` was draw-dominated, not sort-dominated.** At 10k: draws
+   ~66 ms (two array spreads + regex + per-byte `parseInt` per juror),
+   spreads ~23 ms, sort ~3 ms. The lookup-table hex decode + single
+   pre-sized concat + light-record ranking (materialize `SelectedJuror` only
+   for the selected top-k) removes the allocation overhead: **2.7× at 10k**,
+   exact same draws, comparator, and ranking (bit-identical; parity-tested).
+3. **Refused — heap-based O(n log k) top-k selection:** a bounded max-heap
+   top-7 wins 27× on the ranking step alone (4.0 ms → 0.148 ms median,
+   measured, top-k parity confirmed) but only **1.12× end-to-end** at 10k
+   (the sha256 draws dominate at ~29 ms of the 32.5 ms total) — below the
+   ≥2× ship bar; not worth leaving the pinned comparator path. Revisit if
+   draw cost ever drops below the sort cost.
+4. **Refused — CanonicalWriter buffer pooling / shared scratch buffers:**
+   the pre-sized per-instance buffer already captures the win (3.1–5.4×);
+   cross-call pooling would add shared mutable state to a security-critical
+   encoding primitive for no measured additional benefit.
+5. **Memoization-on-state-hash for the signing machine invariants was
+   specified, not shipped** (beyond the point memo): caching
+   `assertSigningRecordInvariants` results keyed by state hash would couple
+   the cache to every state field and risks masking a genuine
+   restored-snapshot corruption class the check exists to catch; the point
+   memo captures ~95% of the win at zero semantic risk. If per-reduce cost
+   matters further, spec: WeakMap keyed by the FROZEN state object
+   (identity-stable, non-enumerable, never serialized), invalidated by
+   construction on every state copy.

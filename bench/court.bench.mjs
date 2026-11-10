@@ -11,13 +11,16 @@
 //                            hashDisputeVerdict; buildAttestationMessageV2
 //                            with 0 and 6 extensions.
 //   2. Merkle batching     — buildBatchMerkleTree + authentication proofs +
+//                            buildBatchMerkleProofs (full O(n) proof set) +
 //                            verifyCaseInBatch at n = 10/100/1k/10k leaves.
 //   3. Validator           — validateAttestationEvent (v1, kind-39007) and
 //                            validateAttestationEventV2 on realistic,
 //                            correctly-signed fixtures (real Schnorr keys,
 //                            generated once at bench start).
-//   4. State machines      — 10k legal transitions each of the vote and
-//                            confirmation machines (pre-generated sequences).
+//   4. State machines      — 10k legal transitions each of the vote,
+//                            confirmation, and signing machines (pre-generated
+//                            sequences; signing at roster=threshold=21, the
+//                            heaviest invariant-checking case).
 //   5. Jury selection      — selectJury over rosters of 50/201/1k/10k.
 //
 // Methodology: every benchmark runs warmup iterations, then >= 5 timed
@@ -41,9 +44,11 @@ import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure';
 import { CanonicalWriter, hashCourtSessionParameters } from '../courtSession.ts';
 import { hashCourtVoteCommit, hashCourtVerdict, hashDisputeVerdict, createCourtVoteMachine, reduceCourtVoteMachine } from '../courtVoteMachine.ts';
 import { createCourtConfirmationMachine, hashCourtConfirmation, reduceCourtConfirmationMachine } from '../courtConfirmationMachine.ts';
+import { createCourtSigningMachine, reduceCourtSigningMachine } from '../courtSigningMachine.ts';
 import {
   buildBatchMerkleTree,
   buildBatchMerkleProof,
+  buildBatchMerkleProofs,
   verifyCaseInBatch,
   buildBatchAttestationEvent,
   hashBatchManifest,
@@ -311,6 +316,12 @@ for (const n of [10, 100, 1000, 10_000]) {
   ));
 
   const proofs = proofIndices.map((i) => buildBatchMerkleProof(leaves, i));
+  results.push(bench(
+    'buildBatchMerkleProofs',
+    `leaves=${n} full proof set (${n} proofs, O(n) shared node table)`,
+    () => buildBatchMerkleProofs(leaves),
+    { iters: n <= 100 ? 20 : n <= 1000 ? 3 : 1, opsPerRun: n },
+  ));
   const verifyIndices = Array.from({ length: VERIFY_SAMPLE[n] }, (_, i) => proofIndices[i % proofCount]);
   const verifyProofs = verifyIndices.map((i) => buildBatchMerkleProof(leaves, i));
   const verifyCases = verifyIndices.map((i) => cases[i]);
@@ -655,8 +666,98 @@ results.push(bench(
   { iters: 1, opsPerRun: confirmationSequence.length },
 ));
 
-// ─── 5. jury selection ──────────────────────────────────────────────────────
+/**
+ * Pre-generate a legal event sequence for the signing machine: full FROST
+ * signing lifecycles (start → accept_commitment ×t → close_commitments →
+ * accept_partial ×t → aggregate → publish) over a roster of 21 with
+ * threshold = 21 — the heaviest invariant-checking case, since
+ * assertSigningRecordInvariants re-validates every stored commitment point
+ * on EVERY transition. Nonce points are real secp256k1 points.
+ */
+function generateSigningSequence(total, rosterSize = 21) {
+  const BINDER = (label) => secp256k1.Point.BASE.multiply(BigInt(`0x${hexId(label)}`)).toHex(true);
+  const events = [];
+  let lifecycle = 0;
+  while (events.length < total) {
+    const eventsForLifecycle = [
+      { type: 'start', now: 100 },
+      ...Array.from({ length: rosterSize }, (_, i) => ({
+        type: 'accept_commitment',
+        idx: i + 1,
+        binderPn: BINDER(`sig-bind-${lifecycle}-${i}`),
+        hiddenPn: BINDER(`sig-hidden-${lifecycle}-${i}`),
+        now: 100 + i,
+      })),
+      { type: 'close_commitments', now: 500 },
+      ...Array.from({ length: rosterSize }, (_, i) => ({
+        type: 'accept_partial',
+        idx: i + 1,
+        psig: hexId(`sig-psig-${lifecycle}-${i}`),
+        now: 600 + i,
+      })),
+      { type: 'aggregate', signature: hexId(`sig-agg-${lifecycle}`) + hexId(`sig-agg2-${lifecycle}`), now: 900 },
+      { type: 'publish', attestationEventId: hexId(`sig-att-${lifecycle}`), now: 950 },
+    ];
+    events.push(...eventsForLifecycle);
+    lifecycle += 1;
+  }
+  return events.slice(0, total);
+}
 
+const signingSequence = generateSigningSequence(10_000);
+{
+  // Legality preflight outside the timed region: exactly one full lifecycle.
+  const EVENTS_PER_LIFECYCLE = 2 * 21 + 4;
+  let s = createCourtSigningMachine({
+    sessionHash: hexId('sig-session-0'),
+    verdictHash: hexId('sig-verdict-0'),
+    outcome: 'YES',
+    participantIndices: Array.from({ length: 21 }, (_, i) => i + 1),
+    threshold: 21,
+    attempt: 1,
+    deadline: 10_000,
+  });
+  for (const event of signingSequence.slice(0, EVENTS_PER_LIFECYCLE)) s = reduceCourtSigningMachine(s, event);
+  if (s.phase !== 'attestation_published') throw new Error('signing bench fixture broken');
+}
+results.push(bench(
+  'reduceCourtSigningMachine',
+  `transitions=${signingSequence.length} roster=21 threshold=21`,
+  () => {
+    let lifecycle = 0;
+    let s = createCourtSigningMachine({
+      sessionHash: hexId('sig-session-0'),
+      verdictHash: hexId('sig-verdict-0'),
+      outcome: 'YES',
+      participantIndices: Array.from({ length: 21 }, (_, i) => i + 1),
+      threshold: 21,
+      attempt: 1,
+      deadline: 10_000,
+    });
+    const EVENTS_PER_LIFECYCLE = 2 * 21 + 4;
+    let count = 0;
+    for (const event of signingSequence) {
+      s = reduceCourtSigningMachine(s, event);
+      count += 1;
+      if (s.phase === 'attestation_published' && count < signingSequence.length) {
+        lifecycle += 1;
+        s = createCourtSigningMachine({
+          sessionHash: hexId(`sig-session-${lifecycle}`),
+          verdictHash: hexId(`sig-verdict-${lifecycle}`),
+          outcome: 'YES',
+          participantIndices: Array.from({ length: 21 }, (_, i) => i + 1),
+          threshold: 21,
+          attempt: 1,
+          deadline: 10_000,
+        });
+      }
+    }
+    return s.phase;
+  },
+  { iters: 1, opsPerRun: signingSequence.length },
+));
+
+// ─── 5. jury selection ──────────────────────────────────────────────────────
 console.log('\n== jury selection ==\n');
 
 function makeRoster(n) {

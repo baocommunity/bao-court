@@ -385,9 +385,29 @@ export function assertCourtSessionParameters(
 /**
  * Length-prefixed canonical binary writer shared by every Court hash domain.
  * Delimiter-joined attacker-controlled strings must never be hashed directly.
+ *
+ * Encoding contract (differential-parity pinned): byte output is IDENTICAL to
+ * the original chunk-list implementation — this is a performance re-implementation
+ * that writes into one pre-sized, geometrically-grown buffer instead of
+ * allocating a chunk per field and concatenating in {@link finish}. The
+ * validation behaviour (fail-closed ranges, hex checks) is unchanged.
  */
 export class CanonicalWriter {
-  private readonly chunks: Uint8Array[] = [];
+  private buf: Uint8Array = new Uint8Array(128);
+  private view: DataView = new DataView(this.buf.buffer);
+  private len: number = 0;
+
+  /** Grow the backing buffer geometrically so `len + need` bytes fit. */
+  private ensure(need: number): void {
+    const required = this.len + need;
+    if (required <= this.buf.length) return;
+    let capacity = this.buf.length * 2;
+    while (capacity < required) capacity *= 2;
+    const next = new Uint8Array(capacity);
+    next.set(this.buf.subarray(0, this.len), 0);
+    this.buf = next;
+    this.view = new DataView(next.buffer);
+  }
 
   u8(value: number): void {
     if (!Number.isInteger(value) || value < 0 || value > 0xff) {
@@ -396,7 +416,9 @@ export class CanonicalWriter {
         'u8 field must be an integer in [0, 255]',
       );
     }
-    this.chunks.push(Uint8Array.of(value));
+    this.ensure(1);
+    this.buf[this.len] = value;
+    this.len += 1;
   }
 
   u32(value: number): void {
@@ -406,9 +428,9 @@ export class CanonicalWriter {
         'u32 field must be an integer in [0, 4294967295]',
       );
     }
-    const bytes = new Uint8Array(4);
-    new DataView(bytes.buffer).setUint32(0, value, false);
-    this.chunks.push(bytes);
+    this.ensure(4);
+    this.view.setUint32(this.len, value, false);
+    this.len += 4;
   }
 
   u64(value: number): void {
@@ -420,14 +442,19 @@ export class CanonicalWriter {
         'u64 field must be a safe non-negative integer',
       );
     }
-    const bytes = new Uint8Array(8);
-    new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false);
-    this.chunks.push(bytes);
+    this.ensure(8);
+    // Big-endian hi/lo split — byte-identical to setBigUint64(BigInt(value))
+    // for every safe non-negative integer, without the BigInt allocation.
+    this.view.setUint32(this.len, Math.floor(value / 0x1_0000_0000), false);
+    this.view.setUint32(this.len + 4, value % 0x1_0000_0000, false);
+    this.len += 8;
   }
 
   bytes(value: Uint8Array): void {
     this.u32(value.length);
-    this.chunks.push(value);
+    this.ensure(value.length);
+    this.buf.set(value, this.len);
+    this.len += value.length;
   }
 
   text(value: string): void {
@@ -439,14 +466,10 @@ export class CanonicalWriter {
   }
 
   finish(): Uint8Array {
-    const length = this.chunks.reduce((total, chunk) => total + chunk.length, 0);
-    const output = new Uint8Array(length);
-    let offset = 0;
-    for (const chunk of this.chunks) {
-      output.set(chunk, offset);
-      offset += chunk.length;
-    }
-    return output;
+    // Exact-size copy: same shape as the original implementation's output
+    // (a fresh, exactly-length array), never an interior view of the
+    // growable buffer — callers may hold or mutate the result freely.
+    return this.buf.slice(0, this.len);
   }
 }
 

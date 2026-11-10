@@ -36,7 +36,9 @@ import { describe, expect, it } from 'vitest';
 
 import { CanonicalWriter, CourtSessionValidationError } from '../courtSession';
 import {
+  BatchAttestationError,
   buildBatchMerkleProof,
+  buildBatchMerkleProofs,
   buildBatchMerkleTree,
   hashBatchManifest,
 } from '../batchAttestation';
@@ -410,6 +412,34 @@ describe('differential parity: batch Merkle tree (batchAttestation)', () => {
       expect(refSubtreeRoot(production.leaves)).toBe(production.root);
       expect(refSubtreeRoot(reference.leaves)).toBe(reference.root);
     }
+  });
+
+  it('batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)', { timeout: 120_000 }, () => {
+    for (const n of [...Array.from({ length: 128 }, (_, i) => i + 1), 333, 1000]) {
+      const production = buildBatchMerkleTree(MERKLE_HASH_POOL.slice(0, Math.min(n, MERKLE_HASH_POOL.length)));
+      const size = production.leaves.length;
+      const batch = buildBatchMerkleProofs(production.leaves);
+      expect(batch.length, `n=${size} proof count`).toBe(size);
+      for (let index = 0; index < size; index += 1) {
+        const single = buildBatchMerkleProof(production.leaves, index);
+        expect(batch[index], `n=${size} index=${index} shape`).toEqual(single);
+        // And every batch proof verifies under the independent verifier.
+        const ok = refVerifyBatchProof({
+          n: size,
+          index,
+          leaf: batch[index]!.verdictHash,
+          path: batch[index]!.path,
+          root: production.root,
+        });
+        expect(ok, `n=${size} index=${index} batch proof must verify`).toBe(true);
+      }
+    }
+  });
+
+  it('batch proof set: rejects malformed leaf arrays exactly like the single-proof API', () => {
+    expect(() => buildBatchMerkleProofs([])).toThrow(BatchAttestationError);
+    expect(() => buildBatchMerkleProofs('nope' as unknown as readonly string[])).toThrow(BatchAttestationError);
+    expect(() => buildBatchMerkleProofs(['ZZ'.repeat(32)])).toThrow(BatchAttestationError);
   });
 
   it('n=1 degenerate: root equals the leaf hash, empty authentication path', () => {
