@@ -15,12 +15,16 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
    in bao.markets (`packages/lib/frost-court`) directly — it is a byte-exact
    mirror synced FROM this repo. Edits made there are overwritten on the
    next sync.
-2. **Tag every release in the same push.** This package ships by git
-   ref/tag — it is NOT published to npm. After a version bump:
-   `git tag -a vX.Y.Z -m "..." && git push origin main vX.Y.Z` in ONE
-   action. Current: **v0.7.2** (court/money binding fixes — funder-key Liquid
-   refunds with minimal CLTV encoding, LN hold plan binding, court-script
-   bond-ownership admission. See `CHANGELOG.md` v0.7.0–v0.7.2).
+2. **Tag every release in the same push, and create the GitHub Release.**
+   This package ships by git ref/tag — it is NOT published to npm. After a
+   version bump: `git tag -a vX.Y.Z -m "..." && git push origin main vX.Y.Z`
+   in ONE action, then `gh release create vX.Y.Z --title "vX.Y.Z — <one-line>"
+   --notes-file <changelog-section>` in the SAME session. A tag without a
+   Release object is invisible on the Releases page (the 2026-11-10 incident:
+   tags through v0.10.2 existed while the page still showed v0.7.1 — 13
+   releases back-filled). Current: **v0.10.2** (API-surface JSDoc, glossary,
+   presentation kit, proofs, security definitions, economics theorems — the
+   full v0.8.0→v0.10.2 arc is in `CHANGELOG.md`).
 3. **Versioning:** bug fixes → patch (`0.4.1`); new modules/capabilities or
    consumer-visible API changes → minor (`0.5.0`). 1.0.0 stays reserved
    until the trusted-dealer DKG is replaced with production Pedersen DKG
