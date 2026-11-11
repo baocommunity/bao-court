@@ -16,11 +16,15 @@
  * property that only the campaign probe asserts is a property CI does not
  * defend, and that is exactly the gap these five pins close:
  *
- *   C11 (M82)  the codec hashes the value it VALIDATED: an id is trimmed and
- *              nothing else, so `" court:1"` and `"court:1"` are one request
- *              with one digest — but the digest must not also cover bytes the
- *              wire does not carry. Dropping the trim made `build` return an
- *              id the preimage then trimmed, i.e. validate A, hash B.
+ *   C11 (M82)  the codec hashes the value it VALIDATED. NOTE (superseded):
+ *              when this campaign ran, `build` trimmed a padded id and hashed
+ *              the trimmed form, so the pin was "trimmed ONCE, in build". The
+ *              review-round-9 finding r9-1 replaced trimming with EXACT
+ *              validation — `" court:1"`, `"court:1\t"` and `"court:1\u3000"`
+ *              were collapsing to one digest — so the pin is now the stronger
+ *              statement: a padded id is REFUSED at build and at the preimage,
+ *              and no two spellings of an id can share a digest. The mutant
+ *              (re-introduce the trim) is caught by the refusal.
  *   C12 (M83)  an accepted id round-trips BYTE-FOR-BYTE. Normalising instead of
  *              refusing is the same class as r8-1: an NFD id and its NFC twin
  *              are different wire strings, one digest, and the host's routing
@@ -75,26 +79,29 @@ const wireOf = (req: CourtEscalationRequest): Record<string, unknown> =>
   JSON.parse(serializeCourtEscalationRequest(req)) as Record<string, unknown>;
 
 describe('C11 (M82) — the id that is hashed is the id that was validated', () => {
-  it('a padded id is trimmed ONCE, in build, and every later step sees the trimmed id', () => {
-    const padded = request({ caseId: `  ${CASE_ID}\t` });
-    // The value the caller gets IS the value the digest covers…
-    expect(padded.caseId).toBe(CASE_ID);
-    // …so the wire form carries no byte the digest ignores.
-    expect(wireOf(padded).caseId).toBe(CASE_ID);
-    expect(serializeCourtEscalationRequest(padded)).toBe(serializeCourtEscalationRequest(request()));
-    expect(courtEscalationRequestPreimage(padded)).toBe(courtEscalationRequestPreimage(request()));
+  it('a padded id is REFUSED at build (r9-1 supersedes the old trim)', () => {
+    // Trimming folded `" court:1"`, `"court:1 "` and `"court:1\u3000"` into one
+    // digest. Exact validation is the fix: the caller must send the id it means.
+    for (const padded of [`  ${CASE_ID}\t`, ` ${CASE_ID} `, `${CASE_ID}\u3000`, `\u3000${CASE_ID}`]) {
+      expect(() => request({ caseId: padded })).toThrow(/whitespace/);
+    }
   });
 
-  it('a hand-built untrimmed id hashes as the trimmed one (the preimage trims nothing it did not validate)', () => {
-    // `build` is the only trimming authority. A hand-built object bypasses it,
-    // and the digest must still be the digest of the request the wire carries —
-    // if the preimage trims something `build` did not, two wire strings share a
-    // digest (the H-6 collision, one field over).
+  it('a hand-built untrimmed id cannot be hashed, and the preimage never folds it', () => {
+    // `build` is not the only authority any more — `hashCourtEscalationRequest`
+    // re-validates (C13), so a hand-built object cannot smuggle a second
+    // spelling past the codec. Two wire strings must never share one digest
+    // (the H-6 collision, one field over); the raw preimage keeps the bytes
+    // distinct, which is the structural half of the same guarantee.
     const built = request();
-    expect(hashCourtEscalationRequest({ ...built, caseId: ` ${CASE_ID} ` }))
-      .toBe(hashCourtEscalationRequest(built));
-    expect(hashCourtEscalationRequest({ ...built, caseId: `${CASE_ID}  ` }))
-      .toBe(hashCourtEscalationRequest(built));
+    expect(() => hashCourtEscalationRequest({ ...built, caseId: ` ${CASE_ID} ` }))
+      .toThrow(/whitespace/);
+    expect(() => hashCourtEscalationRequest({ ...built, caseId: `${CASE_ID}  ` }))
+      .toThrow(/whitespace/);
+    expect(courtEscalationRequestPreimage({ ...built, caseId: ` ${CASE_ID} ` }))
+      .not.toBe(courtEscalationRequestPreimage(built));
+    expect(courtEscalationRequestPreimage({ ...built, caseId: `${CASE_ID}\u3000` }))
+      .not.toBe(courtEscalationRequestPreimage(built));
   });
 
   it('an id that is ONLY whitespace is still refused', () => {
