@@ -38,7 +38,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md) | the protocol paper — architecture, math, security analysis, evaluation, production gates |
 | [`FAQ.md`](docs/FAQ.md) | short answers to common questions |
 | [`GLOSSARY.md`](docs/GLOSSARY.md) | normative domain vocabulary |
-| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 145 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
+| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 146 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
 | [`proofs/`](docs/proofs/) | the mathematical proofs: encoding injectivity, Merkle soundness, tally well-definedness, machine safety (all-n induction over the model checking), attestation soundness — premises registry + reviewer's checking guide |
 | [`THREAT_MODEL.md`](docs/THREAT_MODEL.md) | threat model and security argument |
 | [`CRYPTO_AUDIT.md`](docs/CRYPTO_AUDIT.md) | cryptography literature audit — design choices vs the FROST literature, dispositions |

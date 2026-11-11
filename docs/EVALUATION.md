@@ -156,7 +156,7 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**145 invariants** (`INV-<machine>-<n>`), each extracted from the
+**146 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
 enforcement pointer (`file:line`) and the pinning test. Precision note
 (round-16 external review, finding A-3): the family is *predominantly*
@@ -165,7 +165,7 @@ the invariant family is stated over, INV-SEL-3 is statistical by nature
 (pinned by a paired-derivation statistical differential), and INV-VOTE-14
 is pinned as defense-in-depth only (F-10). The
 invariant↔guard↔test traceability matrix (§12 of that doc) is machine-checked
-via docs/CROSS_CHECK.md: **144/145 (99.3%) carry executable proof** (the one
+via docs/CROSS_CHECK.md: **145/146 (99.3%) carry executable proof** (the one
 open entry, INV-VOTE-14, is a defense-in-depth capacity guard, FINDING-F-10).
 The audit produced 12 findings (F-1…F-12); the substantive F-12 (signing/DKG
 machines lacked a monotonic clock ledger — old-timestamped replays were

@@ -6,7 +6,7 @@
 This is the single artifact a reviewer uses to verify any claim about the
 system. Every meaningful claim from the three claim sources —
 
-1. `docs/FORMAL_INVARIANTS.md` — all 145 `INV-*` invariants;
+1. `docs/FORMAL_INVARIANTS.md` — all 146 `INV-*` invariants;
 2. `docs/FROST_COURT_ORACLE_PAPER.md` — every technical claim (the §6–§7
    universal-confirmation / cohort / batch sections **and** the classic
    ceremony, escrow, and settlement-rail sections);
@@ -63,7 +63,7 @@ breakdown).
 
 | Claim source | Claims | With executable proof | Coverage | Open gaps |
 |---|---|---|---|---|
-| `FORMAL_INVARIANTS.md` (145 INV-*) | 145 | 144 | 99.3% | 1 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10) |
+| `FORMAL_INVARIANTS.md` (146 INV-*) | 146 | 145 | 99.3% | 1 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10) |
 | `FROST_COURT_ORACLE_PAPER.md` | 71 | 68 | 95.8% | 3 (host-side / spec'd protocol work) |
 | `CRYPTO_AUDIT.md` §7 + §8 | 21 | 17 | 81.0% | 4 (spec'd S-1…S-4) |
 | Model-check meta-claims | 7 | 7 | 100% | 0 |
@@ -71,7 +71,7 @@ breakdown).
 | Suite / simulation claims | 4 | 4 | 100% | 0 |
 | Error-taxonomy claims (§15) | 5 | 5 | 100% | 0 |
 | Findings (F-1…F-12 dispositions) | 12 | 7 | 58.3% | 5 (F-5, F-7, F-8, F-10, F-11 — documented conventions/holds) |
-| **Total** | **272** | **259** | **95.2%** | **13 open** |
+| **Total** | **273** | **260** | **95.2%** | **13 open** |
 
 Gaps **closed this round**: 4 — three with new pinning tests (the stale
 `AUDIT-4` pointer / binding-factor message dependence, the F-4 clawback-reason
@@ -81,7 +81,7 @@ Gap register.
 
 ---
 
-## 3. Invariant claims (source a — 145 INV-*)
+## 3. Invariant claims (source a — 146 INV-*)
 
 Each row of the Machine-checkable index with kind `invariant` is one
 invariant of `docs/FORMAL_INVARIANTS.md` §3–§11 (its full statement lives
@@ -331,6 +331,7 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | INV-X-8 | invariant | test | test:__tests__/invariantAssertions.test.ts#rejects out-of-range integers with CourtSessionValidationError; test:__tests__/invariantAssertions.test.ts#u32 is big-endian; test:__tests__/courtSession.test.ts#uses length prefixes instead of ambiguous delimiters |
 | INV-X-9 | invariant | test | test:__tests__/invariantAssertions.test.ts#agrees with the Buffer.compare UTF-8 oracle on all pairs; test:__tests__/invariantAssertions.test.ts#is a total order: antisymmetric and transitive |
 | INV-X-10 | invariant | test | test:__tests__/invariantAssertions.test.ts#the confirmation machine mints its verdict hash with the vote machine; test:__tests__/adversarialCrossModule.test.ts#BY DESIGN: a confirmation verdict and a vote-machine verdict with identical |
+| INV-SETTLE-1 | invariant | test | test:__tests__/liquidEscrow.test.ts#serializes <winner> CHECKSIGVERIFY <group> CHECKSIG; test:__tests__/liquidEscrow.test.ts#is byte-identical in shape to the legacy judge leaf (no new consensus risk); test:__tests__/liquidEscrow.test.ts#refuses a shared winner/group key (authority collapse) |
 | PAPER-ABS-1 | paper | doc | doc:docs/FROST_COURT_ORACLE_PAPER.md |
 | PAPER-ABS-2 | paper | fixture | fixture:__fixtures__/model-check-summary.json#totals.rawThrows=0 |
 | PAPER-ABS-3 | paper | test | test:__tests__/validator.test.ts#accepts a valid FROST attestation event; test:__tests__/batchAttestation.test.ts#accepts a correctly signed batch attestation |

@@ -137,7 +137,7 @@ surfaced by the full contract run.
 | Performance baseline (`docs/benchmarks/BASELINE.md` + medians json) | ✅ | 0 regressions / 0 over-bound vs ±20% gate | ✅ |
 | Committed reproduction record (`docs/benchmarks/repro-log-2026-11-10.txt`) | ✅ | VERDICT block reproduced live this round | ✅ |
 | Claim→evidence index (`docs/CROSS_CHECK.md` + `scripts/cross-check.mjs`) | ✅ | 272 claims / 493 refs resolve, exit 0 | ✅ |
-| Formal invariants (`docs/FORMAL_INVARIANTS.md`, 145 INV-*) | ✅ | pinned by invariant-assertions + model-checking suites | ✅ |
+| Formal invariants (`docs/FORMAL_INVARIANTS.md`, 146 INV-*) | ✅ | pinned by invariant-assertions + model-checking suites | ✅ |
 | Threat model (`docs/THREAT_MODEL.md`) + crypto audit (`docs/CRYPTO_AUDIT.md`) | ✅ | §7 argument skeleton ↔ invariants ↔ anchors | ✅ |
 | Evaluation chapter (`docs/EVALUATION.md`) | ✅ | every number ↔ committed artifact | ✅ |
 | Presentation kit (`docs/presentation/OUTLINE.md`, `FIGURES.md`, `DEMO_SCRIPT.md`) | ✅ | demo beats executed live this round | ✅ |
