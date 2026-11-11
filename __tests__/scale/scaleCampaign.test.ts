@@ -25,8 +25,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { SIZES, type CampaignResult, type MetricValue } from './corpus';
+import { SIZES, percentile, timingMetrics, type CampaignResult, type MetricValue } from './corpus';
 import { CAMPAIGNS, CORPUS_NAMES, declaredSizes, runCampaign } from './index';
+import { TRANSPORT_ROWS } from './escalationTransportCorpus';
+import { GRID_CELLS } from './ledgerBarrierCorpus';
 
 /** Assert a campaign is green and its failure detail is attached to the message. */
 function expectGreen(result: CampaignResult): void {
@@ -62,6 +64,9 @@ describe('scale campaign: declared corpus table', () => {
     expect(SIZES.witnessEvents).toEqual({ fast: 250, full: 10_000 });
     expect(SIZES.epochBatches).toEqual({ fast: 40, full: 1_000 });
     expect(SIZES.finalityChains).toEqual({ fast: 100, full: 5_000 });
+    expect(SIZES.escalationRequests).toEqual({ fast: 400, full: 200_000 });
+    expect(SIZES.barrierStates).toEqual({ fast: 300, full: 100_000 });
+    expect(SIZES.bondSequences).toEqual({ fast: 200, full: 100_000 });
     expect(declaredSizes('fast')).toEqual({
       confirmation: 250,
       tally: 15_000,
@@ -72,8 +77,30 @@ describe('scale campaign: declared corpus table', () => {
       witness: 250,
       epochRotation: 40,
       finality: 100,
+      escalationTransport: 400,
+      ledgerBarrier: 300,
+      bondAlgebra: 200,
     });
     expect(Object.keys(CAMPAIGNS).sort()).toEqual([...CORPUS_NAMES].sort());
+  });
+});
+
+describe('scale campaign: scaffolding', () => {
+  it('summarises a 250,000-sample timing array without blowing the argument limit', () => {
+    // Regression lock: `timingMetrics` used `Math.max(...samples)`, which throws
+    // `RangeError: Maximum call stack size exceeded` once a campaign records more
+    // per-unit samples than the engine's argument limit (~125k here). The
+    // transport campaign records one per unit, so a 200,000-unit FULL run died in
+    // the summary rather than in the corpus.
+    const samples = Array.from({ length: 250_000 }, (_, index) => index);
+    const summary = timingMetrics(samples);
+    expect(summary.maxMs).toBe(249_999);
+    expect(summary.medianMs).toBe(124_999);
+    expect(summary.meanMs).toBe(124_999.5);
+    expect(summary.p95Ms).toBe(237_499);
+    // The empty sample set stays well-defined (no -Infinity from a bare reduce).
+    expect(timingMetrics([])).toMatchObject({ maxMs: 0, medianMs: 0, p95Ms: 0, meanMs: 0 });
+    expect(percentile([], 50)).toBe(0);
   });
 });
 
@@ -229,5 +256,82 @@ describe('scale campaign: verdict finality chains', () => {
     expect(num(campaign, 'terminalWitnessRejections')).toBe(num(campaign, 'chains'));
     expect(num(campaign, 'overturns')).toBeGreaterThan(0);
     expect(num(campaign, 'flipFlops')).toBeGreaterThan(0);
+  });
+});
+
+describe('scale campaign: escalation-request transport (v0.14.0 wire)', () => {
+  it('fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement', { timeout: 300_000 }, () => {
+    const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['escalationTransport'] });
+    const campaign = result.results[0]!;
+    expectGreen(campaign);
+    // T1: no raw throw escapes any stage.
+    expect(num(campaign, 'rawErrors')).toBe(0);
+    // T2: every row of the wire matrix fires (the FAST corpus rotates all of them).
+    expect(num(campaign, 'rowsFired')).toBe(TRANSPORT_ROWS.length);
+    expect(num(campaign, 'typedRefusals')).toBeGreaterThan(0);
+    // T4: no two distinct preimages ever share a request hash.
+    expect(num(campaign, 'digestCollisions')).toBe(0);
+    expect(num(campaign, 'distinctDigests')).toBeGreaterThan(0);
+    // T5: no accepted request carries a claim the host binding contradicts.
+    expect(num(campaign, 'bindingViolations')).toBe(0);
+    // The full pipeline runs: wire → binding → reducer.
+    expect(num(campaign, 'acceptedWire')).toBeGreaterThan(0);
+    expect(num(campaign, 'rejectedWire')).toBeGreaterThan(0);
+    expect(num(campaign, 'mappedEvents')).toBeGreaterThan(0);
+    expect(num(campaign, 'bindingRefusals')).toBeGreaterThan(0);
+    expect(num(campaign, 'reducerAccepted')).toBeGreaterThan(0);
+    expect(num(campaign, 'reducerRefused')).toBeGreaterThan(0);
+    expect(num(campaign, 'roundTrips')).toBeGreaterThan(0);
+    // T7: the TextEncoder surrogate hazard is demonstrated, not assumed.
+    expect(num(campaign, 'surrogateHazards')).toBeGreaterThan(0);
+  });
+});
+
+describe('scale campaign: restored-snapshot ledger barriers', () => {
+  it('accepts every reducer-reachable state and matches the independent oracle on every forged one', { timeout: 300_000 }, () => {
+    const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['ledgerBarrier'] });
+    const campaign = result.results[0]!;
+    expectGreen(campaign);
+    // B1: no false refusal — a restorable snapshot must never be bricked.
+    expect(num(campaign, 'reachableRefused')).toBe(0);
+    expect(num(campaign, 'reachableAccepted')).toBe(num(campaign, 'reachableBarrierRuns'));
+    // B2: the barriers agree with the independent oracle on every run.
+    expect(num(campaign, 'barrierDisagreements')).toBe(0);
+    expect(num(campaign, 'barrierAgreements')).toBe(num(campaign, 'forgedBarrierRuns'));
+    // Both outcomes are actually exercised, and the whole grid gets visited.
+    expect(num(campaign, 'forgedAccepted')).toBeGreaterThan(0);
+    expect(num(campaign, 'forgedRefused')).toBeGreaterThan(0);
+    expect(num(campaign, 'oracleIllegalRuns')).toBeGreaterThan(0);
+    expect(num(campaign, 'untypedRefusals')).toBe(0);
+    expect(num(campaign, 'cellsVisited')).toBe(SIZES.barrierStates.fast);
+    expect(num(campaign, 'gridCells')).toBe(GRID_CELLS.length);
+    // Every phase of the machine is in the stock, terminal ones included.
+    expect(num(campaign, 'stockPhases')).toBe(11);
+    // The mass-vote barrier is exercised too (it is ladder-only).
+    expect(num(campaign, 'barrier_massVoteLedger')).toBeGreaterThan(0);
+  });
+});
+
+describe('scale campaign: per-round bond consumption', () => {
+  it('binds one hash to one index, never re-consumes a witness, and matches the 3^R schedule', { timeout: 300_000 }, () => {
+    const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['bondAlgebra'] });
+    const campaign = result.results[0]!;
+    expectGreen(campaign);
+    expect(num(campaign, 'rawErrors')).toBe(0);
+    // A1/A2/A3: every illegal press is a typed refusal, and both halves run.
+    expect(num(campaign, 'illegalProbes')).toBeGreaterThan(0);
+    expect(num(campaign, 'typedRefusals')).toBe(num(campaign, 'illegalProbes'));
+    expect(num(campaign, 'legalEscalations')).toBeGreaterThan(0);
+    expect(num(campaign, 'collisionProbes')).toBe(SIZES.bondSequences.fast);
+    expect(num(campaign, 'reuseProbes')).toBeGreaterThan(0);
+    expect(num(campaign, 'membershipBondProbes')).toBeGreaterThan(0);
+    expect(num(campaign, 'roundRewindProbes')).toBeGreaterThan(0);
+    expect(num(campaign, 'hostPolicyProbes')).toBeGreaterThan(0);
+    // A4/A5: the schedule is checked against the geometric series.
+    expect(num(campaign, 'scheduleChecks')).toBeGreaterThan(0);
+    expect(num(campaign, 'consumptionChecks')).toBeGreaterThan(0);
+    // Every target round 1..5 is exercised, so the deepest rung is really run.
+    expect(num(campaign, 'distinctRounds')).toBe(5);
+    expect(num(campaign, 'maxRoundsReached')).toBe(5);
   });
 });

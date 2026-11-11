@@ -55,6 +55,12 @@ export const SIZES = {
   epochBatches: { fast: 40, full: 1_000 },
   /** campaign 9 — verdict finality chains (challenge windows + escalations). */
   finalityChains: { fast: 100, full: 5_000 },
+  /** campaign 10 — escalation-request transport fuzz (v0.14.0 wire). */
+  escalationRequests: { fast: 400, full: 200_000 },
+  /** campaign 11 — restored-snapshot ledger/barrier sweep (v0.14 surface). */
+  barrierStates: { fast: 300, full: 100_000 },
+  /** campaign 12 — per-round bond-consumption algebra (R31/R33). */
+  bondSequences: { fast: 200, full: 100_000 },
   /** campaign 5 — single-juror clock draws feeding the chi-square check. */
   chiSquareDraws: { fast: 20_000, full: 100_000 },
 } as const satisfies Record<string, SizeSplit>;
@@ -224,11 +230,15 @@ export function percentile(samples: readonly number[], p: number): number {
 export function timingMetrics(samples: readonly number[]): Record<string, number> {
   const total = samples.reduce((sum, value) => sum + value, 0);
   const round = (value: number): number => Math.round(value * 1000) / 1000;
+  // `Math.max(...samples)` throws `RangeError: Maximum call stack size exceeded`
+  // once a campaign records more than ~125k per-unit samples (the transport
+  // campaign records one per 200,000 units). Fold instead of spread.
+  const max = samples.reduce((highest, value) => (value > highest ? value : highest), 0);
   return {
     totalMs: round(total),
     medianMs: round(percentile(samples, 50)),
     p95Ms: round(percentile(samples, 95)),
-    maxMs: round(samples.length === 0 ? 0 : Math.max(...samples)),
+    maxMs: round(samples.length === 0 ? 0 : max),
     meanMs: round(samples.length === 0 ? 0 : total / samples.length),
   };
 }

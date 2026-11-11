@@ -21,11 +21,12 @@
  *                          for --full, docs/benchmarks/campaign-<date>-fast.json for --fast)
  *   --no-write             print only, do not touch the filesystem
  *   --only <a,b,c>         restrict to campaigns (confirmation,tally,merkle,validator,
- *                          selection,encoding,witness,epochRotation,finality)
+ *                          selection,encoding,witness,epochRotation,finality,
+ *                          escalationTransport,ledgerBarrier,bondAlgebra)
  *   --seed <n>             campaign seed (default 20261111)
  *   --events <n> / --sequences <n> / --tallies <n> / --batches <n> / --draws <n> /
  *   --encodings <n> / --witnesses <n> / --rotations <n> / --chains <n> /
- *   --chi-square <n>
+ *   --requests <n> / --states <n> / --bond-sequences <n> / --chi-square <n>
  *                          per-campaign corpus-size override (the documented split)
  *   --merge                merge into an existing artifact at --out instead of
  *                          replacing it (split invocations, one committed file)
@@ -60,14 +61,27 @@ const OVERRIDE_FLAGS = {
   '--witnesses': 'witness',
   '--rotations': 'epochRotation',
   '--chains': 'finality',
+  '--requests': 'escalationTransport',
+  '--states': 'ledgerBarrier',
+  '--bond-sequences': 'bondAlgebra',
 };
+
+/** Widest campaign name, so the summary table never wraps. */
+const NAME_WIDTH = Math.max(
+  ...[
+    'confirmation', 'tally', 'merkle', 'validator', 'selection', 'encoding',
+    'witness', 'epochRotation', 'finality', 'escalationTransport',
+    'ledgerBarrier', 'bondAlgebra',
+  ].map((name) => name.length),
+);
 
 function usage() {
   console.log(`usage: npx tsx scripts/campaign/run-campaign.mjs [--fast|--full] [--json]
                           [--out <path>] [--no-write] [--only a,b,c] [--seed <n>] [--merge]
                           [--sequences n] [--tallies n] [--batches n] [--events n]
                           [--draws n] [--encodings n] [--witnesses n] [--rotations n]
-                          [--chains n] [--chi-square n]`);
+                          [--chains n] [--requests n] [--states n] [--bond-sequences n]
+                          [--chi-square n]`);
 }
 
 function parseArgs(argv) {
@@ -126,7 +140,7 @@ function fmtMs(ms) {
 function printResult(result) {
   const failed = result.failedChecks === 0 ? 'ok' : 'FAIL';
   console.log(
-    `  ${result.name.padEnd(13)} ${String(result.corpus).padStart(9)} ${result.units.padEnd(10)} `
+    `  ${result.name.padEnd(NAME_WIDTH)} ${String(result.corpus).padStart(9)} ${result.units.padEnd(10)} `
     + `${String(result.checks).padStart(9)} ${String(result.failedChecks).padStart(7)} `
     + `${fmtMs(result.wallMs).padStart(9)}  ${failed}`,
   );
@@ -143,10 +157,10 @@ function printFailures(result, limit = 3) {
 
 function header() {
   console.log(
-    `\n  ${'campaign'.padEnd(13)} ${'corpus'.padStart(9)} ${'unit'.padEnd(10)} `
+    `\n  ${'campaign'.padEnd(NAME_WIDTH)} ${'corpus'.padStart(9)} ${'unit'.padEnd(10)} `
     + `${'checks'.padStart(9)} ${'failed'.padStart(7)} ${'wall'.padStart(9)}`,
   );
-  console.log(`  ${'-'.repeat(70)}`);
+  console.log(`  ${'-'.repeat(NAME_WIDTH + 47)}`);
 }
 
 /** Total wall time across the corpora currently in an artifact. */
@@ -234,7 +248,7 @@ async function main() {
   for (const result of failing) printFailures(result);
 
   const totalCorpus = run.results.reduce((sum, result) => sum + result.corpus, 0);
-  console.log(`  ${'-'.repeat(70)}`);
+  console.log(`  ${'-'.repeat(NAME_WIDTH + 47)}`);
   console.log(
     `  ${run.corporaRun} campaign(s), ${totalCorpus} corpus units, ${run.failedChecks} failed check(s), `
     + `wall ${fmtMs(run.wallMs)}, seed ${run.seed}\n`,
