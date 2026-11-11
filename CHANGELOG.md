@@ -95,6 +95,35 @@ frozen.
   path — `deriveCourtEconomicCap()` was listed as if it shipped here (r29-9);
   invariants 156 → **157**; suite 1,546 → **1,561** (66 files).
 
+### Added — economic re-verify, round 30 (`docs/proofs/economics/06-expert-verify.tex.md`)
+
+- **`quorumEconomics.ts` (new, additive):** the capture arithmetic of a confirm
+  quorum as pure functions of state the machine already records —
+  `captureProbability({panelSize, quorum, adversaryWeight})` (exact binomial
+  upper tail, BigInt rationals over `ρ_den^N`, Model D of 05 §1.1) and
+  `quorumCapCorrection({...})` (κ, the sub-supermajority factor: 4.6364 = 51/11
+  at 3-of-5, ρ = ⅓). Exported from the package root next to `confirmSupermajority`.
+  **The module header states the contract the cap needs:** κ is *not* a divisor
+  for `V_max` — the cap of 05 (5.2) is the π = ½ slice of a family that a weaker
+  quorum *tightens* (06 §3, r30-3) — it is the number a host needs for the
+  ownership capture table and the P+ε free-attack threshold. No behaviour change;
+  13 tests pin every published tail and κ.
+- **`docs/proofs/economics/06-expert-verify.tex.md`:** five economic attacks on
+  the post-fix layer, each with its model change, EV and verdict — r30-1 (the
+  escalation bond is a *membership* test, so the ladder is a free option:
+  farming −2.40 %→−1.86 % of $V$ at the shipped cap, venue/griefer 0.86×→54.1×
+  at the protocol cap), r30-2 (a frozen 135-seat config churned to 45 seats is
+  2.47× short of its own invariant), r30-3 (**SAFE** — the brief's premise is
+  false; κ is slack), r30-4 (idle decay replaced the reset cliff with a ramp
+  that dominates it at every cycle: +26.0 % at 6/6), r30-5 (**SAFE** on the
+  label, grandfathering bounded by r30-2). Registered fixes: per-round bond
+  binding (wire, v0.13), anchored decay + penalty ageing (host), cohort check
+  (host), inventory sweep (host).
+- `scripts/review-quant/economics.mjs` §6 reproduces every number in 06;
+  `README`/`00-model`/`02-ladder`/`04-goodhart` carry the corrections at the row
+  (spec-pinned price curve, superseded idle-expiry clause), and
+  `REVIEW_ROUND_3.md` §9 re-grades r29-3 from LOW to MAJOR (economic).
+
 ## [0.12.0] — 2026-11-11
 
 ### Changed — review-round-2 hardening (API-visible)

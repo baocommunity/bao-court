@@ -469,3 +469,22 @@ general lesson worth carrying into round 4: *every binding asserted in prose mus
 be asserted in the reducer, per-actor, or the audit artifact records the wrong
 actor* — and an independent property checker that mirrors the implementation
 cannot catch the mirror.
+
+---
+
+## 9. Round-30 follow-up (economic re-verify)
+
+Round 4 attacked this round's fixes *structurally*. The complementary pass —
+what each fix did to the **incentive** layer, with the shipped parameters read
+back from code — is `docs/proofs/economics/06-expert-verify.tex.md` (r30-1…r30-5).
+Two of its results land back on this document:
+
+| This round's residual | Round-30 status |
+|---|---|
+| **r29-3** — one challenge bond funds every round of the same case (LOW, "bounded at 5 rounds") | **re-graded MAJOR (economic), r30-1.** The witness is a bond *membership* test, not a consumption test, so the shipped marginal escalation cost is 0 rather than the spec's $3^{r+1}b_0$. Consequence: the ladder is a free option — the rational challenger escalates to the cap, farming's deterrent falls from −2.40 % to −1.86 % of $V$ at the shipped cap (−0.543 % at the protocol cap), and the venue/griefer cost ratio goes from 0.86× at round 2 to 54.1× at round 5. Fix registered: `accept_challenge.round` + `escalate.bondRound` (v0.13), the per-round `calculateBondAmount`, and the policy rule `maxLadderRounds ≤ ⌊ln(ρ/(ρ+β))/ln a_f⌋`. |
+| **r29-7 / r29-8** — cap on a declared value; ladder read live | **closed upstream** (`bao.markets` `7e71dd197`: server-side exposure basis + per-market ladder freeze). What the fix leaves is r30-2: the frozen config is a *ceiling*, and the panel actually seated can be smaller (round rosters are host-supplied, bounded only into $[3,\text{MAX}]$), so a 135-seat config churned to 45 seats is **2.47×** short of its own invariant. |
+| **r29-1** — the bond is bound to the challenger | **holds** economically as well as structurally: the binding is what makes the escalation *right* attributable, and 06 §1 assumes it. |
+
+None of these changes this round's structural verdicts. They change the
+*severity* of one residual (r29-3) and add a second measurement to another
+(r29-8 → r30-2).
