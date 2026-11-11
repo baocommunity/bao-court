@@ -22,6 +22,17 @@ Every residual gets a **disposition** (fixed here / documented + pinned / host
 fix with an owner and a trigger / deferred to a named version). Nothing is left
 as a bare "registered".
 
+**Post-publication note (round 6).** Two later changes supersede statements in
+this document: **r37-1** (#108) taught the escalation log's *round bound* about
+the `ladder_pending` half-step (this document's §2.1 describes the completeness
+rule, which already had it), and **r40-1/r40-2** (#109) added the challenge-ledger
+and log barriers to `escalate` and `open_ladder_round`. So §2.4's "the
+escalate-time barrier" is now a *three*-entry barrier (`escalate`,
+`open_ladder_round`, `finalize`), and the r38-1 barrier this document describes
+then ran at `resolve_round`/`finalize` only — which is exactly the gap round 6
+found. The record below is kept as written; `docs/REVIEW_ROUND_6.md` is the
+current statement.
+
 **What was executed for this audit**
 
 | Check | Result |

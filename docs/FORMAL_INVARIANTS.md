@@ -588,10 +588,19 @@ ladder_pending → ladder_vote_open → ladder_vote_closed → resolve paths)` w
   cannot reintroduce the duplicate. The bond-ownership witness hash is bound so
   observers can re-verify (interface `CourtChallengeRecord`, lines 111-122; the
   witness-vs-UTXO check is the host's pre-dispatch duty — boundary, not machine).
+  **The invariant is per case and per index**, and it is re-derived at every entry
+  that READS the pool: `accept_challenge` (own rule), `escalate` and
+  `open_ladder_round` (r40-1: the `(idx, bondProofHash)` witness test enumerates
+  this pool, so the barrier must run before a rung is opened or a seat spent),
+  `resolve_round` (clawback attribution) and `finalize` (verdict evidence).
+  **Boundary (r40-3):** uniqueness is not ownership — a *derivable* witness
+  (`hash(bondTxid)`) is preemptable, and the first registration wins, so the host
+  cannot lock a payer out (bond UTXO owner key == submitting juror's key).
   Tests: `courtConfirmationMachine.test.ts` › 'rejects challenges after the
   deadline, off-roster, or malformed'; `reviewRound5.test.ts` › 'one bond
   witness cannot buy TWO challengers\' standing (r38-1, EXPLOITABLE)',
-  '… the restore barrier refuses a duplicated bond hash'.
+  '… the restore barrier refuses a duplicated bond hash'; `reviewRound6.test.ts`
+  › 'the barrier runs at EVERY entry that READS the challenge pool'.
 - **INV-CONF-18 (no-challenge routing).** `close_challenge_window` routes to
   `ladder_pending` iff `|challenges| > 0`, else `fee_settlement` with the
   provisional verdict `{outcome: proposedOutcome, upheld: true}` (lines
@@ -772,11 +781,20 @@ escalate {
   barrier a restored `fee_settlement` snapshot could append a fabricated record
   and finalize on top of it, because the verdict hash deliberately does not cover
   the log. Guards: `confirmationMachineCore.ts:313-413`
-  (`assertValidEscalationLog`), called at
-  `confirmationMachineHandlers.ts:692`. Tests: `reviewRound3.test.ts`
+  (`assertValidEscalationLog`), called at `onEscalate`,
+  `onOpenLadderRound` and `onFinalize` (r40-2 added the rung-spend entry:
+  `open_ladder_round` is where the pending escalation costs a panel seat, and it
+  was the one rung-opening transition with no barrier — a restored
+  `ladder_pending` snapshot whose record had been deleted still opened the round
+  and un-consumed its bond). The «round the case never opened» bound is
+  **redundant with completeness** on a consistent log (a consecutive `2..k` log
+  has length `k−1`, and completeness pins the length to the opened count); it
+  exists as the belt that r37-1 had to correct. Tests: `reviewRound3.test.ts`
   › 'a forged escalation record on a restored snapshot is refused at finalize';
   › 'a host-authority record cannot appear on a case that never allowed it';
-  › 'a pre-0.12 snapshot (no escalationLog) still finalizes'.
+  › 'a pre-0.12 snapshot (no escalationLog) still finalizes';
+  `reviewRound6.test.ts` › '(r40-2) a strict log EMPTIED at ladder_pending is
+  refused at open_ladder_round'.
 - **INV-ESC-9 (per-round bond consumption — R31, r30-1).** The witness may carry
   a per-round bond (`roundBondProofHash`): a bond posted for the round being
   opened, bound to it by the `roundIndex === ladderRound + 1` guard and by the
@@ -787,10 +805,15 @@ escalate {
   refused (break-glass `hostEscalation` cases excepted: the host may already
   escalate with no bond at all, so charging the challenger prices nothing). A
   `host` record must never carry one. `assertValidEscalationLog` re-derives all
-  three rules at `finalize`, so a restored snapshot cannot re-open the option,
-  and the log's `MAX_LADDER_ROUNDS` bound bounds the consumption set. Guards:
-  `confirmationMachineHandlers.ts:566-620` (`onEscalate`),
-  `confirmationMachineCore.ts:377-430` (`assertValidEscalationLog`). Tests:
+  three rules at `finalize`, `escalate` and `open_ladder_round`, so a restored
+  snapshot cannot re-open the option, and the log's `MAX_LADDER_ROUNDS` bound
+  bounds the consumption set. `escalate` and `open_ladder_round` also re-derive
+  the CHALLENGE-ledger uniqueness the membership-bond rule enumerates (r40-1:
+  without it a restored ledger binding one hash to two indices satisfies the
+  `(idx, bondProofHash)` test for a juror that posted nothing). Guards:
+  `confirmationMachineHandlers.ts:onEscalate`, `onOpenLadderRound`,
+  `confirmationMachineCore.ts` (`assertValidEscalationLog`,
+  `assertValidConfirmationLedger`). Tests:
   `perRoundBond.test.ts` (the whole compatibility matrix, `docs/PER_ROUND_BOND.md`);
   `modelCheckingCore.ts` P2 (consumption invariant on every reachable state).
   **Round-4 refinements (R33):** the reducer and the barrier also refuse a
@@ -799,8 +822,9 @@ escalate {
   membership bond), and the barrier requires the ledger to be COMPLETE — one
   record per opened round whenever the case has records, and unconditionally
   under `requireRoundBond` (r33-5), because a deleted record un-consumes the bond
-  it paid with. `onEscalate` re-runs the barrier before a rung opens, so a
-  tampered snapshot is refused before a 3× panel is seated rather than at
+  it paid with. `onEscalate` AND `onOpenLadderRound` re-run the barrier before a
+  rung opens (`open_ladder_round` is where the seat is actually spent, r40-2), so
+  a tampered snapshot is refused before a 3× panel is seated rather than at
   `finalize`. The witness is a UNIQUENESS test, not a payment test: the host
   binds it to an escrow and to the challenger (r33-2/2b/3, registered).
   Tests: `reviewRound4.test.ts` › 'refuses ANOTHER challenger's accepted
@@ -1438,7 +1462,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-CONF-14 | terminal absorption + abort | courtConfirmationMachine.ts:729-741 | courtConfirmationMachine.test.ts › aborts from any non-terminal phase… |
 | INV-CONF-15 | quorum gate (economic) | courtConfirmationMachine.ts:795-801 | courtConfirmationMachine.test.ts › fails closed when the confirm quorum never formed |
 | INV-CONF-16 | one confirmation per idx | courtConfirmationMachine.ts:768-776,511-520 | courtConfirmationMachine.test.ts › treats identical redelivery… |
-| INV-CONF-17 | challenge bond binding + one bond witness, one owner (r38-1) | courtConfirmationMachine.ts:823-843; confirmationMachineHandlers.ts:197-210; confirmationMachineCore.ts:550-578 | courtConfirmationMachine.test.ts › rejects challenges after the deadline…; reviewRound5.test.ts › one bond witness cannot buy TWO challengers' standing |
+| INV-CONF-17 | challenge bond binding + one bond witness, one owner (r38-1), re-derived at every pool-reading entry (r40-1) | courtConfirmationMachine.ts:823-843; confirmationMachineHandlers.ts:onAcceptChallenge/onEscalate/onOpenLadderRound; confirmationMachineCore.ts (assertValidConfirmationLedger) | courtConfirmationMachine.test.ts › rejects challenges after the deadline…; reviewRound5.test.ts › one bond witness cannot buy TWO challengers' standing; reviewRound6.test.ts › the barrier runs at EVERY entry that READS the challenge pool |
 | INV-CONF-18 | no-challenge routing | courtConfirmationMachine.ts:864-874 | courtConfirmationMachine.test.ts › routes to fee_settlement… |
 | INV-CONF-19 | consecutive rounds + cap | courtConfirmationMachine.ts:882-897 | multiRoundLadder.test.ts › hand-restored snapshots…; courtConfirmationMachine.test.ts › enforces consecutive rounds… |
 | INV-CONF-20 | round deadline validity | courtConfirmationMachine.ts:898-899 | courtConfirmationMachine.test.ts › enforces consecutive rounds… |
@@ -1458,7 +1482,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-ESC-5 | bond bound to an accepted challenge; host behind frozen policy | confirmationMachineHandlers.ts:544-547,559-573 | escalationWitness.test.ts › bond must match; host is break-glass |
 | INV-ESC-6 | escalation witness log append-only (+ pre-0.12 normalisation) | confirmationMachineHandlers.ts:584-588; courtConfirmationMachine.ts:407-412 | escalationWitness.test.ts › witness recorded append-only; legacy snapshot normalises |
 | INV-ESC-7 | `ladder_pending` unreachable without a witness | confirmationMachineHandlers.ts:487-588 | escalationWitness.test.ts › ladder_pending is reachable ONLY through a witnessed escalation |
-| INV-ESC-8 | witness log tamper barrier at finalize + escalate; completeness (one record per opened round), strict cases never emptied, round bound includes the `ladder_pending` rung (r37-1) | confirmationMachineCore.ts:328-470; confirmationMachineHandlers.ts:521,755 | reviewRound3.test.ts › forged escalation record refused at finalize; reviewRound4.test.ts › every-record / last-record deletion refused; mutationClosuresV013.test.ts › a legal `ladder_pending` snapshot is accepted |
+| INV-ESC-8 | witness log tamper barrier at finalize + escalate + open_ladder_round; completeness (one record per opened round), strict cases never emptied, round bound includes the `ladder_pending` rung (r37-1), seat never spent on a deleted record (r40-2) | confirmationMachineCore.ts (assertValidEscalationLog); confirmationMachineHandlers.ts:onEscalate/onOpenLadderRound/onFinalize | reviewRound3.test.ts › forged escalation record refused at finalize; reviewRound4.test.ts › every-record / last-record deletion refused; mutationClosuresV013.test.ts › a legal `ladder_pending` snapshot is accepted; reviewRound6.test.ts › a strict log EMPTIED at ladder_pending is refused at open_ladder_round |
 | INV-ESC-9 | per-round bond: well-formed, never a membership bond (own OR another juror's), never consumed twice, mandatory under `requireRoundBond` (R31 + R33) | confirmationMachineHandlers.ts:566-620; confirmationMachineCore.ts:377-430 | perRoundBond.test.ts › one bond cannot fund every round; reviewRound4.test.ts › foreign membership bond refused (reducer + finalize) |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |

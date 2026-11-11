@@ -42,6 +42,13 @@ CourtConfirmationMachineState.requireRoundBond : boolean   (frozen policy)
    r33-5): one record per escalation, enforced whenever the case has any record
    and unconditionally under `requireRoundBond`, so a restored snapshot cannot
    delete an entry to un-consume the bond it paid with.
+6. the **challenge pool the witness test reads is itself the ledger the machine
+   could have produced** (R40, r40-1). Rule 3 above and the `(idx,
+   bondProofHash)` test both enumerate `state.challenges`, so `escalate`
+   re-derives the challenge-ledger uniqueness (r38-1) before opening a rung —
+   without it a restored ledger binding one hash to two indices satisfies the
+   pair test for a juror that posted nothing, and a *free* rung is opened on a
+   bond its nominal owner still holds.
 
 The membership pool the rules above read has its own uniqueness invariant
 (R38, r38-1): `accept_challenge` binds one `bondProofHash` to at most ONE roster
@@ -49,18 +56,41 @@ index per case, and `assertValidConfirmationLedger` re-checks it on a restored
 ledger. Without it the whole list was attackable in two steps — mint an
 "accepted challenge" that reuses a bonded juror's hash (the ledger deduped by
 `idx` only), then escalate on `(idx, bondProofHash)`, which is exactly the pair
-r29-1 taught the reducer to require. One paid bond bought unlimited standing. A
-host whose proof derivation can collide across jurors (a hash of the funding
+r29-1 taught the reducer to require. One paid bond bought unlimited standing.
+
+The binding is **per case and per index**: a juror holds at most one challenge in
+a case, one bond witness buys one challenger's standing *in that case*, and the
+same hash may be cited by a different case (there is no cross-case memory here —
+r33-3, the host's registry). That is deliberate: the machine's registry is
+`state.challenges`, and a cross-case ledger is not a state this package can see.
+
+A host whose proof derivation can collide across jurors (a hash of the funding
 transaction, which a batch payout shares) must mix the juror index into the
-witness.
+witness. Note *why* that is mandatory rather than tidy: a **derivable** witness is
+**preemptable**. `hash(bondTxid)` is computable the moment the bond is on chain,
+and uniqueness is first-come-first-served, so a juror that owns no bond can
+register it under its own index and lock the payer out (R40, r40-3). The machine
+cannot tell owner from copier — the state carries no idx→pubkey registry (r38-3)
+— so the host's bond verifier must bind the witness to the **event author**, and
+v0.14's `accept_challenge` pubkey makes it re-derivable.
 
 The hash is bound to the round by construction: the witness's `roundIndex` must
 open exactly `ladderRound + 1`, the record stores that round, and the log is
 append-only, so "one fresh witness per rung" is a property of the state, not of
-the host API. `assertValidEscalationLog` (the barrier `finalize` re-runs **and**
-`escalate` now re-runs before a rung opens) re-derives all five rules, so a
-hand-restored snapshot cannot re-open the option by editing the log. The log is
+the host API. `assertValidEscalationLog` (the barrier `finalize` re-runs, and that
+**`escalate` and `open_ladder_round` re-run before a rung is opened or a panel
+seat is spent**) re-derives all six rules, so a hand-restored snapshot cannot
+re-open the option by editing the log — and `escalate`/`open_ladder_round` also
+re-derive the challenge-ledger uniqueness that rules 3 and 6 depend on. The log is
 bounded by `MAX_LADDER_ROUNDS` (5), so the consumption set is bounded too.
+
+A restored snapshot at **`ladder_pending`** is a legal state and every barrier
+accepts it (R37, r37-1: `escalate` appends the record for `ladderRound + 1` and
+`open_ladder_round` advances `ladderRound`, so the half-step carries one record
+naming `ladderRound + 1`; the completeness rule accounted for it and the round
+bound did not, which made hosts refuse the very snapshots the restore contract
+told them to restore). The definition is **one record per OPENED round** —
+`ladderRound − 1`, or `ladderRound` while a rung is pending.
 
 `hostEscalationEvent` (break-glass) still carries **no** witness: a host record
 must have `roundBondProofHash === null`, exactly like its other challenger
@@ -129,9 +159,11 @@ opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
 ## What the host must do
 
 1. **New deployments:** create confirmation machines with
-   `requireRoundBond: true`. Nothing else changes in the reducer. Until this is
-   wired the deployment rides the **default** (`false` = the r30-1 free option,
-   r33-4) — the hosted package vendors v0.12.0 today, so no live case is strict.
+   `requireRoundBond: true`. Nothing else changes in the reducer. Until a
+   deployment opts in it rides the **default** (`false` = the r30-1 free option,
+   r33-4). The shipped host opted in at R39 (`BAO_COURT_REQUIRE_ROUND_BOND=0` is
+   the explicit legacy opt-out) and vendors bao-court v0.13.1, so a host case is
+   strict unless an operator says otherwise.
 2. **Post and verify a bond per round, and bind it to the challenger.** The
    machine can only see that a hash is fresh; `accept_round_bond`-style
    verification (or a globally unique proof-hash registry) is what makes it a
@@ -148,8 +180,13 @@ opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
    safe cap (6/4/2, clamped to the machine ceiling 5). `ladderCapWithinBound`
    returns the verdict plus both numbers for a refusal message; its `ok` is
    sign-based (`cap < flipRound`), and `derivedCap = 0` means **no depth is
-   safe** — refuse the ladder (R33, r33-6). No host measures `a_f` yet, which is
-   why r33-7 is open.
+   safe** — refuse the ladder (R33, r33-6). Read the SIGN-BASED verdict, not the
+   two integers: composing `cap <= derivedCap` is a different predicate, and it
+   blesses a break-even rung (`E[π] = 0`) whenever the boundary is an exact
+   integer — unreachable at ρ = β, reachable as soon as they differ (R40, r40-4).
+   The host gates the *assumed* accuracy (0.85) at creation since R39, which is
+   not a measurement: r33-7 stays open, and the boot backfill / NULL fallback
+   paths still write the depth from the unbounded config (r40-5).
 
 ## Tests
 
@@ -168,6 +205,13 @@ opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
   ledger order/duplicates/gaps/mismatched challenger, the escalate-time barrier,
   and the registered limits (break-glass exemption, the unverifiable
   `challengerPubkey`).
+- `__tests__/reviewRound6.test.ts` — the R40 attacks on the *barriers*: the
+  challenge-ledger re-derivation at `escalate` and `open_ladder_round` (r40-1),
+  the deleted record at `ladder_pending` (r40-2), the barrier-at-every-entry
+  matrix (5 readers pinned, 3 non-readers stated), the cross-case and collision
+  semantics, the preemption residual (r40-3), and the **legal-state hunt** — a
+  490-state walk over every policy/ladder/authority combination asserting that no
+  reducer-reachable state is refused by either barrier.
 - `__tests__/ladderEconomics.test.ts` — the derived cap and flip round against
   06's published numbers, the EV sign at the boundary, monotonicity, and the
   bond schedule.
@@ -189,7 +233,9 @@ opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
   returns, and the forfeit path is unchanged.
 - `maxLadderRounds` remains a constant per case; the derived bound is a
   pre-flight rule, not something the machine recomputes from a measured `a_f`.
-  Nothing checks the frozen depth against the bound at creation (r33-7).
+  The host gates the depth it FREEZES at creation since R39, but against an
+  ASSUMED accuracy (0.85, env-overridable), and two write paths bypass that gate
+  (boot backfill, NULL fallback — r40-5). A measured `a_f` is still r33-7.
 - `roundBondProofHash` is a uniqueness witness, not a payment witness (r33-2),
   it can be claimed by another bonded challenger before its owner uses it
   (r33-2b), and it is expendable once per case (r33-3). All three need an

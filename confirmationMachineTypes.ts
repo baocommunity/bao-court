@@ -69,6 +69,13 @@ export interface CourtChallengeRecord {
    * standing. A host whose proof derivation can collide across jurors (e.g. a
    * hash of the funding transaction, which a batch payout shares) must mix the
    * juror index into the witness — otherwise the second challenge is refused.
+   *
+   * Uniqueness is NOT ownership (R40, r40-3): whichever challenge lands FIRST
+   * owns the hash, and a DERIVABLE witness (`hash(bondTxid)` is public the
+   * moment the bond is on chain) can be registered by a juror that owns no bond,
+   * locking the payer out of the case. The machine cannot tell owner from copier
+   * — it holds no idx→pubkey registry (r38-3) — so the host's bond verifier must
+   * bind the witness to the event author (bond owner key == submitting juror).
    */
   readonly bondProofHash: string;
   readonly eventId: string;
