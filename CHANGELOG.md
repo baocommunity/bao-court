@@ -428,6 +428,14 @@ frozen.
   default 5 s test timeout flaked the property sweep (deterministic
   assertions; no behaviour change).
 
+## [0.12.0] — 2026-11-11
+
+### Changed — review-round-2 hardening (API-visible)
+- **`escalate` carries a witness** (`authority`, `challengerIdx`, `challengerPubkey`, `requestHash`, `bondProofHash`, `roundIndex`): the reducer enforces phase, `roundIndex == ladderRound+1`, case-roster challenger, 32-byte-hex hashes, a bond hash the machine already accepted, and host authority only under the frozen `hostEscalation` policy (default false). Accepted witnesses append to a frozen `escalationLog`; `ladder_pending` has exactly two entry transitions — the host-bypass path is closed at the machine, not the API (INV-ESC). `concede` remains host-API-enforced (named residual, SPEC §9.2).
+- **Economic security cap derived, γ single-sourced at 0.45**: `deriveCourtEconomicCap()` — `V_max(N) = γ·s₀·N` below the ⌈1/(γσ)⌉ threshold (112 seats at 0.45), unbounded above; shadow mode `off|shadow|enforce` with `would_reject` metrics, boot guard and ECON_RATIO_RUNBOOK (measured rejection: testnet 0.5%, demo 4.8%).
+- **Deterministic simulation budget** replaces the 5 s wall-clock gate (`SIM_BUDGET_MS`, default 30 s) — load-insensitive, still catches real regressions.
+- **Provenance reconciled**: cross-check parses the PO register (PO-1…18, 283 claims / 512 refs / 95.1 %, 14 open); invariants 149 → **156**; suite **1,546**.
+
 ## [0.11.0] — 2026-11-11
 
 ### Added — external-review response + verification campaign
