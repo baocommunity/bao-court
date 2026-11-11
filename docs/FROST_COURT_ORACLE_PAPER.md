@@ -998,15 +998,23 @@ with owner and trigger (App. A.3, r40-3).
 
 **The ladder cap is derived, with a flip-round subtlety.** A deployment's
 admissible depth is a function of its measured accuracy, not a preference:
-`deriveMaxLadderRounds({a_f, ρ, β})` computes
-$\lfloor \ln(\rho/(\rho+\beta)) / \ln a_f \rfloor$ and clamps it to the machine
-ceiling (5) — 6 / 4 / 2 at $a_f = 0.90 / 0.85 / 0.75$, hence 5 / 4 / 2 once
-clamped. `deriveLadderFlipRound` returns the first round that is *profitable* to
-challenge (7 / 5 / 3 at the same accuracies), which is exactly **one above** the
-safe bound: alerting on the flip round is one round late, so the cap must be
-derived from the safe bound and the flip round used only as an alert. Both
-functions are pure, published, and pinned to the numbers of the economics
-re-verify (App. A, S-21 §1.5).
+`deriveMaxLadderRounds({a_f, ρ, β})` returns the largest depth with
+$E[\pi](d) < 0$ strictly — the integer inequality
+$R\cdot D^d < A^d\cdot(R+B)$ (with $a_f = A/D$, $\rho/\beta = R/B$) evaluated
+exactly, not the real-valued $\lfloor \ln(\rho/(\rho+\beta)) / \ln a_f \rfloor$,
+and clamps it to the machine ceiling (5) — 6 / 4 / 2 at
+$a_f = 0.90 / 0.85 / 0.75$, hence 5 / 4 / 2 once clamped (R52: the two agree
+everywhere except at an exact-integer boundary, where the log form named the
+*break-even* round). **Boundary semantics:** the returned depth is the largest
+*strictly* profitable-to-refuse depth; the break-even depth is not included.
+`deriveLadderFlipRound` returns the first round that is *not strictly
+unprofitable* — profitable, or exactly break-even — (7 / 5 / 3 at the same
+accuracies), which is exactly **one above** the safe bound even when the
+boundary is an integer, so alerting on the flip round is one round late and the
+cap must be derived from the safe bound while the flip round is used only as an
+alert. Both functions are pure, published, and pinned to the numbers of the
+economics re-verify (App. A, S-21 §1.5) plus an exact-integer property grid
+(`__tests__/ladderBoundExact.test.ts`).
 
 **The rule reads the *realised* $\beta$, so a constant-$\beta$ gate drifts
 (H-1).** `deriveMaxLadderRounds` is scale-free — the verdict depends only on

@@ -21,15 +21,42 @@
  * Below the bound the unmerited challenger's expected profit is negative; at
  * the next round it is positive and the ladder is a profitable option.
  *
+ * The exported bound is the PREDICATE, evaluated exactly (R52)
+ * -----------------------------------------------------------
+ * The hand rule above is a real-valued expression; evaluating it with `log`
+ * and `floor` rounds the wrong way at an exact-integer boundary (e.g.
+ * `a_f = ½, β = 3ρ`, where `E[π](2) = 0` exactly): `floor` names the
+ * BREAK-EVEN round, which the safety contract — STRICT `E[π](d) < 0` —
+ * excludes. The exported number disagreed with the published gate by one round
+ * at those points (report-vs-decision mismatch, H-2), so the bound is now
+ * defined by the integer inequality Lean proves (`Ladder.safe`,
+ * `safe_depth_bound` in `proofs/lean4/LadderBound.lean`):
+ *
+ *     safe(d)  ⟺  R·D^d < A^d·(R+B)     (a_f = A/D, ρ = R/S, β = B/S)
+ *
+ * Every parameter is converted to the exact rational its decimal text names
+ * (`0.03` → `3/100`, not the nearest double) and the comparison is done in
+ * `BigInt`. There is no logarithm and no floating-point comparison left on the
+ * decision path, so an exact boundary cannot round in either direction, and
+ * `β = 3ρ` — exact in decimal policy arithmetic, off by an ulp in binary — is
+ * seen as the boundary the document derives.
+ *
+ * Boundary semantics, stated once
+ * ------------------------------
+ * The returned depth is the largest STRICTLY-profitable-to-refuse depth for the
+ * challenger (`E[π](d) < 0`, i.e. `R·D^d < A^d·(R+B)`, i.e. `d < flipRound`);
+ * **the break-even depth is not included**. `0` means no depth is safe.
+ *
  * Two numbers, and why both are exported
  * --------------------------------------
- * `deriveMaxLadderRounds` returns the SAFE cap (the floor): the deepest round
- * a challenger may reach with `E[π] < 0`. `deriveLadderFlipRound` returns the
- * first UNSAFE round (the ceiling, one higher unless the ratio is an exact
- * integer) — the number 06 §1.3 prints in its "flip round" column (7 at
- * `a_f = 0.9`, 5 at 0.85, 3 at 0.75) and the one a monitoring alert should
- * fire on. Shipping the cap at the flip round would legalise the one round that
- * is profitable, so the two are deliberately separate values.
+ * `deriveMaxLadderRounds` returns the SAFE cap: the deepest round a challenger
+ * may reach with `E[π] < 0` (always `flipRound − 1`, clamped to the machine
+ * ceiling). `deriveLadderFlipRound` returns the first UNSAFE round — the number
+ * 06 §1.3 prints in its "flip round" column (7 at `a_f = 0.9`, 5 at 0.85, 3 at
+ * 0.75) and the one a monitoring alert should fire on. Because the flip round
+ * includes the break-even round, the two differ by exactly one even when the
+ * boundary is an exact integer; there is no parameter point at which the cap
+ * names the break-even round.
  *
  * Companion: the per-round bond schedule
  * --------------------------------------
@@ -84,10 +111,108 @@ function assertRounds(rounds: unknown): number {
   return rounds;
 }
 
+/** An exact rational, `n / d` with `d > 0`, as `BigInt`. */
+interface ExactRational {
+  readonly n: bigint;
+  readonly d: bigint;
+}
+
+/**
+ * The exact rational a host's number NAMES: the shortest decimal that
+ * round-trips to it (ECMA-262's `Number::toString`), parsed exactly.
+ * `0.03` becomes `3/100`, not the nearest double `5404319552844595/2^59`,
+ * because the ladder parameters are decimal policy numbers (ρ = 3 %, β = 9 %)
+ * and the document's exact-boundary families (`β = 3ρ`, `a_f = ½`) are exact in
+ * THAT arithmetic — this is what makes `E[π](2) = 0` land on the boundary the
+ * economics doc says it does.
+ *
+ * Lossless in the sense that matters: the text parsed back is the same double
+ * (`Number::toString` round-trips), so no parameter is silently changed; only
+ * the 1-ulp fuzz of the binary encoding is removed before the comparison.
+ */
+const DECIMAL_TEXT = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/;
+function exactRational(value: number): ExactRational {
+  const text = String(value);
+  const match = DECIMAL_TEXT.exec(text);
+  if (!match) {
+    // Non-finite values are refused by `assertLadderParameters`; this keeps the
+    // invariant local (a NaN/Infinity cannot silently become a rational).
+    throw new Error(`cannot rationalise ${text} as a finite decimal`);
+  }
+  const [, sign, integerDigits, fractionDigits = '', exponentDigits] = match;
+  let n = BigInt(integerDigits + fractionDigits);
+  let d = 10n ** BigInt(fractionDigits.length);
+  const exponent = Number(exponentDigits ?? '0');
+  if (exponent > 0) n *= 10n ** BigInt(exponent);
+  else if (exponent < 0) d *= 10n ** BigInt(-exponent);
+  return { n: sign === '-' ? -n : n, d };
+}
+
+/** The three ladder parameters as exact rationals. */
+interface ExactLadder {
+  readonly a: ExactRational;
+  readonly reward: ExactRational;
+  readonly bond: ExactRational;
+}
+
+function exactLadderParameters(params: LadderParameters): ExactLadder {
+  const { a_f, rho, beta } = assertLadderParameters(params);
+  const a = exactRational(a_f);
+  const reward = exactRational(rho);
+  const bond = exactRational(beta);
+  if (a.n <= 0n || a.d <= 0n || reward.n <= 0n || bond.n <= 0n) {
+    // Unreachable through the public API (`assertLadderParameters` refuses a
+    // non-positive or non-finite parameter); kept as a load-bearing invariant
+    // because the integer inequality below assumes both sides are positive.
+    throw new Error('ladder parameters must reduce to positive exact rationals');
+  }
+  return { a, reward, bond };
+}
+
+/**
+ * The Lean predicate `Ladder.safe` — `E[π](d) < 0` STRICTLY — in integers.
+ *
+ * Multiplying `ρ < a_f^d·(ρ+β)` through by the positive `rd·bd·D^d` gives
+ *
+ *     R·D^d < A^d·(R+B),   R = rn·bd,  B = bn·rd
+ *
+ * (`ρ` and `β` share the denominator `S = rd·bd`, which cancels). No
+ * division, no logarithm, no floating point: an exact-integer boundary is
+ * decided by `BigInt` comparison, so it cannot round in either direction.
+ * `d = 0` is always safe (`safe_zero`: conceding forfeits `β > 0`).
+ */
+function strictlySafeAtDepth(exact: ExactLadder, d: number): boolean {
+  const A = exact.a.n;
+  const D = exact.a.d;
+  const R = exact.reward.n * exact.bond.d;
+  const B = exact.bond.n * exact.reward.d;
+  let powerA = 1n;
+  let powerD = 1n;
+  for (let i = 0; i < d; i += 1) {
+    powerA *= A;
+    powerD *= D;
+  }
+  return R * powerD < powerA * (R + B);
+}
+
+/** `deriveMaxLadderRounds` over an already-rationalised parameter set. */
+function capFromExact(exact: ExactLadder): number {
+  // The safe set is an INITIAL SEGMENT (`safe_monotone` in LadderBound.lean), so
+  // the cap is the round before the first unsafe one. Depth 0 is always safe
+  // (`safe_zero`), hence the scan starts at 1 and `0` already means "no legal
+  // round is safe" (r33-6).
+  for (let d = 1; d <= MAX_LADDER_ROUNDS; d += 1) {
+    if (!strictlySafeAtDepth(exact, d)) return d - 1;
+  }
+  return MAX_LADDER_ROUNDS;
+}
+
 /**
  * The exact sign boundary `ln(ρ/(ρ+β)) / ln(a_f)` — the round at which a
- * challenger's expected profit crosses zero. Exported so the two derived
- * integers below (and any host telemetry) share one evaluation.
+ * challenger's expected profit crosses zero (break-even). **Telemetry only:**
+ * neither the cap nor the gate reads it (both decide on the exact integer
+ * inequality, R52) — it is exported so a host's dashboards can quote the
+ * real-valued crossing that the two integers straddle.
  *
  * Returns `Number.POSITIVE_INFINITY` at `a_f = 1` (a perfect jury never makes
  * the ladder profitable, so the boundary is unbounded).
@@ -99,57 +224,67 @@ export function ladderSignBoundary(params: LadderParameters): number {
 }
 
 /**
- * The SAFE ladder cap: the deepest escalation round with `E[π] < 0`, i.e.
+ * The SAFE ladder cap, **definitionally the safe predicate**: the largest
+ * `d ∈ {0, …, MAX_LADDER_ROUNDS}` with `E[π](d) < 0` strictly, i.e. exactly
+ * `max{d : R·D^d < A^d·(R+B)}` — the integer form Lean proves
+ * (`Ladder.safe_depth_bound`: `safe d ↔ d < flipRound`). Because the cap is the
+ * round *below* the first unsafe one, it is always `flipRound − 1` (clamped),
+ * including at an exact-integer boundary where the old `floor(ln…)` evaluation
+ * returned the break-even round itself (R52, H-2).
  *
- *     floor( ln(ρ/(ρ+β)) / ln(a_f) ),  capped at MAX_LADDER_ROUNDS.
- *
- * 06 §1.5's interim parameter rule, in code. Because the machine's own ceiling
- * is `MAX_LADDER_ROUNDS` (5), a derivation above it is reported as the ceiling
- * rather than as an unreachable number.
+ * The machine's own ceiling is `MAX_LADDER_ROUNDS` (5), so a larger exact
+ * answer is reported as the ceiling rather than as an unreachable number.
  *
  * **`0` means "no depth is safe" (R33, r33-6).** When `a_f` is at or below
- * `ρ/(ρ+β)` — a jury that is no better than a coin on manufactured disputes, at
- * `β = ρ` an accuracy of ½ — the sign boundary is `≤ 1`, so round 1 itself is
- * already profitable and no legal ladder may be opened. The earlier version
- * clamped that to `1` and its own contract ("E[π] < 0 for every R ≤ derived")
- * was false there; `ladderCapWithinBound` then blessed the profitable cap. The
- * clamp only applies upwards now.
+ * `ρ/(ρ+β)` — a jury no better than a coin on manufactured disputes, at `β = ρ`
+ * an accuracy of ½ — round 1 itself is already break-even or profitable, so no
+ * legal ladder may be opened. The earlier version clamped that to `1` and its
+ * own contract ("E[π] < 0 for every R ≤ derived") was false there;
+ * `ladderCapWithinBound` then blessed the profitable cap. The clamp only
+ * applies upwards now.
  *
  * Monotone **non-decreasing in `a_f`** (a more accurate jury may only get a
  * deeper ladder; equivalently: a less accurate jury must not be given a deeper
  * one — the direction was stated backwards until review round 41, which
  * measured the grid 0.30…0.95 → caps 0…5 rather than trusting the sentence)
- * and non-decreasing in `β`.
+ * and non-decreasing in `β` (`derivedCap_mono_accuracy` / `_mono_bond`).
  *
  * @example
  * ```ts
  * deriveMaxLadderRounds({ a_f: 0.9, rho: 0.03, beta: 0.03 }); // 5 (derivation 6, ceiling 5)
  * deriveMaxLadderRounds({ a_f: 0.75, rho: 0.03, beta: 0.03 }); // 2 (derivation 2.41)
  * deriveMaxLadderRounds({ a_f: 0.45, rho: 0.03, beta: 0.03 }); // 0 (no safe depth)
+ * deriveMaxLadderRounds({ a_f: 0.5, rho: 1, beta: 3 });        // 1 (boundary 2 = break-even, excluded)
  * ```
  */
 export function deriveMaxLadderRounds(params: LadderParameters): number {
-  const boundary = ladderSignBoundary(params);
-  if (!Number.isFinite(boundary)) return MAX_LADDER_ROUNDS;
-  // `boundary === 1` is break-even at round 1 (E[π] = 0), not safe: the
-  // contract is strictly negative.
-  if (boundary <= 1) return 0;
-  return Math.min(MAX_LADDER_ROUNDS, Math.floor(boundary));
+  return capFromExact(exactLadderParameters(params));
 }
 
 /**
- * The first UNSAFE round — `ceil(ln(ρ/(ρ+β)) / ln(a_f))`, at least 1 — i.e.
- * the round at which `E[π]` becomes positive. This is 06 §1.3's "flip round"
+ * The first UNSAFE round — the smallest `d ≥ 1` with `not (E[π](d) < 0)`, i.e.
+ * the round at which `E[π]` reaches zero or turns positive (the break-even
+ * round is included: `break_even_not_safe`). This is 06 §1.3's "flip round"
  * column (7 at `a_f = 0.9`, 5 at 0.85, 3 at 0.75) and the number a pre-flight
- * alert should watch: a configured cap at or above it prices the option for
- * the challenger. It is deliberately NOT the cap (see `deriveMaxLadderRounds`).
+ * alert should watch: a configured cap at or above it prices the option for the
+ * challenger. It is deliberately NOT the cap (see `deriveMaxLadderRounds`).
  *
- * Returns `Number.POSITIVE_INFINITY` at `a_f = 1`.
+ * Evaluated exactly (integer form) for every round a legal cap could reach
+ * (`1 … MAX_LADDER_ROUNDS + 1`), so `flipRound = cap + 1` unclamped even at an
+ * exact-integer boundary. Deeper than the machine's ceiling the number is only
+ * telemetry, and the logarithmic boundary rounded up is reported instead — no
+ * legal cap can reach it either way.
+ *
+ * Returns `Number.POSITIVE_INFINITY` at `a_f = 1` (`perfect_jury_all_depths_safe`).
  */
 export function deriveLadderFlipRound(params: LadderParameters): number {
+  const exact = exactLadderParameters(params);
+  for (let d = 1; d <= MAX_LADDER_ROUNDS + 1; d += 1) {
+    if (!strictlySafeAtDepth(exact, d)) return d;
+  }
   const boundary = ladderSignBoundary(params);
   if (!Number.isFinite(boundary)) return Number.POSITIVE_INFINITY;
-  return Math.max(1, Math.ceil(boundary));
+  return Math.max(MAX_LADDER_ROUNDS + 2, Math.ceil(boundary));
 }
 
 /**
@@ -159,8 +294,10 @@ export function deriveLadderFlipRound(params: LadderParameters): number {
  *
  * This is the function the cap is derived from; it is exported so a host (or a
  * test) can ASSERT the bound instead of trusting it: `E[π(R)] < 0` for every
- * `R <= deriveMaxLadderRounds(...)` and `> 0` from `deriveLadderFlipRound(...)`
- * up.
+ * `R <= deriveMaxLadderRounds(...)` and `>= 0` from `deriveLadderFlipRound(...)`
+ * up. Note that the DERIVATION does not use this evaluation — it decides on the
+ * exact integer inequality (R52) — so the two agree to within IEEE-754
+ * resolution at the boundary and agree exactly everywhere else.
  */
 export function escalationOptionEv(params: LadderParameters & { readonly rounds: number }): number {
   const { a_f, rho, beta } = assertLadderParameters(params);
@@ -175,13 +312,14 @@ export function escalationOptionEv(params: LadderParameters & { readonly rounds:
  * verdict plus both derived numbers so a refusal message can quote them.
  *
  * `ok` is decided by the SIGN, not by comparing with `derivedCap` (R33, r33-6):
- * a cap is inside the bound iff it is BELOW the flip round, i.e. iff
- * `E[π(cap)] < 0` strictly. That is the same comparison for every non-integer
- * boundary, and it is the only correct one when the boundary is `≤ 1` — the
- * case where `derivedCap` is `0` (no safe depth) and a naive `cap <= derivedCap`
- * would still be false, but the old `derivedCap = 1` clamp made it TRUE. A host
- * that only reads `derivedCap` must therefore treat `0` as "refuse every
- * ladder", which is what the number means.
+ * a cap is inside the bound iff `E[π](cap) < 0` strictly, evaluated with the
+ * SAME exact-integer predicate that produces `derivedCap` (R52). That makes the
+ * gate and the exported number the same predicate by construction:
+ * `ok ⟺ maxLadderRounds ≤ derivedCap`, i.e. `ok ⟺ maxLadderRounds < flipRound`,
+ * at every parameter point — including an exact-integer boundary, where the old
+ * `floor(ln…)` cap named the break-even round while this gate refused it. A host
+ * that only reads `derivedCap` must treat `0` as "refuse every ladder", which is
+ * what the number means.
  */
 export function ladderCapWithinBound(params: LadderParameters & { readonly maxLadderRounds: number }): {
   readonly ok: boolean;
@@ -199,12 +337,13 @@ export function ladderCapWithinBound(params: LadderParameters & { readonly maxLa
       `maxLadderRounds must be a safe integer in [1, ${MAX_LADDER_ROUNDS}] (got ${String(maxLadderRounds)})`,
     );
   }
-  const derivedCap = deriveMaxLadderRounds(params);
-  const flipRound = deriveLadderFlipRound(params);
+  // One rationalisation, one predicate: `ok` and `derivedCap` cannot disagree.
+  const exact = exactLadderParameters(params);
+  const derivedCap = capFromExact(exact);
   return {
-    ok: maxLadderRounds < flipRound,
+    ok: strictlySafeAtDepth(exact, maxLadderRounds),
     derivedCap,
-    flipRound,
+    flipRound: deriveLadderFlipRound(params),
   };
 }
 

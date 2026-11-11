@@ -19,9 +19,10 @@
  *     3. `safe_depth_bound` AGAIN, in gate form — `ladderCapWithinBound().ok`
  *        is the SIGN of the EV at the cap, which is what the theorem says the
  *        comparison `cap < flipRound` is (r33-6/r40-4);
- *     4. `derivedCap = flipRound - 1` — with the ONE parameter point where the
- *        code's `floor` differs from `flipRound - 1` pinned and explained
- *        (exact-integer boundary `>= 2`; see the KNOWN EDGE note below);
+ *     4. `derivedCap = flipRound - 1` — at EVERY parameter point, including an
+ *        exact-integer boundary `>= 2` where the pre-R52 `floor(ln…)` cap named
+ *        the break-even round (that defect is now regression-locked as a FIXED
+ *        case, not excused: see the "R52" test below);
  *     5. `derivedCapZero_no_safe_depth` — `derivedCap = 0` means every legal
  *        round is unprofitable (the r33-6 clamp defect);
  *     6. `flipRound_mono_accuracy` / `flipRound_mono_bond` — the monotonicity
@@ -138,13 +139,10 @@ describe('LadderBound.lean §3 — the gate is the SIGN, not the cap comparison'
 });
 
 describe('LadderBound.lean §4 — derivedCap and the "no safe depth" corollary', () => {
-  it('derivedCap = flipRound - 1, except at an exact-integer boundary >= 2', () => {
+  it('derivedCap = flipRound - 1 at EVERY parameter point, exact-integer boundaries included', () => {
     for (const p of GRID) {
       const flip = deriveLadderFlipRound(p);
       const cap = deriveMaxLadderRounds(p);
-      const boundary = ladderSignBoundary(p);
-      const exactIntegerEdge = Number.isInteger(boundary) && boundary >= 2;
-      if (exactIntegerEdge) continue; // pinned separately below
       expect({ case: label(p), cap }).toEqual({
         case: label(p),
         cap: Math.min(MAX_LADDER_ROUNDS, flip - 1),
@@ -153,34 +151,35 @@ describe('LadderBound.lean §4 — derivedCap and the "no safe depth" corollary'
   });
 
   /**
-   * KNOWN EDGE (pinned, not hidden; reported to the review round).
+   * R52 — the exact-integer boundary, FIXED and regression-locked.
    *
-   * `deriveMaxLadderRounds` is `floor(boundary)`; `deriveLadderFlipRound` is
-   * `ceil(boundary)`. They differ by one everywhere EXCEPT at an exact integer
-   * boundary, where `floor = ceil`, so the exported cap names the BREAK-EVEN
-   * round — the one round the theorem says is NOT safe. The GATE
-   * (`ladderCapWithinBound`) is sign-based and still refuses that cap, so no
-   * host that re-derives with the gate is exposed; a host that reads
-   * `derivedCap` alone and treats it as "deepest safe round" over-admits by one.
-   * The mechanised statement is `derivedCap = flipRound - 1`, so this edge is a
-   * code↔model disagreement of exactly one round, at a measure-zero parameter
-   * point (a_f = 0.5, β = 3ρ reproduces it with plain floats).
+   * At `a_f = ½, β = 3ρ` the sign boundary is exactly 2 (`ln ¼ / ln ½`), so
+   * round 2 is break-even: `E[π](2) = 0`, which the safety contract (STRICT
+   * `< 0`) excludes (`break_even_not_safe`). The pre-R52 cap evaluated
+   * `floor(ln(ρ/(ρ+β))/ln a_f)` and returned 2 — the break-even round — while
+   * the gate refused it (`ok = false`): the exported number and the decision
+   * disagreed by one round (H-2). The cap is now the exact predicate
+   * (`R·D^d < A^d·(R+B)` in `BigInt`), so it returns `flipRound − 1` here too.
    */
-  it('KNOWN EDGE: at an exact-integer boundary >= 2 the cap equals break-even, and the gate refuses it', () => {
+  it('R52 FIXED: at an exact-integer boundary >= 2 the cap is flipRound - 1, not the break-even round', () => {
     const edges: LadderParameters[] = [
       { a_f: 0.5, rho: 0.03, beta: 0.09 }, // boundary 2
       { a_f: 0.5, rho: 0.03, beta: 0.21 }, // boundary 3
     ];
     for (const p of edges) {
       expect(ladderSignBoundary(p)).toBe(Math.round(ladderSignBoundary(p)));
+      const flip = deriveLadderFlipRound(p);
       const cap = deriveMaxLadderRounds(p);
-      expect(cap).toBe(ladderSignBoundary(p));
-      // The cap is the break-even round: EV is exactly 0 there, not negative.
-      expect(ev(p, cap)).toBeGreaterThanOrEqual(0);
-      // The gate the host actually applies still refuses it.
-      expect(ladderCapWithinBound({ ...p, maxLadderRounds: cap }).ok).toBe(false);
-      // …and the deepest genuinely-safe round is one less.
-      expect(Math.min(MAX_LADDER_ROUNDS, deriveLadderFlipRound(p) - 1)).toBe(cap - 1);
+      // The old value was `ladderSignBoundary(p)` (the break-even round).
+      expect(cap).toBe(flip - 1);
+      expect(cap).toBe(ladderSignBoundary(p) - 1);
+      // The cap is now strictly unprofitable, and the flip round is not:
+      expect(ev(p, cap)).toBeLessThan(0);
+      expect(ev(p, flip)).toBe(0); // exactly break-even — excluded by the cap
+      // The gate, the cap and the retired `cap <= derivedCap` composition now
+      // give the same answer at the boundary.
+      expect(ladderCapWithinBound({ ...p, maxLadderRounds: cap })).toMatchObject({ ok: true, derivedCap: cap });
+      expect(ladderCapWithinBound({ ...p, maxLadderRounds: flip }).ok).toBe(false);
     }
   });
 

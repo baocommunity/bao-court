@@ -864,22 +864,22 @@ describe('T3 — deriveMaxLadderRounds / deriveLadderFlipRound consumers', () =>
     expect(exact).toBe(0);
   });
 
-  it('(registered r40-4) a consumer that composes the integers diverges once beta != rho', () => {
-    // beta = 3*rho makes the sign boundary exactly 2 (ln 0.25 / ln 0.5), which
-    // is the case the host gate's own docstring says "the two coincide".
+  it('(registered r40-4, FIXED in R52) the integers and the gate agree once beta != rho', () => {
+    // beta = 3*rho makes the sign boundary exactly 2 (ln 0.25 / ln 0.5) — the
+    // point where the exported cap used to name the break-even round. R52 made
+    // the cap the safe predicate itself, so the composed integers and the gate
+    // no longer diverge.
     const params = { a_f: 0.5, rho: 0.03, beta: 0.09 };
     expect(ladderSignBoundary(params)).toBe(2);
-    expect(deriveMaxLadderRounds(params)).toBe(2);
+    expect(deriveMaxLadderRounds(params)).toBe(1);
     expect(deriveLadderFlipRound(params)).toBe(2);
     const verdict = ladderCapWithinBound({ ...params, maxLadderRounds: 2 });
-    // The package is right: cap 2 is EXACTLY break-even, so it is not inside a
-    // strictly-negative bound.
+    // cap 2 is EXACTLY break-even, so it is not inside a strictly-negative bound.
     expect(verdict.ok).toBe(false);
     expect(escalationOptionEv({ ...params, rounds: 2 })).toBe(0);
-    // A host composing the two integers would bless it.
-    expect(verdict.derivedCap >= 1 && 2 <= verdict.derivedCap).toBe(true);
-    // Disposition: the host must call `ladderCapWithinBound` (one import) the
-    // moment beta stops being rho; today beta = rho = 0.03 makes it unreachable.
+    // A host composing the two integers now gets the SAME answer.
+    expect(verdict.derivedCap >= 1 && 2 <= verdict.derivedCap).toBe(false);
+    expect(verdict.derivedCap >= 1 && 1 <= verdict.derivedCap).toBe(true);
   });
 
   it('derivedCap = 0 refuses every legal depth, and no blessed depth is profitable', () => {
