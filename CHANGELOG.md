@@ -9,6 +9,18 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.12.1] — 2026-11-11
+
+### Fixed (review-round-3, PR #95)
+- **Escalation bond binding:** the reducer bound the bond hash to the CASE instead of the CHALLENGER — a juror holding no bond could escalate on a bonded juror's accepted hash, and the audit log named the wrong person. Now the challenge's index, challenger index and bond proof hash must all match (`challenge.idx === challengerIdx` ∧ hash match). The model checker's "independent" property had mirrored the same weak check (it agreed with the bug); the property is corrected.
+- **`finalize` re-verifies the escalation log** (`assertValidEscalationLog`, INV-ESC-8): a restored snapshot can no longer append a fabricated witness record and mint a verdict on top. Short/absent logs remain accepted so pre-0.12 snapshots finalize (pinned).
+- **Simulation budget pinned:** a mutant returning `Infinity` survived 23/23 budgeted tests (vacuous ceiling) — the ceiling is now asserted.
+- **Witness-aware verification:** the full sweep regenerated with escalate events — 15 instances / 3,869,232 states / 213,521,172 applications; an illegal-witness matrix at every reachable state (60,020,684 probes, 0 accepted); `escalationLog` structurally bounded; terminals refuse perfect witnesses.
+
+### Added (campaign artifacts)
+- Round-29 corpora: witness fuzz (10k), epoch-rotation batches (1k/39 rotations), finality chains (5k) — campaign total **1,187,000 units / 3,745,566 assertions / 0 failures**.
+- `docs/REVIEW_ROUND_3.md`.
+
 ## [Unreleased]
 
 ### Fixed — review-round-3 hardening (`docs/REVIEW_ROUND_3.md`)
