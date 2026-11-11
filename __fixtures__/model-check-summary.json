@@ -1,9 +1,9 @@
 {
   "tool": "scripts/model-check.mjs",
   "description": "Exhaustive finite-state-space model checking of the BAO Court phase machines (courtVoteMachine, courtConfirmationMachine, courtSigningMachine). Regenerate with: npx tsx scripts/model-check.mjs",
-  "generatedAt": "2026-11-10T07:20:33.034Z",
+  "generatedAt": "2026-11-11T02:54:56.897Z",
   "mode": "full",
-  "totalWallMs": 1027212,
+  "totalWallMs": 1196087,
   "propertiesChecked": [
     "P1 phase legality — phase ∈ the machine's declared phase set, at every reachable state",
     "P2 data invariants — ledger ⊆ roster with unique indices, reveals ⊆ commits, ballot closure, real SHA-256 commit-reveal / canonical confirmation-hash / signing-session-hash re-derivation, real secp256k1 nonce points, signer-set freeze == distinct commitment set (A-1), partials ⊆ finalized signer set (A-1), verdict⇔phase coherence, failure⇔expired/aborted, configuration immutability, deep-frozen states, monotonic clock on every edge, tally re-derivation at terminal phases",
@@ -14,14 +14,14 @@
   ],
   "totals": {
     "instances": 13,
-    "states": 3145632,
-    "abstractStates": 1098527,
-    "progressEdges": 11716954,
-    "selfLoops": 4729534,
-    "applications": 128522740,
-    "typedThrows": 112076252,
+    "states": 3149142,
+    "abstractStates": 1100867,
+    "progressEdges": 11718124,
+    "selfLoops": 4733044,
+    "applications": 134838724,
+    "typedThrows": 118387556,
     "rawThrows": 0,
-    "illegalEventChecks": 68077138,
+    "illegalEventChecks": 74349832,
     "determinismPathsReplayed": 2600
   },
   "instances": [
@@ -47,7 +47,7 @@
       },
       "tallyReachableStates": 164,
       "determinismPathsReplayed": 200,
-      "wallMs": 119
+      "wallMs": 101
     },
     {
       "name": "vote n=2 k=2",
@@ -71,7 +71,7 @@
       },
       "tallyReachableStates": 1148,
       "determinismPathsReplayed": 200,
-      "wallMs": 753
+      "wallMs": 637
     },
     {
       "name": "vote n=3 k=2",
@@ -95,7 +95,7 @@
       },
       "tallyReachableStates": 16628,
       "determinismPathsReplayed": 200,
-      "wallMs": 21380
+      "wallMs": 11203
     },
     {
       "name": "vote n=4 k=2",
@@ -119,7 +119,7 @@
       },
       "tallyReachableStates": 470348,
       "determinismPathsReplayed": 200,
-      "wallMs": 400310
+      "wallMs": 497058
     },
     {
       "name": "vote n=2 k=3",
@@ -143,7 +143,7 @@
       },
       "tallyReachableStates": 2348,
       "determinismPathsReplayed": 200,
-      "wallMs": 1333
+      "wallMs": 1557
     },
     {
       "name": "confirm n=3 q=3 r=1 challengers=all [clock 6/12/14]",
@@ -151,10 +151,10 @@
       "abstractStates": 225852,
       "progressEdges": 672074,
       "selfLoops": 501186,
-      "applications": 14231718,
-      "typedThrows": 13058458,
+      "applications": 15679902,
+      "typedThrows": 14506642,
       "rawThrows": 0,
-      "illegalChecks": 8923150,
+      "illegalChecks": 10371334,
       "terminalStates": 234078,
       "terminalPhaseCounts": {
         "expired": 21744,
@@ -168,7 +168,7 @@
       },
       "tallyReachableStates": 127608,
       "determinismPathsReplayed": 200,
-      "wallMs": 101191
+      "wallMs": 120030
     },
     {
       "name": "confirm n=3 q=1 r=1 dup-event-ids [clock 6/12/14]",
@@ -176,10 +176,10 @@
       "abstractStates": 593409,
       "progressEdges": 1893188,
       "selfLoops": 1489458,
-      "applications": 41952186,
-      "typedThrows": 38569540,
+      "applications": 45995466,
+      "typedThrows": 42612820,
       "rawThrows": 0,
-      "illegalChecks": 24927904,
+      "illegalChecks": 28971184,
       "terminalStates": 668382,
       "terminalPhaseCounts": {
         "expired": 116307,
@@ -194,22 +194,22 @@
       },
       "tallyReachableStates": 316926,
       "determinismPathsReplayed": 200,
-      "wallMs": 308804
+      "wallMs": 378328
     },
     {
       "name": "confirm n=3 q=1 r=2 [clock 6/12/14]",
-      "states": 108405,
-      "abstractStates": 80118,
-      "progressEdges": 179228,
-      "selfLoops": 147078,
-      "applications": 4136817,
-      "typedThrows": 3810511,
+      "states": 111915,
+      "abstractStates": 82458,
+      "progressEdges": 180398,
+      "selfLoops": 150588,
+      "applications": 4715517,
+      "typedThrows": 4384531,
       "rawThrows": 0,
-      "illegalChecks": 2667187,
-      "terminalStates": 65499,
+      "illegalChecks": 3202597,
+      "terminalStates": 69009,
       "terminalPhaseCounts": {
         "expired": 6114,
-        "aborted": 35805,
+        "aborted": 39315,
         "final": 23580
       },
       "parkingStates": 2430,
@@ -219,7 +219,7 @@
       },
       "tallyReachableStates": 40476,
       "determinismPathsReplayed": 200,
-      "wallMs": 31230
+      "wallMs": 32635
     },
     {
       "name": "confirm n=3 q=1 r=1 roundRoster [clock 6/12/14]",
@@ -227,10 +227,10 @@
       "abstractStates": 37878,
       "progressEdges": 117113,
       "selfLoops": 84828,
-      "applications": 2431062,
-      "typedThrows": 2229121,
+      "applications": 2676882,
+      "typedThrows": 2474941,
       "rawThrows": 0,
-      "illegalChecks": 1514557,
+      "illegalChecks": 1760377,
       "terminalStates": 39669,
       "terminalPhaseCounts": {
         "expired": 3744,
@@ -244,7 +244,7 @@
       },
       "tallyReachableStates": 21726,
       "determinismPathsReplayed": 200,
-      "wallMs": 17852
+      "wallMs": 18917
     },
     {
       "name": "signing n=2 t=1 [clock 10/25]",
@@ -267,7 +267,7 @@
       "parkingKinds": {},
       "tallyReachableStates": 300,
       "determinismPathsReplayed": 200,
-      "wallMs": 1298
+      "wallMs": 1264
     },
     {
       "name": "signing n=3 t=2 [clock 10/25]",
@@ -290,7 +290,7 @@
       "parkingKinds": {},
       "tallyReachableStates": 2270,
       "determinismPathsReplayed": 200,
-      "wallMs": 9468
+      "wallMs": 9507
     },
     {
       "name": "signing n=3 t=2 commitment-equivocation [clock 6/12]",
@@ -313,7 +313,7 @@
       "parkingKinds": {},
       "tallyReachableStates": 15920,
       "determinismPathsReplayed": 200,
-      "wallMs": 71075
+      "wallMs": 69439
     },
     {
       "name": "signing n=3 t=2 partial-equivocation [clock 6/12]",
@@ -336,7 +336,7 @@
       "parkingKinds": {},
       "tallyReachableStates": 10490,
       "determinismPathsReplayed": 200,
-      "wallMs": 62371
+      "wallMs": 55386
     }
   ]
 }

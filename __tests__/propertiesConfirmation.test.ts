@@ -35,6 +35,7 @@ import {
 import { hashCourtVerdict, CourtVoteTransitionError } from '../courtVoteMachine';
 import { mulberry32, int, pick, hex32 } from './helpers/rng';
 import { assertConfirmationStateFrozen as assertFullyFrozen } from './helpers/asserts';
+import { escalateEvent, unwitnessedEscalate } from './helpers/machines';
 
 // ─── seeded LCG: now imported from helpers/rng (mulberry32) ─────────────────
 
@@ -76,7 +77,7 @@ function runHostileProbes(state: CourtConfirmationMachineState, log: string): vo
     // value-bearing events are both refused.
     expectTypedError(state, { type: 'abort', reason: 'probe' }, 'abort-from-terminal', log);
     expectTypedError(state, { type: 'finalize', now: state.latestTimestamp }, 'finalize-after-terminal', log);
-    expectTypedError(state, { type: 'escalate', now: state.latestTimestamp }, 'escalate-after-terminal', log);
+    expectTypedError(state, unwitnessedEscalate(state.latestTimestamp), 'escalate-after-terminal', log);
     expectTypedError(state, { type: 'concede', now: state.latestTimestamp }, 'concede-after-terminal', log);
     // …and the tick no-op from a terminal phase is legal and returns frozen state.
     const ticked = reduceCourtConfirmationMachine(state, { type: 'tick', now: state.latestTimestamp });
@@ -115,7 +116,7 @@ function runHostileProbes(state: CourtConfirmationMachineState, log: string): vo
   );
   // …and escalate/concede are refused outside round_resolved (v0.9.0).
   if (state.phase !== 'round_resolved') {
-    expectTypedError(state, { type: 'escalate', now: state.latestTimestamp }, 'escalate-out-of-phase', log);
+    expectTypedError(state, unwitnessedEscalate(state.latestTimestamp), 'escalate-out-of-phase', log);
     expectTypedError(state, { type: 'concede', now: state.latestTimestamp }, 'concede-out-of-phase', log);
   }
 }
@@ -470,7 +471,7 @@ function nextLegalEvent(
       // v0.9.0: the host explicitly escalates (rounds remain) or concedes —
       // the machine never auto-escalates and never auto-concedes. Both are
       // legal here (a park only happens below the cap).
-      add(4, () => ({ type: 'escalate', now }));
+      add(4, () => escalateEvent(state, now));
       add(4, () => ({ type: 'concede', now }));
       recordFee();
       add(0.7, () => ({ type: 'tick', now: clock + int(r, 1, 100) })); // exempt phase

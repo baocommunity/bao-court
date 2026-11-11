@@ -50,6 +50,7 @@ import {
 } from '../../courtConfirmationMachine';
 import { hashCourtVerdict } from '../../courtVoteMachine';
 import { childRng, int, pick } from '../helpers/rng';
+import { escalateEvent } from '../helpers/machines';
 import {
   CampaignReporter,
   firstUnfrozen,
@@ -546,7 +547,7 @@ function nextLegalEvent(
     }
     case 'round_resolved': {
       // Host-driven: the machine never auto-escalates and never auto-concedes.
-      add(4, () => ({ type: 'escalate', now }));
+      add(4, () => escalateEvent(state, now));
       add(4, () => ({ type: 'concede', now }));
       recordFee();
       add(0.7, () => ({ type: 'tick', now: clock + int(r, 1, 100) }));

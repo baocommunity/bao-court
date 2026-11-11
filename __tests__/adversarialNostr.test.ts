@@ -67,6 +67,10 @@ import type { SelectedJuror, StakeCommitment } from '../types';
 /* ------------------------------------------------------------------------- */
 
 import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
+import { budgetMs } from './helpers/budget';
+
+/** Generous, env-tunable ceiling for the linear tag scan (see helpers/budget). */
+const VALIDATOR_BUDGET_MS = budgetMs('VALIDATOR_BUDGET_MS');
 
 const MY_BYTE = 2;
 const MY_PUBKEY = nostrPubkey(MY_BYTE);
@@ -308,9 +312,16 @@ describe('tag abuse: duplicates, nesting, emptiness, and scale', () => {
     );
     const start = Date.now();
     const result = validateAttestationEvent(event);
-    // Linear scan of 100k tags completes well inside a test budget and the
-    // >10k bound rejects it.
-    expect(Date.now() - start).toBeLessThan(5_000);
+    // The >10k tag bound rejects this event BEFORE any hashing, so the scan is
+    // linear in the tag count — the behavioural assertion is the typed error
+    // below. The ceiling is deliberately generous (30 s default, env-tunable
+    // via VALIDATOR_BUDGET_MS) because an absolute wall-clock gate measures
+    // the box, not the code: see __tests__/helpers/budget.ts and
+    // docs/MUTATION_TESTING.md §7.
+    expect(
+      Date.now() - start,
+      `100k-tag rejection took longer than ${VALIDATOR_BUDGET_MS}ms`,
+    ).toBeLessThan(VALIDATOR_BUDGET_MS);
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/1\.\.10000/);
   }, 30_000);

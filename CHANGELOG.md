@@ -9,7 +9,68 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
-## [Unreleased]
+## [0.12.0] — 2026-11-11
+
+### Changed (BREAKING — confirmation machine: machine-level escalation authority witness)
+
+- **`escalate` now carries an authority witness and the reducer validates it**
+  (SPEC §9.2, INV-ESC-1…7, `docs/FORMAL_INVARIANTS.md` §5.9). Round 2's
+  sharpest finding was that `onEscalate` **ignored its event**: escalation was
+  decided by the host API, so a host that bypassed its endpoint (the event is
+  just a reducer input) kept the appeal power. The event is now
+  `{ type: 'escalate', authority, challengerIdx, challengerPubkey,
+  requestHash, bondProofHash, roundIndex, now }` and the machine refuses:
+  an unwitnessed event; `roundIndex !== ladderRound + 1` (no witness replay,
+  no skipped round); a challenger outside the case roster; malformed
+  non-32-byte-hex witness hashes; a `bondProofHash` that matches no bond the
+  case already accepted; and `authority: "host"` unless the frozen case policy
+  sets the new **`hostEscalation: true`** (default `false`, break-glass only —
+  the protocol default is the bonded challenger's right). Every accepted
+  escalation appends one frozen `escalationLog` record
+  `{round, authority, challengerIdx, challengerPubkey, requestHash,
+  bondProofHash, at}`, so anyone can re-derive who escalated and against which
+  request and bond.
+  - **Consumer impact (breaking):** callers that dispatched
+    `{type: 'escalate', now}` must now build the witness. The new exported
+    helpers `challengerEscalationEvent(state, now, {challengerPubkey,
+    requestHash, challengerIdx?})` and `hostEscalationEvent(state, now)` do the
+    derivation (round index + accepted-bond binding). A pre-0.12 snapshot
+    without `escalationLog` normalises to an empty log; a hand-restored
+    non-array value is still refused. `concede` is unchanged — its
+    challenger-concession witness (ESC-RIGHT-3) stays open and is named in the
+    invariants rather than implied.
+  - Tests: `__tests__/escalationWitness.test.ts` (12 cases: unwitnessed,
+    wrong/stale/skipped round, non-roster challenger, foreign bond, malformed
+    hashes, valid witness recorded, host policy on/off, replay, the
+    `ladder_pending` reachability proof, log monotonicity, legacy snapshot).
+    The model checker now probes four illegal witness variants at every state
+    and checks the escalation-log invariants on every reachable state.
+
+### Changed (tests — the wall-clock gate is gone)
+
+- The 5 s absolute budget that made CI red twice in #85 and produced two false
+  mutation "captures" (M40/M47 — `docs/MUTATION_TESTING.md` §3.1/§7) is
+  replaced: deterministic assertions first (exact eight-step pipeline in
+  order), then a generous **30 s ceiling** with a `SIM_BUDGET_MS` override
+  (`__tests__/helpers/budget.ts`). Measured baseline ≈1.2 s, so a real 100×
+  regression still fails while suite/sweep load no longer does. The same
+  treatment applies to the 100k-tag validator scan (`VALIDATOR_BUDGET_MS`).
+
+### Fixed (docs — provenance and two surviving overclaims)
+
+- **PO provenance reconciled and now machine-checked:**
+  `node scripts/cross-check.mjs` parses the register in
+  `docs/THREAT_MODEL.md` §6 (**PO-1…PO-18**), fails on any cited-but-undefined
+  code, and prints the coverage/gap tally; the presentation outline and
+  EVALUATION no longer carry the stale "PO-1…PO-14 / PO-1…PO-17 / 13 open gaps"
+  numbers (machine truth: 283 claims, 512 refs, **269/283 = 95.1 % covered, 14
+  open obligations** in an 18-entry register).
+- Abstract and Conclusion now say *exhaustive **reachability** model checking
+  on **bounded instances*** (three of four machines), and the Conclusion no
+  longer claims what remains is "not protocol design": the distributed ceremony
+  (PO-14), the concession witness and the settlement-binding constructions
+  (PO-15/16) are named as protocol work.
+- Paper §6.2 describes the shipped machine-level witness instead of the gap.
 
 ### Added (docs — review round 2: does the response answer the reviewers?)
 

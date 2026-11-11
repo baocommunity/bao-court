@@ -76,7 +76,7 @@ Highlights against the committed record:
 - **Beat 4 (`cross-check.mjs`):** exact match with the documented output —
   272 claims, 493 refs, gap register 17, `OK`, exit 0.
 - **Beat 3 one-liner (`node -e … require(fixture)`):** works; prints the
-  committed headline `{"instances":13,"states":3145632,…}` as documented.
+  committed headline `{"instances":13,"states":3149142,…}` as documented.
 - **Beat 5:** covered by §1.1 — the committed-log fallback remains valid and
   the live full-contract run reproduced the same VERDICT shape.
 

@@ -129,7 +129,7 @@ npx tsx scripts/model-check.mjs --only "signing n=2"
 property classes on **every edge** — phase legality, data invariants with
 real SHA-256 re-derivation and real secp256k1 nonce points, no dead ends,
 acyclic progress, determinism. The headline sweep is 13 instances:
-**3,145,632 states, 128.5 million event applications, 112 million typed
+**3,149,142 states, 134.8 million event applications, 118 million typed
 throws, and zero untyped `TypeError`/`RangeError`** — that ran in 574 s
 committed in the reproduction log. This one instance is the same explorer,
 same machines, live."
@@ -144,9 +144,9 @@ node -e "const f=require('./__fixtures__/model-check-summary.json');console.log(
 committed ones to quote from memory or the slide.)
 
 > **Committed full sweep (`__fixtures__/model-check-summary.json`, PR #53/#63):**
-> states **3,145,632** · applications **128,522,740** · typed throws
-> **112,076,252** · illegal-event checks **68,077,138** · **raw throws 0** ·
-> progress edges 11,716,954 · determinism paths 2,600, all byte-identical.
+> states **3,149,142** · applications **134,838,724** · typed throws
+> **118,387,556** · illegal-event checks **74,349,832** · **raw throws 0** ·
+> progress edges 11,718,124 · determinism paths 2,600, all byte-identical.
 
 ---
 

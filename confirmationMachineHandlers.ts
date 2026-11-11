@@ -14,6 +14,7 @@ import {
   CourtConfirmationMachineEvent,
   CourtConfirmationMachineState,
   CourtConfirmationTransitionError,
+  CourtEscalationRecord,
   CourtRoundOutcomeRecord,
 } from './confirmationMachineTypes';
 import {
@@ -21,6 +22,7 @@ import {
   MAX_CLAWBACK_FLAGS,
   MAX_CONFIRMATIONS,
   MAX_FEES,
+  MAX_LADDER_ROUNDS,
   MAX_MASS_VOTES,
   MAX_REASON_BYTES,
   TERMINAL_PHASES,
@@ -459,10 +461,32 @@ function applyRoundClawbacks(
   return clawbackFlags;
 }
 
-/** Apply an `escalate`: host opens the next ladder round. */
+/**
+ * Apply an `escalate`: open the next ladder round under a validated authority
+ * witness (SPEC §9.2, INV-ESC-1…6).
+ *
+ * The machine — not the host API — decides whether the move is authorised:
+ *
+ *  - the phase must allow it (`round_resolved`) and the ladder cap must not be
+ *    reached (fail closed on a hand-restored snapshot);
+ *  - `roundIndex` must open exactly the NEXT round (`ladderRound + 1`), so a
+ *    witness minted for another round cannot be replayed;
+ *  - `authority: "challenger"` requires a case-roster participant, a 32-byte
+ *    x-only pubkey, a 32-byte request hash, and the bond-proof hash of a
+ *    challenge the machine has ALREADY accepted (the witness is bound to
+ *    state, not merely well-formed);
+ *  - `authority: "host"` requires the frozen `hostEscalation` policy (default
+ *    false) and must not carry a challenger request.
+ *
+ * The validated witness is appended to `escalationLog` (append-only), so an
+ * observer can re-derive who escalated, for which round, against which request
+ * and bond. A host that bypasses its own API cannot skip this check: the event
+ * is the only way into the next round, and an unwitnessed event is a typed
+ * error.
+ */
 export function onEscalate(
   state: CourtConfirmationMachineState,
-  _event: Extract<ConfirmEvent, { type: 'escalate' }>,
+  event: Extract<ConfirmEvent, { type: 'escalate' }>,
 ): CourtConfirmationMachineState {
   if (state.phase !== 'round_resolved') {
     throw new CourtConfirmationTransitionError(
@@ -476,7 +500,92 @@ export function onEscalate(
       `maxLadderRounds ${state.maxLadderRounds} already reached at round ${state.ladderRound}`,
     );
   }
-  return freezeState({ ...state, phase: 'ladder_pending' });
+  const log = state.escalationLog ?? [];
+  if (log.length >= MAX_LADDER_ROUNDS) {
+    throw new CourtConfirmationTransitionError(
+      `escalation log exceeds the ${MAX_LADDER_ROUNDS}-round ladder bound`,
+    );
+  }
+  const expectedRound = state.ladderRound + 1;
+  const authority = event.authority;
+  if (authority !== 'challenger' && authority !== 'host') {
+    throw new CourtConfirmationTransitionError(
+      'escalation requires an authority witness: authority must be "challenger" or "host"',
+    );
+  }
+  if (event.roundIndex !== expectedRound) {
+    throw new CourtConfirmationTransitionError(
+      `escalation roundIndex ${String(event.roundIndex)} does not open the next ladder round ${expectedRound}`,
+    );
+  }
+  let record: CourtEscalationRecord;
+  if (authority === 'challenger') {
+    const idx = event.challengerIdx;
+    if (!Number.isSafeInteger(idx)) {
+      throw new CourtConfirmationTransitionError(
+        'challenger escalation requires a safe-integer challengerIdx',
+      );
+    }
+    assertParticipant(state, idx as number);
+    assertHex32(
+      event.challengerPubkey as string,
+      'escalation challenger pubkey must be 32-byte lowercase hex',
+    );
+    assertHex32(
+      event.requestHash as string,
+      'escalation request hash must be 32-byte lowercase hex',
+    );
+    assertHex32(
+      event.bondProofHash as string,
+      'escalation bond proof hash must be 32-byte lowercase hex',
+    );
+    // Bind the witness to a bond the machine already accepted: a
+    // well-formed hash for a bond this case never saw proves nothing.
+    if (!state.challenges.some((c) => c.bondProofHash === event.bondProofHash)) {
+      throw new CourtConfirmationTransitionError(
+        'escalation bond proof hash does not match any accepted challenge bond',
+      );
+    }
+    record = {
+      round: expectedRound,
+      authority,
+      challengerIdx: idx as number,
+      challengerPubkey: event.challengerPubkey as string,
+      requestHash: event.requestHash as string,
+      bondProofHash: event.bondProofHash as string,
+      at: event.now,
+    };
+  } else {
+    if (state.hostEscalation !== true) {
+      throw new CourtConfirmationTransitionError(
+        'host escalation is not permitted: the case policy does not set hostEscalation',
+      );
+    }
+    if (
+      event.challengerIdx != null
+      || event.challengerPubkey != null
+      || event.requestHash != null
+      || event.bondProofHash != null
+    ) {
+      throw new CourtConfirmationTransitionError(
+        'a host escalation must not carry a challenger request witness',
+      );
+    }
+    record = {
+      round: expectedRound,
+      authority,
+      challengerIdx: null,
+      challengerPubkey: null,
+      requestHash: null,
+      bondProofHash: null,
+      at: event.now,
+    };
+  }
+  return freezeState({
+    ...state,
+    phase: 'ladder_pending',
+    escalationLog: [...log, record],
+  });
 }
 
 /** Apply a `concede`: the current round's outcome becomes final. */

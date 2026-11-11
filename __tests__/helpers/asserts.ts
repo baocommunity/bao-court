@@ -64,6 +64,12 @@ export function assertConfirmationStateFrozen(state: CourtConfirmationMachineSta
       expect(Object.isFrozen(record.winnerIndices)).toBe(true);
     }
   }
+  // Escalation witness log (v0.12): append-only, so the array and every
+  // record in it are frozen.
+  if (state.escalationLog) {
+    expect(Object.isFrozen(state.escalationLog)).toBe(true);
+    for (const record of state.escalationLog) expect(Object.isFrozen(record)).toBe(true);
+  }
   if (state.ladder) {
     expect(Object.isFrozen(state.ladder)).toBe(true);
     expect(Object.isFrozen(state.ladder.votes)).toBe(true);

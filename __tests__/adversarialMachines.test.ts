@@ -1028,7 +1028,19 @@ describe('adversarial: legality matrix — every event at every phase, typed fai
     { type: 'accept_mass_vote', idx: 2, outcome: 'NO', eventId: hexId('f32'), now: 250 },
     { type: 'close_ladder_round', now: 400 },
     { type: 'resolve_round', now: 410 },
-    { type: 'escalate', now: 411 },
+    {
+      // Witness-shape escalation (SPEC §9.2): matches the challenge bond and
+      // roster index created by `confirmationAt`, so it is legal exactly at
+      // `round_resolved` and a typed error everywhere else.
+      type: 'escalate',
+      authority: 'challenger',
+      challengerIdx: 2,
+      challengerPubkey: hexId('7'),
+      requestHash: hexId('8'),
+      bondProofHash: '66'.repeat(32),
+      roundIndex: 1,
+      now: 411,
+    },
     { type: 'concede', now: 411 },
     { type: 'record_fee', feeEventId: hexId('fe1'), now: 420 },
     { type: 'flag_clawback', idx: 1, reason: 'fuzz', now: 430 },
