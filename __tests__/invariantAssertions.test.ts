@@ -104,6 +104,7 @@ import { BOND_OWNERSHIP_DOMAIN } from '../escrow';
 import { LN_AUDIT_DOMAIN, LN_PREIMAGE_DOMAIN } from '../lnSettlement';
 import { HEX_32 } from '../courtCeremonyCore';
 import { CourtError } from '../errors';
+import { SIGNING_JOURNAL_DOMAIN } from '../attribution';
 import {
   voteMachine as sharedVoteMachine,
   confirmationMachine as sharedConfirmationMachine,
@@ -247,6 +248,7 @@ const ALL_DOMAINS: readonly string[] = [
   BOND_OWNERSHIP_DOMAIN,
   LN_PREIMAGE_DOMAIN,
   LN_AUDIT_DOMAIN,
+  SIGNING_JOURNAL_DOMAIN,
 ];
 
 describe('INV-X-1: the BAO-Court hash domains form a pairwise-disjoint family', () => {

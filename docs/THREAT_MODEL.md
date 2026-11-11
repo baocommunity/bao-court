@@ -60,8 +60,8 @@ assumption A1 of the paper §10.1).
 | ID | Adversary | Capabilities | Not in scope |
 |---|---|---|---|
 | **ADV-RELAY** | Hostile Nostr relay | Drop, reorder, delay, duplicate any event; serve partitioned views (over-serve selected clients); replay old events; append hostile tags to re-published events. Cannot forge (NIP-01 id + Schnorr bind content) and cannot read NIP-59 gift-wrap payloads. | Compromising juror hosts; breaking the seal cryptography. |
-| **ADV-JUROR-<t** | Malicious juror minority | Controls < $t$ shares of the active cohort; votes arbitrarily, equivocates commits/nonces/partials, abstains, colludes with the coordinator, publishes its share of evidence. By Shamir privacy learns nothing about $f(0)$ beyond what its own shares give. | Forging an attestation alone; reading others' shares. |
-| **ADV-JUROR-≥t** | Malicious juror majority | Controls ≥ $t$ shares: can produce **valid** attestations for any outcome, steer the signer set, and do all of ADV-JUROR-<t. This is the strongest insider adversary. | Remaining honest jurors' keys. |
+| **ADV-JUROR-<t** | Malicious juror minority | Controls < $t$ shares of the active cohort; votes arbitrarily, equivocates commits/nonces/partials, abstains, colludes with the coordinator, publishes its share of evidence. By Shamir privacy learns nothing about $f(0)$ beyond what its own shares give. | Forging an attestation alone; reading others' shares; **escaping attribution for a published partial** — once the session journal is published, a partial that fails share verification is attributable to its index (Theorem 6, `docs/proofs/attribution.tex.md`). |
+| **ADV-JUROR-≥t** | Malicious juror majority | Controls ≥ $t$ shares: can produce **valid** attestations for any outcome, steer the signer set, and do all of ADV-JUROR-<t. This is the strongest insider adversary. | Remaining honest jurors' keys; **anonymity of the contributing shares** — a prepared collusion is still *attributable* after the fact (detective, not preventive; Theorem 6 + `docs/ATTRIBUTABLE_SIGNING.md`). |
 | **ADV-COORD** | Malicious coordinator / host | Drives every machine (creates states, closes phases, dispatches); can withhold, reorder, delay, or replay events to peers; can attempt the paper's vector I (phase-timing manipulation); runs restored-snapshot recovery. **In scope in v1: release.** The host holds the settlement-signer credential, so under the host-mediated binding (`docs/SETTLEMENT-BINDING.md` §2.3) it can request the cohort's spend signature, release against no verdict, and pick among several valid verdicts for one market. Cannot sign (no shares), cannot alter frozen machine states undetected, cannot redirect an escrow to an arbitrary destination (the cohort's signature commits to one sighash and the winner must also sign). | Forging an attestation (needs $t$ shares); spending without the winner's key; surviving the published `(attestation, planHash, sighash, txid)` audit trail. |
 | **ADV-PROP** | Hostile proposer / oracle | Supplies the proposed outcome, evidence-id set, ballot, deadlines, and anchoring block hash; can grind selection by timing dispute opening and by adaptive reselection (`appealCoordinator.maybeReselect`, CRYPTO_AUDIT §2.4). | Fabricating block hashes at required depth (A5). |
 | **ADV-ECON** | Economic adversaries (two sub-species, the round-10 findings) | **(a) Ack-farming:** maximize measured SLA (ack rate) without participating — pre-fix the SLA was ack-rate-only. **(b) Bond-gaming:** challenge with a bonded but bad-faith dispute to farm overturn clawbacks or to launder a losing position through the ladder; exploit bond-escrow edges (witness-vs-UTXO duty, dust fungibility, redelivery rules). | Stealing sats directly; breaking the ledger state machine. |
@@ -138,6 +138,22 @@ the verdict hash from the supporting event-id set (INV-VOTE-20 — order
 independence), the signed message from the tags (INV-VAL-7), and the Schnorr
 verification against the **pinned** empaneled key (§5). Every step is
 public.
+
+**Attribution (detective control, formal since round 23).** The aggregate
+alone names no signers (Theorem 6, Lemma 6.0). The **signing-session journal**
+does: round-1 nonce commitments, round-2 partials, signer set, threshold and
+aggregate, published append-only (RFC 9162-style log). Anyone then verifies
+each partial against its certified verification share
+(`s_i·G = R_i + c·λ_i·(π·Y_i)`), recomputes `s = Σ s_i`, and attributes every
+defect to an index — a bad partial is `PARTIAL_INVALID` at its signer
+(INV-ATTRIB-1/2, `attribution.ts`, `docs/proofs/attribution.tex.md`). The
+detective control is bounded by two named premises: the **certified-share pin**
+(P1 — otherwise a fabricated journal can name a substitute key) and
+**authenticated append-only entries** (P2 — otherwise a relay can frame a
+signer). The journal is host-side today; the log store/publication and the
+mechanically-enforced batch duty are v0.11 candidates
+(`docs/ATTRIBUTABLE_SIGNING.md` §5). Without a published journal a session is
+unattributable — the signature cannot be un-linked retroactively.
 
 **Residual (honest).** ADV-JUROR-≥t produces a *valid* verdict for any
 outcome **by design** — that is what a threshold signature means. The
@@ -523,6 +539,7 @@ CROSS_CHECK.md finding-class row where evidence exists.
 | PO-15 | Settlement binding (paper A6 / asset A7): v1 release is host-mediated — the cohort authorises, the host releases; no verdict is required by the signer, and the cohort's consent is a signature over the sighash, not over the verdict | Two-signature leaves (the cohort cannot redirect), one-signature-per-binding at the signer (no equivocation), validator pinning (no verdict forgery or alteration), and the published `(attestation, planHash, sighash, txid)` tuple (detective) | Stakes are small, the operator is the deployment, and the honest description ("the court decides, the host releases") is now in the paper, this model, and `docs/SETTLEMENT-BINDING.md` | Spend-session binding (`marketId ‖ attestationDigest ‖ planHash ‖ sighash` in the signing-session hash + a signer that refuses a partial without a valid attestation) and, for Liquid binary/escrow rails, the `CHECKSIGFROMSTACK` leaf — both gated in `docs/SETTLEMENT-BINDING.md` §2.2 and §4.2 |
 | PO-16 | Lightning panel preimage has **no secret input**: every field of `deriveLnPreimage` (disputeId, role, pubkey, outcome, attestationDigest, round) is public once reveals close, so any party can derive any hold's preimage. Forfeiture is a host policy plus an attributable race, not a cryptographic property (paper §9.1, §10.2 O) | Ordering: the preimage cannot exist before the verdict it commits to; a settle contrary to the plan is attributable (the published preimage matches the published witness); Panel B's script-enforced path has no such exposure | Holds are host-operated in the current deployment, and the observation is documented rather than discovered by an attacker | A host-held secret witness (makes the host a custodian of every slashing claim) or migrate the economic layer to the script-enforced panel; an LN-settlement construction with a script-checked verdict |
 | PO-17 | Cross-engine selection ordering: `Math.log` is not required to be bit-identical across ECMAScript engines, so near-ties in `-ln(r)/sqrt(w)` could order differently on two conforming verifiers (paper §4.2) | The 32-bit draws are exactly reproducible from public data, boundary values are clamped, and collisions resolve by the pubkey tie-break — a divergence is *detectable* by recomputation | One implementation is deployed; the draw is public and re-checkable per selection | Compare priorities exactly (or publish computed priorities with a pinned tolerance + tie-break), or replace the transcendental with a fixed-point transform |
+| PO-18 | Attribution is detective and host-mediated: the journal builder/verifier ship (Theorem 6, INV-ATTRIB-1/2), but the append-only log, head publication/gossip, per-participant entries and the mechanical batch-signing duty (INV-ATTRIB-3) do not — an unjournaled session stays unattributable (P1/P2 are caller obligations) | Record format + verifier exported and tested (8 cases); `identityPinned` makes the certified-share pin explicit; the paper/model now state the detective boundary instead of implying linkability | Detection is a post-hoc slashing/reputation control; v1 already trusts the host for release (A7), so host-side journaling adds evidence without adding a new trust assumption; no validator or signature change | v0.11: append-on-aggregate in the host, per-participant signed entries, signed tree heads + gossip, and batch-manifest binding into the signed FROST message (`docs/ATTRIBUTABLE_SIGNING.md` §5.2) |
 
 ---
 
@@ -530,7 +547,7 @@ CROSS_CHECK.md finding-class row where evidence exists.
 
 - **Cryptographic core (A1–A3):** sound by construction against <t insiders
   — FROST/RFC 9591 binding factors, Shamir privacy, PoK-fenced DKG, strict
-  BIP-340 verification at every site, all pinned executably (145 invariants;
+  BIP-340 verification at every site, all pinned executably (149 invariants;
   3M-state model checking; differential parity with zero disagreements).
 - **Settlement binding (A7 = paper A6, PO-15):** *not* cryptographic in v1. The
   court attests, the host releases; the winner must co-sign, so the cohort

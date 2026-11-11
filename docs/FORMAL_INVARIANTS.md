@@ -1380,6 +1380,9 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-X-9 | compareOutcomeUtf8 = UTF-8 byte order | courtVoteMachine.ts:131-140 | invariantAssertions.test.ts › comparator oracle |
 | INV-X-10 | shared verdict domain by design | courtConfirmationMachine.ts:18-27,1170 | invariantAssertions.test.ts › domain binding |
 | INV-SETTLE-1 | judge-leaf key contract (winner ≠ group, byte-identical to legacy) | liquidEscrow.ts › buildCourtJudgeLeaf | liquidEscrow.test.ts › buildCourtJudgeLeaf (attested-spend binding) |
+| INV-ATTRIB-1 | journal well-formedness (1 commitment + 1 partial per sorted signer, threshold met) | attribution.ts › buildSigningJournal | attribution.test.ts › builds a journal…; rejects a wrong signer set |
+| INV-ATTRIB-2 | journal ⇔ aggregate (recomputed partials reproduce R and s exactly) | attribution.ts › buildSigningJournal/verifyAggregateAttribution | attribution.test.ts › builds a journal…; rejects a signature the published partials do not reconstruct |
+| INV-ATTRIB-3 | batch-signing duty (D1–D5) recorded in the journal entry — **spec-level, not mechanically enforced** | §16; docs/ATTRIBUTABLE_SIGNING.md §4 | — (documented duty; see §16) |
 
 ---
 
@@ -1498,10 +1501,12 @@ lack an enforcing test. Ordered by audit significance.
   `__tests__/invariantAssertions.test.ts` (27 always-on global assertions).
 - Typecheck: `npm run typecheck && npm run typecheck:tests`.
 - The invariant count: 8 core + 23 vote + 36 confirmation + 15 signing +
-  12 DKG + 9 selection + 16 batch + 16 validator + 10 cross-machine =
-  **145 stated invariants**, each with an enforcement pointer; 137 pinned by a
-  pre-existing named test, and the cross-machine/global set pinned by the 27
-  executable assertions of `invariantAssertions.test.ts`. Twelve findings
+  12 DKG + 9 selection + 16 batch + 16 validator + 10 cross-machine +
+  3 attribution + INV-SETTLE-1 = **149 stated invariants**, each with an enforcement
+  pointer; 140 pinned by a named test, and the cross-machine/global set
+  pinned by the 27 executable assertions of
+  `__tests__/invariantAssertions.test.ts` (INV-ATTRIB-3 is spec-level —
+  see §16). Twelve findings
   (F-1…F-12) were recorded against v0.9.1; as of v0.9.2, F-2, F-3, F-9, and
   F-12 are CLOSED (enforced guards + regression tests), and F-10/F-11 remain
   documented-only (F-10 guards are unreachable defense-in-depth, F-11 is
@@ -1515,7 +1520,7 @@ Every error thrown across the package boundary is a `CourtError` (`errors.ts`)
 — no plain `Error` escapes. The model has three axes, each independently
 holdable:
 
-1. **Class** — how to `catch`. All 30 exported classes extend `CourtError`.
+1. **Class** — how to `catch`. All 31 exported classes extend `CourtError`.
 2. **`code`** — what happened, machine-readable. New codes are
    SCREAMING_SNAKE; the pre-existing per-class code unions keep their
    historical lowercase values (compat is additive — existing `err.code`
@@ -1544,6 +1549,7 @@ true.
 |---|---|---|---|
 | `ARGUMENT_INVALID` | `CourtArgumentError` | default code (rarely used; sites pass a domain-prefixed code) | — |
 | `BATCH_ATTESTATION` | `BatchAttestationError` | batchAttestation.ts (14 sites) | INV-BATCH-3 (duplicate verdicts) |
+| `ATTRIBUTION` | `AttributionError` | attribution.ts (builder validation) | INV-ATTRIB-1/2 (journal well-formedness) |
 | `CONFIRMATION_TRANSITION` | `CourtConfirmationTransitionError` | courtConfirmationMachine.ts | INV-CONF-3/5/6/7/9… (illegal edges, deadlines, ledgers) |
 | `SIGNING_TRANSITION` | `CourtSigningTransitionError` | courtSigningMachine.ts | INV-SIGN-3/10/12/13 (edges, deadlines, aborts) |
 | `DKG_TRANSITION` | `CourtDkgTransitionError` | courtDkgMachine.ts | INV-DKG-3/4/9/10/11 (edges, deadlines, aborts) |
@@ -1576,3 +1582,58 @@ v0.10.1; one internal control-flow throw in `courtProtocolEvents.ts`
 typed too). Malformed-but-well-typed caller input surfaces as
 `CourtArgumentError` (or a domain class), never as a raw `TypeError` escaping
 the boundary — pinned by `__tests__/errorTaxonomy.test.ts`.
+
+---
+
+## 16. Attribution journal (INV-ATTRIB, v0.11 candidate)
+
+The FROST aggregate is an ordinary Schnorr signature and names no signers
+(docs/proofs/attribution.tex.md, Lemma 6.0). Attribution is therefore a
+property of the **published signing session**, not of the signature. The
+record builder/verifier ships (`attribution.ts`); the append-only log store,
+head publication and gossip are v0.11 candidates
+(`docs/ATTRIBUTABLE_SIGNING.md` §5). **Premises** (Theorem 6 §3): **P1** the
+verification shares are the certified DKG shares (`DkgRecord.verificationShares`);
+**P2** journal entries are authenticated per signer and append-only; **H3**
+hash collision resistance.
+
+- **INV-ATTRIB-1 (journal well-formedness).** `buildSigningJournal` accepts
+  only: a 32-byte `message`, a curve-point `groupPubkey`, `1 ≤ threshold ≤
+  |signerSet|`, sorted distinct signer indices, and **exactly one** commitment
+  and one partial per signer, with each partial's published share key equal to
+  its commitment's key; it throws `AttributionError` (`ATTRIBUTION`) otherwise.
+  Guard: `attribution.ts › buildSigningJournal`. Test:
+  `__tests__/attribution.test.ts` › 'builds a journal that verifies and
+  attributes both signers', 'rejects a wrong signer set'.
+
+- **INV-ATTRIB-2 (journal ⇔ aggregate).** The record's aggregate is
+  **recomputed** from its partials, and verification requires (a) every partial
+  to satisfy the share-verification identity
+  `s_i·G = R_i + c·λ_i·(π·Y_i)`, (b) `Σ s_i + c·π·τ = s`, (c) `R` to equal the
+  group nonce of the published commitments, and (d) BIP-340 validity under the
+  pinned key. The x-only identity admits at most two scalars per signer
+  (`s_i`, `n − s_i`), both at the **same** index, and `R` fixes the signer set
+  independently (Theorem 6 Lemma 6.4); so a valid record decomposes the
+  aggregate to exactly the published signer set, and a failing partial is
+  attributed to its `idx` (`PARTIAL_INVALID`). Guard:
+  `attribution.ts › verifyAggregateAttribution`.
+  Test: `__tests__/attribution.test.ts` › 'builds a journal…', 'attributes a
+  forged partial to its signer index', 'fails reconstruction when a partial is
+  missing', 'rejects a signature the published partials do not reconstruct'.
+
+- **INV-ATTRIB-3 (batch-signing duty — spec-level, no mechanical guard).** A
+  signer MUST NOT contribute a partial to a batch root before verifying
+  D1 epoch/cohort binding, D2 count/shape, D3 root recomputation over its own
+  verdict hashes, D4 optional inclusion spot-check, and MUST record the result
+  (D5) in its journal entry. This cannot be enforced inside
+  `aggregateAttestation` today because the batch manifest is not in the signed
+  FROST message; the duty is normative for hosts
+  (`docs/ATTRIBUTABLE_SIGNING.md` §4) and the primitives of the check are
+  exported (`buildBatchMerkleTree`, `hashBatchManifest`). **Not covered:** a
+  mechanical hook — v0.11 signing-schema change. This invariant is the
+  documented half of Claude #9 (one signature certifies up to 10 000 verdicts:
+  the compression must not be in the verification duty).
+
+**Traceability gaps.** INV-ATTRIB-3 has no executable proof yet (registered in
+`docs/CROSS_CHECK.md`'s gap register). INV-ATTRIB-1/2 are pinned by
+`__tests__/attribution.test.ts` (8 tests).

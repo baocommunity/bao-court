@@ -68,6 +68,41 @@ frozen.
   references to it are short names rather than paths, and §11.5's review
   record names that round.
 
+### Added (round 23 — attribution: the FROST signature names no one, the session does)
+
+- **New module `attribution.ts` + `@bao/court/attribution`** — the
+  signing-session record and its verifier: `buildSigningJournal({ message,
+  groupPubkey, threshold, signerSet, commitments, partials })` recomputes the
+  aggregate from the published partials; `verifyAggregateAttribution(journal,
+  aggregate, pinnedGroupXonly, verificationShares?)` fails closed and reports
+  each defect with the attributable signer `idx` (`PARTIAL_INVALID`,
+  `SHARE_MISMATCH`, `R_MISMATCH`, `RECONSTRUCTION_MISMATCH`,
+  `AGGREGATE_INVALID`, …). `hashSigningJournal` is the canonical RFC 9162 log
+  leaf preimage. `identityPinned` makes the certified-share pin explicit.
+- **New proof `docs/proofs/attribution.tex.md` (Theorem 6).** Unconditional
+  reconstruction (`s = Σ s_i + c·π·τ`) and per-signer share verification
+  (`s_i·G = R_i + c·λ_i·(π·Y_i)`; at most two scalars per index — the x-only
+  sign ambiguity — which leaves the attributed index unchanged); identity
+  conditional on the certified-share pin (P1) and authenticated append-only
+  entries (P2); Lemma 6.0 proves the bare aggregate is unlinkable — the reason
+  the *session* must be journaled. Includes D-BATCH:
+  what a signer MUST verify before contributing to a batch root (count/epoch/
+  cohort binding + its own Merkle-root recomputation), the answer to "one
+  signature certifies up to 10,000 verdicts".
+- **New doc `docs/ATTRIBUTABLE_SIGNING.md`** — journal format, RFC 9162 log
+  construction (leaf/tree/STH/inclusion/consistency/equivocation), the
+  batch-signing duty record, and the v0.11 deployment plan (host journal is
+  host-side today; per-participant entries, head publication and the mechanical
+  batch hook are specced, not shipped).
+- **`FORMAL_INVARIANTS.md` §16 (INV-ATTRIB-1..3)**, §12/§14 traceability and
+  counts, error registry (`ATTRIBUTION`), `THREAT_MODEL.md` ADV-JUROR rows +
+  A1 detective-control paragraph + PO-18, `proofs/README.md` (T6 + H3/P1/P2
+  premises + GAP-6a/6b), and a `CROSS_CHECK.md` round-23 delta note.
+- **Tests:** `__tests__/attribution.test.ts` — 8 cases (honest journal,
+  forged partial attributed by index, missing partial, tampered aggregate,
+  wrong signer set, identity pin, wrong group key, malformed record) +
+  journal-hash determinism.
+
 ### Fixed (settlement binding — what the FROST judge key actually signs)
 
 - **New doc `docs/SETTLEMENT-BINDING.md`** (normative): the three achievable
