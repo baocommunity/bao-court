@@ -602,12 +602,14 @@ export {
   COURT_ESCALATION_REQUEST_DOMAIN,
   COURT_ESCALATION_REQUEST_VERSION,
   MAX_ESCALATION_REQUEST_ROUND,
+  MAX_ESCALATION_CASE_ID_BYTES,
   buildCourtEscalationRequest,
   courtEscalationRequestPreimage,
   escalationRequestToMachineEvent,
   hashCourtEscalationRequest,
   parseCourtEscalationRequest,
   serializeCourtEscalationRequest,
+  type CourtEscalationBinding,
   type CourtEscalationRequest,
 } from './courtEscalationRequest';
 

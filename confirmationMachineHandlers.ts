@@ -366,6 +366,20 @@ export function onResolveRound(
   // `round_flip` clawbacks from `previous.winnerIndices` — a hand-restored
   // (forged) history must be re-verified before it directs clawbacks.
   assertValidOutcomeHistory(state);
+  // Round-8 finding r8-6: the barrier above proves the history is a consecutive
+  // 1..k sequence but not that k is the round being resolved. A restored
+  // `ladder_vote_closed` snapshot with `ladderRound = 4` and ONE record used to
+  // append round 4 on top, producing [1,4] — a history no later barrier accepts,
+  // so the case could never finalize again (the r40-2 brick, value-locked). The
+  // live path always has exactly `round - 1` records: `open_ladder_round` opens
+  // rounds one at a time and each `resolve_round` appends exactly one record.
+  if (state.outcomeHistory.length !== state.ladder.round - 1) {
+    throw new CourtConfirmationTransitionError(
+      `cannot resolve round ${state.ladder.round}: the outcome history holds `
+      + `${state.outcomeHistory.length} record(s) but ${state.ladder.round - 1} round(s) were resolved `
+      + '— the two ledgers disagree, so resolving would append a non-consecutive record',
+    );
+  }
   if (state.ladder.votes.length === 0) {
     throw new CourtConfirmationTransitionError('cannot resolve a round without any valid mass vote');
   }
