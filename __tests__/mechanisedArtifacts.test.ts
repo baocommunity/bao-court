@@ -519,11 +519,15 @@ describe('EscalationLedger.lean §6 — reachable_wellFormed: live histories nev
 describe('escalation.qnt — invBinding: the recorded claims agree with the HOST binding (r8-2)', () => {
   const CASE = 'court:r46-mechanised:1';
   const binding = { caseId: CASE, authenticatedPubkey: PUBKEY } as const;
+  // r9-2: the mapper binds the request's `bondTxid` to the accepted challenge
+  // that carries the membership witness — the fixture's challenge is juror 2's,
+  // txid `d2…`.
+  const challengeTxid = padHexId('d2');
   const request = buildCourtEscalationRequest({
     caseId: CASE,
     round: 1,
     challengerPubkey: PUBKEY,
-    bondTxid: BOND_TXID,
+    bondTxid: challengeTxid,
     bondProofHash: BOND_PROOF,
     roundBondProofHash: roundBond(2),
     eventId: padHexId('9'),
@@ -558,6 +562,13 @@ describe('escalation.qnt — invBinding: the recorded claims agree with the HOST
         s, buildCourtEscalationRequest({ ...request, round: 2 }), 3200, binding,
       )),
     ).toMatch(/signed to escalate past round/);
+    // r9-2 (round 9): the request hash would commit to a bond txid the case
+    // never bound, so the mapper refuses it too.
+    expect(
+      message(() => escalationRequestToMachineEvent(
+        s, buildCourtEscalationRequest({ ...request, bondTxid: BOND_TXID }), 3200, binding,
+      )),
+    ).toMatch(/the request hash would commit to a bond this case never bound/);
     // …and a missing binding is itself a refusal (r8-2).
     expect(
       message(() => escalationRequestToMachineEvent(

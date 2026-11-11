@@ -17,8 +17,10 @@
 //     bond and its per-round bond. The transport cannot verify the last three;
 //     the HOST holds the binding (the case id it routed on, and the pubkey the
 //     request authenticated as — `CourtEscalationBinding`, r8-2). `canParse`
-//     is the codec's shape check; `canMap` is the r8-2 binding check; and
-//     `canReduce` is the reducer's witness check. Claim:
+//     is the codec's shape check; `canMap` is the r8-2 binding check (case id,
+//     authenticated pubkey, resolved round — round 9's `bondTxid` binding is NOT
+//     modelled: ids are abstract `int`s here); and `canReduce` is the reducer's
+//     witness check. Claim:
 //     **invBinding** — every recorded escalation carries wire claims that AGREE
 //     with the host binding, for every wire the environment may offer
 //     (`wireSim` deliberately offers mismatched, stale and replayed ones).
