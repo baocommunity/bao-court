@@ -42,6 +42,19 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.13.1] — 2026-11-11
+
+### Fixed (review-round-4, PR #103)
+- **Two-challenger bond billing (r33-1, exploitable):** the reducer compared the round bond only with the escalator's own membership bond, so juror B could bill its rung to juror A's accepted challenge bond (A's witness burned, B free, wrong payer logged). The reducer and the finalize barrier now refuse ANY already-accepted challenge bond.
+- **Short escalation log un-consumed bonds (r33-5, exploitable):** deleting a log record freed its bond — a restored snapshot could open a free rung (then brick the case at finalize). The ledger must now be complete (one record per opened round), and `onEscalate` re-runs the barrier before any rung opens.
+- **Profitable round blessed when `a_f ≤ ½` (r33-6, exploitable):** the derived-bound clamp admitted the first profitable rung; `0` now means no safe depth, and the ok-test is sign-based.
+- `Infinity` from finite overflow in the penalty arithmetic (r33-9).
+
+### Changed (docs + verification)
+- Paper + evaluation refreshed with rounds 29–31 evidence (witness-aware sweep 15 instances / 3,869,232 states / 60,020,684 illegal-witness probes / 0 accepted), the Byzantine-relay equivocation matrix (NO_EQUIVOCATION — mechanism), and §11.6 "the review verifies itself".
+- Registered-findings sweep: 107 items dispositioned (6 fixed / 46 closed-by-design / 53 deferred-v0.14 with triggers / 2 rejected); zero left registered.
+- Readiness review: 3× READY-WITH-EDITS, 14 doc corrections; suite **1,686 / 76 files**; invariants 158; cross-check 285 claims / 516 refs / 95.1 %.
+
 ## [0.13.0] — 2026-11-11
 
 ### Fixed — the escalation bond is a consumption test, not a membership test (R31, r30-1)
