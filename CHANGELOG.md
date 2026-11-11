@@ -407,6 +407,20 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.15.0] — 2026-11-11
+
+### Changed (semantics — the exported ladder bound)
+- **`deriveMaxLadderRounds` IS the safe predicate** (r52, closing the off-by-one round 46a's mechanisation exposed): it returns `max{d : R·D^d < A^d·(R+B)}` evaluated in exact `BigInt` on the rational each parameter names — no logarithm, no float comparison on the decision path, `0` = no safe depth. At exact-integer boundaries (`a_f = 1/2` with `β = 3ρ`, `7ρ`, `15ρ`, `31ρ`; `3/4` with `β = 7ρ/9`) the old value named the **break-even** round that the sign gate already refused. Seven rows change; all non-boundary rows are unchanged (flip 7/5/4/3/2, cap 5/4/3/2/1). `derivedCap = flipRound − 1` is now an equality everywhere, and `ρ+β` overflow no longer reads as a perfect jury.
+
+### Added
+- **Mechanised escalation layer** (`proofs/lean4/LadderBound.lean`, `EscalationLedger.lean`; `proofs/mechanized/escalation.qnt`): `safe_depth_bound` (`E[π](d) < 0 ↔ d < flipRound`, reduced to the integer inequality), `safe_monotone`, `unsafe_witness` (the ladder is not a free option), `one_hash_one_index`, `consumed_not_reused`, `round_bond_not_membership`, `strict_case_has_round_bond`, `rounds_consecutive`, `escalation_opens_next_round`, `log_length_bounded`, `reachable_wellFormed` (barriers never refuse a legal history). **No `sorry`; axioms `propext` and `Quot.sound` only.** Apalache exhaustive (depth 10/8) with 58 Quint scenarios; a `file:line` code↔model correspondence table in `docs/proofs/07`.
+- **Independent wire implementation + differential** (`scripts/differential/`, `docs/DIFFERENTIAL_WIRE.md`): a Python reference written from the spec reproduces the known-answer digest independently; 100,000-case differential, 51,252 accepted requests byte-identical, 0 disagreements after the fixes below.
+- **Campaign 10×**: 1,587,000 units / 8,286,823 assertions / 0 failures (`docs/benchmarks/SCALE_CAMPAIGN_V2.md`).
+
+### Fixed
+- Four raw `TypeError` escapes found by the differential (non-array `challenges`, `null` ledger row, `build(null)`, `build([])`).
+- **Review round 10** (PR #122): the refusal path echoed wire values verbatim, so a crafted id forged a log line inside the refusal document (`quoteWireValue` now escapes `Cc/Cf/Zl/Zp/Cs` and bounds the echo); a **signed concession re-presented with `concession:false` was hashed as an escalation nobody signed** (the binding now lives inside the signed bytes — kind, id, signature, author, `created_at`, content); `finalize` read `ladder.round` for the verdict and `ladderRound` for the log, so a skewed snapshot **finalised round 2's YES over round 3's NO** (`assertRoundCountersAgree` in `finalize`/`escalate`/`open_ladder_round`).
+
 ## [0.14.2] — 2026-11-11
 
 ### Fixed (review-round-9, PR #118)
