@@ -654,6 +654,14 @@ export class CourtInbox {
    *
    * Re-delivery of a known wrap id is idempotent: the relay is added to the
    * record's provenance and `lastSeen` advances; `firstSeen` never moves.
+   *
+   * Provenance is capped at {@link MAX_RELAYS_PER_RECORD} sources per wrap
+   * (round-30 finding): the FIRST distinct sources win, deterministically by
+   * delivery order, and later sources are dropped with `lastSeen` still
+   * advancing. Without this cap a recipient fed the same wrap by more than
+   * `MAX_RELAYS_PER_RECORD` relays produced a snapshot that `fromSnapshot`
+   * (correctly) refuses as `corrupt_snapshot` — i.e. one hostile relay set
+   * could brick the whole durable inbox on restart.
    */
   ingest(wrapEvent: unknown, relayUrl: string, now: number): CourtInboxIngestResult {
     assertNow(now);
@@ -672,6 +680,7 @@ export class CourtInbox {
     const existing = this.records.get(wrapEvent.id);
     if (existing) {
       const relays = existing.relays.includes(relayUrl)
+        || existing.relays.length >= MAX_RELAYS_PER_RECORD
         ? existing.relays
         : [...existing.relays, relayUrl].sort();
       const next: CourtInboxRecord = {

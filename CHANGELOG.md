@@ -23,6 +23,53 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed — round-30 transport campaign
+- **Provenance overflow bricked the durable inbox** (finding T-1, operational):
+  `CourtInbox.ingest` appended one provenance URL per distinct relay without a
+  cap, but `CourtInbox.fromSnapshot` rejects any record with more than
+  `MAX_RELAYS_PER_RECORD` (64) relays as `corrupt_snapshot`. One wrap delivered
+  by 65+ relays therefore produced a snapshot that could never be restored —
+  the *whole* inbox (every message) was lost on the next restart, and a hostile
+  relay set could trigger it for a legitimate recipient without any key. Ingest
+  now caps a record's provenance at the first 64 distinct sources (determinism:
+  delivery order), keeps advancing `lastSeen`, and the restored-state check
+  stays strict so a tampered store is still rejected. Regression:
+  `__tests__/r30InboxOutboxLoad.test.ts` (B).
+
+### Added — round-30 transport + ceremony campaign (test-only, no API change)
+- `__tests__/r30SealGames.test.ts` — NIP-59 seal-layer attacks, each pinned to
+  the layer that catches it: seal-author mismatch, rumor-id recomputation (and
+  the honest boundary that a *consistent* forgery is stopped by the roster
+  gate, not the wrap), wrong/compressed recipient p-tag, self-wrapped replay,
+  **cross-session seal replay** (the wrap is re-creatable by anyone; the inner
+  session binding and freshness are what refuse it), a gift wrap addressed to a
+  non-roster peer, and wraps carrying two seals.
+- `__tests__/r30MarmotTransport.test.ts` — the MLS surface in two halves: the
+  transport *contract* the ceremony needs (epoch-scoped key packages, single-use
+  welcomes, authorized member adds), modelled locally because `marmot-ts` is a
+  consumer dependency, not this package's; and what the **real** FROST code
+  guarantees when the transport lies (non-roster commitments/reveals refused,
+  reveals bound to their own nonce, no message transfer between rounds, local
+  nonce-reuse refusal).
+- `__tests__/r30InboxOutboxLoad.test.ts` — 10k-event flood that is 90%
+  duplicates (1,000 records, 10 provenance entries each, bounded serialized
+  size, replay-idempotent, restart-stable), provenance cap/overflow,
+  `MAX_RECORDS` capacity semantics, and outbox exactly-once under a partial
+  relay failure (same stored wrap template rebroadcast, one recipient drain,
+  one ack, idempotent ack redelivery) plus canonical-message-key collision
+  probes.
+- `scripts/court/multi-process-ceremony.mjs` + `scripts/court/juror-child.ts` —
+  N = 3…7 **separate OS processes** running the real Pedersen DKG and FROST
+  signing round over a loopback HTTP relay that assigns message order;
+  `--chaos=kill` (SIGKILL mid-DKG / mid-signing) and `--chaos=replay`
+  (cross-round wire replay). The coordinator re-derives the group key from the
+  published commitments and verifies the aggregate itself. Gated in CI by
+  `__tests__/r30MultiProcessCeremony.test.ts`; scope and honest limits in
+  `docs/MULTI_PROCESS_CEREMONY.md`.
+- `npm run simulate:multiprocess`.
+- Suite: **1,606 passed / 1 skipped, 70 files** (round-30 adds 42 assertions
+  across 4 files, including the 4-scenario multi-process gate).
+
 ### Fixed — review-round-3 hardening (`docs/REVIEW_ROUND_3.md`)
 - **The escalation bond is now bound to the CHALLENGER, not just to the case**
   (r29-1, EXPLOITABLE): `onEscalate` accepted any `bondProofHash` present in
