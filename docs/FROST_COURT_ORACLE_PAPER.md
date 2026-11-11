@@ -403,8 +403,9 @@ infeasible to bias without a deep reorg. The selection event publishes the
 exact seed and block hash used, so **anyone recompute the draw**
 (`verifyJurySelection`) — selection is a proof, not a claim.
 
-Two ordering requirements, and their residual (`docs/proofs/economics/05-review-gapfills.tex.md`
-§4): **(a)** the seed block **height** must be *derived* from the candidate-set
+Two ordering requirements, and their residual (the economics gap-fills note,
+App. A, S-15, §4): **(a)** the seed block **height** must be *derived* from the
+candidate-set
 freeze height ($h^{*} = h_{\text{freeze}} + \Delta$ with $\Delta \ge 6$), never
 selected after a hash is visible — otherwise whoever picks the height picks the
 jury; **(b)** the candidate set must be committed before the seed exists. The
@@ -429,8 +430,8 @@ by pubkey ascending (insertion-order independent, fully reproducible).
 stake path evaluates $\pi_j = -\ln(r_j)/\sqrt{\max(1, w_j)}$: the $\max(1,\cdot)$
 floor stops a zero-stake candidate from producing an infinite priority, and it
 is the only structural difference between the formula above and
-`quadraticPriority`. (ii)
-The optional reputation mode of §4.4 replaces $\sqrt{w_j}$ with a caller-supplied
+`quadraticPriority`. (ii) The optional reputation mode of §4.4 replaces
+$\sqrt{w_j}$ with a caller-supplied
 weight $w_j$ and evaluates $\pi_j = -\ln(r_j)/w_j$ (`weightedPriority`) — the
 same exponential clock, a different rate function; the paper's $\sqrt{w_j}$ is
 the *stake default*, not the general case. (iii) $r_j$ is clamped away from the
@@ -475,7 +476,7 @@ carried by the admission filters of §4.3** (web-of-trust score, account age,
 confirmed stake commitment, category match), whose per-identity cost is
 non-purchasable, not by the exponent. Exponents are a transaction cost on
 splitting; the filters are the defence. Full derivation and the corrected
-statement: `docs/proofs/economics/05-review-gapfills.tex.md` §5.
+statement: the economics gap-fills note (App. A, S-15, §5).
 
 ### 4.3 Eligibility filters
 
@@ -986,7 +987,7 @@ reward plus reputation — *social* slashing — which seizes no capital, so a
 bribery bound expressed as "colluders risk their stake" holds on Panel B and
 not on Panel A; there the resistance is coordination cost and detection, and
 the operator must cap the values it routes to that rail
-(`docs/proofs/economics/05-review-gapfills.tex.md` §2.2–2.5).
+(the economics gap-fills note, App. A, S-15, §2.2–2.5).
 
 **C. Censorship / oracle stall.** The refund path (Path C) activates after
 $T$. *Mitigated by construction.*
@@ -1012,7 +1013,7 @@ sighash. The host, however, can *choose* which verge of the flow runs: see
 filter set of §4.3 (WoT, account age, confirmed pledge). Honest scope: with
 splitting to the $1\%$-of-volume floor the achievable weight is linear in
 stake, so the exponent is a transaction cost on splitting, not a plutocracy
-bound (`docs/proofs/economics/05-review-gapfills.tex.md` §5).
+bound (the economics gap-fills note, App. A, S-15, §5).
 
 **G. Single-process ceremony (prototype).** Demo coordinators run the DKG and
 signing in one process; compromising it observes all shares in memory.
@@ -1310,8 +1311,11 @@ mechanism to its source (FROST and Drijvers-style two-round attacks, RFC 9591,
 Crites et al. at CRYPTO 2025 for adaptive security, ChillDKG/BIP-445, the
 ZF-FROST refresh vulnerability record [20], RFC 6962); a differential-parity
 round; a performance round that also records the optimizations it *refused*;
-a host-side mechanism audit; and a proofs round producing five line-checked
-theorems (App. A.2). The reviewers were AI agents working in the repository,
+a host-side mechanism audit; a quantitative gap-fills round (capture
+probability, per-rail cost of corruption, the P+ε argument, the seed-grinding
+bound, and √k stake splitting — App. A, S-15); and a proofs round producing
+five line-checked theorems (App. A.2). The reviewers were AI agents working in
+the repository,
 directed by the project. They are not disinterested — they wrote the code they
 audited — and that is why §13 labels the evidence by kind rather than treating
 it as a single verdict.
@@ -1534,6 +1538,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-12 | Claim-to-evidence cross-check ledger | `docs/CROSS_CHECK.md` |
 | S-13 | Performance baseline (methodology, full tables, repro log) | `docs/benchmarks/BASELINE.md`, `baseline-medians.json`, `repro-log-2026-11-10.txt` |
 | S-14 | Module map | `README.md` §10 |
+| S-15 | Economics gap-fills (capture probability, per-rail cost of corruption, P+ε, seed-grinding bound, √k stake splitting — the external reviews' quantitative asks, each with derivation and residual) | `docs/proofs/economics/05-review-gapfills.tex.md`; numbers reproducible from `scripts/review-quant/economics.mjs` |
 
 ### A.2 Proofs and machine-checked artifacts
 
