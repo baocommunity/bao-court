@@ -31,8 +31,8 @@ against independent reimplementations (§2.2), **property-based sweeps** and a
 **formal-invariants audit** (§2.3–2.4), and a decade-compressed **adversarial
 audit record** plus a host-API pentest (§3). Performance is measured, never
 assumed, including the optimizations that were *refused* with numbers (§4).
-The threat-model chapter closes the loop: 272 indexed claims, 94.9%→95.2%
-with executable proof (§5). What the numbers do **not** prove is stated in
+The threat-model chapter closes the loop: 283 indexed claims, **95.1%** backed
+by executable evidence (§5). What the numbers do **not** prove is stated in
 §6 — reviewers should read it.
 
 **Recorded verification state at v0.10.2 `main` (2026-11-10, PR #64):** full
@@ -68,12 +68,12 @@ determinism paths per instance.
 
 | Metric (13 instances, full sweep) | Value |
 |---|---|
-| Concrete states explored | **3,145,632** |
-| Event applications | **128,522,740** |
-| Typed throws (illegal-event discipline exercised) | 112,076,252 |
-| Illegal-event checks | 68,077,138 |
+| Concrete states explored | **3,149,142** |
+| Event applications | **134,838,724** |
+| Typed throws (illegal-event discipline exercised) | 118,387,556 |
+| Illegal-event checks | 74,349,832 |
 | **Raw throws (`TypeError`/`RangeError`)** | **0** |
-| Progress edges / idempotent self-loops | 11,716,954 / 4,729,534 |
+| Progress edges / idempotent self-loops | 11,718,124 / 4,733,044 |
 | Determinism paths replayed | 2,600 — all byte-identical |
 
 *Artifact:* `__fixtures__/model-check-summary.json#totals` (PR #63/#64).
@@ -88,12 +88,12 @@ determinism replays):
 | vote n=3 k=2 | 42,646 | 1,843,302 | 25,544 |
 | vote n=4 k=2 | 1,268,770 | 54,752,135 | 794,624 |
 | vote n=2 k=3 | 5,482 | 246,757 | 2,984 |
-| confirm n=3 q=3 r=1 challengers=all | 362,046 | 14,231,718 | 234,078 |
-| confirm n=3 q=1 r=1 dup-event-ids | 1,010,820 | 41,952,186 | 668,382 |
-| confirm n=3 q=1 r=2 | 108,405 | 4,136,817 | 65,499 |
-| confirm n=3 q=1 r=1 roundRoster | 61,455 | 2,431,062 | 39,669 |
+| confirm n=3 q=3 r=1 challengers=all | 362,046 | 15,679,902 | 234,078 |
+| confirm n=3 q=1 r=1 dup-event-ids | 1,010,820 | 45,995,466 | 668,382 |
+| confirm n=3 q=1 r=2 | 111,915 | 4,715,517 | 69,009 |
+| confirm n=3 q=1 r=1 roundRoster | 61,455 | 2,676,882 | 39,669 |
 | signing n=2 t=1 | 2,532 | 78,588 | 2,232 |
-| **signing n=3 t=2** | **19,822** | 617,139 | 17,552 |
+| **signing n=3 t=2** | 19,822 | 617,139 | 17,552 |
 | signing n=3 t=2 commitment-equivocation | 143,764 | 4,464,858 | 127,844 |
 | signing n=3 t=2 partial-equivocation | 116,906 | 3,635,665 | 106,416 |
 
@@ -159,7 +159,7 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**149 invariants** (`INV-<machine>-<n>`), each extracted from the
+**156 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
 enforcement pointer (`file:line`) and the pinning test. Precision note
 (round-16 external review, finding A-3): the family is *predominantly*
@@ -354,15 +354,15 @@ so the before/after table is one artifact, not two methodologies.
 |---|---|---|
 | Assets (parametric damage in V, B, S, F) | **6** (verdict integrity, settlement steering, key shares, reputation, liveness, fee/slashing correctness) | THREAT_MODEL §3 |
 | Formalized adversaries | **9** (relay, juror <t, juror ≥t, coordinator, proposer, economic ×2 sub-species, LLM advisor, key compromise, network eclipse) | THREAT_MODEL §2 |
-| Proof obligations (honest-gap register) | **14** (PO-1…PO-14, each with stage-acceptability + closure path) | THREAT_MODEL §6 |
+| Proof obligations (honest-gap register) | **18** (PO-1…PO-18, each with stage-acceptability + closure path) | THREAT_MODEL §6 |
 | MUST-pin trust boundaries | 12 (P1–P12, each unpinned consequence reproduced by a named adversarial test) | THREAT_MODEL §5 |
-| Claims indexed | **272** across the four claim sources | CROSS_CHECK §2 |
-| **Claim coverage** | **94.9%** with executable proof at PR #63 (258/272), refreshed to **95.2%** (259/272) in PR #64 after four in-round gap closures; **13 open gaps** each registered with a planned proof | CROSS_CHECK §2 + Gap register |
+| Claims indexed | **283** across the four claim sources | CROSS_CHECK §2 |
+| **Claim coverage** | **95.1%** (269/283) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
 
-The 94.9% number is itself machine-checked: `node scripts/cross-check.mjs`
-parses the index, verifies all 493 evidence refs resolve against the tree
-today, and exits non-zero on a dangling pointer — the coverage claim cannot
-drift silently.
+The 95.1% number is itself machine-checked: `node scripts/cross-check.mjs`
+parses the index, verifies all **512** evidence refs resolve against the tree
+today, prints the open/closed split of the gap register, and exits non-zero on
+a dangling pointer — the coverage claim cannot drift silently.
 
 ---
 

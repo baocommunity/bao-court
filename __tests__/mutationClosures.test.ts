@@ -51,6 +51,7 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { quadraticPriority, deriveSelectionSeed, jurorRandomValue, selectJury } from '../selection';
 import type { JurorProfile } from '../types';
 import { hexId, padHexId } from './helpers/ids';
+import { escalateEvent } from './helpers/machines';
 import { hostPubkey, nostrPubkey, schnorrKeypair } from './helpers/keys';
 import { buildV2AttestationEvent, type V2Fields } from './helpers/fixtures';
 
@@ -208,7 +209,7 @@ describe('mutation closure C4 (M37) — round_flip flags stay idempotent', () =>
     state = reduceCourtConfirmationMachine(state, { type: 'resolve_round', now: 401 });
     expect(state.outcomeHistory[0]).toMatchObject({ round: 1, outcome: 'NO', winnerIndices: [1, 2] });
     // Round 2: YES wins (the proposal is restored) → round-1 voters flip.
-    state = reduceCourtConfirmationMachine(state, { type: 'escalate', now: 401 });
+    state = reduceCourtConfirmationMachine(state, escalateEvent(state, 401));
     state = reduceCourtConfirmationMachine(state, {
       type: 'open_ladder_round', round: 2, voteDeadline: 600, now: 402,
     });

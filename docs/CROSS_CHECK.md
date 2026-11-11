@@ -6,7 +6,7 @@
 This is the single artifact a reviewer uses to verify any claim about the
 system. Every meaningful claim from the three claim sources —
 
-1. `docs/FORMAL_INVARIANTS.md` — all 149 `INV-*` invariants;
+1. `docs/FORMAL_INVARIANTS.md` — all 156 `INV-*` invariants;
 2. `docs/FROST_COURT_ORACLE_PAPER.md` — every technical claim (the §6–§7
    universal-confirmation / cohort / batch sections **and** the classic
    ceremony, escrow, and settlement-rail sections);
@@ -48,10 +48,10 @@ Conventions for evidence refs:
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,534 passed / 1 skipped (64 files)** — re-verified 2026-11-11, round 21 (mutation-closure pins, `docs/MUTATION_TESTING.md`); 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Full suite | `npm test` | **1,546 passed / 1 skipped (65 files)** — re-verified 2026-11-11 (escalation witness + budget round); 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified round 17) |
 | Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (re-verified round 17; output in the PR body) |
-| Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (17 min): **13 instances, 3,145,632 states, 128,522,740 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
+| Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (20 min): **13 instances, 3,149,142 states, 134,838,724 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
 
 ---
 
@@ -63,7 +63,7 @@ breakdown).
 
 | Claim source | Claims | With executable proof | Coverage | Open gaps |
 |---|---|---|---|---|
-| `FORMAL_INVARIANTS.md` (149 INV-*) | 149 | 147 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
+| `FORMAL_INVARIANTS.md` (156 INV-*) | 156 | 154 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
 | `FROST_COURT_ORACLE_PAPER.md` | 71 | 68 | 95.8% | 3 (host-side / spec'd protocol work) |
 | `CRYPTO_AUDIT.md` §7 + §8 | 21 | 17 | 81.0% | 4 (spec'd S-1…S-4) |
 | Model-check meta-claims | 7 | 7 | 100% | 0 |
@@ -87,7 +87,7 @@ second open gap (gap register).
 
 ---
 
-## 3. Invariant claims (source a — 149 INV-*)
+## 3. Invariant claims (source a — 156 INV-*)
 
 Each row of the Machine-checkable index with kind `invariant` is one
 invariant of `docs/FORMAL_INVARIANTS.md` §3–§11 (its full statement lives
@@ -176,7 +176,7 @@ round` (pinning test written in round 14).
 | FINDING-A-6 | Node-side nonce guard is memory-only; a restarted process can re-consume a persisted commitment package | OPEN | S-3: file-backed Node guard or session-bound `(secret, sessionHash)` HKDF derivation (never share-only, per RFC 9591 §7.3) |
 | FINDING-A-7 | Nothing enforces at the type level that `seededScalar`-derived values never reach a signing nonce | OPEN | S-4: `@: SigningNonce` brand (or lint rule) separating demo-derivation from signing nonces |
 | PAPER-12-5 | Differential parity against a *second independent FROST implementation* (cross-implementation differential) remains open | OPEN | cross-implementation FROST vector exchange once a ChillDKG/BIP-445 reference implementation is available (production gate, not a protocol change) |
-| SUITE-4 | The paper's suite-size claim ("1,300-test-strong") drifts as the suite evolves | CLOSED this round | abstract now carries the live count (1,491) plus a pointer to the per-round recorded count in CROSS_CHECK §1 |
+| SUITE-4 | The paper's suite-size claim ("1,300-test-strong") drifts as the suite evolves | CLOSED this round | abstract now carries no fixed count; the live count (1,546) is recorded per round in CROSS_CHECK §1 and re-measured by `npm test` |
 
 Closed-before-this-round findings (evidence verified today): F-2 (empty-pin
 fail-closed), F-3 (outcome-history barrier), F-9 (commit version bit), F-12
@@ -253,6 +253,13 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | INV-CONF-27 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#flags every confirming juror for clawback on overturn; test:__tests__/multiRoundLadder.test.ts#does not duplicate overturned_confirmation flags |
 | INV-CONF-28 | invariant | test | test:__tests__/multiRoundLadder.test.ts#flags the previous round's majority with 'round_flip' |
 | INV-CONF-29 | invariant | test | test:__tests__/multiRoundLadder.test.ts#rounds beyond the last settle without a concede; test:__tests__/multiRoundLadder.test.ts#escalate re-opens the ladder for the next consecutive round; test:__tests__/multiRoundLadder.test.ts#concede settles with the current round outcome as final |
+| INV-ESC-1 | invariant | test | test:__tests__/escalationWitness.test.ts#an unwitnessed escalate is a typed error |
+| INV-ESC-2 | invariant | test | test:__tests__/escalationWitness.test.ts#an unwitnessed escalate is a typed error |
+| INV-ESC-3 | invariant | test | test:__tests__/escalationWitness.test.ts#the machine — not the caller — checks the round: only ladderRound + 1 opens |
+| INV-ESC-4 | invariant | test | test:__tests__/escalationWitness.test.ts#a challenger outside the case roster cannot escalate; test:__tests__/escalationWitness.test.ts#request hash and pubkey must be well-formed 32-byte lowercase hex |
+| INV-ESC-5 | invariant | test | test:__tests__/escalationWitness.test.ts#the bond witness must match a bond the machine already accepted; test:__tests__/escalationWitness.test.ts#host authority is break-glass: refused by default, legal only under the frozen policy |
+| INV-ESC-6 | invariant | test | test:__tests__/escalationWitness.test.ts#a valid challenger witness is recorded append-only and opens the next round; test:__tests__/escalationWitness.test.ts#pre-0.12 snapshots without an escalation log normalise to an empty ledger |
+| INV-ESC-7 | invariant | test | test:__tests__/escalationWitness.test.ts#ladder_pending is reachable ONLY through a witnessed escalation |
 | INV-CONF-30 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#records fees idempotently and rejects malformed ids; test:__tests__/adversarialMachines.test.ts#accepts exactly MAX_FEES fee entries |
 | INV-CONF-31 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#accepts explicit clawback flags only during fee_settlement, deduped per (idx, reason) |
 | INV-CONF-32 | invariant | test | test:__tests__/multiRoundLadder.test.ts#finality = LAST resolved round: verdict outcome + supporting ids from that round only |

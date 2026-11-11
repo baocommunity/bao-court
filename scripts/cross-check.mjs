@@ -162,10 +162,15 @@ for (const line of indexSection.split('\n')) {
 if (rows.length === 0) throw new Error('no machine index rows parsed from docs/CROSS_CHECK.md');
 
 const gapClaimIds = new Set();
+const gapStatus = new Map();
 for (const line of gapSection.split('\n')) {
   if (!line.startsWith('|')) continue;
   const cells = line.split('|').slice(1, -1).map((c) => c.trim());
-  if (cells.length >= 1 && /^[A-Z]/.test(cells[0]) && cells[0].includes('-')) gapClaimIds.add(cells[0]);
+  if (cells.length >= 1 && /^[A-Z]/.test(cells[0]) && cells[0].includes('-')) {
+    gapClaimIds.add(cells[0]);
+    // Status column is the 3rd cell (`| claim | text | STATUS | proof |`).
+    if (cells.length >= 3) gapStatus.set(cells[0], cells[2].toUpperCase().startsWith('OPEN') ? 'open' : 'closed');
+  }
 }
 
 // ─── verify ──────────────────────────────────────────────────────────────────
@@ -201,6 +206,58 @@ for (const m of doc.matchAll(/(?:^|\s)((?:INV|PAPER|CA|FINDING|ER|MC|BENCH|SUITE
 const missingFromIndex = [...discussed].filter((id) => !seenClaimIds.has(id) && id.startsWith('PAPER-'));
 for (const id of missingFromIndex) failures.push(`${id}: discussed in the doc but absent from the Machine-checkable index`);
 
+// ─── proof-obligation (PO-*) provenance reconciliation ───────────────────────
+// The paper cites obligations by code (PO-1…PO-N); the register is
+// `docs/THREAT_MODEL.md` §6. Review round 2 found the codes drifting (stale
+// "PO-1…PO-14/17" ranges in the presentation outline and EVALUATION) after four
+// new obligations shipped. This check makes drift a machine error: every PO-n
+// cited anywhere in the docs, proofs, or source must be DEFINED in the register,
+// and the register's codes must be contiguous from 1.
+
+const threatPath = path.join(ROOT, 'docs', 'THREAT_MODEL.md');
+const threatDoc = fs.readFileSync(threatPath, 'utf8');
+const threatSectionStart = threatDoc.indexOf('## 6.');
+if (threatSectionStart === -1) failures.push('docs/THREAT_MODEL.md: missing §6 (proof-obligation register)');
+const threatRest = threatDoc.slice(threatSectionStart);
+const threatNext = threatRest.slice(1).indexOf('\n## ');
+const threatSection = threatNext === -1 ? threatRest : threatRest.slice(0, threatNext + 1);
+
+const definedPos = new Set();
+for (const m of threatSection.matchAll(/^\| (PO-[0-9]+) \|/gm)) definedPos.add(m[1]);
+if (definedPos.size === 0) failures.push('docs/THREAT_MODEL.md §6: no PO-n register rows parsed');
+const poNumbers = [...definedPos].map((id) => Number(id.slice(3))).sort((a, b) => a - b);
+for (let i = 0; i < poNumbers.length; i += 1) {
+  if (poNumbers[i] !== i + 1) {
+    failures.push(`docs/THREAT_MODEL.md §6: PO codes are not contiguous (expected PO-${i + 1}, found PO-${poNumbers[i]})`);
+    break;
+  }
+}
+
+/** Every Markdown doc under docs/ (including proofs/) plus the source files. */
+function poScanTargets() {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(abs);
+      else if (entry.name.endsWith('.md')) out.push(abs);
+    }
+  };
+  walk(path.join(ROOT, 'docs'));
+  for (const name of fs.readdirSync(ROOT)) {
+    if (name.endsWith('.md') || name.endsWith('.ts')) out.push(path.join(ROOT, name));
+  }
+  return out;
+}
+
+const citedPos = new Set();
+for (const file of poScanTargets()) {
+  const src = fs.readFileSync(file, 'utf8');
+  for (const m of src.matchAll(/\bPO-([0-9]+)\b/g)) citedPos.add(`PO-${m[1]}`);
+}
+const undefinedPos = [...citedPos].filter((id) => !definedPos.has(id)).sort();
+for (const id of undefinedPos) failures.push(`${id}: cited but not defined in docs/THREAT_MODEL.md §6`);
+
 // ─── report ──────────────────────────────────────────────────────────────────
 
 const byKind = {};
@@ -211,7 +268,12 @@ for (const row of rows) byType[row.evidenceType] = (byType[row.evidenceType] ?? 
 console.log(`cross-check: ${rows.length} claims indexed, ${checks} evidence refs verified`);
 console.log(`claims by kind:   ${JSON.stringify(byKind)}`);
 console.log(`claims by evidence: ${JSON.stringify(byType)}`);
-console.log(`gap register entries: ${gapClaimIds.size}`);
+const gapOpen = [...gapStatus.values()].filter((v) => v === 'open').length;
+const gapClosed = gapStatus.size - gapOpen;
+console.log(`gap register: ${gapClaimIds.size} entries (${gapOpen} open, ${gapClosed} closed this round)`);
+console.log(`proof obligations: PO-1..PO-${poNumbers.length} defined, ${citedPos.size} distinct codes cited, 0 dangling`);
+// Claim coverage: a claim is "covered" when it is not an OPEN obligation.
+console.log(`claim coverage: ${rows.length - gapOpen}/${rows.length} claims covered by executable evidence (${(((rows.length - gapOpen) / rows.length) * 100).toFixed(1)}%), ${gapOpen} open obligations`);
 
 if (failures.length > 0) {
   console.error(`\nFAIL — ${failures.length} problem(s):`);

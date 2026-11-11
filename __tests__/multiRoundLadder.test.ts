@@ -28,6 +28,7 @@ import { hashCourtVerdict } from '../courtVoteMachine';
 
 /** Deterministic 32-byte lowercase hex id from a hex-digit string. */
 import { repeatHexId as id } from './helpers/ids';
+import { escalateEvent, unwitnessedEscalate } from './helpers/machines';
 
 const SESSION = id('1');
 const PROPOSAL = id('2');
@@ -135,7 +136,7 @@ function ladderToResolved(rounds: ReadonlyArray<RoundSpec>, params: CaseParams =
     s = openRound(s, i + 1, { roster: rounds[i]!.roster, voteDeadline: deadline, now: deadline - 1900 });
     s = voteRound(s, rounds[i]!.votes, deadline);
     if (i < rounds.length - 1) {
-      s = reduceCourtConfirmationMachine(s, { type: 'escalate', now: deadline + 100 });
+      s = reduceCourtConfirmationMachine(s, escalateEvent(s, deadline + 100));
     }
   }
   return s;
@@ -247,7 +248,7 @@ describe('multi-round ladder: escalate/concede decision matrix', () => {
     let s = ladderToResolved([{ votes: [[1, 'YES', 'a1'], [2, 'YES', 'a2'], [3, 'YES', 'a3']] }]);
     // Upheld at round 1 — still parks in round_resolved (host decides).
     expect(s.phase).toBe('round_resolved');
-    s = reduceCourtConfirmationMachine(s, { type: 'escalate', now: 5100 });
+    s = reduceCourtConfirmationMachine(s, escalateEvent(s, 5100));
     expect(s.phase).toBe('ladder_pending');
     // Round numbering stays consecutive after escalation:
     s = openRound(s, 2, { voteDeadline: 7000, now: 5200 });
@@ -272,14 +273,14 @@ describe('multi-round ladder: escalate/concede decision matrix', () => {
     const resolved = ladderToResolved([{ votes: [[1, 'YES', 'a1'], [2, 'YES', 'a2'], [3, 'YES', 'a3']] }]);
     // From fee_settlement (post-concede):
     const conceded = reduceCourtConfirmationMachine(resolved, { type: 'concede', now: 5100 });
-    expect(() => reduceCourtConfirmationMachine(conceded, { type: 'escalate', now: 5110 })).toThrow(/during fee_settlement/);
+    expect(() => reduceCourtConfirmationMachine(conceded, escalateEvent(conceded, 5110))).toThrow(/during fee_settlement/);
     expect(() => reduceCourtConfirmationMachine(conceded, { type: 'concede', now: 5110 })).toThrow(/during fee_settlement/);
     // Double decision from round_resolved:
-    const escalated = reduceCourtConfirmationMachine(resolved, { type: 'escalate', now: 5100 });
-    expect(() => reduceCourtConfirmationMachine(escalated, { type: 'escalate', now: 5110 })).toThrow(/during ladder_pending/);
+    const escalated = reduceCourtConfirmationMachine(resolved, escalateEvent(resolved, 5100));
+    expect(() => reduceCourtConfirmationMachine(escalated, escalateEvent(escalated, 5110))).toThrow(/during ladder_pending/);
     expect(() => reduceCourtConfirmationMachine(escalated, { type: 'concede', now: 5110 })).toThrow(/during ladder_pending/);
     // From earlier phases:
-    expect(() => reduceCourtConfirmationMachine(create(), { type: 'escalate', now: 1100 })).toThrow(/during confirm_open/);
+    expect(() => reduceCourtConfirmationMachine(create(), unwitnessedEscalate(1100))).toThrow(/during confirm_open/);
     expect(() => reduceCourtConfirmationMachine(create(), { type: 'concede', now: 1100 })).toThrow(/during confirm_open/);
     // Finalize before the host decision is illegal:
     expect(() => reduceCourtConfirmationMachine(resolved, { type: 'finalize', now: 5100 })).toThrow(
@@ -411,7 +412,7 @@ describe('multi-round ladder: maxLadderRounds enforcement', () => {
       { maxLadderRounds: 1 },
     );
     expect(single.phase).toBe('fee_settlement');
-    expect(() => reduceCourtConfirmationMachine(single, { type: 'escalate', now: 5200 })).toThrow(
+    expect(() => reduceCourtConfirmationMachine(single, unwitnessedEscalate(5200))).toThrow(
       /during fee_settlement/,
     );
   });
@@ -431,7 +432,7 @@ describe('multi-round ladder: maxLadderRounds enforcement', () => {
       ...ladderToResolved([{ votes: [[1, 'YES', 'a1'], [2, 'YES', 'a2'], [3, 'YES', 'a3']] }]),
       maxLadderRounds: 1,
     };
-    expect(() => reduceCourtConfirmationMachine(rogueEscalate, { type: 'escalate', now: 5110 })).toThrow(
+    expect(() => reduceCourtConfirmationMachine(rogueEscalate, escalateEvent(rogueEscalate, 5110))).toThrow(
       /maxLadderRounds/,
     );
   });

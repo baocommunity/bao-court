@@ -128,6 +128,16 @@ evidence: it is load noise with a bug attached. Both are re-adjudicated below
 (§5, §7): M47's hole is real and is now pinned by C8, M40 turned out to be an
 *equivalent* mutant that no test should ever catch.
 
+**Remedy applied (v0.12, closes review-round-2 N4).** The absolute 5 s gate is
+gone. The test now asserts the deterministic work first — the exact eight-step
+pipeline, in order, each green — and keeps only a generous ceiling: **30 s by
+default**, overridable with `SIM_BUDGET_MS` (`__tests__/helpers/budget.ts`).
+The measured baseline is ≈1.2 s for `poolSize: 20, jurySize: 7`, so the ceiling
+has ~25× headroom against load noise yet still fails a real 100× regression
+(≈120 s). The 100 000-tag validator scan got the same treatment
+(`VALIDATOR_BUDGET_MS`). Any future performance claim belongs in `bench/`, not
+in a suite assertion.
+
 ### Per class
 
 "As found" is the pass-1 score; "after pins" is the score once the closure tests
@@ -330,15 +340,16 @@ with the pins (1,534 passing + 1 env-gated skip).
 
 ## 7. What this does not prove
 
-- **A performance assertion is not a detector.** `simulateCourt.test.ts` asserts
-  the whole pipeline finishes inside 5 s. Under sweep load it fails, and in
-  pass 1 that was enough to "capture" M40 (an equivalent mutant) and M47 (a real
-  hole whose other detectors were silent). Two of 46 pass-1 captures — 4 % —
-  were load noise, and the same test also made two full-suite runs red on a
-  loaded box with no code change. Treat any capture whose only failing test is a
-  wall-clock budget as *unproven*, and prefer a generous budget (or a
-  relative/test-only measurement) over a tight one: a flaky performance gate
-  corrupts mutation results and CI alike.
+- **A performance assertion is not a detector.** The old `simulateCourt.test.ts`
+  asserted the whole pipeline finished inside 5 s. Under sweep load it failed,
+  and in pass 1 that was enough to "capture" M40 (an equivalent mutant) and M47
+  (a real hole whose other detectors were silent). Two of 46 pass-1 captures —
+  4 % — were load noise, and the same test also made two full-suite runs red on
+  a loaded box with no code change. Treat any capture whose only failing test is
+  a wall-clock budget as *unproven*: a flaky performance gate corrupts mutation
+  results and CI alike. **Fixed in v0.12** — deterministic step assertions plus
+  a 30 s env-tunable ceiling (`SIM_BUDGET_MS`), so this class of capture can no
+  longer occur.
 - **Equivalent mutants exist.** M40 shows the catalogue can contain a mutant
   whose removal changes nothing observable; the runner has no automatic
   equivalence detection, so verdicts must be adjudicated by hand (as here).

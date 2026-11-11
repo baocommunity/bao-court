@@ -40,7 +40,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md) | the protocol paper — architecture, math, security analysis, related work, evaluation, scope of verification, production gates, artifact provenance (App. A) |
 | [`FAQ.md`](docs/FAQ.md) | short answers to common questions |
 | [`GLOSSARY.md`](docs/GLOSSARY.md) | normative domain vocabulary |
-| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 149 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
+| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 156 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
 | [`proofs/`](docs/proofs/) | the mathematical proofs: encoding injectivity, Merkle soundness, tally well-definedness, machine safety (all-n induction over the model checking), attestation soundness, **attribution** (Theorem 6) — premises registry + reviewer's checking guide |
 | [`THREAT_MODEL.md`](docs/THREAT_MODEL.md) | threat model and security argument |
 | [`CRYPTO_AUDIT.md`](docs/CRYPTO_AUDIT.md) | cryptography literature audit — design choices vs the FROST literature, dispositions |
@@ -307,10 +307,17 @@ persist states.
   fee_settlement → final` (+ `round_resolved`, `expired`/`aborted`); public
   confirmations (one per roster index, canonical `hashCourtConfirmation`
   binding), a bond-witnessed challenge window, mass-vote ladder rounds with
-  vote-machine tie-break semantics, host-driven escalation
+  vote-machine tie-break semantics, witness-bound escalation
   (`escalate`/`concede` after each non-final round resolution, capped by
   `maxLadderRounds`, default 2, bound 1..5; per-round roster expansion via
-  `open_ladder_round.roundRoster`), automatic `overturned_confirmation`
+  `open_ladder_round.roundRoster`). `escalate` carries an authority witness the
+  REDUCER validates — `authority`, `challengerIdx`, `challengerPubkey`,
+  `requestHash`, `bondProofHash`, `roundIndex` (must be `ladderRound + 1`) —
+  refuses an unwitnessed event, a non-roster challenger, a bond the case never
+  accepted, and a host escalation outside the frozen `hostEscalation` policy
+  (default false), and appends the accepted witness to the append-only
+  `escalationLog` (`challengerEscalationEvent` / `hostEscalationEvent` build the
+  event; SPEC §9.2, INV-ESC-1…7). Automatic `overturned_confirmation`
   clawback flags plus `round_flip` flags when consecutive rounds disagree
   (flip-flop rule), an append-only `outcomeHistory`, a fee ledger, and a
   final verdict (= LAST resolved round's winner) reusing `hashCourtVerdict`.
@@ -444,7 +451,7 @@ winning_secret_commitment`.
 | `courtDkgMachine.ts` | DKG state machine |
 | `courtVoteMachine.ts` | vote commit/reveal/tally state machine + verdict hashing |
 | `courtSigningMachine.ts` | FROST signing-session state machine + signing-session hashing |
-| `courtConfirmationMachine.ts` | universal-confirmation case machine: public confirmations, bond-witnessed challenges, multi-round mass-vote ladder (host-driven escalate/concede), clawback flags, outcome history, fee ledger |
+| `courtConfirmationMachine.ts` | universal-confirmation case machine: public confirmations, bond-witnessed challenges, multi-round mass-vote ladder (witness-bound escalate/concede, `escalationLog`), clawback flags, outcome history, fee ledger |
 | `batchAttestation.ts` | kind-39018 RFC-6962-style Merkle batch attestations: tree/proofs/manifest, fail-closed validator, per-case `verifyCaseInBatch` |
 | `epochCohort.ts` | standing-cohort records (n≤300 unanimous-DKG cap), rotation ordering rules, epoch handoff hashing |
 | `dkg.ts` | Pedersen DKG adapter, VSS verify, share combine, refresh math |
@@ -477,7 +484,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (1,534 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (1,546 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit

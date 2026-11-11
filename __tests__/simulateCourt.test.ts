@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { runCourtSimulation } from '../scripts/simulateCourt';
+import { budgetMs } from './helpers/budget';
 
 describe('full court simulation (single script, hermetic)', () => {
   // DKG + FROST rounds are CPU-heavy; under a fully parallel suite run the
@@ -10,11 +11,35 @@ describe('full court simulation (single script, hermetic)', () => {
   // docs/FIXES-2026-08-15.md #6). Give the sim an explicit budget.
   const SIM_TIMEOUT = 60_000;
 
+  /**
+   * Wall-clock budget for the end-to-end simulation.
+   *
+   * The old gate was an ABSOLUTE 5 s assertion. It failed under suite/sweep
+   * load with no code change — twice red CI runs in #85 and two false mutation
+   * "captures" (M40/M47) — and docs/MUTATION_TESTING.md §3.1/§7 concluded that
+   * such a gate corrupts mutation results and CI alike. The replacement is:
+   *
+   *   - DETERMINISTIC first: the pipeline must produce exactly the eight steps
+   *     in order, each green. That is the behaviour the test actually cares
+   *     about, and it is load-insensitive by construction.
+   *   - A generous CEILING second, default 30 s (≈25× the measured 1.2 s
+   *     baseline for pool 20 / jury 7 on the reference box), env-tunable so a
+   *     loaded or slower box raises it without editing the test:
+   *     `SIM_BUDGET_MS=120000 npm test`. A real 100× regression (≈120 s)
+   *     still exceeds the default and is caught.
+   */
+  const SIM_BUDGET_MS = budgetMs('SIM_BUDGET_MS');
+
+  const PIPELINE_STEPS = [
+    'selection', 'dkg', 'vote', 'sign', 'validate', 'escrow', 'ln', 'liquid',
+  ] as const;
+
   it('runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid', { timeout: SIM_TIMEOUT }, async () => {
     const r = await runCourtSimulation({ poolSize: 12, jurySize: 5, backups: 2, seed: 'test' });
 
-    // Every step passed.
+    // Every step passed, in the published order, with no step silently gone.
     expect(r.ok).toBe(true);
+    expect(r.steps.map((s) => s.step)).toEqual([...PIPELINE_STEPS]);
     for (const s of r.steps) {
       expect(s.ok, `step "${s.step}" should pass: ${s.detail}`).toBe(true);
     }
@@ -47,12 +72,25 @@ describe('full court simulation (single script, hermetic)', () => {
     expect(a.ok && b.ok).toBe(true);
   });
 
-  it('fast: completes the full pipeline well under the default 5s budget', { timeout: SIM_TIMEOUT }, async () => {
+  it('is load-insensitive: the pipeline is complete, and only a real regression breaks the budget', { timeout: SIM_TIMEOUT }, async () => {
     const start = Date.now();
     const r = await runCourtSimulation({ poolSize: 20, jurySize: 7, backups: 3 });
     const elapsed = Date.now() - start;
     expect(r.ok).toBe(true);
-    // Pedersen DKG + FROST over 7 jurors in one process should be < 2s.
-    expect(elapsed).toBeLessThan(5_000);
+
+    // Deterministic work first: the full eight-step pipeline ran, in order.
+    // This is the assertion that fails on a behavioural regression, and it
+    // cannot flake under load.
+    expect(r.steps.map((s) => s.step)).toEqual([...PIPELINE_STEPS]);
+    expect(r.steps.every((s) => s.ok)).toBe(true);
+
+    // Then the generous ceiling (see SIM_BUDGET_MS above). Measured baseline:
+    // ≈1.2 s. A docs-only tree once tripped the old 5 s gate at 8.9 s under
+    // sweep load; 30 s absorbs that class of noise while still catching a 100×
+    // regression (≈120 s). Override with SIM_BUDGET_MS on a slower box.
+    expect(
+      elapsed,
+      `pipeline took ${elapsed}ms; budget ${SIM_BUDGET_MS}ms (set SIM_BUDGET_MS to raise it)`,
+    ).toBeLessThan(SIM_BUDGET_MS);
   });
 });

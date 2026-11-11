@@ -75,11 +75,19 @@ import {
  * count. `open_ladder_round` may carry an expanded per-round roster
  * (`roundRoster`); superset-of-previous is NOT required, but indices must be
  * valid (sequential 1..N, N ≤ 10_000) and the effective round roster must
- * have ≥ 3 members. Escalation is host-driven and explicit: after every
+ * have ≥ 3 members. Escalation is explicit and WITNESS-BOUND: after every
  * round resolution with rounds remaining the machine parks in
- * `round_resolved`, where the host plays `escalate` (next round pending) or
+ * `round_resolved`, where a caller plays `escalate` (next round pending) or
  * `concede` (the current round's outcome becomes final) — the machine never
- * auto-escalates and never auto-concedes. When the last permitted round
+ * auto-escalates and never auto-concedes. `escalate` carries an authority
+ * witness the REDUCER validates (SPEC §9.2, INV-ESC-1…7): the authority
+ * (`challenger` | `host`), the challenger's roster index and x-only pubkey,
+ * the signed request hash, a bond-proof hash bound to a challenge the machine
+ * already accepted, and the round index, which must equal `ladderRound + 1`.
+ * A host-authority escalation additionally requires the frozen break-glass
+ * policy `hostEscalation` (default false). The accepted witness is appended to
+ * the append-only `escalationLog`, so a host that bypasses its own API cannot
+ * escalate without proving the right. When the last permitted round
  * resolves, the machine proceeds directly to `fee_settlement`. Finality:
  * the verdict at `finalize` is the LAST resolved round's winner, backed by
  * that round's winning-vote event ids (or the confirmation ids when never
@@ -124,6 +132,8 @@ export {
   type CourtClawbackFlag,
   type CourtConfirmationVerdict,
   type CourtRoundOutcomeRecord,
+  type CourtEscalationAuthority,
+  type CourtEscalationRecord,
   type CourtConfirmationMachineState,
   type CourtConfirmationMachineEvent,
   CourtConfirmationTransitionError,
@@ -186,6 +196,14 @@ export function createCourtConfirmationMachine(params: {
    * `round_resolved` awaiting an explicit host `escalate`/`concede`.
    */
   readonly maxLadderRounds?: number;
+  /**
+   * May the host escalate on its own authority (break-glass ops recovery)?
+   * Default `false`: the protocol default is that only a bonded challenger's
+   * relayed request escalates (SPEC §9.2 ESC-RIGHT-2), and the reducer refuses
+   * an `authority: "host"` escalation otherwise. Recorded in the state so the
+   * policy is frozen with the case.
+   */
+  readonly hostEscalation?: boolean;
 }): CourtConfirmationMachineState {
   assertHex32(params.sessionHash, 'sessionHash must be 32-byte lowercase hex');
   assertHex32(params.proposalHash, 'proposalHash must be 32-byte lowercase hex');
@@ -286,10 +304,74 @@ export function createCourtConfirmationMachine(params: {
     challenges: [],
     ladderRound: 0,
     maxLadderRounds,
+    hostEscalation: params.hostEscalation === true,
+    escalationLog: [],
     outcomeHistory: [],
     clawbackFlags: [],
     fees: [],
   });
+}
+
+/**
+ * Build a well-formed CHALLENGER escalation for the state's next round
+ * (SPEC §9.2): derives `roundIndex` (= `ladderRound + 1`) and binds
+ * `bondProofHash` to the case's first accepted challenge bond. The caller
+ * supplies the identities only it can know — the challenger's x-only pubkey,
+ * the hash of its signed request, and (optionally) which accepted challenge is
+ * the challenger's. Fails closed when the case has no accepted challenge bond
+ * or is not parked at `round_resolved`.
+ *
+ * Hosts use this to construct the event they relay; tests use it to construct
+ * the legal move. It performs no verification itself — the reducer does.
+ */
+export function challengerEscalationEvent(
+  state: CourtConfirmationMachineState,
+  now: number,
+  witness: {
+    readonly challengerPubkey: string;
+    readonly requestHash: string;
+    readonly challengerIdx?: number;
+  },
+): Extract<CourtConfirmationMachineEvent, { type: 'escalate' }> {
+  const bond = witness.challengerIdx === undefined
+    ? state.challenges[0]
+    : state.challenges.find((c) => c.idx === witness.challengerIdx);
+  if (!bond) {
+    throw new CourtConfirmationTransitionError(
+      'no accepted challenge bond to bind an escalation witness to',
+    );
+  }
+  return {
+    type: 'escalate',
+    authority: 'challenger',
+    challengerIdx: bond.idx,
+    challengerPubkey: witness.challengerPubkey,
+    requestHash: witness.requestHash,
+    bondProofHash: bond.bondProofHash,
+    roundIndex: state.ladderRound + 1,
+    now,
+  };
+}
+
+/**
+ * Build a break-glass HOST escalation for the state's next round. Legal only
+ * when the case was created with `hostEscalation: true`; the reducer refuses
+ * it otherwise (INV-ESC-5).
+ */
+export function hostEscalationEvent(
+  state: CourtConfirmationMachineState,
+  now: number,
+): Extract<CourtConfirmationMachineEvent, { type: 'escalate' }> {
+  return {
+    type: 'escalate',
+    authority: 'host',
+    challengerIdx: null,
+    challengerPubkey: null,
+    requestHash: null,
+    bondProofHash: null,
+    roundIndex: state.ladderRound + 1,
+    now,
+  };
 }
 
 /**
@@ -319,10 +401,15 @@ export function reduceCourtConfirmationMachine(
   // Fail closed on a tampered or hand-restored state whose configuration or
   // ledger fields were replaced by non-array values (an uncaught TypeError
   // in the guards below, or a string allowlist admitting substring matches
-  // outside the frozen ballot).
+  // outside the frozen ballot). Pre-0.12 snapshots predate the escalation
+  // witness log: an ABSENT field is normalised to an empty ledger, a
+  // non-array value is still rejected by the assert below.
+  if ((state as { readonly escalationLog?: unknown }).escalationLog === undefined) {
+    state = { ...state, escalationLog: [] };
+  }
   assertStateArrays(
     state as unknown as Record<string, unknown>,
-    ['participantIndices', 'allowedOutcomes', 'confirmations', 'challenges', 'fees', 'clawbackFlags', 'outcomeHistory'],
+    ['participantIndices', 'allowedOutcomes', 'confirmations', 'challenges', 'fees', 'clawbackFlags', 'outcomeHistory', 'escalationLog'],
     CourtConfirmationTransitionError,
   );
   if (

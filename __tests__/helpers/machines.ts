@@ -23,9 +23,11 @@ import {
   type CourtVoteMachineState,
 } from '../../courtVoteMachine';
 import {
+  challengerEscalationEvent,
   createCourtConfirmationMachine,
   hashCourtConfirmation,
   reduceCourtConfirmationMachine,
+  type CourtConfirmationMachineEvent,
   type CourtConfirmationMachineState,
 } from '../../courtConfirmationMachine';
 import {
@@ -302,6 +304,45 @@ export function confirmChallengedTo(
   // Round 1 of a maxLadderRounds=2 case parks in round_resolved; the host
   // concedes to settle with the round outcome (multi-round ladder, 0.9).
   return reduceCourtConfirmationMachine(s, { type: 'concede', now: (opts.challengeDeadline ?? CONFIRM_DEFAULTS.challengeDeadline) + 1150 });
+}
+
+// ---------------------------------------------------------------------------
+// Confirmation escalation witnesses (SPEC §9.2 / INV-ESC)
+// ---------------------------------------------------------------------------
+
+/** House challenger x-only pubkey for escalation witnesses. */
+export const ESCALATION_PUBKEY = hexId('7');
+/** House escalation-request hash. */
+export const ESCALATION_REQUEST = hexId('8');
+
+/**
+ * A VALID challenger escalation for the state's next ladder round: derives
+ * `roundIndex` and the bond witness from the state, so it is legal exactly when
+ * the state is parked at `round_resolved` below the ladder cap. Override any
+ * witness field to build a deliberately invalid one.
+ */
+export function escalateEvent(
+  state: CourtConfirmationMachineState,
+  now: number,
+  overrides: Partial<{
+    authority: 'challenger' | 'host';
+    challengerIdx: number | null;
+    challengerPubkey: string | null;
+    requestHash: string | null;
+    bondProofHash: string | null;
+    roundIndex: number;
+  }> = {},
+) {
+  const base = challengerEscalationEvent(state, now, {
+    challengerPubkey: ESCALATION_PUBKEY,
+    requestHash: ESCALATION_REQUEST,
+  });
+  return { ...base, ...overrides };
+}
+
+/** A syntactic `escalate` with NO authority witness (must be a typed error). */
+export function unwitnessedEscalate(now: number) {
+  return { type: 'escalate' as const, now } as unknown as CourtConfirmationMachineEvent;
 }
 
 // ---------------------------------------------------------------------------

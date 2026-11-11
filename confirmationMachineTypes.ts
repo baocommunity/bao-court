@@ -87,6 +87,43 @@ export interface CourtClawbackFlag {
 }
 
 /**
+ * Who asserts the right to escalate a resolved ladder round on to the next
+ * one (SPEC §9.2, ESC-RIGHT-1…5): the bonded `challenger` (the protocol
+ * default) or the host under break-glass policy (`hostEscalation`).
+ */
+export type CourtEscalationAuthority = 'challenger' | 'host';
+
+/**
+ * The authority witness a later round may be opened under, recorded
+ * append-only in `escalationLog` so an observer can re-derive who escalated
+ * and against which request and bond (INV-ESC-6). Every field is part of the
+ * machine's own validation, not host policy: `challenger` requires a
+ * case-roster participant, an x-only pubkey, a request hash and the hash of a
+ * bond the machine has already accepted; `host` requires the frozen
+ * `hostEscalation` policy and carries no challenger request.
+ */
+export interface CourtEscalationRecord {
+  /** The ladder round this escalation OPENED (= ladderRound at dispatch + 1). */
+  readonly round: number;
+  readonly authority: CourtEscalationAuthority;
+  /** Case-roster index of the asserting challenger (`null` for `host`). */
+  readonly challengerIdx: number | null;
+  /** x-only public key (32-byte hex) of the asserting challenger; `null` for `host`. */
+  readonly challengerPubkey: string | null;
+  /**
+   * 32-byte hex hash of the challenger's signed escalation request (`null`
+   * for `host`). The host relays the request; it cannot manufacture one for a
+   * challenger — the machine records the hash, so a published request with no
+   * matching entry is provable misconduct.
+   */
+  readonly requestHash: string | null;
+  /** 32-byte hex bond-proof hash, bound to an accepted challenge bond; `null` for `host`. */
+  readonly bondProofHash: string | null;
+  /** Caller-supplied clock at the escalation. */
+  readonly at: number;
+}
+
+/**
  * Final verdict of a confirmation case: the last resolved round's winner
  * (or the confirmed proposal when never challenged), the sorted supporting
  * event ids, the canonical verdict hash, and whether the proposed outcome
@@ -167,6 +204,20 @@ export interface CourtConfirmationMachineState {
    */
   readonly maxLadderRounds: number;
   /**
+   * Frozen policy: may the HOST play `escalate` on its own authority
+   * (break-glass ops recovery)? Default `false` — the protocol default is that
+   * only a bonded challenger's relayed request escalates (SPEC §9.2
+   * ESC-RIGHT-2). Read fail-closed: an absent value on a hand-restored
+   * snapshot is `false`.
+   */
+  readonly hostEscalation: boolean;
+  /**
+   * Append-only witness log of every escalation (INV-ESC-6): one entry per
+   * `escalate`, recording who asserted the right and the request/bond hashes
+   * the reducer validated. Never rewritten, never truncated.
+   */
+  readonly escalationLog: readonly CourtEscalationRecord[];
+  /**
    * Append-only history of resolved rounds' outcomes (frozen). The final
    * verdict is the last entry; hosts derive reputation scores from the
    * per-round coherence with the final outcome.
@@ -229,8 +280,21 @@ export type CourtConfirmationMachineEvent =
   | { readonly type: 'close_ladder_round'; readonly now: number }
   | { readonly type: 'resolve_round'; readonly now: number }
   | {
-      /** Host-driven escalation: next ladder round becomes pending. */
+      /**
+       * Escalation to the next ladder round, witness-bound (SPEC §9.2,
+       * INV-ESC-2…5). The reducer — not the host API — decides whether the
+       * move is authorised: `challenger` needs a case-roster participant, an
+       * x-only pubkey, a request hash and the bond hash of an accepted
+       * challenge; `host` needs the frozen `hostEscalation` policy and carries
+       * no challenger request. `roundIndex` must open exactly the next round.
+       */
       readonly type: 'escalate';
+      readonly authority: CourtEscalationAuthority;
+      readonly challengerIdx: number | null;
+      readonly challengerPubkey: string | null;
+      readonly requestHash: string | null;
+      readonly bondProofHash: string | null;
+      readonly roundIndex: number;
       readonly now: number;
     }
   | {

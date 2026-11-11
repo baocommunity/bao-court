@@ -973,6 +973,42 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       check(typeof flag.reason === 'string' && flag.reason.length > 0, 'P2: clawback reason non-empty');
     }
 
+    // Escalation witness log (INV-ESC-6): append-only, consecutive, bounded,
+    // and every challenger entry names a roster participant + accepted bond.
+    let expectedEscalationRound = 2;
+    for (const record of s.escalationLog) {
+      check(
+        record.round === expectedEscalationRound,
+        `P2: escalationLog rounds are consecutive from 2 (expected ${expectedEscalationRound}, got ${record.round})`,
+      );
+      expectedEscalationRound += 1;
+      if (record.authority === 'challenger') {
+        check(roster.includes(record.challengerIdx as number), 'P2: escalation challenger ∈ roster');
+        check(
+          HEX_32.test(record.challengerPubkey as string)
+          && HEX_32.test(record.requestHash as string)
+          && HEX_32.test(record.bondProofHash as string),
+          'P2: escalation witness hashes well-formed',
+        );
+        check(
+          s.challenges.some((c) => c.bondProofHash === record.bondProofHash),
+          'P2: escalation bond bound to an accepted challenge',
+        );
+      } else {
+        check(
+          record.challengerIdx === null && record.requestHash === null && record.bondProofHash === null,
+          'P2: host escalation carries no challenger request',
+        );
+      }
+    }
+    check(s.escalationLog.length <= s.ladderRound, 'P2: escalationLog bounded by rounds opened');
+    check(
+      s.phase !== 'ladder_pending'
+      || s.ladderRound === 0
+      || s.escalationLog[s.escalationLog.length - 1]?.round === s.ladderRound + 1,
+      'P2: ladder_pending witnessed by the escalation that opened it',
+    );
+
     // Fee ledger.
     const feeIds = new Set<string>();
     for (const fee of s.fees) {
@@ -1119,7 +1155,19 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       else events.push({ type: 'finalize', now: latest });
     }
     events.push(
-      { type: 'escalate', now: latest },
+      // The legal escalation carries a full authority witness bound to the
+      // challenge bond the machine accepted (SPEC §9.2): a challenger from the
+      // case roster, a request hash, and the NEXT round index.
+      {
+        type: 'escalate',
+        authority: 'challenger',
+        challengerIdx: s.challenges[0]?.idx ?? roster[0],
+        challengerPubkey: BOND_PROOF,
+        requestHash: BOND_TX,
+        bondProofHash: s.challenges[0]?.bondProofHash ?? BOND_PROOF,
+        roundIndex: s.ladderRound + 1,
+        now: latest,
+      },
       { type: 'concede', now: latest },
     );
     if (s.phase === 'fee_settlement') {
@@ -1147,6 +1195,13 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       { type: 'open_ladder_round', round: wrongRound + 1, voteDeadline: 0, now: latest },
       { type: 'open_ladder_round', round: wrongRound + 1, voteDeadline: latest, now: latest }, // deadline not in the future
       { type: 'open_ladder_round', round: wrongRound + 1, voteDeadline: 21, roundRoster: [1, 2], now: latest }, // panel < 3
+      // escalation witness refusals (SPEC §9.2 / INV-ESC-2..5): an unwitnessed
+      // escalate, a host escalation under the default policy, a witness for the
+      // wrong round, and a bond hash the case never accepted.
+      { type: 'escalate', now: latest },
+      { type: 'escalate', authority: 'host', challengerIdx: null, challengerPubkey: null, requestHash: null, bondProofHash: null, roundIndex: s.ladderRound + 1, now: latest },
+      { type: 'escalate', authority: 'challenger', challengerIdx: roster[0], challengerPubkey: BOND_PROOF, requestHash: BOND_TX, bondProofHash: BOND_PROOF, roundIndex: wrongRound, now: latest },
+      { type: 'escalate', authority: 'challenger', challengerIdx: roster[0], challengerPubkey: BOND_PROOF, requestHash: BOND_TX, bondProofHash: BAD_HEX, roundIndex: s.ladderRound + 1, now: latest },
       { type: 'flag_clawback', idx: roster[0], reason: '', now: latest },
       { type: 'flag_clawback', idx: 0, reason: MANUAL_REASON, now: latest },
       { type: 'record_fee', feeEventId: BAD_HEX, now: latest },
@@ -1176,6 +1231,7 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       s.ladderRound,
       s.outcomeHistory.map((o) => `${o.round}${o.outcome[0]}`).join(','),
       s.clawbackFlags.map((f) => `${f.idx}.${f.reason[0]}.${f.round}`).join(','),
+      s.escalationLog.map((e) => `${e.round}${e.authority[0]}`).join(','),
       s.fees.length,
       s.verdict ? `V:${s.verdict.outcome}.${s.verdict.verdictHash === '' ? 'pending' : s.verdict.verdictHash.slice(0, 8)}.${s.verdict.upheld ? 'u' : 'o'}` : '-',
       s.failure ? `F:${s.failure.phase}` : '-',

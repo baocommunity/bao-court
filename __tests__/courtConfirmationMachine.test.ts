@@ -21,6 +21,7 @@ import {
   confirmationMachine as makeConfirmationMachine,
   confirmHappyPath,
   confirmChallengedTo,
+  escalateEvent,
 } from './helpers/machines';
 
 const SESSION = id('1');
@@ -646,7 +647,7 @@ describe('outcome-history restore barrier (finding F-3)', () => {
     s = reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 4000 });
     s = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 4050 });
     expect(s.phase).toBe('round_resolved');
-    s = reduceCourtConfirmationMachine(s, { type: 'escalate', now: 4100 });
+    s = reduceCourtConfirmationMachine(s, escalateEvent(s, 4100));
     // Round 2: NO wins (idx 2, 3).
     s = reduceCourtConfirmationMachine(s, { type: 'open_ladder_round', round: 2, voteDeadline: 5000, now: 4200 });
     s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx: 1, outcome: 'YES', eventId: id('4'), now: 4301 });

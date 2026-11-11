@@ -118,7 +118,7 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 - *Artifact:* FORMAL_INVARIANTS.md; CROSS_CHECK.md §1 (counts are printed by the cross-check script).
 
 ### Slide 8 — "3.1M states, zero untyped throws"
-- Exhaustive finite-state exploration of the three ceremony machines: **3,145,632 concrete states · 128.5M event applications · 112M typed throws · 0 raw `TypeError`/`RangeError`** (13 instances).
+- Exhaustive finite-state exploration of the three ceremony machines: **3,149,142 concrete states · 134.8M event applications · 118.4M typed throws · 0 raw `TypeError`/`RangeError`** (13 instances).
 - Properties asserted on **every edge**: phase legality (P1), data invariants incl. real SHA-256 re-derivation and real secp256k1 nonce points (P2), no dead ends (P3), acyclic progress graph (P4), determinism — 2,600 replayed paths, all byte-identical (P5).
 - Honest scope: explored rosters are n ≤ 4 because state spaces grow combinatorially — but the properties are checked on the machines' **own reducer code paths**, not a model of them.
 - The checking cost was itself optimized: signing-machine reduce **3,340 µs → 110 µs (30×)** made the equivocation-variant instances tractable.
@@ -152,7 +152,7 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 - **Caller-pins-not-the-event:** a valid signature proves *some* key signed — consumers MUST pin the empaneled group key, epoch, roots; every unpinned consequence is reproduced by a named adversarial test (P1–P12, THREAT_MODEL §5).
 - **Liveness under partition is not proven** (PO-3): deadlines + Path-C refund *bound the damage*; the soak validates empirically (zero lost deadlines at 10k/day), not a theorem.
 - **Single-process prototype:** demo ceremonies concentrate shares in one memory space (vector G) — a production gate (cross-client deployment), not a protocol defect.
-- *Artifact:* THREAT_MODEL §6 (PO-1…PO-14), §7 ("the argument's shape"); EVALUATION §6 (threats to validity).
+- *Artifact:* THREAT_MODEL §6 (PO-1…PO-18), §7 ("the argument's shape"); EVALUATION §6 (threats to validity).
 
 ---
 
@@ -165,8 +165,8 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 - **The soak:** one day at **10,000 settlements/day** on unmodified real services (virtual clock, 2m52s wall): **20/20 assertions**, zero lost deadlines (20,668 scheduled, every one fired exactly once), sat-exact ledger parity vs an independent oracle, 0 double-publishes — and it *found* F6 (ack-reconcile starvation, p99 20.6 min → 1.98 min after the fix).
 - *Artifact:* docs/benchmarks/BASELINE.md; EVALUATION §4; FIGURES.md F4.
 
-### Slide 14 — "Claim coverage: 94.9% → 95.2%, machine-checked"
-- 276 claims indexed across the four sources (invariants, paper, crypto audit, model-check/bench/suite meta-claims); **502 evidence refs resolve**, and the **13 open gaps** are registered with a planned proof — the open list *is* the roadmap.
+### Slide 14 — "Claim coverage: 95.1%, machine-checked"
+- 283 claims indexed across the four sources (invariants, paper, crypto audit, model-check/bench/suite meta-claims); **512 evidence refs resolve**, and the **14 open obligations** (of an 18-entry gap register, 4 closed) are registered with a planned proof — the open list *is* the roadmap. Both counts are printed by `node scripts/cross-check.mjs`.
 - The coverage number is itself machine-checked: `node scripts/cross-check.mjs` verifies every evidence pointer (tests exist, fixtures hold, instances match) and **exits non-zero on a dangling pointer** — the claims cannot drift silently.
 - **The audit program as methodology** (paper §11.5): each round picks an attack surface, records what it finds, lands the disposition — rounds 1–3 adversarial, formal audit, model checking, literature audit, differential parity, performance, host-side mechanism audit. Not "the authors assert" but "the round that owns this claim pinned it, and the pin regenerates from one command."
 - One-command reproducibility: `bash scripts/reproduce.sh` regenerates every artifact from a clean clone — committed run: **REPRODUCED, every artifact PASS** (999.9s).
@@ -176,9 +176,9 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 
 ## 7. (f) What's next — the proof obligations
 
-### Slide 15 — "PO-1…PO-17: the honest-gap register as a roadmap"
+### Slide 15 — "PO-1…PO-18: the honest-gap register as a roadmap"
 - 17 registered proof obligations, each with **stage-acceptability** (why it's safe to ship now) and a **closure path** (what would close it).
-- Highlights: **PO-1** game-theoretic model of the majority-collusion bribe game; **PO-2** multi-block selection beacon + committed reputation roots; **PO-3** liveness theorem under ≤1/3 relay control; **PO-13** external-assumption watch (LDVR / Crites et al. CRYPTO 2025; ChillDKG/BIP-445 upgrade trigger); **PO-14** cross-client ceremonies close the prototype assumption gap; **PO-15** settlement binding (host-mediated release in v1); **PO-16** Lightning preimage is publicly computable (forfeiture is host policy); **PO-17** cross-engine selection ordering.
+- Highlights: **PO-1** game-theoretic model of the majority-collusion bribe game; **PO-2** multi-block selection beacon + committed reputation roots; **PO-3** liveness theorem under ≤1/3 relay control; **PO-13** external-assumption watch (LDVR / Crites et al. CRYPTO 2025; ChillDKG/BIP-445 upgrade trigger); **PO-14** cross-client ceremonies close the prototype assumption gap; **PO-15** settlement binding (host-mediated release in v1); **PO-16** Lightning preimage is publicly computable (forfeiture is host policy); **PO-17** cross-engine selection ordering; **PO-18** attribution is detective (the journal is what attributes a FROST signature).
 - Production gates beyond the proofs: rail *execution* adapters, contract-enforced phase deadlines on-chain, independent side-channel audit, and the third-party FROST differential (the second half of the parity gate).
 - Close on the methodology, not the marketing: *the design is backed by an evaluation methodology, not a claim — and every pin regenerates from one command.*
 - *Artifact:* THREAT_MODEL §6 (register); paper §12 (honest status), §13 (scope of verification: proven / machine-checked / empirically evaluated / open obligation).

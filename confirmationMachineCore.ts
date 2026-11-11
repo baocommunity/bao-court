@@ -185,6 +185,10 @@ export function freezeState(state: CourtConfirmationMachineState): CourtConfirma
   Object.freeze(state.challenges);
   Object.freeze(state.clawbackFlags);
   Object.freeze(state.fees);
+  if (state.escalationLog) {
+    for (const record of state.escalationLog) Object.freeze(record);
+    Object.freeze(state.escalationLog);
+  }
   Object.freeze(state.participantIndices);
   Object.freeze(state.allowedOutcomes);
   Object.freeze(state.evidenceIds);

@@ -668,6 +668,83 @@ ladder_pending → ladder_vote_open → ladder_vote_closed → resolve paths)` w
   concede; escalate is impossible once settled'; `… › 'escalate re-opens the
   ladder for the next consecutive round; the machine never auto-escalates'`;
   `… › 'concede settles with the current round outcome as final'`.
+
+### 5.9 Escalation authority witness (INV-ESC) — SPEC §9.2
+
+The confirmation machine is the authority boundary for escalation, not the host
+API. Before v0.12, `onEscalate` **ignored its event**: a host that bypassed its
+own endpoint (the event is just a reducer input) kept the appeal power. The
+event now carries a witness, and the reducer validates it. **Wire shape:**
+
+```
+escalate {
+  authority:       "challenger" | "host",
+  challengerIdx:   number | null,   // case-roster index (null for host)
+  challengerPubkey: hex32 | null,   // x-only pubkey (null for host)
+  requestHash:     hex32 | null,    // signed escalation request (null for host)
+  bondProofHash:   hex32 | null,    // accepted challenge bond (null for host)
+  roundIndex:      number,          // MUST equal ladderRound + 1
+  now:             number,
+}
+```
+
+- **INV-ESC-1 (phase gate).** `escalate` is legal only in `round_resolved`;
+  every other phase raises `CONFIRMATION_TRANSITION` (unchanged, INV-CONF-29's
+  phase half). Guard: `confirmationMachineHandlers.ts:487-493`.
+- **INV-ESC-2 (witness required).** `authority` must be `"challenger"` or
+  `"host"`; an unwitnessed event (no authority, no hashes) is a typed error,
+  never a transition. Guard: `confirmationMachineHandlers.ts:511-514`.
+  Test: `escalationWitness.test.ts` › 'an unwitnessed escalate is a typed error
+  (the bypass the round-2 review found)'.
+- **INV-ESC-3 (next round only).** `roundIndex === ladderRound + 1` exactly; a
+  witness minted for the current round, a skipped round, or a non-integer is
+  refused, so a witness cannot be replayed on to a later round. Guard:
+  `confirmationMachineHandlers.ts:516-520`. Test: `escalationWitness.test.ts` ›
+  'the machine — not the caller — checks the round: only ladderRound + 1 opens'.
+- **INV-ESC-4 (challenger is a roster member with well-formed witness).** For
+  `authority: "challenger"`: `challengerIdx` is a safe integer **and** a case
+  roster member, and `challengerPubkey` / `requestHash` / `bondProofHash` are
+  32-byte lowercase hex. Guard: `confirmationMachineHandlers.ts:522-543`.
+  Tests: `escalationWitness.test.ts` › 'a challenger outside the case roster
+  cannot escalate'; `… › 'request hash and pubkey must be well-formed 32-byte
+  lowercase hex'`.
+- **INV-ESC-5 (bond bound to state, host behind policy).** The challenger's
+  `bondProofHash` must match a bond the machine **already accepted**
+  (`state.challenges`) — a well-formed hash for a foreign bond proves nothing;
+  and `authority: "host"` is refused unless the frozen case policy sets
+  `hostEscalation: true` (default **false**, SPEC §9.2 ESC-RIGHT-2), in which
+  case it must carry no challenger request. Guards:
+  `confirmationMachineHandlers.ts:544-547,559-573`, policy frozen at
+  `courtConfirmationMachine.ts:307`. Tests: `escalationWitness.test.ts` › 'the
+  bond witness must match a bond the machine already accepted'; `… › 'host
+  authority is break-glass: refused by default, legal only under the frozen
+  policy'`.
+- **INV-ESC-6 (append-only witness log).** A legal escalation appends exactly
+  one `escalationLog` record — `{round, authority, challengerIdx,
+  challengerPubkey, requestHash, bondProofHash, at}` — to the frozen log; the
+  log is never rewritten, and a state without one (pre-0.12 snapshot)
+  normalises to `[]` while a non-array value is refused. Guards:
+  `confirmationMachineHandlers.ts:584-588`,
+  `courtConfirmationMachine.ts:407-412`. Test: `escalationWitness.test.ts` ›
+  'a valid challenger witness is recorded append-only and opens the next
+  round'; `… › 'pre-0.12 snapshots without an escalation log normalise to an
+  empty ledger'`.
+- **INV-ESC-7 (no bypass path).** `ladder_pending` is reachable by exactly two
+  transitions: `close_challenge_window` (round 0, before any round has opened)
+  and a WITNESSED `escalate`. No other event moves a `round_resolved` state
+  into `ladder_pending`, so a host that speaks the reducer directly cannot
+  escalate without a witness. Model-checked: `modelCheckingCore.ts` probes an
+  unwitnessed escalate, a host escalation under the default policy, a
+  wrong-round witness and a foreign-bond witness at every state, and asserts
+  the escalation log invariants on every reachable state. Test:
+  `escalationWitness.test.ts` › 'ladder_pending is reachable ONLY through a
+  witnessed escalation'.
+
+**Open (round 3):** `concede` carries no witness yet (SPEC §9.2 ESC-RIGHT-3
+asks for the challenger's own signed concession). A host may therefore still
+end an escalation ladder by conceding to the current round's outcome; that is
+strictly weaker than escalating — it cannot change a verdict, only stop the
+ladder — and is left named rather than implied.
 - **INV-CONF-30 (fee ledger idempotency).** `record_fee` accepts `HEX_32` ids,
   is idempotent per id, and caps at 256 entries (lines 1082-1093).
   Test: `courtConfirmationMachine.test.ts` › 'records fees idempotently and
@@ -1307,6 +1384,13 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-CONF-27 | overturn clawback idempotent | courtConfirmationMachine.ts:1001-1015 | courtConfirmationMachine.test.ts › flags every confirming juror…; multiRoundLadder.test.ts › does not duplicate… |
 | INV-CONF-28 | flip-flop clawback idempotent | courtConfirmationMachine.ts:1016-1033 | multiRoundLadder.test.ts › flags the previous round's majority… |
 | INV-CONF-29 | escalation gating | courtConfirmationMachine.ts:1039-1042,1062-1066 | multiRoundLadder.test.ts › escalate/concede decision matrix |
+| INV-ESC-1 | escalation phase gate | confirmationMachineHandlers.ts:487-493 | multiRoundLadder.test.ts › escalate/concede decision matrix |
+| INV-ESC-2 | escalation witness required (no bare `escalate`) | confirmationMachineHandlers.ts:511-514 | escalationWitness.test.ts › an unwitnessed escalate is a typed error |
+| INV-ESC-3 | witness opens exactly the next round | confirmationMachineHandlers.ts:516-520 | escalationWitness.test.ts › only ladderRound + 1 opens |
+| INV-ESC-4 | challenger ∈ roster, witness hashes well-formed | confirmationMachineHandlers.ts:522-543 | escalationWitness.test.ts › outsider cannot escalate; hashes well-formed |
+| INV-ESC-5 | bond bound to an accepted challenge; host behind frozen policy | confirmationMachineHandlers.ts:544-547,559-573 | escalationWitness.test.ts › bond must match; host is break-glass |
+| INV-ESC-6 | escalation witness log append-only (+ pre-0.12 normalisation) | confirmationMachineHandlers.ts:584-588; courtConfirmationMachine.ts:407-412 | escalationWitness.test.ts › witness recorded append-only; legacy snapshot normalises |
+| INV-ESC-7 | `ladder_pending` unreachable without a witness | confirmationMachineHandlers.ts:487-588 | escalationWitness.test.ts › ladder_pending is reachable ONLY through a witnessed escalation |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |
 | INV-CONF-32 | finality = last round | courtConfirmationMachine.ts:1145-1155 | multiRoundLadder.test.ts › finality = LAST resolved round… |
@@ -1513,11 +1597,12 @@ lack an enforcing test. Ordered by audit significance.
 - Full suite: `npm test` (vitest) — all green including
   `__tests__/invariantAssertions.test.ts` (27 always-on global assertions).
 - Typecheck: `npm run typecheck && npm run typecheck:tests`.
-- The invariant count: 8 core + 23 vote + 36 confirmation + 15 signing +
+- The invariant count: 8 core + 23 vote + 36 confirmation + **7 escalation
+  (INV-ESC-1…7)** + 15 signing +
   12 DKG + 9 selection + 16 batch + 16 validator + 10 cross-machine +
-  3 attribution + INV-SETTLE-1 = **149 stated invariants**, each with an enforcement
-  pointer; 140 pinned by a named test, and the cross-machine/global set
-  pinned by the 27 executable assertions of
+  3 attribution + INV-SETTLE-1 = **156 stated invariants**, each with an
+  enforcement pointer; 147 pinned by a named test, and the cross-machine/global
+  set pinned by the 27 executable assertions of
   `__tests__/invariantAssertions.test.ts` (INV-ATTRIB-3 is spec-level —
   see §16). Twelve findings
   (F-1…F-12) were recorded against v0.9.1; as of v0.9.2, F-2, F-3, F-9, and

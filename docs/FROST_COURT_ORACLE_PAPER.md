@@ -49,8 +49,9 @@ this repository: platform-neutral TypeScript with a deterministic end-to-end
 simulation harness that runs the entire pipeline — selection, DKG, voting,
 threshold signing, attestation validation, slashing, and both settlement rails
 — in one process with no network. The evaluation methodology is itself part of
-the design: line-checked proofs of six core properties, exhaustive finite-state
-model checking of three of the four ceremony machines (the DKG machine is
+the design: line-checked proofs of six core properties, exhaustive
+*reachability* model checking of three of the four ceremony machines on bounded
+instances (rosters $n \le 4$, reduced clock universes; the DKG machine is
 invariant-pinned only), in-house differential
 parity over every critical pure function, a regenerable performance baseline,
 and a round-by-round cryptographic literature audit (§11, §13).
@@ -628,15 +629,21 @@ auto-concedes.
 the previous round is *not* required); mass votes validate against the
 round panel, and round rosters re-verify at the close/resolve ledger
 barrier. **In the host deployment, escalation is not the operator's to
-grant.** The host's confirmation spec makes `escalate` a **bonded
+grant.** The confirmation spec makes `escalate` a **bonded
 challenger's right** (ESC-RIGHT-1…5): while the challenger's window is open
 the host may neither escalate nor concede, and operator discretion is
-break-glass only (`BAO_COURT_HOST_ESCALATION`, default off). What the
-protocol machine does *not* yet do is verify that authorisation itself — the
-`escalate`/`concede` events carry no proposer, challenger or request-hash
-witness, so the binding is enforced by the host API and not by the reducer.
-The wire shape for the machine-level witness is specified in the host's
-confirmation spec and is not shipped here.
+break-glass only (`BAO_COURT_HOST_ESCALATION`, default off). **The protocol
+machine now verifies that authorisation itself** (INV-ESC-1…7,
+`docs/FORMAL_INVARIANTS.md` §5.9): `escalate` carries an authority witness
+(`authority`, `challengerIdx`, `challengerPubkey`, `requestHash`,
+`bondProofHash`, `roundIndex`), and the reducer — not the host API — refuses an
+unwitnessed escalation, a witness for any round other than
+`ladderRound + 1`, a challenger outside the case roster, a bond hash the case
+never accepted, or a host escalation outside the frozen break-glass policy;
+the accepted witness is appended to `escalationLog`. A host that bypasses its
+own endpoint therefore no longer holds the appeal power. What remains open is
+the symmetric witness on `concede` (the challenger's own signed concession,
+ESC-RIGHT-3), which v1 still leaves to the host API.
 
 ### 6.3 Clawbacks, flip-flop flags, and outcome history
 
@@ -1201,12 +1208,12 @@ covers 13 instances:
 
 | Metric | Value |
 |---|---|
-| Concrete states explored | **3,145,632** |
-| Event applications | **128,522,740** |
-| Illegal-event checks (typed rejection exercised) | 68,077,138 |
-| Typed throws | 112,076,252 |
+| Concrete states explored | **3,149,142** |
+| Event applications | **134,838,724** |
+| Illegal-event checks (typed rejection exercised) | 74,349,832 |
+| Typed throws | 118,387,556 |
 | **Raw throws (`TypeError`/`RangeError`)** | **0** |
-| Progress edges / idempotent self-loops | 11,716,954 / 4,729,534 |
+| Progress edges / idempotent self-loops | 11,718,124 / 4,733,044 |
 | Determinism paths replayed | 2,600 (all byte-identical) |
 
 Abstraction limits are stated honestly: explored rosters are small
@@ -1477,14 +1484,18 @@ slashing, flip-flop clawbacks) and the dual-rail settlement specification
 (Lightning hold invoices, Liquid script escrow) are deterministic and
 publicly recomputable; custody, execution, retention, and SLA policy stay
 with hosts. The design is backed by an evaluation methodology rather than an
-assertion: six line-checked theorems, exhaustive model checking of three of the
-four ceremony machines (the DKG machine is invariant-pinned only), in-house
+assertion: six line-checked theorems, exhaustive reachability model checking of
+three of the four ceremony machines on bounded instances (the DKG machine is
+invariant-pinned only), in-house
 differential parity, a regenerable performance
 baseline, and a literature-anchored audit record (§11), with §13 stating which
-claim rests on which kind of evidence. What remains is not protocol design but
-deployment engineering and independent auditing — including the two
-obligations this paper newly registers (PO-16, PO-17) and the settlement
-binding that v1 leaves to the host (PO-15).
+claim rests on which kind of evidence. What remains is not only deployment
+engineering: the distributed ceremony (PO-14), the concession half of the
+escalation authority (§6.2), and the settlement-binding constructions
+(§9.2, PO-15/PO-16) are protocol work, alongside the independent auditing and
+external replication this paper cannot supply. Three obligations are newly
+registered here (PO-16, PO-17, PO-18 — attribution is detective), and the
+settlement binding that v1 leaves to the host is PO-15.
 
 ---
 
@@ -1619,7 +1630,7 @@ history itself is `CHANGELOG.md`.
 |---|---|---|
 | Test suite | `npm test` | 1,498 passing, 1 environment-gated live test skipped, 61 files (measured on this branch; the per-round pinned count is `docs/CROSS_CHECK.md` §1) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`, source + scripts + tests) | clean |
-| Model-check sweep | `npx tsx scripts/model-check.mjs` | 13 instances, 3,145,632 states, 0 raw throws |
+| Model-check sweep | `npx tsx scripts/model-check.mjs` | 13 instances, 3,149,142 states, 0 raw throws |
 | Differential parity | `npx vitest run __tests__/differentialParity.test.ts` | 5 areas, seeded |
 | Whole-court simulation | `npm run simulate:court` | deterministic, same-seed reproducible |
 | Benchmarks | `npm run bench` / `-- --json` | 29 timed rows; two-run reproducibility pair |

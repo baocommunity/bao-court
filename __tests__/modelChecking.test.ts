@@ -451,7 +451,16 @@ describe('model checking — determinism on fixed sequences', () => {
       s = reduceCourtConfirmationMachine(s, { type: 'close_ladder_round', now: 22 });
       s = reduceCourtConfirmationMachine(s, { type: 'resolve_round', now: 22 });
       expect(s.phase).toBe('round_resolved'); // round 1 of 2 parks for the host
-      s = reduceCourtConfirmationMachine(s, { type: 'escalate', now: 22 });
+      s = reduceCourtConfirmationMachine(s, {
+        type: 'escalate',
+        authority: 'challenger',
+        challengerIdx: 1,
+        challengerPubkey: BOND_PROOF,
+        requestHash: BOND_TX,
+        bondProofHash: BOND_PROOF,
+        roundIndex: 2,
+        now: 22,
+      });
       s = reduceCourtConfirmationMachine(s, { type: 'open_ladder_round', round: 2, voteDeadline: 24, now: 23 });
       for (const idx of [1, 2, 3]) {
         s = reduceCourtConfirmationMachine(s, { type: 'accept_mass_vote', idx, outcome: 'YES', eventId: hex(String(idx)), now: 23 });
