@@ -9,7 +9,14 @@ describe('full court simulation (single script, hermetic)', () => {
   // DKG + FROST rounds are CPU-heavy; under a fully parallel suite run the
   // default 5s timeout is load-dependent (same class of flake as
   // docs/FIXES-2026-08-15.md #6). Give the sim an explicit budget.
-  const SIM_TIMEOUT = 60_000;
+  //
+  // r29-11: the timeout must FOLLOW the budget, not be an independent absolute
+  // gate. An operator who raises the ceiling with `SIM_BUDGET_MS=120000` would
+  // otherwise get a 60 s vitest timeout — i.e. a timeout flake instead of a
+  // clean assertion, the exact class the budget fix removed. 2× the budget plus
+  // a floor keeps the ordering property (assertion < timeout) for every value.
+  const SIM_BUDGET_MS = budgetMs('SIM_BUDGET_MS');
+  const SIM_TIMEOUT = Math.max(SIM_BUDGET_MS * 2, 10_000);
 
   /**
    * Wall-clock budget for the end-to-end simulation.
@@ -28,11 +35,20 @@ describe('full court simulation (single script, hermetic)', () => {
    *     `SIM_BUDGET_MS=120000 npm test`. A real 100× regression (≈120 s)
    *     still exceeds the default and is caught.
    */
-  const SIM_BUDGET_MS = budgetMs('SIM_BUDGET_MS');
-
   const PIPELINE_STEPS = [
     'selection', 'dkg', 'vote', 'sign', 'validate', 'escrow', 'ln', 'liquid',
   ] as const;
+
+  // r29-11: pin the ordering the derivation exists for — the wall-clock
+  // assertion must always be able to fire before vitest's timeout does, at the
+  // default budget and at an operator override. Without this, raising
+  // SIM_BUDGET_MS silently converts a clean assertion into a timeout flake.
+  it('derives the per-test timeout from the budget, never an independent absolute gate (r29-11)', () => {
+    expect(SIM_TIMEOUT).toBeGreaterThan(SIM_BUDGET_MS);
+    expect(SIM_TIMEOUT).toBeGreaterThanOrEqual(10_000);
+    // 2× the budget is the documented rule; the floor only raises it.
+    expect(SIM_TIMEOUT).toBe(Math.max(SIM_BUDGET_MS * 2, 10_000));
+  });
 
   it('runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid', { timeout: SIM_TIMEOUT }, async () => {
     const r = await runCourtSimulation({ poolSize: 12, jurySize: 5, backups: 2, seed: 'test' });

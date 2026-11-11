@@ -443,6 +443,10 @@ $ npm test
 
 ## 7. Residuals registered (not fixed here)
 
+Disposition of every row in this table: `bao.markets`
+`docs/operations/REGISTERED_FINDINGS_SWEEP.md` (round 34) — the single source of
+truth for registered findings across both repositories.
+
 | # | Residual | Severity | Where the fix goes |
 |---|---|---|---|
 | r29-3 | one challenge bond funds every round of the same case (no per-round appeal cost) | LOW (bounded at 5 rounds) | economic design — `docs/proofs/economics/02-ladder.tex.md` / host fee policy |

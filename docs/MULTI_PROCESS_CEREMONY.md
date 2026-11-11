@@ -5,6 +5,10 @@ distributed."* This harness is the closest we can get without a second box.
 It is **not** a distributed deployment, and this page exists to keep us from
 claiming it is.
 
+**Status (round 34):** F1–F4 are dispositioned in the cross-repo register
+`bao.markets` `docs/operations/REGISTERED_FINDINGS_SWEEP.md` — that table is the
+single source of truth for every registered finding in this repository.
+
 ```
 tsx scripts/court/multi-process-ceremony.mjs --jurors=3               # happy path
 tsx scripts/court/multi-process-ceremony.mjs --jurors=7
@@ -188,6 +192,26 @@ signs two different commitments under the same `(disputeId, phaseNonce)`. That
 is detected and disqualified by the same gates (R30 `--chaos=replay`,
 `__tests__/courtRelayAdversary.test.ts`, `courtInbox`/`courtOutbox` suite).
 
+### Normative completion semantics (A / N / P)
+
+These are the three properties the harness asserts and the deployment may rely
+on. They are stated here as the reference; R34 made them explicit because F1–F4
+below were previously only prose in this file. Disposition of every row in this
+section: `bao.markets` `docs/operations/REGISTERED_FINDINGS_SWEEP.md` (round 34).
+
+| property | statement | what it does **not** say |
+|---|---|---|
+| **A — arrival-order insensitivity (safety)** | For any per-receiver delivery order, every juror that completes holds the *same* group key and the *same* message; at most one distinct signature exists. Interleaving order cannot change *what* is signed. | It does **not** make completion order-independent: a commit/reveal inversion (F1) can leave one juror able to aggregate where its peers cannot. |
+| **N — all-or-nothing (liveness)** | The attempt either completes for every participant that received the full roster traffic, or fails closed with a typed classification; there is no threshold-sized degraded ceremony. | It does **not** promise liveness under one dead, silenced or eclipsed juror (F3): the attempt dies and a new one is needed. |
+| **P — `PARTIAL` is legal (availability asymmetry)** | `PARTIAL` means *some* juror(s) aggregated one identical message/signature and the rest failed closed; it is a legal completion shape and can never become `ALL_COMPLETED_DIVERGENT`. | It does **not** mean the signature is weaker, nor that the failed peers agreed to anything: the signature is the same object, held by fewer parties (F4). |
+
+**Evidence in the suite:** `__tests__/r33ByzantineRelay.test.ts` asserts A on
+every cell (`NO_EQUIVOCATION`), N on `fork`/`silence`/`drop`
+(`ALL_FAILED_CLOSED`), and P on `reorder --reorder-style=invert` (one signature,
+`PARTIAL`); `__tests__/r30MultiProcessCeremony.test.ts` asserts the same on the
+process-kill paths. The host-side deployment notes mirror this table in
+`bao.markets` `docs/operations/COURT_MULTIHOST_CEREMONY.md` §0.1.
+
 ### Findings (registered, with severity)
 
 - **F1 — the reveal gate is arrival-order sensitive (availability, not
@@ -196,25 +220,37 @@ is detected and disqualified by the same gates (R30 `--chaos=replay`,
   past its own reveal (`--reorder-style=invert`) makes that sender's partial
   signature unusable at its peers: peers abort with `SIGN_MISSING_REVEAL` while
   the sender itself — which holds its own nonce locally — aggregates and signs.
-  One message, one key, one signature: **no equivocation**, but the ceremony's
-  completion is now view-dependent. Candidate fixes (not implemented here):
-  buffer unmatched reveals and re-apply them when the commitment lands, or make
-  the reveal self-contained (carry the commitment it belongs to).
-- **F2 — blame is "whom I did not hear from", not "who misbehaved".** Under
-  `silence`, peers correctly name the silenced juror; under `invert` and `drop`
-  they name an **honest** sender whose message the relay discarded. Fine for
-  fail-closed decisions, unusable on its own as slashing evidence — slashing
-  needs the signed evidence paths (`DkgVerificationFailure`, `falseComplaints`),
-  not this classification.
-- **F3 — all-or-nothing liveness.** `fork`, `silence` and `drop` never degrade
-  to a threshold-sized ceremony: the attempt dies and needs a new one. That is
-  the protocol as shipped (DKG and the reveal gate both require the full
-  certified roster); no Byzantine *liveness* is provided.
-- **F4 — `PARTIAL` completion is legal and benign.** Message loss can leave one
-  juror able to aggregate while others cannot (N=3 `drop`, `invert`). Because
-  the message and key are identical, this is an availability asymmetry, not a
-  divergence; the harness asserts it can never become
-  `ALL_COMPLETED_DIVERGENT`.
+  One message, one key, one signature: **no equivocation** (property A holds),
+  but the ceremony's *completion* is now view-dependent (property P applies).
+  The refusal is final for that attempt: the dropped reveal is not buffered.
+  Candidate fixes (not implemented here): buffer unmatched reveals and re-apply
+  them when the commitment lands, or make the reveal self-contained (carry the
+  commitment it belongs to). **Trigger to implement:** any deployment whose
+  relays can reorder across senders (i.e. any real WAN relay, not loopback).
+- **F2 — "blame" is *whom I did not hear from*, not *who misbehaved*.** The
+  field is `blamedIdx` in the harness (and `blame` in the prose of earlier
+  rounds). Under `silence`, peers name the silenced juror; under `invert` and
+  `drop` they name an **honest** sender whose message the relay discarded. It is
+  diagnostic evidence for a fail-closed decision — **never slashing evidence**.
+  Slashing needs the signed evidence paths (`DkgVerificationFailure`,
+  `falseComplaints`), not this classification; a host that treats `blamedIdx`
+  as proof of misconduct would punish a relay's victim. The harness now states
+  this in the field's JSDoc, in the report JSON (`blameSemantics`) and in its
+  console line ("did not hear from … — diagnostic, not slashing evidence").
+- **F3 — all-or-nothing liveness (property N).** `fork`, `silence` and `drop`
+  never degrade to a threshold-sized ceremony: the attempt dies and needs a new
+  one. That is the protocol as shipped (DKG and the reveal gate both require
+  the full certified roster); no Byzantine *liveness* is provided. Consequence
+  for operators: a single absent juror costs a fresh attempt, not a smaller
+  quorum — plan the deadline and re-summons budget for it, never "wait for the
+  threshold".
+- **F4 — `PARTIAL` completion is legal and benign (property P).** Message loss
+  can leave one juror able to aggregate while others cannot (N=3 `drop`,
+  `invert`). Because the message and key are identical, this is an availability
+  asymmetry, not a divergence; the harness asserts it can never become
+  `ALL_COMPLETED_DIVERGENT`. A host must publish the single signature it
+  received rather than re-running the ceremony for cosmetic uniformity, and must
+  not read a peer's `SIGN_MISSING_REVEAL` as that peer's dissent.
 
 ## What this proves
 

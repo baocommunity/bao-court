@@ -25,6 +25,14 @@ declared-and-assumed: `declaredSizes` (what the round set out to run) and
 `actualSizes` (what ran) are both in the JSON, and the summary table prints the
 actual corpus size.
 
+**Provenance note (N7, review round 2).** The merged body of PR #86 quotes a
+different invocation than the artifact committed with it — 3,496,808 checks /
+1,124 s across three merged runs, against 3,592,861 assertions / 550 s in one
+invocation. The tree was never inconsistent; the PR text was, and it is immutable
+history. The numbers in *this* page are the artifact's (and now the round-29
+extension's), so this note is the correcting record rather than a rewrite.
+Disposition: `bao.markets` `docs/operations/REGISTERED_FINDINGS_SWEEP.md`.
+
 ---
 
 ## 1. What each campaign proves

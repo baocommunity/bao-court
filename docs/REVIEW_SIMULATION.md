@@ -592,6 +592,10 @@ correct answer to the reviewer's own objection.**
 
 ## Registered follow-ups (RS-n)
 
+Disposition of every RS row below (and of N1–N8 above):
+`bao.markets` `docs/operations/REGISTERED_FINDINGS_SWEEP.md` — round-34 sweep,
+the single source of truth. Nothing here is silently open.
+
 | ID | Finding | Obligation |
 |---|---|---|
 | RS-1 | A-1 | DKG-machine adapter for the exhaustive explorer (structural event space) |
