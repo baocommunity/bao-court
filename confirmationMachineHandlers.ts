@@ -373,6 +373,25 @@ export function onResolveRound(
   // so the case could never finalize again (the r40-2 brick, value-locked). The
   // live path always has exactly `round - 1` records: `open_ladder_round` opens
   // rounds one at a time and each `resolve_round` appends exactly one record.
+  // Round-9 finding r9-4: the r8-6 rule below compared the history with
+  // `ladder.round` — ONE of the two counters — and never checked that
+  // `ladder.round` is the machine's own round. `ladderRound` is the counter every
+  // other transition reads (`escalate` derives `roundIndex = ladderRound + 1`,
+  // `open_ladder_round` advances it, `assertValidEscalationLog` sizes the log
+  // from it), and both are written together, so they agree in every state this
+  // machine can produce. A restored snapshot that disagrees is not a state the
+  // machine could have made, and choosing the smaller counter is exactly how the
+  // r8-6 guard was bypassed: `ladderRound = 4` with `ladder.round = 2` and ONE
+  // history record passed the length check and appended round 2 — three rungs on
+  // the escalation log, two on the history (measured; see
+  // `docs/REVIEW_ROUND_9.md` §4).
+  if (state.ladderRound !== state.ladder.round) {
+    throw new CourtConfirmationTransitionError(
+      `the round counters disagree: ladderRound is ${state.ladderRound} but the open round is `
+      + `${state.ladder.round} — a restored snapshot must not carry two round numbers, because the `
+      + 'history rule below reads one and every escalation rule reads the other (r9-4)',
+    );
+  }
   if (state.outcomeHistory.length !== state.ladder.round - 1) {
     throw new CourtConfirmationTransitionError(
       `cannot resolve round ${state.ladder.round}: the outcome history holds `

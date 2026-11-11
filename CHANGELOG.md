@@ -11,6 +11,59 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (review-round-9 — the round-8 fixes attacked)
+- **`caseId` was still FOLDED, so two ids shared one digest (r9-1,
+  exploitable).** r8-1 rejected surrogates, NUL and >256 bytes and then returned
+  `value.trim()`: `"court:X "`, `"court:X\t"` and `"court:X\u{3000}"` were one id
+  with **one** request hash — the r7 H-6 collision that r8-1 was written to
+  close, one `String.prototype.trim` away — and `build` returned an id the caller
+  never supplied (the r8-5 shape). The host binding folded symmetrically
+  (`expectedCaseId.trim()`), so "a request must not cross cases" held only up to
+  the whitespace class. Ids are now validated **exactly** — leading/trailing
+  whitespace is a typed refusal, canonicality is checked on the raw value, and
+  the preimage no longer trims. **Consumer impact:** a case id with surrounding
+  whitespace was previously accepted (folded) and is now refused; no generated id
+  carries one, and the refusal is loud at build time rather than silent in a
+  digest.
+- **`bondTxid` was in the preimage and outside the binding (r9-2).** The mapper
+  selects the challenge by `bondProofHash` and never compared `bondTxid` with the
+  case, so a bonded challenger could name any txid and the logged `requestHash` —
+  the append-only log's only record of the request — committed to a bond the case
+  never bound (the r8-2 unverified-claim family on the field r8-2 forgot). It must
+  now equal the `CourtChallengeRecord.bondTxid` its witness selects.
+- **A CONCESSION was minted as an ESCALATION (r9-3).** `concession: true` is
+  parsed strictly (r8-3) and committed to the hash as `'1'`, and the mapper then
+  ignored it: an escalate event was minted from a request whose signer dropped the
+  appeal, the reducer accepted it, and `escalationLog` recorded an authorisation
+  the challenger refused while his exit (finality) was blocked and a fresh round
+  bond was charged. A concession is now a typed refusal that names the `concede`
+  transition.
+- **The r8-6 history rule read one of the case's two round counters (r9-4).** The
+  state carries `ladderRound` and `ladder.round`; every rung transition reads the
+  first and the r8-6 length rule read the second. A snapshot with
+  `ladderRound = 4`, `ladder.round = 2` and one history record passed the length
+  check and appended round 2 — the "history no later barrier accepts" harm r8-6
+  exists to refuse, after which the escalated round bond is already consumed (the
+  r40-2 brick, reached through the guard added to prevent it).
+  `onResolveRound` now requires the two counters to agree, and the escalation
+  mapper refuses the same snapshot.
+- **The 2 000-id "injectivity pin" measured sha256, not the encoding (r9-5).**
+  Its generator (`court:market-r48:${i}`) produces ids with no surrogate, NUL,
+  length or whitespace risk, so the sweep passes on the pre-fix code and on a
+  deliberately lossy encoder (measured: 2 000 ids → **1** distinct digest). It is
+  kept as a smoke test and joined by a differential pin over the **preimage
+  bytes** — dangerous pairs must differ, the fold family must be refused.
+- `__tests__/reviewRound9.test.ts` (27) — the encoding edge sweep (surrogates at
+  seven positions, NUL at four, the 256/257 byte boundary at 1/2/3/4-byte widths,
+  overlong UTF-8, NFC/NFD), the binding attacks (`bondTxid`, concession, echoed
+  binding, derivable witness, cross-case), the duplicate-key depth argument, and
+  the `resolve_round` lags: **8 red on v0.14.1**, 27 green here.
+  `docs/REVIEW_ROUND_9.md` records attack → repro → measured outcome →
+  disposition per target, and pins three REGISTERED residuals with named owners
+  (the binding is a trust anchor a host can fill from the wire; bond ownership is
+  still the host verifier's, so r40-3 is not preempted; the case state carries no
+  case identity). Suite **1,831 passed / 1 skipped (82 files + 1 skipped)**.
+
 ### Fixed (review-round-8 — the escalation transport and the r41-1 barrier attacked)
 - **The transport bound nothing: three unchecked wire claims (r8-2,
   exploitable).** `escalationRequestToMachineEvent` filled `challengerIdx` from

@@ -173,6 +173,40 @@ whose append-only log could name ANY juror, apply a request signed for one case
 to another, and accept a request signed for round 1 at round 3. All three are
 refused now, and a 3-argument call is a refusal rather than a silent pass.
 
+**The binding is a TRUST ANCHOR, not a proof (r9-6) — read this before wiring
+the route.** The mapper can only compare the binding with the request; it cannot
+tell a value the host VERIFIED from the same value COPIED out of the body. A host
+that does
+
+```
+binding = { caseId: body.caseId, authenticatedPubkey: body.challengerPubkey }
+```
+
+reproduces the pre-r8-2 harm exactly (log names a juror who never escalated,
+`challengerIdx` from the bond record). So the host owes two things, and they are
+the whole guarantee:
+
+- `authenticatedPubkey` = the x-only pubkey the **auth layer** derived from the
+  signed request (NIP-98 event pubkey / bearer-session identity) — never read
+  from the JSON body;
+- `caseId` = the id the host **looked up** to fetch the snapshot. Store and route
+  ids byte-exactly: the codec refuses ids with leading/trailing whitespace
+  precisely so that `"court:X"` and `"court:X "` cannot be one case (r9-1).
+
+Two more bounds the mapper cannot close, stated so they are not quoted away:
+**bond ownership** (r9-7) — a derivable witness (`hash(bondTxid)`) can be
+registered by a juror who owns no bond, so the host's bond verifier must bind the
+witness to the event author (r40-3); and **case identity in the state** (r9-8) —
+`CourtConfirmationMachineState` carries no case id, so the snapshot and the
+binding must come from the SAME lookup, or a request for case A can be reduced on
+case B's snapshot.
+
+Two wire fields are now bound by the mapper and one transition is refused
+(r9-2/r9-3): `bondTxid` must equal the txid of the challenge record its witness
+selects, and a `concession: true` request is NOT an escalation — route it to
+`concede` (the machine's `concede` event carries no request witness, so keep the
+signed concession in the host's own audit trail).
+
 **Never compose `requireRoundBond: true` with `hostEscalation: true`** (R38,
 r38-2). The break-glass row above exempts a *challenger* escalation from the
 round-bond requirement, not just the host's, so the strict policy prices
