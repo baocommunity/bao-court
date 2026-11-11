@@ -115,8 +115,11 @@ export function ladderSignBoundary(params: LadderParameters): number {
  * was false there; `ladderCapWithinBound` then blessed the profitable cap. The
  * clamp only applies upwards now.
  *
- * Monotone non-increasing in `a_f` (a less accurate jury must not be given a
- * deeper ladder) and non-decreasing in `β`.
+ * Monotone **non-decreasing in `a_f`** (a more accurate jury may only get a
+ * deeper ladder; equivalently: a less accurate jury must not be given a deeper
+ * one — the direction was stated backwards until review round 41, which
+ * measured the grid 0.30…0.95 → caps 0…5 rather than trusting the sentence)
+ * and non-decreasing in `β`.
  *
  * @example
  * ```ts

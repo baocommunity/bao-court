@@ -789,16 +789,49 @@ export function onFinalize(
   // so a restored snapshot must not be able to ADD a record naming a juror
   // who never escalated, a round never opened, or a bond never posted.
   assertValidEscalationLog(state);
+  // Evidence barrier (round-41 finding r41-1). For a CHALLENGED case the
+  // verdict's evidence is not the confirmation ledger — it is the LAST round's
+  // vote ledger, which becomes the hash preimage. `resolve_round` re-derives
+  // that ledger, but a restore skips transitions and this entry did not: a
+  // snapshot parked at `fee_settlement` (reachable through `concede`, one of the
+  // entries REVIEW_ROUND_6 recorded as NOT reading the challenge pool) could
+  // carry duplicate ballots, off-roster voters, or an outcome outside the frozen
+  // ballot, and finalize minted a canonical verdict over them. A malformed id
+  // escaped as the VOTE machine's error type; duplicates inflated the verdict's
+  // support set. Same class as r40-1, one ledger over.
+  const challenged = state.challenges.length > 0;
+  if (challenged) {
+    assertValidMassVoteLedger(state);
+  }
   const pending = state.verdict;
   if (!pending) {
     throw new CourtConfirmationTransitionError('cannot finalize without a resolved round');
   }
-  // Finality (multi-round ladder §4.2): the verdict is the LAST resolved
-  // round's winner. A challenged case is backed by that round's
-  // winning-vote event ids; an never-challenged case by the confirmation
-  // ledger. (v0.8.5 backed an upheld challenged round with confirmations;
-  // the ladder spec pins the evidence to the round that decided.)
-  const supportingEventIds = finalSupportingEventIds(state, pending);
+  // The verdict itself is re-derived from the verified ledgers rather than
+  // trusted (r41-1). `outcome`, `upheld` and the supporting set are what a host
+  // settles on, and the hash only commits to whichever values the CALLER left in
+  // the pending field — so a restored snapshot could flip `upheld` without
+  // changing the hash, or point `outcome` at any ballot that has one vote. Both
+  // are pure functions of state the barriers above have verified: the deciding
+  // round's record in the append-only `outcomeHistory` (which `resolve_round`
+  // writes in the SAME transition as the tally, making the two an independent
+  // cross-check of each other), or the standing proposal when the case was never
+  // challenged.
+  const derived = deriveFinalVerdict(state, challenged);
+  if (pending.outcome !== derived.outcome) {
+    throw new CourtConfirmationTransitionError(
+      `cannot finalize: the pending verdict names "${pending.outcome}" but the verified `
+      + `ledgers derive "${derived.outcome}" — a verdict must be the deciding round's recorded majority`,
+    );
+  }
+  if (pending.upheld !== derived.upheld) {
+    throw new CourtConfirmationTransitionError(
+      `cannot finalize: the pending verdict sets upheld=${String(pending.upheld)} but the verified `
+      + `ledgers derive upheld=${String(derived.upheld)} (outcome "${derived.outcome}" against the `
+      + `proposed "${state.proposedOutcome}") — the flag is not covered by the verdict hash`,
+    );
+  }
+  const supportingEventIds = derived.supportingEventIds;
   // Fail closed (round-3 finding r3-1): a final verdict needs at least one
   // supporting event. On live paths this is unreachable —
   // close_confirmations enforces the quorum (so the never-challenged path
@@ -815,29 +848,92 @@ export function onFinalize(
   }
   const verdictHash = hashCourtVerdict({
     sessionHash: state.sessionHash,
-    outcome: pending.outcome,
+    outcome: derived.outcome,
     supportingEventIds,
   });
   return freezeState({
     ...state,
     phase: 'final',
     verdict: {
-      outcome: pending.outcome,
+      outcome: derived.outcome,
       supportingEventIds,
       verdictHash,
-      upheld: pending.upheld,
+      upheld: derived.upheld,
     },
   });
 }
 
-function finalSupportingEventIds(
+/**
+ * Re-derive the final verdict from the verified ledgers (round-41 / r41-1).
+ *
+ * A never-challenged case's verdict is the standing proposal backed by the
+ * confirmation ledger (v0.9.0 finality). A challenged case's is the LAST
+ * resolved round's record: `outcomeHistory` is append-only and re-verified
+ * (consecutive rounds, ballot closure, unique well-formed event ids and
+ * indices), and `resolve_round` writes it in the same transition as the tally,
+ * so requiring the vote ledger and the history record to agree is a check the
+ * machine itself could always have passed — and one a forged snapshot that
+ * touched only one of them cannot.
+ *
+ * The supporting set comes from the HISTORY, not from the (attacker-shaped)
+ * vote ledger: `winnerEventIds` is the record the machine committed to when it
+ * resolved the round.
+ */
+function deriveFinalVerdict(
   state: CourtConfirmationMachineState,
-  pending: NonNullable<CourtConfirmationMachineState['verdict']>,
-): string[] {
-  return state.challenges.length === 0 && pending.upheld
-    ? state.confirmations.map((c) => c.eventId.toLowerCase()).sort()
-    : (state.ladder?.votes ?? [])
-        .filter((v) => v.outcome === pending.outcome)
-        .map((v) => v.eventId.toLowerCase())
-        .sort();
+  challenged: boolean,
+): { outcome: string; upheld: boolean; supportingEventIds: string[] } {
+  if (!challenged) {
+    return {
+      outcome: state.proposedOutcome,
+      upheld: true,
+      supportingEventIds: state.confirmations.map((c) => c.eventId.toLowerCase()).sort(),
+    };
+  }
+  const ladder = state.ladder;
+  if (!ladder) {
+    throw new CourtConfirmationTransitionError(
+      'cannot finalize: a challenged case has no ladder state to derive its verdict from',
+    );
+  }
+  const record = state.outcomeHistory[state.outcomeHistory.length - 1];
+  if (!record) {
+    throw new CourtConfirmationTransitionError(
+      'cannot finalize: a challenged case has no resolved-round record to derive its verdict from',
+    );
+  }
+  if (record.round !== ladder.round) {
+    throw new CourtConfirmationTransitionError(
+      `cannot finalize: the last resolved round is ${record.round} but the ladder is at round `
+      + `${ladder.round} — the outcome history and the ladder disagree`,
+    );
+  }
+  const tallied = tallyRoundVotes(state);
+  if (tallied.winner !== record.outcome) {
+    throw new CourtConfirmationTransitionError(
+      `cannot finalize: the round ${record.round} vote ledger tallies "${tallied.winner}" but the `
+      + `recorded outcome is "${record.outcome}" — one of the two was not produced by resolve_round`,
+    );
+  }
+  const talliedEventIds = ladder.votes
+    .filter((v) => v.outcome === record.outcome)
+    .map((v) => v.eventId.toLowerCase())
+    .sort();
+  const recordedEventIds = record.winnerEventIds.map((e) => e.toLowerCase()).sort();
+  if (
+    talliedEventIds.length !== recordedEventIds.length
+    || talliedEventIds.some((id, i) => id !== recordedEventIds[i])
+  ) {
+    throw new CourtConfirmationTransitionError(
+      `cannot finalize: the round ${record.round} vote ledger does not match the recorded winning `
+      + `event ids (${talliedEventIds.length} ballot(s) vs ${recordedEventIds.length} recorded)`,
+    );
+  }
+  return {
+    outcome: record.outcome,
+    // Derived, never trusted: `upheld` is not in the verdict hash, so a snapshot
+    // that flips it changes the meaning of a verdict whose hash still verifies.
+    upheld: record.outcome === state.proposedOutcome,
+    supportingEventIds: recordedEventIds,
+  };
 }

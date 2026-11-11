@@ -92,6 +92,21 @@ bound did not, which made hosts refuse the very snapshots the restore contract
 told them to restore). The definition is **one record per OPENED round** —
 `ladderRound − 1`, or `ladderRound` while a rung is pending.
 
+**The entry matrix names the pools, not just the barriers (R41, r41-1).** Round
+6 classified `close_ladder_round`, `concede` and `flag_clawback` as non-readers
+"followed by a pool-reading barrier before any value is locked in" — true of the
+CHALLENGE pool, and false of the pool `finalize` actually reads for a challenged
+case: the verdict's evidence is the **round vote ledger**. `concede` walks
+straight to `fee_settlement` without re-deriving anything, so a restored snapshot
+entered through it carried a forged vote ledger into `finalize`, which had no
+mass-vote barrier at all — duplicate ballots, off-roster voters and event ids no
+ballot ever carried all minted a canonical verdict (a malformed id even escaped
+as the *vote* machine's error type). `finalize` now runs
+`assertValidMassVoteLedger` for a challenged case and derives the verdict from
+the round's append-only `outcomeHistory` record, requiring the vote ledger to
+agree with it. The non-readers themselves are unchanged and still lock nothing
+in: each is followed by a barrier before value moves.
+
 `hostEscalationEvent` (break-glass) still carries **no** witness: a host record
 must have `roundBondProofHash === null`, exactly like its other challenger
 fields.
@@ -156,6 +171,37 @@ a restored snapshot fails closed rather than silently downgrading the case. A
 strict case also refuses a snapshot whose log is missing an entry for a round it
 opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
 
+### Upgrading a deployment to the strict policy (checklist — R41, r41-T4)
+
+The strict policy is a **host** decision passed at case creation; this package
+does not flip it (a factory default of `true` is v0.14, sweep r33-4). Nothing
+here breaks on upgrade — an existing case keeps whatever policy it froze, and a
+pre-0.13 snapshot with the field absent stays legacy (`reviewRound7.test.ts` ›
+'(r41-T4) a v0.12 snapshot … is legacy'). The breakage risk is the *other*
+order of operations, and it is the one to check before arming:
+
+1. **The transport must carry the witness BEFORE the policy requires it.** A
+   strict case refuses any challenger escalation without `roundBondProofHash`,
+   so a host that flips the flag while its escalate endpoint still accepts only
+   `{round, bond_txid, bond_proof_hash, event_id, signed_at}` turns every
+   escalation into a typed refusal — the ladder parks at its last resolved round
+   (fail closed, but dead). Verify the route's body schema and the request hash
+   both carry the per-round witness (and that the hash binds it, or two
+   different round bonds produce the same request hash).
+2. **A strict case cannot be relaxed later.** The policy is frozen with the
+   case: a host that flips `BAO_COURT_REQUIRE_ROUND_BOND` back to `0` changes
+   only NEW cases. Existing strict cases keep refusing witness-less
+   escalations.
+3. **Never combine it with `hostEscalation: true`** (the matrix's break-glass
+   row): the exemption is granted to challenger escalations too, so the strict
+   policy prices nothing (r38-2).
+4. **Legacy cases keep the documented deletion residual** (r33-5): a legacy case
+   restored with an emptied log still opens a rung. A deployment that wants that
+   closed must create new cases under the strict policy — there is no retrofit.
+5. **Both ends must agree on "one bond witness, one standing"** (r38-1/r40-3):
+   the witness derivation must mix the juror index in, and the host verifier
+   must bind it to the event author, or the first registrant preempts the payer.
+
 ## What the host must do
 
 1. **New deployments:** create confirmation machines with
@@ -212,6 +258,13 @@ opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
   semantics, the preemption residual (r40-3), and the **legal-state hunt** — a
   490-state walk over every policy/ladder/authority combination asserting that no
   reducer-reachable state is refused by either barrier.
+- `__tests__/reviewRound7.test.ts` — the R41 attacks: the three stated
+  non-readers probed with forged snapshots (r41-1: `concede` carries a forged
+  vote ledger into `finalize`, which minted a verdict for a losing outcome),
+  the verdict evidence barrier and the derived `upheld`, a 40-flow
+  over-strictness walk, and the sign-rule predicate probed at its edges
+  (ρ/β ⇒ 0, scale invariance, monotonicity in `a_f` and `β`, the break-even
+  cell, `derivedCap = 0`, the constant-`β` drift).
 - `__tests__/ladderEconomics.test.ts` — the derived cap and flip round against
   06's published numbers, the EV sign at the boundary, monotonicity, and the
   bond schedule.
