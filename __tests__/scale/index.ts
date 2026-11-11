@@ -28,6 +28,9 @@ import { runEncodingCampaign } from './encodingCorpus';
 import { runWitnessCampaign } from './witnessCorpus';
 import { runEpochRotationCampaign } from './epochRotationCorpus';
 import { runFinalityCampaign } from './finalityCorpus';
+import { runEscalationTransportCampaign } from './escalationTransportCorpus';
+import { runLedgerBarrierCampaign } from './ledgerBarrierCorpus';
+import { runBondAlgebraCampaign } from './bondAlgebraCorpus';
 
 /** The campaign names, in artifact order. */
 export const CORPUS_NAMES = [
@@ -40,6 +43,9 @@ export const CORPUS_NAMES = [
   'witness',
   'epochRotation',
   'finality',
+  'escalationTransport',
+  'ledgerBarrier',
+  'bondAlgebra',
 ] as const;
 
 export type CorpusName = (typeof CORPUS_NAMES)[number];
@@ -116,6 +122,27 @@ export const CAMPAIGNS: Record<CorpusName, CampaignDefinition> = {
     what: 'verdict finality chains: challenge windows + escalations → verdict → batch finality shapes',
     sizes: SIZES.finalityChains,
     run: (size, seed) => runFinalityCampaign({ size, seed }),
+  },
+  escalationTransport: {
+    name: 'escalationTransport',
+    units: 'requests',
+    what: 'v0.14.0 escalation-request wire: build/parse/serialize/map/reduce over boundary ids, duplicate keys, pollution and binding disagreements',
+    sizes: SIZES.escalationRequests,
+    run: (size, seed) => runEscalationTransportCampaign({ size, seed }),
+  },
+  ledgerBarrier: {
+    name: 'ledgerBarrier',
+    units: 'states',
+    what: 'restored-snapshot states through every ledger barrier: no false refusal, no false accept (independent oracle)',
+    sizes: SIZES.barrierStates,
+    run: (size, seed) => runLedgerBarrierCampaign({ size, seed }),
+  },
+  bondAlgebra: {
+    name: 'bondAlgebra',
+    units: 'sequences',
+    what: 'legal escalation sequences: one-hash-one-index, no re-consumption, strictly increasing rounds, the 3^R bond schedule',
+    sizes: SIZES.bondSequences,
+    run: (size, seed) => runBondAlgebraCampaign({ size, seed }),
   },
 };
 
