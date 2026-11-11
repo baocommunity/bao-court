@@ -46,23 +46,23 @@ Conventions for evidence refs:
 **Where the review history lives.** The rounds that produced these claims and the
 rounds that attacked them are mapped in [`REVIEWS_INDEX.md`](REVIEWS_INDEX.md):
 every review/simulation round in order (improvement rounds 1–4, symposium 5–21,
-the 2026-11-10 external reviews, review rounds 2–6, the instrument rounds 29–37),
+the 2026-11-10 external reviews, review rounds 2–8, the instrument rounds 29–37),
 the findings by severity, the fix (PR and release) and the disposition of every
-residual — plus the eight-class failure taxonomy and the artifact behind each
+residual — plus the nine-class failure taxonomy and the artifact behind each
 headline number. This file remains the **claim→proof** index; the reviews index
 is the **round→finding** index, and the two are joined by claim id (the pinning
 duty, for example, is `PAPER-7.3-3` here and class 1 in the taxonomy) and by
-finding code (`r29-*`, `r33-*`, `r38-*`, `r40-*`).
+finding code (`r29-*`, `r33-*`, `r38-*`, `r40-*`, `r41-*`, `r8-*`).
 
 ---
 
-## 1. Verification runs recorded for this round (2026-11-11, worktree at v0.13.0+, `608e6dc`)
+## 1. Verification runs recorded for this round (2026-11-11, worktree at v0.14.1, `bc28ff3`)
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,686 passed / 1 skipped (76 files)** — re-measured at `608e6dc` (round 34); 1,677 at the review-round-4 head `841b012` (the +9 are `r33ByzantineRelay.test.ts` ×8, merged as #102 after that count was taken, and the r29-11 timeout pin); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
-| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `608e6dc`) |
-| Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `608e6dc`) |
+| Full suite | `npm test` | **1,804 passed / 1 skipped (81 files)** — re-measured at `bc28ff3` (v0.14.1); 1,758 at the review-round-7 head `4cd97f1` (+19: `reviewRound7.test.ts`); 1,739 at v0.13.2 `8bac1bc` (+23: `reviewRound6.test.ts`); 1,686 at `608e6dc` (round 34); 1,677 at the review-round-4 head `841b012` (the +9 are `r33ByzantineRelay.test.ts` ×8, merged as #102 after that count was taken, and the r29-11 timeout pin); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `bc28ff3`) |
+| Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `bc28ff3`) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | witness-aware regeneration (2,525 s): **15 instances, 3,869,232 states, 213,521,172 event applications, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws, 3,000 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
 | Statistical corpora | `npx tsx scripts/campaign/run-campaign.mjs --full` | 9 campaigns — **1,187,000 units / 3,745,566 assertions / 0 failures** in 608.8 s (artifact `docs/benchmarks/campaign-2026-11-11.json`) |
 | Multi-process ceremony | `npm run simulate:multiprocess` | 4 scenarios green (N = 3…7 OS processes; kill mid-DKG, kill mid-signing, cross-round replay) |

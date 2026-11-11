@@ -1,7 +1,7 @@
 # BAO Court — Evaluation
 
-**Version:** tracks `@bao/court` v0.13.0 · **Date:** 2026-11-11 · **Round:** 32
-(paper refresh with the round-29…31 artifacts)
+**Version:** tracks `@bao/court` v0.14.1 · **Date:** 2026-11-11 · **Round:** 45
+(paper refresh with the review-round 7–8 artifacts)
 
 This is the paper's evaluation section as a standalone artifact. Every number
 below comes from **existing committed evidence** — a merged PR, a committed
@@ -70,6 +70,25 @@ penalty pins and the overflow guard. See `docs/REVIEW_ROUND_4.md`.)*
 `node scripts/cross-check.mjs` exit 0 over 285 claims / 516 evidence refs. The
 +9 over the R33 count are the round-33 Byzantine-relay suite (`#102`, 8 tests,
 merged after that count was taken) and the r29-11 budget-derived timeout pin.)*
+*(Review rounds 5–6, 2026-11-11 — **1,739 passed / 1 skipped (78 files)** at
+`8bac1bc` (v0.13.2), reached through review round 5's r38-1 closure and review
+round 6's 23 probes (the r40-1/r40-2 closures, the barrier-at-every-entry
+matrix, the 490-state legal-state hunt). See `docs/REVIEW_ROUND_5.md`,
+`docs/REVIEW_ROUND_6.md`.)*
+*(Review round 7, 2026-11-11 — **1,758 passed / 1 skipped (79 files + 1
+skipped)** at `4cd97f1`: +19 for `reviewRound7.test.ts` — the four r41-1
+closures (all red on the pre-fix head), the three stated non-readers probed, the
+40-flow over-strictness walk, the sign-rule edge/grid pins and two doc pins. See
+`docs/REVIEW_ROUND_7.md`.)*
+*(Review round 8 / this refresh, 2026-11-11 — **current head `bc28ff3`
+(v0.14.1): 1,804 passed / 1 skipped (81 files)**, `npm run typecheck` +
+`typecheck:tests` + `typecheck:scripts` clean, `node scripts/cross-check.mjs`
+exit 0 over **285 claims / 516 evidence refs** (95.1 % covered; gap register 18
+entries: 14 open, 4 closed). The +46 over round 7 are `reviewRound8.test.ts`
+(34 — the r8-1…r8-6 closures, of which **13 are red on the released v0.14.0
+head**, plus the four paths to `final`, re-attacked from outside) and
+`escalationRequestWire.test.ts` (12 — the transport's round-trip, strict
+refusal matrix and pinned known-answer digest). See `docs/REVIEW_ROUND_8.md`.)*
 
 ---
 
@@ -279,14 +298,20 @@ docs/CROSS_CHECK.md.
 | **Review round 3 — the fixes attacked** | v0.12.1, PR #95 | **1 EXPLOITABLE** (r29-1: the escalation bond was bound to the *case*, so a juror with no bond could escalate on another's accepted hash and the audit log named the wrong challenger), 1 EXPLOITABLE-at-host (r29-7: cap on a client-declared number), 3 PARTIAL (2 fixed — r29-2 escalation-log barrier, r29-10 vacuous budget; 1 registered), rest BLOCKED with guards cited; 8 residuals registered |
 | **Round-30 transport + ceremony** | v0.12.1, PR #98 | 1 operational brick (**T-1**: a wrap delivered by 65+ relays made the *whole* durable inbox unrestorable — no key needed), seal-layer and MLS attacks each pinned to the layer that catches them, inbox/outbox load under a 10k-event flood, and 4 multi-process ceremony scenarios (kill mid-DKG, kill mid-signing, cross-round replay) |
 | **Round-31 economic re-verify + per-round bond** | v0.13.0, PR #99/#100 | 5 economic attacks: **r30-1 MAJOR** (the bond was a *membership* test, so escalation was a free option worth 363 $b_0$) → fixed in the reducer; **r30-2 MAJOR** (frozen ladder is a ceiling; churn 135→45 is 2.47× short) → closed host-side; **r30-3 SAFE** (the brief's premise was wrong — a weaker quorum *tightens* the cap); r30-4 (idle decay's ramp dominates the cliff it replaced); r30-5 SAFE on the label |
+| **Review round 5 — the round-4 closures attacked** | v0.13.1, PR #107 | **1 EXPLOITABLE** (r38-1: the challenge pool had **no uniqueness**, so one paid bond bought N challengers' standing — a two-step r29-1 bypass), 2 PARTIAL (r38-2 `requireRoundBond` × `hostEscalation` prices nothing; r38-3 pubkey unverifiable → v0.14), 1 host (r38-4: the host vendored the pre-fix `ladderEconomics.ts`); 3 closures red on v0.13.1 |
+| **Review round 6 — the entries that spend a rung** | v0.13.2, PR #109/#110 | **2 EXPLOITABLE** (r40-1: `escalate` re-derived the log but not the challenge pool it reads; r40-2: a restored `ladder_pending` with its record deleted opened the rung), 1 PARTIAL in-package (r40-3: the hash is unique but not **owned** — a derivable witness is preemptable), 2 PARTIAL host (r40-4 the composed predicate disagreed with the sign rule; r40-5 the boot backfill bypassed the creation gate); **490-state legal-state hunt: 0 refusals** |
+| **Review round 7 — the value-locking entry's other ledger** | v0.14.0, PR #112/#114 | **1 EXPLOITABLE** (r41-1: `finalize` minted a canonical verdict from a vote ledger it never re-derived — `concede` was the route in, and `upheld` was caller-supplied and absent from the hash preimage; the reachable harm is settling the losing side of a case, or `FINAL outcome=MAYBE` on a case no ballot could answer), 1 doc defect (r41-T1-doc: the `a_f` monotonicity sentence pointed the wrong way), 6 host findings (H-1 ρ/β ≠ the enforced cap, H-2 `a_f = 1`, H-3/H-4/H-5 the clamp's readers, metric and permanence, H-6 the escalate body cannot carry the witness); **4 closures red on the pre-fix head, 40/40 legal flows finalize unchanged** |
+| **Review round 8 — the transport, and the barrier from outside** | v0.14.1, PR #115/#116 | **2 EXPLOITABLE** (r8-1: `caseId` was encoded lossily — an unpaired surrogate and U+FFFD are two ids and **one request hash**; r8-2: the transport **bound nothing** — an unverified `challengerPubkey` wrote a non-escalator into the append-only log, a stale wire `round` opened an unauthorised rung, a `caseId` crossed cases), **4 PARTIAL fixed** (r8-3 `concession` coerced to false, r8-4 duplicate JSON keys silently resolved, r8-5 `build` validated A and returned B, r8-6 `resolve_round` bricked a case on a history that outran the ladder), the finality barrier **BLOCKED on all four paths to `finalize`**; **13 of 34 red on v0.14.0** |
 
-Condensed: **≈40 findings across the committed adversarial record, seven at the
+Condensed: **≈50 findings across the committed adversarial record, ten at the
 top of this document's own severity scale** — 1 CRITICAL and 4 HIGH from the
-pre-mainnet rounds, plus 2 EXPLOITABLE-class findings from the re-attack rounds
-(r29-1 and T-1) — every one fixed with a regression test or dispositioned in the
-Gap register; none silently dropped. That the last two top-severity entries sit
+pre-mainnet rounds, plus **ten named `EXPLOITABLE` closures** from the re-attack
+rounds (r29-1, r33-1, r33-5, r33-6, r38-1, r40-1, r40-2, r41-1, r8-1, r8-2) —
+every one fixed with a regression test or dispositioned in the
+Gap register; none silently dropped. That the last top-severity entries sit
 in code written *after* the previous audit is the section's own thesis
-(§3.2) continuing to hold.
+(§3.2) continuing to hold — and it now holds across six consecutive review
+rounds, each of which attacked the fixes the round before shipped.
 
 **Finding-class distribution** (each class names its representative committed
 findings):
@@ -294,10 +319,11 @@ findings):
 | Class | Share | Representative findings |
 |---|---|---|
 | Trust-boundary pinning | largest | v0.8.2 F3/F1 (un-enforced scope pins, policy downgrade); v0.8.5 batch-root pin; F-2 empty-pin; the R2 unpinned-key class (THREAT_MODEL §5 P1–P12) |
-| Parsing / canonicalization | large | FIXES-08-18 delimiter aliasing; lone-surrogate hash collision (PR #37); state-shape tampering; r3-2/r3-3 raw-TypeError escapes; PR #51 ingest-dedup and spread-cache bugs |
-| Availability / DoS | medium | forged-complaint ceremony DoS (FIXES-08-15 #2); cross-index eventId wedge (PR #37); r3-6 mid-ladder dead end; host F6 ack-reconcile starvation at scale (PR #2295) |
-| Races / replay / concurrency | medium | Drijvers concurrent-session hardening (CRYPTO_AUDIT §1.1); nonce-equivocation aborts; F-12 monotonic clock ledger; host quorumMet deadline-pin clobber (soak F3, PR #2293) |
-| Economic | medium | round-10 mechanism audit: ack farming (composite SLA), redelivery griefing (1+1, ×0.8), cross-network epoch replay, dust starvation, weight gaming (host repo, THREAT_MODEL §4.4/§4.6) |
+| Identifier canonicalisation | large, and the class that keeps returning | FIXES-08-18 delimiter aliasing; lone-surrogate hash collision (PR #37); **H-6** (the round-bond witness omitted from the request hash, so two bonds hashed alike); **r8-1** (`caseId` through a lossy `TextEncoder`, so two cases hashed alike); state-shape tampering; r3-2/r3-3 raw-TypeError escapes; PR #51 ingest-dedup and spread-cache bugs. The rule this class taught: canonicalise **per field**, with an injectivity pin per field (paper §11.6) |
+| Attribution / identity | large | r29-1 (the log named a juror who never escalated); r38-1/r40-1 (the payer of a rung logged as the wrong actor, or the rung bought with a borrowed bond); r40-3 (preemption of a derivable witness); **r8-2** (the transport forwarded an unverified `challengerPubkey` into the append-only log); r29-5/r38-3 (`challengerPubkey` caller-supplied, no idx→pubkey map) |
+| Availability / DoS | medium | forged-complaint ceremony DoS (FIXES-08-15 #2); cross-index eventId wedge (PR #37); r3-6 mid-ladder dead end; T-1 (a 65-relay delivery bricked the durable inbox); r40-2/r8-6 (a restored snapshot bricked a case with value locked); host F6 ack-reconcile starvation at scale (PR #2295) |
+| Races / replay / concurrency | medium | Drijvers concurrent-session hardening (CRYPTO_AUDIT §1.1); nonce-equivocation aborts; F-12 monotonic clock ledger; the escalation replay window (a request signed for round 1 applied at round 3, r8-2b); host quorumMet deadline-pin clobber (soak F3, PR #2293) |
+| Economic | medium | round-10 mechanism audit: ack farming (composite SLA), redelivery griefing (1+1, ×0.8), cross-network epoch replay, dust starvation, weight gaming (host repo, THREAT_MODEL §4.4/§4.6); r30-1 (membership vs consumption) and H-1 (a constant-β gate drifting three rungs) |
 
 ### 3.2 The finding-per-LOC-of-new-code observation
 
@@ -313,6 +339,15 @@ memoization hazards). For the pre-mainnet claim this validates: risk
 concentrates in fresh code, the audit program was run *before* mainnet, and
 the finding rate on the mature core decayed to the MED/LOW tail across
 roughly eight consecutive adversarial rounds.
+
+The pattern recurred in review rounds 7–8, and it is worth stating as a
+prediction rather than a post-hoc note: all three of those rounds' new
+exploitables attach to code **less than two rounds old** — r41-1 to the
+round-5-era `finalize`, r8-1 and r8-2 to the v0.14.0 transport — while the same
+rounds' attacks on the settled core (the sign-rule arithmetic, the ladder
+witness, the four paths to `final`) came back `BLOCKED` with the guard cited by
+file and line. Fresh code is where the risk is; the audit rate on the mature
+core is the tail.
 
 ### 3.3 Host-API penetration test
 
@@ -540,25 +575,31 @@ results:
    which is exactly the class of error an in-house model cannot be trusted to
    catch reliably.
 7. **The re-attack rounds are self-review, and the instruments are in-house
-   too.** Rounds 29–31 found three of this artifact's own defects (§3.1), but
+   too.** Review rounds 2–8 found **six** of this artifact's own
+   defects (§3.1) — the latest being a finality forgery the round-6 entry matrix
+   had *stated* was safe, and a wire encoding that gave two cases one digest —
+   but
    the attacker and the author are the same people, working from the same
    threat model: a specification-level misreading shared by both survives, as
-   it does in §6.3. Two concrete demonstrations that this is not a formality:
+   it does in §6.3. Three concrete demonstrations that this is not a formality:
    the model checker's escalation-bond property had **mirrored** the weak
-   predicate it was supposed to check (r29-1), and the soak was silently **red
-   on `main`** for two protocol rounds (SOAK-F8). Both were found by *attacking*,
-   not by restating — and both are why no row here is labelled independently
-   verified.
+   predicate it was supposed to check (r29-1), the soak was silently **red
+   on `main`** for two protocol rounds (SOAK-F8), and a canonicalisation class
+   was fixed three times in three different fields (paper §11.6) — each fix
+   correct, each one field short of the rule. All three were found by
+   *attacking*, not by restating — and all are why no row here is labelled
+   independently verified.
 8. **The multi-process ceremony is localhost.** N = 3…7 real OS processes, real
    PIDs/identities/state dirs, signed events and relay-assigned ordering — on
    one kernel and one clock, with an honest, always-available relay and no
    packet loss, partitions, clock skew or custody (paper §11.7; PO-14 open).
    It closes the *coordination* question, not the *distribution* one.
 9. **Evaluation numbers age.** Suite counts (1,656 at `c456fb4`, 1,677 at the
-   review-round-4 head), coverage
+   review-round-4 head, 1,758 at the review-round-7 head `4cd97f1`, **1,804 at
+   `bc28ff3` / v0.14.1**), coverage
    (95.1%), the model-check totals and the bench medians are per-round records
    tied to a commit. The cross-check script's exit-0 gate is the mechanism that
-   makes stale numbers *visible*; docs/REPRODUCIBILITY.md specifies how a
+   makes stale numbers *visible*; `docs/REPRODUCIBILITY.md` specifies how a
    reviewer regenerates every number on this page from one command — and
    SOAK-F8 is what happens when a harness is allowed to age unobserved.
 
@@ -573,7 +614,7 @@ results:
 | §2.3 property suites | `__tests__/properties{Confirmation,Batch,Validator}.test.ts` | #44, #45, #46 |
 | §2.4 formal invariants | `docs/FORMAL_INVARIANTS.md` | #47, #48, #95 (INV-ESC-8), #100 (INV-ESC-9) |
 | §2.5 statistical corpora | `docs/benchmarks/SCALE_CAMPAIGN.md`, `docs/benchmarks/campaign-2026-11-11.json`, `scripts/campaign/run-campaign.mjs` | #96 |
-| §3.1 audit record | `docs/FIXES-2026-08-{15,18,21}.md`, `docs/REVIEW_ROUND_3.md` | #36, #37, #41, #49, #51, #95, #98, #99/#100 |
+| §3.1 audit record | `docs/FIXES-2026-08-{15,18,21}.md`, `docs/REVIEW_ROUND_3.md` … `docs/REVIEW_ROUND_8.md` | #36, #37, #41, #49, #51, #95, #98, #99/#100, #107, #109/#110, #112/#114, #115/#116 |
 | §3.3 API pentest | `packages/api/src/routes/__tests__/courtPentest.test.ts` (host repo) | bao.markets #2287 |
 | §4.1 benchmarks + optimization | `docs/benchmarks/BASELINE.md`, `bench/court.bench.mjs` | #50, #54 |
 | §4.2 soak (one day) | `scripts/soak/court-soak.mts` + README (host repo) | bao.markets #2293, #2295 |

@@ -61,10 +61,14 @@ three-day fault-injected soak of the host pipeline at 30,000 settlements, and a
 ceremony run across real OS processes (honestly scoped to one host), plus a
 round-by-round cryptographic literature audit. The program also turns on
 itself: every round attacks the fixes the round before shipped, and that
-re-attack — not an outside reviewer — found three of its own shipped defects
-(a bond-free escalation, a durable inbox a 65-relay delivery could brick, and a
-ladder bond that priced *membership* rather than *consumption*). §11.6 states
-that methodology and §13 labels what it does and does not establish.
+re-attack — not an outside reviewer — found six of its own shipped defects
+(a bond-free escalation, a durable inbox a 65-relay delivery could brick, a
+ladder bond that priced *membership* rather than *consumption*, a `finalize`
+that minted a canonical verdict from a vote ledger it never re-derived, and —
+in the transport that carries a challenge onto the ladder — an identifier
+encoding that gave two different requests one digest, plus a mapping that bound
+none of the three claims it forwarded). §11.6 states that methodology and §13
+labels what it does and does not establish.
 
 **Keywords:** threshold signatures, FROST, distributed key generation,
 prediction markets, dispute resolution, Nostr, Bitcoin, Liquid, Lightning.
@@ -140,10 +144,15 @@ Schnorr constructions.
    code the previous round shipped, grades a finding `EXPLOITABLE` only when a
    test demonstrates the harm, and re-runs the whole battery on the next head.
    It has found its own exploits (r29-1: the escalation bond was bound to the
-   case rather than the challenger), its own operational brick (T-1: a 65-relay
-   delivery made a durable inbox unrestorable), and its own economic hole
+   case rather than the challenger; r41-1: `finalize` mints the verdict from a
+   vote ledger it never re-derives, reachable through `concede`; r8-2: the
+   transport that carries a challenge onto the ladder forwards three claims it
+   binds none of), its own operational brick (T-1: a 65-relay
+   delivery made a durable inbox unrestorable), its own economic hole
    (r30-1: the ladder bond was a membership test, so escalation was a free
-   option) — and its own **stale evidence** (SOAK-F8: the soak had been silently
+   option), its own **wire-canonicalisation** hole (r8-1: one `TextEncoder`
+   preimage, two distinct request hashes for what the host dedupes and audits),
+   and its own **stale evidence** (SOAK-F8: the soak had been silently
    red on `main` for two protocol rounds). §11.6 names the method and its
    limits; §13 keeps it in the evidence taxonomy rather than treating it as a
    verdict.
@@ -627,7 +636,32 @@ confirm_open → confirm_closed → challenge_window
   outcome, unique well-formed winner event ids and winner indices. A
   hand-restored or edited snapshot cannot direct clawbacks at arbitrary
   indices (the barrier is pinned by the ledger-restore finding recorded in
-  App. A.3).
+  App. A.3). Since v0.14.0 the barrier at `finalize` is **three** ledgers, and
+  the third one is the one the verdict is built from: the **mass-vote ledger**
+  (whose winning event ids are the verdict hash's evidence set) is re-derived
+  like the other two, and the verdict is no longer read from the pending field
+  but **derived** from the deciding round's append-only `outcomeHistory`
+  record — round number, majority outcome and the exact winning-id multiset
+  must all agree, and `upheld` is derived (`record.outcome ===
+  proposedOutcome`) instead of copied. That closes **r41-1** (App. A.3):
+  `concede` was a legitimate route into a `finalize` that validated every
+  ledger *except* the votes, so a restored snapshot could settle the losing
+  side of a case with a canonical, publicly verifying hash — and could even
+  finalize on an outcome (`MAYBE`) that no ballot in the case was allowed to
+  name. The derivation is a re-derivation, not a new restriction: a 40-flow
+  walk (both bond policies × both escalation authorities × depths 1–5 ×
+  never-challenged and challenged-to-the-cap) finalizes identically and mints
+  identical hashes (App. A, S-23).
+- **The residual a state machine cannot close.** A snapshot that rewrites the
+  vote ledger, the matching history record *and* the pending verdict together
+  is still accepted, because all three are state and the machine's only record
+  of what a panel did is that state. Provenance is signatures over the
+  ballots, which `accept_mass_vote`'s **caller** checks; the machine's boundary
+  is therefore "the host authenticates the event stream before dispatching",
+  stated in the module and pinned as a test that asserts the accepted
+  consistent forgery *and* the two cheaper forgeries it excludes (r41-2, App.
+  A.3). The closure path is a per-round vote commitment carried by a signed
+  attestation; until then the host's admission check is the anchor.
 - **Fail-closed creation and restore.** Rosters below 3 members are rejected
   at creation (the confirmation quorum and round-panel semantics presuppose
   a panel); every restore re-verifies the same invariants; states are
@@ -667,7 +701,42 @@ policy, and (on a case created with `requireRoundBond`, default **off** for
 compatibility) a rung that arrives without its own consumed bond. The accepted
 witness is appended to `escalationLog`, which `finalize` re-verifies
 (INV-ESC-8). A host that bypasses its own endpoint therefore no longer holds the
-appeal power. Two properties of the ladder are *economic*, not structural, and
+appeal power. **The escalation transport, and what it must bind (v0.14.0).** The witness the
+reducer demands has to arrive from a client, and until v0.14.0 the artifact a
+challenger could actually *submit* had no field for it: the host's escalate
+body was an `additionalProperties: false` object without a round-bond
+property, and the request-hash preimage omitted it too — so a strict case's
+escalation was refused no matter what the client sent, and two *different*
+round bonds would have hashed to one request hash (H-6). `courtEscalationRequest.ts`
+is the versioned wire codec that closes the order-of-operations problem:
+`build` (validate + normalise), `serialize`/`parse` (canonical JSON, strict
+about unknown fields — a silently dropped field *is* the defect), a
+**domain-v2** request hash whose preimage binds the round-bond witness
+(`'-'` sentinel for its absence), and `escalationRequestToMachineEvent`, which
+produces the reducer's `escalate` event field for field. The split it enforces
+is the protocol's own: the wire supplies the challenger's claims
+(`challengerPubkey`, the membership bond, the per-round bond, the signed event
+id and timestamp); **the case supplies everything the challenger must not
+choose** — `challengerIdx`, `roundIndex`, and `now`.
+
+That split was the round-8 finding, because forwarding a claim is not binding
+it (r8-2). The mapping filled `challengerIdx` from the bond owner and then
+passed the wire's `challengerPubkey` through uncompared, so a bonded
+challenger could write **another juror's pubkey** into the append-only
+`escalationLog` — the audit artifact hosts read to attribute misconduct and
+price fees; `roundIndex` is derived from the case, so a request signed to
+escalate past round 1 was accepted at round 3 (replayable on every rung of a
+legacy case, where nothing is consumed); and `caseId` was in the hash but never
+compared with the case being escalated. The mapping now **requires** the host's
+binding — `{caseId, authenticatedPubkey}`, the case the host *routed on* and
+the pubkey NIP-98 *proved* — and refuses a request that disagrees with either,
+or whose `round` is not the round being resolved. Only the adapter can hold
+that binding: a case id and an authenticated key are host facts, not
+state-machine facts (the reducer has indices, no pubkeys, and no case id at
+all). Source-compatible, behaviour-breaking by design: a three-argument call
+now throws instead of minting an unbound escalation.
+
+Two properties of the ladder are *economic*, not structural, and
 are specified separately: the challenge bond is a **consumption** test per
 round, not a membership test (v0.13.0, §8.4), and the ladder depth a deployment
 may price is derived from its measured accuracy rather than chosen
@@ -697,7 +766,15 @@ resolved round's* winner, backed by that round's winning-vote event ids
 under the same `hashCourtVerdict` domain as the mass-vote and dispute
 paths, so kind-89 attestations reference it unchanged. (Attestation kinds:
 **kind 89** for normal/confirmation verdicts, **kind 39007** for dispute
-overrides — the validator accepts both, §7.3.)
+overrides — the validator accepts both, §7.3.) The verdict is *derived from
+this record*, not read from a pending field (§6.1, r41-1): the history is the
+machine's independent commitment to the deciding round — written by
+`resolve_round` in the same transition as the tally — so a vote ledger that
+disagrees with it is provably not a machine-produced state. Two consequences
+worth stating: a tally over a forged ledger is consistent with *itself* (one
+forged YES ballot makes YES the majority), which is why the history and not the
+tally is the derivation source; and `upheld`, absent from the hash preimage,
+can no longer be flipped without changing the outcome it describes.
 
 ### 6.4 Monotonic clock ledgers
 
@@ -907,6 +984,18 @@ $\Delta C_R = 3^R b_0$ on top of the challenge bond — cumulative
 4 / 13 / 40 / 121 / 364× at $R = 1..5$ — and *the amounts stay host policy*,
 which the machine cannot see.
 
+**Uniqueness is not ownership (r40-3).** The consumption rule above makes the
+witness *distinct*; it does not make it *unforgeable*, because a witness derived
+from public data is first-come-first-served. A non-owner who registers the
+payer's derivable hash first holds the only escalation right for that round and
+locks the payer out — the mirror image of r38-1 (which stopped one payment
+buying N challengers' standing), and the reason the reducer's strongest
+available predicate is distinctness over strings, never "paid by this actor".
+Binding a witness to its payer is a *signature* check: the host verifier must
+bind it to the event author, and the `accept_challenge` pubkey change (v0.14)
+is what lets the snapshot carry the actor rather than only the index. Registered
+with owner and trigger (App. A.3, r40-3).
+
 **The ladder cap is derived, with a flip-round subtlety.** A deployment's
 admissible depth is a function of its measured accuracy, not a preference:
 `deriveMaxLadderRounds({a_f, ρ, β})` computes
@@ -918,6 +1007,41 @@ safe bound: alerting on the flip round is one round late, so the cap must be
 derived from the safe bound and the flip round used only as an alert. Both
 functions are pure, published, and pinned to the numbers of the economics
 re-verify (App. A, S-21 §1.5).
+
+**The rule reads the *realised* $\beta$, so a constant-$\beta$ gate drifts
+(H-1).** `deriveMaxLadderRounds` is scale-free — the verdict depends only on
+$\rho/(\rho+\beta)$ — but the $\beta$ it needs is the bond over the exposure the
+ladder is actually used against, *now*, not at creation. A host that prices its
+gate with constants ($\rho = \beta = 0.03$ are the shipped values) is
+conservative only while $V$ is frozen. At a fixed 10,000-sat bond on a
+200,000-sat market $\beta = 0.05$: the package's safe cap is 5 and the gate says
+4, i.e. stricter than the rule — safe. Let $V$ reach 1,000,000 through liquidity
+additions the host explicitly permits and $\beta = 0.01$: the safe cap is **1**
+while the gate still blesses **4**, three rungs that are profitable for an
+unmerited challenger. That is r40-4's harm one parameter over, and the ratio is
+why it is a drift and not a units bug. The gate must re-price at escalation from
+the frozen bond over the *current* exposure, and $\rho$ — which has no
+derivation anywhere, only an assumed accuracy that governs a different quantity
+— must be exposed or documented with the same standing as the assumed juror
+accuracy (App. A.3, H-1).
+
+**A frozen depth is a promise; a clamp is a ceiling (H-3, H-5).** A host that
+inherits legacy markets has to bound their depth after the fact; the mechanism
+backs it by writing `min(configured, derived)` into the row and clamping again
+at *read* time. Three properties of that shape are obligations rather than
+details. (i) **Every consumer must read the clamped value** — a capacity or
+liquidity gate that reads the row directly prices a rung the ladder will refuse
+to seat, and because a deeper `maxLadderRounds` *raises* the derived economic
+cap, the asymmetry re-opens r30-2's capital-invariant violation from the other
+side: at $a_f = 0.75$ a row frozen at 3 is served as depth 2 (45 seats, 101,250
+sats) while the gate still prices depth 3's 135 seats. (ii) **The write should
+carry the configured depth** (or an explicit operator action must re-widen it):
+writing the clamped value turns a transient environment typo into a durable
+freeze that raising the variable does not undo. (iii) $derivedCap = 0$ means *no
+depth is safe* — flooring it to depth 1 serves the most profitable rung where
+the honest behaviour is to refuse the ladder. All three are host-side, and they
+must land with the arithmetic of H-1 rather than after it (App. A.3,
+H-3/H-5).
 
 **Two corrections the re-verify forced, in opposite directions.** (i) The brief
 that prompted it assumed a weaker-than-supermajority confirm quorum *loosens*
@@ -1208,6 +1332,29 @@ default). *Both defects are structural-or-economic, both are now pinned by
 tests, and neither was visible to the model checker before the witness event
 existed — see §11.6 for why that matters.*
 
+**Q. The transport that carries a claim, and the identifier it carries it
+under.** The escalation witness only matters if a client can submit it and if
+the thing submitted is the thing the reducer acts on. Two defects in that layer
+were found by attacking the round-7 transport (r8-2, r8-1; App. A.3, S-24).
+(i) **Forwarding is not binding:** the mapper derived the challenger's roster
+index from the bond owner and then passed the wire's `challengerPubkey` through
+uncompared, so a bonded challenger could write *another juror's* pubkey into the
+append-only escalation log — the r29-2 attribution harm at mint time — while the
+wire's `round` was inert (a request signed for round 1 opened round 3, and on a
+legacy case nothing is consumed, so one signature became an unlimited escalation
+mandate) and its `caseId` was hashed but never compared with the case. Fixed by
+requiring the adapter's `{caseId, authenticatedPubkey}` binding and
+`round === ladderRound` (§6.2); the residual is that a host which builds
+`escalate` events by hand instead of through the codec re-opens it. (ii) **A
+lossy identifier encoding gives two meanings one digest:** `caseId` entered the
+preimage through `TextEncoder`, which maps an unpaired UTF-16 surrogate to
+U+FFFD, so two different cases hashed to one request hash — the same class as
+the pre-mainnet lone-surrogate collision and H-6, one field over. Fixed by
+canonicalising the field (§6.2, §11.6). *The lesson generalises past this
+protocol: a codec that validates shape and forwards claims is a canonicaliser
+with no opinion about identity, and identity is exactly what a pubkey and a case
+id are.*
+
 ### 10.3 Fail-closed invariants (implementation-level)
 
 - **Unanimous-roster DKG** — any disqualification aborts; subset keys are
@@ -1254,8 +1401,8 @@ adapters. The module map is in App. A.2.
 ### 11.1 Suite, simulation, and review record
 
 - **Suite:** the full test suite is green and the typecheck is clean (source,
-  scripts, and tests are all typechecked) — **1,686 passing, 1
-  environment-gated live test skipped, over 76 files**, re-measured on this head
+  scripts, and tests are all typechecked) — **1,804 passing, 1
+  environment-gated live test skipped, over 81 files**, re-measured on this head
   (App. A.4; per-round record in App. A.1, S-12 §1). Coverage includes:
   BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
@@ -1266,7 +1413,10 @@ adapters. The module map is in App. A.2.
   the universal-confirmation pipeline and multi-round ladder, batch
   attestation trees/proofs/validators, v2 finality binding, the escalation
   witness and its per-round bond consumption, the derived ladder economics and
-  penalty ageing, the NIP-59 seal-layer and MLS-transport games, inbox/outbox
+  penalty ageing, the escalation request wire codec (canonical round-trip, the
+  strict refusal matrix, the required host binding), the finality re-derivation
+  attacked along all four paths to `final`, the NIP-59 seal-layer and
+  MLS-transport games, inbox/outbox
   provenance bounds under a 10k-event flood, and the
   adversarial machine/relay/validator suites (§10.2). What the suite does and
   does not establish is §13's business, not this list's.
@@ -1512,14 +1662,23 @@ caught overclaims, unstated assumptions, missing related work, and imprecise
 statements — which is what a careful reader of a text can do — and they are
 not a security audit of the system the text describes.
 
-**4. Fix-and-re-attack rounds (rounds 29–31, 2026-11-11).** The program then
+**4. Fix-and-re-attack rounds (review rounds 2–8 with instrument rounds 29–37,
+2026-11-11).** The program then
 turned on itself: each round took the *fixes* the previous round shipped and
 attacked them as an adversary holding the reducer, the HTTP route, or the env
 var. This tier found: a **bond-free escalation** (r29-1, `EXPLOITABLE` — a juror
 with no bond quoting a bonded juror's hash, with the audit log naming the wrong
 challenger), a **durable inbox that a 65-relay delivery could brick** (T-1), a
 **ladder bond that priced membership instead of consumption** (r30-1 — escalation
-as a free option worth 363 $b_0$), a **vacuous test ceiling** that had survived
+as a free option worth 363 $b_0$), one payment buying several challengers'
+standing (r38-1) and a restored challenge ledger buying a free rung (r40-1), a
+**finalize that minted a canonical verdict from a vote ledger it never
+re-derived** (r41-1 — reachable through `concede`, and able to settle the losing
+side of a case, or an outcome no ballot could name), a **transport that bound
+none of the three claims it forwarded** (r8-2 — an attribution forgery into the
+append-only escalation log, a stale request opening an unauthorised rung, and a
+cross-case replay), a **wire encoding that gave two different case ids one
+digest** (r8-1), a **vacuous test ceiling** that had survived
 all 23 budgeted tests (r29-10), and — against its own instrumentation — a soak
 that had been **red on `main` for two protocol rounds** without anyone noticing
 (SOAK-F8). §11.6 states the method, what it is worth, and what it is not; it is
@@ -1554,19 +1713,42 @@ code path) demonstrates the harm**; otherwise it is **`PARTIAL`** (the guard
 exists but is incomplete) or **`BLOCKED`**, with the guard cited by file and
 line. Two instruments make the grade auditable rather than rhetorical: the new
 tests must *fail before* the fix and pass after (round 29: 15 targeted tests, 4
-of them red on the pre-fix head), and **mutation probes** ask whether the
+of them red on the pre-fix head; round 8: 34 tests, **13 red on the released
+v0.14.0 head**), and **mutation probes** ask whether the
 existing suite notices when a guard is removed (a mutant returning an infinite
 simulation ceiling survived all 23 budgeted tests — the ceiling was decorative).
 
 **Why it is stronger than it sounds.** It is the only tier whose findings were
-*unknown to the authors until the tier looked*, and it caught three classes that
+*unknown to the authors until the tier looked*, and it caught four classes that
 a reading review does not reach: a **binding asserted in prose but not in the
 reducer** (r29-1: the bond was bound to the case, not to the challenger, so a
 non-bonded juror could escalate and the audit log named the wrong person); an
 **operational brick reachable without a key** (T-1: an inbox that a 65-relay
-delivery made unrestorable, i.e. every message lost on the next restart); and an
+delivery made unrestorable, i.e. every message lost on the next restart); an
 **economic hole inside a structural guard** (r30-1: the witness proved *a bond
-exists*, not that *this rung was paid for*, so one bond bought the whole ladder).
+exists*, not that *this rung was paid for*, so one bond bought the whole ladder);
+and a **value-locking entry that reads a ledger no barrier covers** (r41-1: a
+verdict re-derived from votes the machine never validated, because the barrier
+for that ledger ran at a transition a restore skips).
+
+**The canonicalisation class, stated as a rule.** Three of this program's
+findings are now the same defect in three different fields: a lone-surrogate
+collision in the original machine fuzz (two distinct outcomes hashed
+identically), H-6 (two different round bonds hashed to one escalation request
+hash, because the preimage omitted the field), and r8-1 (two different `caseId`s
+produced one digest, because `TextEncoder` is lossy outside canonical UTF-8).
+The pattern is not "hash more fields": it is that **attacker-controlled
+identifier encodings must be canonicalised once, with an injectivity pin, per
+FIELD** — each field independently restricted to a domain on which its encoding
+is injective (canonical UTF-8, no unpaired surrogates, no separator character,
+a byte bound), pinned by a collision probe over that field, and hashed with a
+domain tag and an explicit absence sentinel. A field that is only *validated*
+(a shape check, a hex regex) rather than *canonicalised* remains a member of this
+class, and every round since the first has found at least one more field — which
+is why the rule is stated per field rather than per schema. The failure is
+silent by construction: the hash verifies, the signature is valid, and two
+meanings share one digest. It is the class the campaign's taxonomy ranks second
+by count (App. A.3; `REVIEWS_INDEX.md` §2).
 The two findings are also the reason this paper does not treat its own model
 checker as an independent witness: the explorer's escalation-bond property
 **mirrored the weak predicate** and agreed with the bug (r29-1). A mirror cannot
@@ -1579,6 +1761,9 @@ being made here.
 | **r29-1** — bond bound to the case, not the challenger (`EXPLOITABLE`) | the witness proved *some* accepted bond existed; the factory helper checked the challenger, but the hostile-host threat model speaks the reducer directly; the model-check property restated the same weak check | reducer requires `challenge.idx === challengerIdx` ∧ hash match; INV-ESC-5 restated, model-check property corrected, 2 failing tests now green; residual r29-5 (idx→pubkey pin) |
 | **T-1** — 65-relay provenance overflow bricks the durable inbox | `ingest` appended one URL per relay without a cap; `fromSnapshot` rejects > 64 relays as `corrupt_snapshot`, so *one* wrap delivered by 65+ relays made the whole inbox unrestorable — no key required | cap provenance at the first 64 distinct sources (delivery order), keep advancing `lastSeen`, keep restore strict; regression in the load suite |
 | **r30-1** — the ladder bond was a membership test | the witness admitted any bond the challenger had ever posted, so $\Delta C_{r+1} = 0$; the structural invariant held while the price was zero | v0.13.0 per-round consumption (INV-ESC-9) + `assertValidEscalationLog` re-derivation at `finalize`; compatibility matrix and 12 tests |
+| **r41-1** — `finalize` minted a verdict from a vote ledger it never re-derived (`EXPLOITABLE`) | the round-6 entry matrix asked *which entries read the challenge pool* and answered correctly; nobody asked **which pool each value-locking entry reads**. `finalize` builds the verdict's evidence set from `state.ladder.votes`, and the barrier for that ledger ran at `resolve_round` — which a restore skips. `concede` was the free entry, and `upheld` was not in the hash preimage at all | `finalize` runs `assertValidMassVoteLedger` and **derives** the verdict from the deciding round's `outcomeHistory` record (round, majority, exact winning-id multiset), with `upheld` derived; 4 closures red on the pre-fix head, 40/40 legal flows unchanged (S-23) |
+| **r8-1** — one `TextEncoder` preimage, two different `caseId`s (`EXPLOITABLE`) | the wire codec hashed `caseId` through `TextEncoder`, which maps an unpaired UTF-16 surrogate to U+FFFD; two ids that are different strings, different wire documents and different *cases* produced one request hash — the r7 H-6 collision one field over, on the value the host dedupes and the auditor reads | `caseId` normalised once: canonical UTF-8 (no unpaired surrogate), `U+0000`-free, ≤ 256 bytes, so the encoding is injective over the accepted domain; pinned by the collision probe and a 2,000-id sweep (S-24) |
+| **r8-2** — the transport bound none of its three claims (`EXPLOITABLE`) | the mapper filled `challengerIdx` from the bond owner and then *forwarded* the wire's `challengerPubkey` without comparing them, deriving `roundIndex` from the case (so the wire's `round` was inert) and never comparing `caseId` with the case. Forwarding a claim is not binding it | `escalationRequestToMachineEvent` requires the host's `{caseId, authenticatedPubkey}` binding — the case it routed on and the key NIP-98 proved — and refuses a mismatch or `round ≠ ladderRound`; ambiguous bond ledgers refused rather than resolved (S-24) |
 | **r29-10** — a vacuous test ceiling | the budget helper was unpinned, so a mutant returning `Infinity` passed every budgeted assertion | the helper's default, junk fallback, override and ordering are asserted (3 tests) |
 | **SOAK-F8** — the soak was red on `main` | nothing re-ran the soak on protocol changes; vendored v0.12.0 required an authority witness while the reference handler played an unwitnessed `escalate` | soak drives the real §9.2 path; unmodified `main` re-measured at 11/17 assertions, 289 stuck cases, 48,089 retries |
 
@@ -1593,14 +1778,16 @@ substituted for the independent audit that section still lists as absent.
 
 **The full record.** Every round this method has produced — the improvement
 rounds 1–4, symposium rounds 5–21, the 2026-11-10 external reviews
-(GPT/Claude/Gemini), review rounds 2–6, and the instrument rounds 29–37 that
+(GPT/Claude/Gemini), review rounds 2–8, and the instrument rounds 29–37 that
 supply the measurements quoted here — is mapped in
 [`REVIEWS_INDEX.md`](REVIEWS_INDEX.md): per round, the attack surface, the
 findings by severity, where the fix landed (PR and release), and how each
-residual was dispositioned; plus the **eight-class failure taxonomy** the
+residual was dispositioned; plus the **nine-class failure taxonomy** the
 campaign has actually found (trust-boundary pinning, state-restore divergence and
 its over-strictness mirror, bond/economics binding, report-vs-decision mismatch,
-vacuity, flood/eviction, attribution) and every headline number with the artifact
+vacuity, flood/eviction, attribution, and — added at round 8 — **identifier
+canonicalisation**, whose three instances are the pre-mainnet lone-surrogate
+collision, H-6 and r8-1) and every headline number with the artifact
 that produced it. The `REVIEW_ROUND_*.md` documents remain the authoritative
 statements; the index is the map, and it names the source for each number.
 
@@ -1750,6 +1937,19 @@ Remains **host-side or pre-production** (engineering, not design):
    closed there (server-side exposure basis, per-market ladder freeze, effective
    cohort size, `min(cap)`), which is precisely why they are listed here as a
    gate rather than as shipped evidence.
+9. **The escalation transport must be wired before the strict policy is
+   enforced (H-6, r8-2).** The package ships the codec (§6.2) and the reducer
+   demands the witness; the *host* still has to adopt the v2 body schema and the
+   domain-v2 request hash (or the field is dropped the moment it is parsed), and
+   to pass the required binding — the case id it routed on and the pubkey
+   NIP-98 authenticated. Two orders are mandatory rather than cosmetic: the
+   transport lands **before** any case is created with `requireRoundBond`, or
+   every escalation on that case is refused and the ladder parks at its last
+   resolved round forever; and a host that builds `escalate` events by hand
+   instead of through the codec re-opens r8-2 by construction. The one
+   `challengerPubkey` a reducer accepts is an index-derived claim, never an
+   identity, so the attribution duty stays with the adapter (App. A.3, H-6;
+   `PER_ROUND_BOND.md` carries the five-point upgrade checklist).
 
 ---
 
@@ -1773,10 +1973,13 @@ distinct question with a distinct answer, so the taxonomy has a fifth axis: the
 this paper actually relies on is that each round re-attacks the previous round's
 fixes with the reducer, the route or the env in hand, requires a failing-before
 test to call something `EXPLOITABLE`, and re-runs the whole battery on the new
-head. Three of this paper's own defects were found that way and not by a
+head. Six of this paper's own defects were found that way and not by a
 reviewer: a bond-free escalation (r29-1), an inbox a 65-relay delivery could
-brick (T-1), and a ladder bond that priced membership rather than consumption
-(r30-1) — plus a soak that was red on `main` without anyone noticing (SOAK-F8).
+brick (T-1), a ladder bond that priced membership rather than consumption
+(r30-1), a verdict minted from an unvalidated vote ledger (r41-1), a wire
+identifier that gave two cases one digest (r8-1), and a transport that bound
+none of the claims it forwarded (r8-2) — plus a soak that was red on `main`
+without anyone noticing (SOAK-F8).
 The axis is listed here because it *earns* the labels above over time; it is
 also the weakest defence in the table by authorship, since the attacker and the
 author are the same people — which is exactly why the independent audit remains
@@ -1790,9 +1993,9 @@ verified*.
 | **Cryptographic security** — attestation unforgeability | No attestation validates under the pinned group key unless $\ge M$ distinct certified shares signed that exact message triple (session, outcome, round, signer set). | Schnorr EUF-CMA; FROST binding-factor soundness (KG20/RFC 9591, adaptive form under LDVR [19]); honest-key generation; the pinned library implements those semantics (probe- and differential-pinned, not verified from source — GAP-5a). | Theorem T5 (App. A.2), proved; the verification direction is conditional on the crypto premises; the pipeline direction (valid attestation ⇒ distinct partials) is unconditional. Who signed a given attestation is Theorem T6: the bare aggregate names no one, and the session journal is what attributes it (conditional on the certified-share pin P1 and authenticated entries P2). | **Proven** (conditional) + **open obligation** PO-13 (assumption watch), GAP-5a (dependency fidelity) and PO-18 (attribution is detective; the journal is host-side in v0.11) |
 | **Cryptographic security** — secrecy of the group key | Fewer than $M$ corrupted jurors learn nothing about $f(0)$, and the public ceremony transcript yields at most $m$ interpolation points to a coalition of size $m$ under possession-bound complaints. | Shamir perfect privacy [2]; honest majority $m+1 \le t$ for the complaint bound; the DKG never has a dealer. | Shamir privacy (§2.3) and the transcript-counting argument (§2.4), both with premises stated; the complaint-binding suite pins the mechanism the argument relies on. The transcript bound is *not* a line-checked theorem. | **Proven** (reduction to Shamir privacy + counting argument) + **empirically evaluated** (forged- and unattributable-complaint rejection) |
 | **Protocol safety** — state machines | Every reachable state of the vote, confirmation, signing and DKG machines satisfies the INV-* bundle; no illegal transition is accepted; no illegal escalation witness opens a round; no raw `TypeError`/`RangeError` escapes. | ECMAScript semantics (premise J1), canonical UTF-8/hex inputs, monotone host clock. | Theorem T4 (structural induction over event sequences, all roster sizes) plus exhaustive model checking of three machines (15 instances, 3.87M states, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws) within n ≤ 3–4 and reduced clocks; 158 stated invariants, each with an enforcement pointer. | **Proven** (T4) + **machine-checked** (three machines; DKG machine is invariant-pinned only, RS-1) |
-| **Protocol safety** — tally and encoding | The verdict is a function of the reveal multiset; the tie-break is a strict total order; canonical encodings are injective and prefix-free per schema. | J1; SHA-256 collision resistance for the hash bindings. | Theorems T1 and T3 (proved); exhaustive differential over small domains; the UTF-8-vs-UTF-16 divergence pinned. | **Proven** + **empirically evaluated** (in-house differential, §11.3) |
+| **Protocol safety** — tally and encoding | The verdict is a function of the reveal multiset; the tie-break is a strict total order; canonical encodings are injective and prefix-free per schema, and **per field**: every attacker-controlled identifier is normalised into a domain on which its encoding is injective (canonical UTF-8, no unpaired surrogate, no separator, byte-bounded) before it enters a preimage. | J1; SHA-256 collision resistance for the hash bindings. | Theorems T1 and T3 (proved); exhaustive differential over small domains; the UTF-8-vs-UTF-16 divergence pinned; the per-field rule pinned by collision probes on the `caseId` (r8-1) and the round-bond slot (H-6). | **Proven** + **empirically evaluated** (in-house differential, §11.3); the per-field generalisation is an *engineering rule* with three instances of evidence, not a theorem over future fields |
 | **Protocol safety** — batch inclusion | Accepting an inclusion proof implies the recomputed leaf is in the committed set; domain separation blocks leaf/node confusion. | SHA-256 collision resistance; Schnorr EUF-CMA for the manifest signature. | Theorem T2 (proved; soundness conditional, completeness unconditional); exhaustive proof verification for n ≤ 128 plus the cap. | **Proven** (conditional) |
-| **Protocol safety** — finality | A stale artifact cannot satisfy current policy: v2 binds epoch, tier, threshold, signer-set root and batch root in-band, and v1-shaped events fail v2-only policy. | Consumers pin the expected group key — *caller pins, not the event* (an unpinned consumer accepts any group's signature). | §7.3 design + adversarial validator reproduction suite; T5 covers the signature, not the pinning duty. | **Machine-checked** (within the suite) + **open obligation**: the pinning duty is a trust assumption, not a mechanism (PO-10 for the unbounded v1 path) |
+| **Protocol safety** — finality | A stale artifact cannot satisfy current policy: v2 binds epoch, tier, threshold, signer-set root and batch root in-band, and v1-shaped events fail v2-only policy. Within a case, the verdict at `finalize` is re-derived from the deciding round's append-only history record and must agree with the re-validated vote ledger. | Consumers pin the expected group key — *caller pins, not the event* (an unpinned consumer accepts any group's signature); for the in-case verdict, a **consistent** forgery of votes + history + pending verdict is undetectable at this layer and must be excluded by the host's ballot admission check. | §7.3 design + adversarial validator reproduction suite; §6.1's three-ledger barrier, attacked along all four paths to `final`; T5 covers the signature, not the pinning duty. | **Machine-checked** (within the suite) + **open obligation**: the pinning duty is a trust assumption, not a mechanism (PO-10 for the unbounded v1 path); the consistent-forgery residual is host-owned (r41-2) |
 | **Protocol safety** — selection | The draw is publicly recomputable from the published seed and block hash, samples without replacement with probability ∝ $\sqrt{w}$ on the stake path, and fails closed on invalid weights. | Uniform 32-bit draws from SHA-256; the seed is unbiased at the required depth (A5). | Exponential-race proposition (§4.2, proof sketch); statistical differential (chi-square, moments, winner law over 100k draws); property tests for fail-closed behaviour. | **Empirically evaluated** + **open obligations** PO-2 (seed anchoring / grinding) and PO-17 (cross-engine ordering) |
 | **Operational resilience** | Up to $N-M$ jurors may be absent without preventing a signature; an unresponsive or censoring oracle cannot block the refund path; no wedged state exists in the three model-checked machines. | A2 (≥ M honest jurors participate); relay delivery liveness L1; absolute deadlines enforced (contract-level enforcement still open). | Model-checked no-dead-ends and termination (P3/P4) for three machines; refund path by construction; the end-to-end simulation; a three-day fault-injected soak at 30,000 settlements (32/32 assertions, faults: partitions, churn, restarts, witness storms, cursor rollback) on the host side; the ceremony across N = 3…7 real OS processes with crash/replay injection (§11.7). | **Machine-checked** (bounded) + **empirically evaluated** (soak, ceremony — single host, virtual clock) + **open obligations** PO-3 (partition/eclipse liveness — no availability proof) and the on-chain deadline gate (§12.3) |
 | **Operational resilience** — prototype gap | A single-process ceremony reveals all shares to whoever compromises the process. | — | Stated as a production gate (§12.2); the *coordination* half (separate processes, identities, ordering, independent verification) is exercised on one host (§11.7). | **Open obligation** PO-14 (cross-client deployment) |
@@ -1809,7 +2012,7 @@ they are the difference between "designed and checked" and "deployed and
 independently audited".
 
 A third reading follows from §11.6 and matters for the rows that moved in
-rounds 29–31: three of the entries above are weaker than they were two rounds
+the fix-and-re-attack rounds: three of the entries above are weaker than they were two rounds
 ago *and say so*. The escalation authority row gained a consumption invariant
 because the previous row was a membership test (r30-1); the operational row
 gained a soak and a ceremony because neither existed; and the economic row went
@@ -1853,11 +2056,13 @@ escalation authority (§6.2), and the settlement-binding constructions
 (§9.2, PO-15/PO-16) are protocol work, alongside the independent auditing and
 external replication this paper cannot supply. Three obligations are newly
 registered here (PO-16, PO-17, PO-18 — attribution is detective), and the
-settlement binding that v1 leaves to the host is PO-15. Rounds 29–31 registered
-no new obligation codes: they re-attacked, they shipped three fixes (a
-challenger-bound bond, a bounded inbox provenance, a per-round bond), and they
+settlement binding that v1 leaves to the host is PO-15. Review rounds 2–8
+registered no new obligation codes: they re-attacked, they shipped the fixes
+those attacks required (a challenger-bound bond, a bounded inbox provenance, a
+per-round consumption rule, a re-derived verdict, a canonical identifier and a
+transport that binds what it forwards), and they
 left their residuals where residuals belong — named, graded, and owned, in the
-round documents (App. A, S-17, S-18, S-21).
+round documents (App. A, S-17, S-18, S-21, S-23, S-24).
 
 ---
 
@@ -1945,6 +2150,8 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-20 | Statistical corpora (nine campaigns) + the witness-aware model-check tables | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json` |
 | S-21 | Economic expert re-verify of the post-fix layer (r30-1…r30-5: bond consumption, churn cap, κ slack, decay pairing) | `docs/proofs/economics/06-expert-verify.tex.md`; numbers reproduced by `scripts/review-quant/economics.mjs` §6 |
 | S-22 | Three-day fault-injected soak (30,000 settlements, 32/32 assertions, SOAK-F7/F8/F11) | host repository `bao.markets`: `docs/benchmarks/SOAK_3DAY.md`, `docs/benchmarks/soak-3day.json` |
+| S-23 | Review round 7 — attacking v0.13.2 and the R41 host fixes (r41-1, r41-2, r41-T1-doc, H-1…H-7; the sign-rule grid, the legacy clamp's readers, the strict-policy upgrade order) | `docs/REVIEW_ROUND_7.md` |
+| S-24 | Review round 8 — attacking the v0.14.0 escalation transport and the r41-1 barrier (r8-1…r8-6; the wire-refusal matrix, the required host binding, the four paths to `final`, the consistent-forgery boundary) | `docs/REVIEW_ROUND_8.md` |
 
 ### A.2 Proofs and machine-checked artifacts
 
@@ -1965,6 +2172,8 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | — | Witness-aware model-check tables and the nine-campaign statistical corpora | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json`; `scripts/campaign/run-campaign.mjs` |
 | — | Multi-process ceremony (N = 3…7 OS processes, kill/replay chaos, Byzantine-relay split-view/loss/reorder/replay/silence matrix) | `scripts/court/multi-process-ceremony.mjs`, `scripts/court/juror-child.ts`; gated by `__tests__/r30MultiProcessCeremony.test.ts`, `__tests__/r33ByzantineRelay.test.ts` |
 | — | Escalation-witness and per-round-bond pins | `__tests__/reviewRound3.test.ts`, `__tests__/escalationWitness.test.ts`, `__tests__/perRoundBond.test.ts`, `__tests__/ladderEconomics.test.ts`, `__tests__/penaltyAging.test.ts` |
+| — | Escalation request wire codec (canonical round-trip, strict refusal matrix, the required host binding, a pinned known-answer digest) | `__tests__/escalationRequestWire.test.ts`, `__tests__/reviewRound8.test.ts`; `courtEscalationRequest.ts` |
+| — | Review-round 7 closures (the finality re-derivation, the non-reader entry matrix, the 40-flow over-strictness walk, the sign-rule edges and grid) | `__tests__/reviewRound7.test.ts`; `docs/REVIEW_ROUND_7.md` |
 | — | Transport/seal/MLS suite | `__tests__/r30SealGames.test.ts`, `__tests__/r30MarmotTransport.test.ts`, `__tests__/r30InboxOutboxLoad.test.ts` |
 | — | Differential-parity suite and its restatements | `__tests__/differentialParity.test.ts`; `__tests__/reference/` |
 | — | Whole-court simulation | `__tests__/simulateCourt.test.ts` (`npm run simulate:court`) |
@@ -1992,6 +2201,22 @@ cluttering the argument.
 | r30-1 | The ladder bond was a **membership** test, not a consumption test: $\Delta C_{r+1} = 0$, so escalation was a free option worth 363 $b_0$ | Per-round bond witness + consumption rules, v0.13.0; INV-ESC-9; restored-snapshot re-derivation (S-18, S-21 §1) |
 | r30-2 | A frozen ladder configuration is a *ceiling*: the panel a cohort can actually seat is $\min(N_{\text{cfg}}, \text{drawable})$, so 135→45 seats is 2.47× short of its own invariant | Host: cap re-derived at the effective $N$, `min(cap at creation, cap now)`, `cap_degraded` flag; a concession is never blocked (S-21 §2) |
 | r30-3 | The prompt's premise was wrong: a weaker-than-supermajority quorum **tightens** the cap ($\kappa_q = 2.75$–$4.64$), so the correction is slack, not exposure | Premise corrected in the paper; no code change; **SAFE** (S-21 §3) |
+| r38-1 | The challenge pool had **no uniqueness**: one paid bond bought two challengers' standing (a two-step r29-1 bypass) | `accept_challenge` dedupes by `(idx, bondProofHash)` and one hash → one index per case; the ledger barrier re-derives it (S-19, `REVIEW_ROUND_5.md`) |
+| r40-1 | `escalate` re-derived the log but not the challenge pool it reads, so a restored ledger bought a free rung | Challenge-ledger barrier before the witness is used (S-18; `REVIEW_ROUND_6.md`) |
+| r40-3 | The bond witness is unique but not **owned**: a derivable witness is preemptable, so a non-owner registers it first and holds the only escalation right | Registered; host verifier must bind the witness to the event author; the `accept_challenge` pubkey change (v0.14) is the snapshot-side closure (§8.4) |
+| r40-4 | The retired composed predicate (`cap ≤ derivedCap`) disagreed with the sign rule at the break-even rung | `ladderCapWithinBound.ok` is sign-based (`cap < flipRound`); the retired composition regression-locked (§8.4) |
+| r41-1 | `finalize` minted a canonical verdict from a vote ledger it never re-derived; reachable through `concede`; `upheld` was caller-supplied and absent from the hash preimage | Mass-vote barrier + verdict **derived** from the deciding round's `outcomeHistory` record, `upheld` derived; 4 closures red on the pre-fix head, 40/40 legal flows unchanged (§6.1, §6.3; S-23) |
+| r41-2 | A **consistent** forgery (vote ledger + history record + pending verdict rewritten to agree) is undetectable in a pure state machine | Registered, **host-owned**: the ballot admission check is the anchor; closure path is a per-round vote commitment in a signed attestation (§6.1, §13) |
+| r41-T1-doc | `deriveMaxLadderRounds`' monotonicity sentence said "non-increasing in $a_f$" — the direction is the opposite | Docstring corrected; both text and behaviour pinned (§8.4; S-23) |
+| r8-1 | `caseId` was encoded lossily: an unpaired UTF-16 surrogate and U+FFFD are different ids with one `TextEncoder` preimage, hence **one request hash for two requests** (H-6 one field over) | `caseId` canonicalised once — canonical UTF-8, NUL-free, ≤ 256 bytes — so the encoding is injective over the accepted domain; collision probe + 2,000-id sweep (§6.2; S-24) |
+| r8-2 | The transport **bound nothing**: an unverified `challengerPubkey` wrote a non-escalator into the append-only log, a stale wire `round` opened a rung nobody authorised, and a `caseId` crossed cases | `escalationRequestToMachineEvent` requires the host's `{caseId, authenticatedPubkey}` binding and `round === ladderRound`; ambiguous bond ledgers refused (§6.2; S-24) |
+| r8-6 | `resolve_round` appended onto a history that outran nothing, producing `[1,4]` — a history no later barrier accepts, so the case bricked with value locked | `onResolveRound` requires `outcomeHistory.length === ladder.round − 1`; a legal two-round ladder still resolves `[1,2]` (S-24) |
+| H-1 | A gate priced at constant $\rho = \beta$ assesses a ladder whose rule needs the **realised** `bond/V`: a 5× growth in $V$ drifts the safe cap from 5 to 1 while the gate still blesses 4 | **Host fix**: re-price at escalation from the frozen bond over current exposure; expose $\rho$ as a stated assumption (§8.4; S-23) |
+| H-2 | `a_f = 1` (and $\rho+\beta$ overflow) yields an infinite bound, i.e. every depth is "safe" — legal in the package, refused by the host's env resolver | Documented + pinned in both layers; the host must keep `assumedAccuracy` off any env-sourced path (S-23) |
+| H-3 / H-5 | The legacy depth clamp is read by some consumers unclamped (a deeper row *raises* the derived cap), and the backfill **writes** the clamped depth so a transient env value freezes legacy rows permanently; $derivedCap = 0$ is floored to the most profitable rung instead of refusing the ladder | **Host fix**: route every reader through the clamped value, write the configured depth (or add a re-widening action), and make `derivedCap = 0` a refusal (§8.4; S-23) |
+| H-4 | The clamp metric increments per **read** with no market label, so juror-controlled retries inflate it; the "missing" counter is used as a gauge | **Host fix** (metrics hygiene): emit once per (market, source) per boot, label by market, expose depth as a gauge (S-23) |
+| H-6 | The escalate body schema cannot carry `roundBondProofHash` and the request hash omits it, so a strict case's escalation cannot be submitted at all — and the transport must land **before** the policy is enforced | **Package half shipped** (v0.14.0 codec, domain v2); host must adopt the body + hash and pass the binding before enforcing (§6.2, §12.9; S-23/S-24) |
+| H-7 | `resolveMaxLadderRounds(env)` has no caller while the freeze module's header says escalation reads it | **Host fix**: delete or re-wire, and correct the header (S-23) |
 | T-1 | Provenance overflow: a wrap delivered by 65+ relays produced a snapshot the restore path must reject, so the **whole** durable inbox was unrestorable — triggerable by a hostile relay set without any key | Provenance capped at the first 64 distinct sources by delivery order; `lastSeen` still advances; restore stays strict (§11.7) |
 | MC-F7 | A variant instance whose state space equals its base's is not exercising what it claims | Instance repaired (19,822 → 116,906 states) (§11.2) |
 | MC-F8 | All-digit witness fixtures made the "uppercase hex" probe a no-op | Fixtures carry hex letters; the illegal-witness assertion catches the class (§11.2) |
@@ -2002,7 +2227,13 @@ cluttering the argument.
 **Finding codes are namespaced per artifact**, deliberately: `F-2`, `F-3`,
 `F-12`, `F-13` and `A-1`/`A-3` are the formal-invariant and editorial rounds;
 `MC-F7`/`MC-F8` are the model checker's own fixture defects; `SOAK-F7`/`F8`/`F11`
-are the soak's; `r29-*`/`r30-*` are review-round findings; `T-1` is the transport
+are the soak's; `r29-*`, `r30-*`, `r33-*`, `r38-*`, `r40-*`, `r41-*` and `r8-*`
+are review-round findings (each round numbers its own; round 8's namespace is
+`r8-*`, not a continuation of the campaign counter, and the two systems are
+never mixed inside a document); `H-n` is the **host-disposition** namespace and
+it is *per round* — `H-2` in round 4 is not `H-2` in round 7, a collision the
+index records rather than hides, and round 7 folded its predecessor's `H-2` into
+`H-1`; `T-1` is the transport
 campaign. The paper names each with its namespace so that two unrelated `F7`s
 never read as one finding — a provenance defect the round-23 paper check did
 find in an earlier draft.
@@ -2025,9 +2256,9 @@ history itself is `CHANGELOG.md`.
 
 ### A.4 Artifact inventory and regeneration
 
-| Artifact | Command / location | Count (2026-11-11, at `c456fb4`) |
+| Artifact | Command / location | Count (2026-11-11, at `bc28ff3`, v0.14.1) |
 |---|---|---|
-| Test suite | `npm test` | 1,686 passing, 1 environment-gated live test skipped, 76 files (measured at `608e6dc`, round 34; the per-round pinned count is App. A.1, S-12 §1) |
+| Test suite | `npm test` | 1,804 passing, 1 environment-gated live test skipped, 81 files (re-measured at `bc28ff3`; the per-round pinned count is App. A.1, S-12 §1) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`, source + scripts + tests) | clean |
 | Model-check sweep | `npx tsx scripts/model-check.mjs` | 15 instances, 3,869,232 states, 60,020,684 illegal-witness probes (0 accepted), 0 raw throws |
 | Statistical corpora | `npm run campaign:full` | 9 campaigns, 1,187,000 units, 3,745,566 assertions, 0 failures (CI runs a fast subset) |
@@ -2046,7 +2277,7 @@ Counts are point-in-time and are re-recorded per round in `docs/CROSS_CHECK.md`
 | Tier | Who | Scope | Record |
 |---|---|---|---|
 | In-house audit and symposium rounds | AI agents working in this repository, directed by the project | The implementation and its documents; findings landed as fixes, specs, or registered obligations | `docs/FIXES-2026-08-15.md`, `docs/FIXES-2026-08-18.md`, `docs/FIXES-2026-08-21.md`, `docs/REVIEW_SIMULATION.md`, `docs/CROSS_CHECK.md`, `docs/DRESS_REHEARSAL.md`, `docs/proofs/` |
-| **Fix-and-re-attack rounds (29–31, 2026-11-11)** | AI agents working in this repository, attacking the *previous* round's shipped fixes with the reducer/route/env in hand | Escalation witness and its bond binding, per-round consumption, budget vacuity, transport provenance, inbox/seal/MLS games, the economic layer, and the soak's own staleness | `docs/REVIEW_ROUND_3.md` (S-17), `docs/PER_ROUND_BOND.md` (S-18), `docs/MULTI_PROCESS_CEREMONY.md` (S-19), `docs/proofs/economics/06-expert-verify.tex.md` (S-21), §11.6 |
+| **Fix-and-re-attack rounds (review rounds 2–8; instrument rounds 29–37; 2026-11-11)** | AI agents working in this repository, attacking the *previous* round's shipped fixes with the reducer/route/env in hand | Escalation witness and its bond binding, per-round consumption, budget vacuity, transport provenance, inbox/seal/MLS games, the economic layer, the soak's own staleness, the finality derivation and the escalation wire codec | `docs/REVIEW_ROUND_3.md` (S-17), `docs/PER_ROUND_BOND.md` (S-18), `docs/MULTI_PROCESS_CEREMONY.md` (S-19), `docs/proofs/economics/06-expert-verify.tex.md` (S-21), `docs/REVIEW_ROUND_4.md`, `REVIEW_ROUND_5.md`, `REVIEW_ROUND_6.md`, `docs/REVIEW_ROUND_7.md` (S-23), `docs/REVIEW_ROUND_8.md` (S-24), §11.6 |
 | Multi-agent editorial audit, three rounds (2026-11-10) | Parallel review agents, each assigned a section | Assurance framing, related work, provenance hygiene, statement corrections, disclosure, scope | This document (§11.5) and App. A.3 |
 | External AI reviews (2026-11-10) | GPT, Claude, Gemini | **Paper text only** — no code access, no execution, no cryptographic analysis, no formal verification | Verdicts applied in this revision |
 | Independent human / third-party audit | — | Not performed | §12.5 remains open |
@@ -2062,11 +2293,12 @@ Both rows are registered in the obligation register (App. A.1, S-6) and
 restated here with their closure paths, so that the paper never cites an
 obligation it has not registered.
 
-**Rounds 29–31 registered no new obligation codes**, and that is a deliberate
+**Review rounds 2–8 registered no new obligation codes**, and that is a deliberate
 choice rather than an omission: what those rounds produced are *engineering*
 residuals with named owners and closure points, not paper-level proof
 obligations. They are graded and recorded in the round documents — r29-3…r29-8
-and r29-10 in S-17, r30-1…r30-5 in S-21, T-1 in §11.7, SOAK-F7/F8/F11 in S-22 —
+and r29-10 in S-17, r30-1…r30-5 in S-21, T-1 in §11.7, SOAK-F7/F8/F11 in S-22,
+r41-1/r41-2/H-1…H-7 in S-23, r8-1…r8-6 in S-24 —
 because an obligation code that never closes is worse than a residual with a
 date on it. Two of them were reachable in the host deployment and are already
 closed there (r29-7/r29-8 → server-side exposure basis and per-market ladder
