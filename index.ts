@@ -592,6 +592,13 @@ export {
 } from './courtConfirmationMachine';
 
 export {
+  captureProbability,
+  quorumCapCorrection,
+  type AdversaryWeightShare,
+  type CaptureProbability,
+} from './quorumEconomics';
+
+export {
   BAO_COURT_BATCH_ATTESTATION_KIND,
   buildBatchMerkleTree,
   buildBatchMerkleProof,

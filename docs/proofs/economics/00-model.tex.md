@@ -141,6 +141,17 @@ table, L108–117 (values 4×/13×/40×/121×/364× verbatim); machine side:
 exactly-once (INV-CONF-29). Deeper rungs gated by
 bond ≥ 25% of disputed value for $r \ge 3$ (spec L118–119).
 
+**This curve is spec-pinned, not machine-enforced — see 06 r30-1.** The
+shipped `escalate` witness binds a bond to the *challenger* (`idx` +
+`bondProofHash`, `confirmationMachineHandlers.ts:546–552`), and no event carries
+a per-round bond, so the shipped marginal escalation cost is $\Delta C_{r+1} =
+0$ and the whole ladder rides on one payment. Theorem 2's $r^{*}$ is therefore a
+*policy* boundary (`maxLadderRounds`), not a price boundary; the EV consequences
+are worked in [`06-expert-verify.tex.md`](06-expert-verify.tex.md) §1, and the
+per-round schedule the helper already computes is
+`escrow.ts:117–129` (`calculateBondAmount` $= \max(0.05V_m,10{,}000)\cdot
+2^{r-1}$ — **doubling**, where this table triples).
+
 ### 5.4 Reputation weight (the compounding asset)
 
 Shipped pure core `jurorReputationWeight.ts` (bao.markets), parameters
@@ -160,6 +171,21 @@ $$w \;=\; w_0 \cdot g \cdot \Big(\prod_e \pen_e\Big) \cdot \Big(1 + \lambda \tex
 | contribution caps | 4/epoch, 24 lifetime, most-recent-first | :52–54, :319–323 |
 | recency decay | $c_e \cdot 0.9^{\text{age}}$ | :56, :321 |
 | idle expiry | > 6 idle epochs ⇒ weight resets to $w_0$ | :58, :255–260 |
+
+> **R23 amendment (shipped after `04` was written — 06 r30-4).** The idle-reset
+> *cliff* above is gone. The shipped rule replaces the expiry branch with
+> **continuous decay**
+> $w = w_0 + (w_{\text{earned}} - w_0)\,e^{-\lambda\,\text{idle}}$,
+> $\lambda = \ln 2/3$ (half-life 3 idle epochs), and `idleExpiryEpochs` is
+> reporting-only (`expired`). The penalty *product* is floored at $0.5w_0$ before
+> the decay, and a confirmed-then-abstained ladder round now carries its own
+> ×0.8 (`nonParticipationPenaltyFactor`). Consequence for this model: the weight
+> has **memory** (04's Lemma 4.1 "no memory across windows" no longer holds for
+> $w$), and a penalised juror's weight is *non-decreasing in idleness* —
+> $0.500 \to 0.603 \to 0.750$ over one, two and three idle epochs from the floor.
+> 04 §4.4's cycle arithmetic is superseded by
+> [`06-expert-verify.tex.md`](06-expert-verify.tex.md) §4, which shows the ramp
+> dominates the cliff's average at every cycle length.
 
 Selection probability ∝ $w/\Sigma w$ via the exponential-clock draw
 (`selection.ts:221–229`, `weightedPriority`; default stake path
@@ -225,6 +251,12 @@ to a threshold set strictly above 0.5 (paper §7.4 lines 605–618; finding C-2
 | Slash fractions, stake/bond doubling schedule | **code-pinned** (protocol layer) | `escrow.ts:93–96,114–155` |
 | Uncontested 0.2%, premium 7×, loser-bond 2%, symmetric 3% bonds, panel sizes, τ | **spec-pinned** | `UNIVERSAL_JURY_CONFIRMATION.md` L108–124, L197–227 (merged design doc; host-layer constants the theorems take as given) |
 | Retainer threshold τ value | **open host duty** — the theorems state conditions **in τ** and flag the pass-mark region τ ≤ 0.5 | paper §7.4; C-2 |
+
+Review-round status of the two rows the fixes touched: the **escalation price
+curve** (§5.3) is spec-pinned and *not* machine-enforced (06 r30-1), and the
+**idle-expiry row** of §5.4 is superseded by continuous decay (06 r30-4). Both
+are marked at the row rather than silently rewritten, so a reader can still see
+what the theorems were proved against.
 
 Where a theorem needs a spec-pinned constant it says so; no theorem below
 treats a spec-pinned number as if code enforced it. This is the same

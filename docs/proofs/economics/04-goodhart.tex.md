@@ -181,6 +181,24 @@ cycle average by renewal-reward (the cycle is i.i.d. across periods). ∎
 > who do not participate have no bonus term — the fix separates the two
 > populations on the only axis that differs, participation. ∎
 
+> **Remark 4.7 (the R23 decay ramp — 06 r30-4).** The idle-expiry reset costed
+> in Theorem 4.4 has since been replaced in code by **continuous decay**,
+> $w = w_0 + (w_{\text{earned}}-w_0)e^{-\lambda\,\text{idle}}$ with
+> $\lambda = \ln 2/3$. That removes the *cliff* (no single epoch restores $w_0$)
+> but not the *loop*: a penalised juror's weight is **non-decreasing in
+> idleness** ($0.500 \to 0.603 \to 0.750$ over 1/2/3 idle epochs from the floor),
+> and the decay's average weight exceeds the cliff's at **every finite cycle
+> length** — +26.0 % at 6 active/6 idle, +44.5 % at 1/6, +12.6 % at 1/12 —
+> while converging to the same endpoint $w_0$. So T4.4's 0.573·$w_0$ figure is a
+> pre-R23 baseline, and the loop it prices is *cheaper* under the fix, not
+> removed: the cliff's only cost to the farmer was the six-epoch wait. The
+> repair is an **anchored** decay (`anchor = earned ≥ w0 ? w0 : 0.5w0`, so a
+> penalty decays toward the floor instead of toward probation), paired with
+> penalty ageing so that participation — not idleness — is the recovery path.
+> Full derivation: [`06-expert-verify.tex.md`](06-expert-verify.tex.md) §4.
+> C4.1, C4.2 and the retainer optimum $p^{*} = \max(0,2\tau-1)$ are **unaffected**
+> — the composite has no memory, so no value of $\lambda$ changes them.
+
 ## 5. What is NOT proved here
 
 - **LEMMA-GAP (empirical $c_p$, $\bar F$):** (4.2)/(4.3) contain effort and

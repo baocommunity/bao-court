@@ -169,6 +169,16 @@ unorchestratable, and lands on coherent jurors — the cohort's honest members.
 
 ## 6. What is NOT proved here
 
+- **The price curve is not the shipped mechanism (06 r30-1).** Everything above
+  derives from $\Delta C_{r+1} = 3^{r+1}b_0$, and the machine charges no
+  marginal escalation cost at all: the witness binds a bond to the challenger,
+  not to the round (`confirmationMachineHandlers.ts:546–552`), so one payment
+  buys the whole ladder. $r^{*}$ therefore describes what the ladder *should*
+  charge, and `maxLadderRounds` is what actually stops it. The EV with the
+  shipped cost curve — and the $a_f$ threshold at which the free option turns
+  farming profitable — is worked in
+  [`06-expert-verify.tex.md`](06-expert-verify.tex.md) §1. Read this theorem as
+  the *design* boundary, not as a description of the deployed price.
 - **LEMMA-GAP (empirical):** conditional independence of rounds (A4). If
   jury errors correlate across rounds (same evidence, same LLM prompt
   family), adverse rounds are *more* informative than (2.1) assumes —

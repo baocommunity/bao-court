@@ -18,6 +18,14 @@ per-rail cost-of-corruption, P+ε, seed-grinding bound, the √stake splitting
 result), each with its reviewer attribution, derivation and honest residual —
 and each number reproducible from `scripts/review-quant/economics.mjs`.
 
+The **expert re-verify** added `06-expert-verify.tex.md`: a mechanism-design
+pass over the layer *after* the round-29/30 fixes, run as an adversary rather
+than as a reviewer. Five attacks, three verdicts of EXPLOITABLE with bounds, two
+SAFE with the inequality that makes them so — including one brief whose premise
+the algebra refutes (r30-3). Its arithmetic is partly code now:
+`quorumEconomics.ts` (exact binomial capture tail + the sub-supermajority
+factor κ) ships with it, so no host has to re-derive a tail from a doc table.
+
 ---
 
 ## 1. The theorems
@@ -30,6 +38,7 @@ and each number reproducible from `scripts/review-quant/economics.mjs`.
 | 3 | [`03-collusion.tex.md`](03-collusion.tex.md) | **Collusion condition-bounded** | Resistance iff $V < C_{\mathsf{pay}}(V) + \kappa_0 m$; zero-κ region $V^{*}$ = **157k** (moderately-contested) to **752k sats** (fully-contested, cap-2 ladder) — powered by the victim's own Theorem-2 escalation; weakly-contested verdicts are κ-bounded only (honest residual). Amortized/hit-and-run cartels above the payment-mass region: **open**, bounded not closed. | **PO-1: CONDITION-BOUNDED** (was: unmodeled) |
 | 4 | [`04-goodhart.tex.md`](04-goodhart.tex.md) | **Goodhart characterized** | Farmer's optimum is the corner $p^{*} = \max(0, 2\tau-1)$; cap binds iff $\tau > 0.5$ (C4.1, proven); non-profitability guard $\tau \ge 1 - \bar F/(2c_pT)$ (C4.2, proven); PO-12 reset loop quantified: 13-epoch cycle, long-run **0.573·$w_0$** vs 0.5·$w_0$ under the fix (+14.6% farming subsidy; pure ack-farmer unaffected — its cap is C4.1). | **R10/R16 C-2 + PO-12: proven conditions** (was: TODO) |
 | 5 | [`05-review-gapfills.tex.md`](05-review-gapfills.tex.md) | **Review gap-fills** (5 items) | (i) Capture probability, exact binomial: **0.8504 %** at $N{=}15$/$\rho{=}⅓$ and **5.001·10⁻⁶** at $N{=}45$ — both reviewers' figures confirmed; plus minimum-panel-vs-value guidance, and the round-0 finding (3-of-5 → 0.2099; code default `confirmQuorum`=1 → 0.8683). (ii) Per-rail $V_{\max}$: staked rails 369k→1.425M→**unbounded at $t \ge 100$ seats**; the **Lightning rail has $\alpha = 0$** — condition (C-i) fails there, so the market-cap invariant $V_{\max} \le \gamma\sum_i S_i$ is unsatisfiable and the reduction must be a value cap. (iii) P+ε cost is $\max(0,1-2\pi)X$ — **free at $\pi \ge ½$** (reviewer's "ε" corrected to a discount factor); pure-pay rails confirmed defenceless. (iv) Seed grinding viable only for $V > R_{\text{blk}}/\Pr[X{=}t{-}1]$ = **≥ 223 BTC** in the most favourable shipped case. (v) $\sqrt{k}$ splitting **proved**, and it **saturates to linear-in-stake** at the 1 % gate — the paper's anti-plutocracy claim corrected. | PO-1/PO-2 upgraded from "open" to "open, with quantified boundaries and named rails" |
+| 6 | [`06-expert-verify.tex.md`](06-expert-verify.tex.md) | **Expert re-verify** (5 attacks on the post-fix layer) | (r30-1) the escalation bond is a **membership** test, not a consumption test, so $\Delta C_{r+1} = 0$ instead of $3^{r+1}b_0$: farming EV rises −2.40 %→−1.86 % ($R{=}2$)/−0.543 % ($R{=}5$), the flip round is **7 at $a_f{=}0.9$ but 5 at 0.85**, and the venue/griefer cost ratio goes **0.86×→54.1×** from $R{=}2$ to 5. (r30-2) the frozen ladder is a *ceiling*: a 135-seat config churned to 45 seats is **2.47× short**, its honest cap falling to 101,250 sats. (r30-3) the cap is the **$\pi{=}½$ slice** of $V_{\max}(\pi)$; a weaker quorum *tightens* it, so $\kappa_q = 2.75$–$4.64$ is **slack, not exposure** — **SAFE**, premise corrected. (r30-4) idle decay replaced the reset cliff with a ramp that **dominates the cliff's average at every cycle** (+26.0 % at 6/6, +44.5 % at 1/6), so the loop is cheaper, not removed; the retainer optimum is unchanged. (r30-5) the shadow label carries no secret; the temporal asymmetry is bounded by the config being **scale-free** ($\gamma\sigma N{=}1.215$) and by deposit re-assessment. | PO-12 reopened, PO-1 boundary refined, all five registered |
 
 ## 2. Dependency graph
 
@@ -62,6 +71,14 @@ Assumptions A1–A9 (00-model §6) + closed-budget lemma L-0
          (T4.4's reset loop feeds back into T3 Remark 3.3)
 ```
 
+06 hangs off **all five** and is a different kind of file: not a theorem but an
+adversarial pass on the layer they describe *after* the fixes, with the shipped
+parameters read back from code. Its two cross-cutting results feed backwards —
+r30-1 removes the marginal cost T2 assumed ($\Delta C_{r+1} = 3^{r+1}b_0 \to 0$),
+so T2's $r^{*}$ becomes a policy cap rather than a price; r30-4 re-opens T4.4,
+because idle decay replaced the reset cliff with a ramp whose average weight
+dominates the cliff's at every cycle length.
+
 05 hangs **off** T3 and feeds back into it as a review-round addendum (§2.1 and
 the PO-1 status table of `03-collusion`), not into T4 — the Goodhart analysis is
 independent of the bribe arithmetic.
@@ -88,6 +105,7 @@ whose referee is broken would be worthless.
 | T3 | `selection.ts:163–229` (unpredictable draw); `escrow.ts:93–96,147` (α_I, stake); retention monitors are host policy | round-0 quorum 3-of-5; retention thresholds 20/35/50%, ejection (spec L191, L253–254); J ≈ 500 sats/d steady state (spec L221–223) | clawback idempotency INV-CONF-26/27/28; `simulateCourt.test.ts` |
 | T4 | `courtSlaComposite.ts:24,59` (composite, FLOOR 0.5); `SummonsAckService.ts:1093–1096`; `jurorReputationWeight.ts:60–62,255–259,292–335` (ack target 0.95, expiry→w0, ×0.8, floor) | τ (retainer threshold — **open host duty**, theorems stated in τ) | `mechanismAdversarial.test.ts:347–362` (0.5/0.75/1.0), `:541–545` (0.8³) |
 | 05 | `selection.ts:150–173` (seed), `:204–229` (`quadraticPriority`/`weightedPriority`), `:263–286` + `:275` (eligibility, 1 % gate); `escrow.ts:93–96,133–155` (α, stake schedule); `courtConfirmationMachine.ts:223` (`confirmQuorum ?? 1`); `liquidEscrow.ts:6` + `liquidRail.ts:37` (seizable Panel B); `lnSettlement.ts:3–10` (Panel A is *social* slashing) | $\rho$ (adversary weight share — **not observable**, GAP-5b); $p_{\text{flip}}$, $p_{\text{eject}}$, $J$ (A1/A7 numerics) | none new — every 05 figure is arithmetic over the parameters the other rows pin; `npx vitest run __tests__/selection.test.ts` covers the draw modes |
+| 06 | `confirmationMachineHandlers.ts:546–552` (bond **membership**, not consumption), `:262–263` + `confirmationMachineCore.ts:121–134` (round roster bounds $[3,\text{MAX}]$), `escrow.ts:117–129` (`calculateBondAmount`, $2^{r-1}$); host `courtEconomicRatio.ts` ($\gamma = 0.45$, `resolveCourtLadderFreeze`), `courtSlaComposite.ts`, `jurorReputationWeight.ts` (`decayLambda`) | $a_f$ (A4 — the flip round is a function of it, 06 §1.3); $c_s$ (per-summon operator cost, §1.4); the retainer cadence $k$ (§4.3); $\rho$ again | `__tests__/quorumEconomics.test.ts` (13, exact tails + κ) |
 
 ## 4. Empirical validation — the incentive Monte Carlo (spec'd, not built)
 
@@ -166,3 +184,10 @@ building it before the theorems landed would have validated nothing.
   holds at $N{=}135$, not at the shipped $N{=}45$), and the round-0 quorum is
   a host duty whose code default (1) is far below the $\lceil 2N/3\rceil$ the
   threat model names (05 §1.3).
+- **The re-verify moved two of those tensions rather than closing them**
+  (06 §7): the ladder cap is now known to be a *policy* instrument because the
+  shipped machine charges no marginal escalation cost (r30-1), and PO-12's
+  reset loop is **re-open**, not closed — decay replaced the cliff with a ramp
+  whose average weight is higher at every cycle length (r30-4). Neither is a
+  parameter change; both are rules the host must adopt, and both are registered
+  with their exact shape.
