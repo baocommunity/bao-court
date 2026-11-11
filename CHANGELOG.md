@@ -63,6 +63,32 @@ to −0.543 % (a 77 % loss of deterrence) at the protocol cap.
 
 ## [Unreleased]
 
+### Documentation — paper + docs refresh with the round-29…31 artifacts (round 32)
+- **Paper** (`docs/FROST_COURT_ORACLE_PAPER.md`): witness-aware model checking in the
+  abstract and §11.2 (15 instances / 3,869,232 states / 213,521,172 applications /
+  **60,020,684 illegal-witness probes, 0 accepted**, plus MC-F7/MC-F8 as published
+  fixture defects); new **§11.6 "The review verifies itself"** (the
+  review-verifies-itself methodology, its grading rule and its limits, with the
+  self-found defect table: r29-1, T-1, r30-1, r29-10, SOAK-F8) and **§11.7
+  "Evidence at scale, across processes, and over time"** (1,187,000-unit corpora, the
+  three-day soak with SOAK-F7/F8/F11, T-1, and the multi-process ceremony with its
+  honest localhost scope); §8.4 gains the per-round bond (consumption vs membership,
+  ΔC_R = 3^R b₀, the free option worth 363 b₀) and the derived ladder cap with the
+  flip-round subtlety, plus r30-3's corrected premise and r30-2's effective-N churn
+  cap; §10.2 gains attack vector **P**; §13 gains the taxonomy's fifth axis and
+  refreshed Table 2 rows; §11.5 gains the fix-and-re-attack tier; App. A gains
+  S-17…S-22, the namespaced finding-code table (r29-*, r30-*, T-1, MC-F7/F8,
+  SOAK-F7/F8/F11) and the A.6 note on why rounds 29–31 registered no new PO codes.
+- **Counts re-pinned everywhere**: suite **1,656 passed / 1 skipped (74 files)**;
+  invariants **158** (INV-ESC-8 was missing from the machine-checkable index and is
+  now indexed; `FORMAL_INVARIANTS.md` §14 corrected 157→158 and escalation 7→9);
+  cross-check **285 claims / 516 evidence refs / 95.1 %** (271/285); campaign
+  **1,187,000 units / 3,745,566 assertions**. `docs/EVALUATION.md` (§2.1, new §2.5,
+  §2.4, §3.1, new §4.3, §5, §6, §7), README, `docs/TESTING_GUIDE.md`,
+  `docs/CROSS_CHECK.md` §1, `docs/REPRODUCIBILITY.md`, the presentation numbers
+  (`OUTLINE`, `DEMO_SCRIPT`) and `docs/proofs/04-machine-safety.tex.md` updated to
+  match; no behaviour change.
+
 ### Fixed — round-30 transport campaign
 - **Provenance overflow bricked the durable inbox** (finding T-1, operational):
   `CourtInbox.ingest` appended one provenance URL per distinct relay without a

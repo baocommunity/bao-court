@@ -1,7 +1,7 @@
 # BAO Court — Evaluation
 
-**Version:** tracks `@bao/court` v0.10.2 · **Date:** 2026-11-10 · **Round:** 15
-(symposium evaluation chapter)
+**Version:** tracks `@bao/court` v0.13.0 · **Date:** 2026-11-11 · **Round:** 32
+(paper refresh with the round-29…31 artifacts)
 
 This is the paper's evaluation section as a standalone artifact. Every number
 below comes from **existing committed evidence** — a merged PR, a committed
@@ -25,15 +25,18 @@ The claims of the paper were not checked once; they are the output of a
 round-by-round program (paper §11.5) in which each round picks an attack
 surface or a verification technique, records what it finds, and lands the
 disposition — a shipped fix with pinned tests, a documented hold, or a spec'd
-follow-up. The evaluation evidence therefore has four layers: **exhaustive
-model checking** of the ceremony machines (§2.1), **differential parity**
-against independent reimplementations (§2.2), **property-based sweeps** and a
-**formal-invariants audit** (§2.3–2.4), and a decade-compressed **adversarial
-audit record** plus a host-API pentest (§3). Performance is measured, never
-assumed, including the optimizations that were *refused* with numbers (§4).
-The threat-model chapter closes the loop: 283 indexed claims, **95.1%** backed
-by executable evidence (§5). What the numbers do **not** prove is stated in
-§6 — reviewers should read it.
+follow-up. The evaluation evidence therefore has five layers: **exhaustive
+model checking** of the ceremony machines, witness-aware since v0.12 (§2.1),
+**differential parity** against independent reimplementations (§2.2),
+**property-based sweeps** and a **formal-invariants audit** (§2.3–2.4),
+**statistical corpora** of 1.19 M seeded cases (§2.5), and a decade-compressed
+**adversarial audit record** — including the rounds that attacked its own
+fixes — plus a host-API pentest and two soaks (§3, §4). Performance is measured,
+never assumed, including the optimizations that were *refused* with numbers
+(§4). The threat-model chapter closes the loop: 285 indexed claims, **95.1%**
+backed by executable evidence (§5). What the numbers do **not** prove is stated
+in §6 — reviewers should read it, especially items 7–8, which are the new
+limits this refresh introduced rather than removed.
 
 **Recorded verification state at v0.10.2 `main` (2026-11-10, PR #64):** full
 suite **1,491 passed / 1 skipped (61 files)**; `npm run typecheck` +
@@ -48,6 +51,15 @@ round-16 review fixes; all contract stages PASS — see
 *(Review round 3, 2026-11-11: full suite now **1,561 passed / 1 skipped (66 files)** —
 15 adversarial tests added while attacking the shipped escalate witness; see
 `docs/REVIEW_ROUND_3.md`.)*
+*(Round 30, 2026-11-11: **1,606 passed / 1 skipped (70 files)** — the transport
+and multi-process ceremony campaign (seal games, MLS surface, inbox/outbox load,
+4 ceremony scenarios) plus the economic re-verify's modules.)*
+*(Round 31 / R31, 2026-11-11 — **current head**, `c456fb4`: **1,656 passed / 1
+skipped (74 files)**, `npm run typecheck` clean, `node scripts/cross-check.mjs`
+exit 0 over **285 claims / 516 evidence refs** (95.1 % covered, gap register 18
+entries: 14 open, 4 closed). The +50 over round 30 are the per-round bond
+consumption matrix, the derived ladder economics, penalty ageing, and the
+churn/quorum cap arithmetic.)*
 
 ---
 
@@ -57,8 +69,9 @@ round-16 review fixes; all contract stages PASS — see
 
 **Artifact:** `__fixtures__/model-check-summary.json` (committed), regenerated
 by `npx tsx scripts/model-check.mjs` · **PRs #53** (v0.9.4), fixture refreshed
-**PR #63/#64** (full-mode regeneration, 17 min) · methodology and abstraction
-limits: the header of `__tests__/modelCheckingCore.ts`; properties P1–P5 +
+**PR #63/#64** (full-mode regeneration, 17 min) and **again in rounds 29/30**
+(witness-aware: 15 instances, 2,525 s full mode) · methodology and abstraction
+limits: the header of `__tests__/modelCheckingCore.ts`; properties P1–P7 +
 typed-error discipline described in paper §11.2.
 
 Every reachable state × every event application of the three ceremony phase
@@ -67,19 +80,27 @@ legality, the data-invariant set (real SHA-256 commit–reveal and
 session-hash re-derivation, real secp256k1 nonce points, signer-set freeze,
 deep-frozen states, monotonic clock on **every edge**), the no-dead-ends
 biconditional, acyclicity of the progress graph (Kahn), and ≥200 replayed
-determinism paths per instance.
+determinism paths per instance. Since the escalate witness exists, the explorer
+also **dispatches an illegal escalation-witness matrix at every reachable
+state** (P6) and fails the instance if any witness is accepted, and checks the
+`escalationLog` bound (P7).
 
-| Metric (13 instances, full sweep) | Value |
+| Metric (15 instances, full sweep) | Value |
 |---|---|
-| Concrete states explored | **3,149,142** |
-| Event applications | **134,838,724** |
-| Typed throws (illegal-event discipline exercised) | 118,387,556 |
-| Illegal-event checks | 74,349,832 |
+| Concrete states explored | **3,869,232** |
+| Event applications | **213,521,172** |
+| Typed throws (illegal-event discipline exercised) | 195,033,132 |
+| Illegal-event checks | 145,907,861 |
+| **Illegal escalation witnesses dispatched** | **60,020,684** |
+| **Illegal witnesses accepted** | **0** |
+| Max observed `escalationLog` depth | 2 |
 | **Raw throws (`TypeError`/`RangeError`)** | **0** |
-| Progress edges / idempotent self-loops | 11,718,124 / 4,733,044 |
-| Determinism paths replayed | 2,600 — all byte-identical |
+| Progress edges / idempotent self-loops | 12,796,460 / 5,691,580 |
+| Determinism paths replayed | 3,000 — all byte-identical |
 
-*Artifact:* `__fixtures__/model-check-summary.json#totals` (PR #63/#64).
+*Artifact:* `__fixtures__/model-check-summary.json#totals` (witness-aware sweep;
+pre-witness sweep was 13 instances / 3,149,142 states / 134,838,724
+applications, tables in `docs/benchmarks/SCALE_CAMPAIGN.md` §2.1).
 
 Per-instance (the committed fixture; every row carries `rawThrows: 0` and 200
 determinism replays):
@@ -91,21 +112,25 @@ determinism replays):
 | vote n=3 k=2 | 42,646 | 1,843,302 | 25,544 |
 | vote n=4 k=2 | 1,268,770 | 54,752,135 | 794,624 |
 | vote n=2 k=3 | 5,482 | 246,757 | 2,984 |
-| confirm n=3 q=3 r=1 challengers=all | 362,046 | 15,679,902 | 234,078 |
-| confirm n=3 q=1 r=1 dup-event-ids | 1,010,820 | 45,995,466 | 668,382 |
-| confirm n=3 q=1 r=2 | 111,915 | 4,715,517 | 69,009 |
-| confirm n=3 q=1 r=1 roundRoster | 61,455 | 2,676,882 | 39,669 |
+| confirm n=3 q=3 r=1 challengers=all | 362,046 | 22,196,730 | 234,078 |
+| confirm n=3 q=1 r=1 dup-event-ids | 1,010,820 | 64,190,226 | 668,382 |
+| confirm n=3 q=1 r=2 | 111,915 | 6,729,987 | 69,009 |
+| confirm n=3 q=1 r=1 roundRoster | 61,455 | 3,783,072 | 39,669 |
+| **confirm n=3 q=1 r=2 escalate-witness challengers=1,2** | **537,825** | **38,045,170** | — |
+| **confirm n=3 q=1 r=3 host-escalation** | **182,265** | **12,805,030** | — |
 | signing n=2 t=1 | 2,532 | 78,588 | 2,232 |
-| **signing n=3 t=2** | 19,822 | 617,139 | 17,552 |
+| signing n=3 t=2 | 19,822 | 617,139 | 17,552 |
 | signing n=3 t=2 commitment-equivocation | 143,764 | 4,464,858 | 127,844 |
 | signing n=3 t=2 partial-equivocation | 116,906 | 3,635,665 | 106,416 |
 
-*Artifact:* `__fixtures__/model-check-summary.json#instances` (PR #53, fixture
-regenerated in PR #63; the partial-equivocation instance's state space was
-**repaired from a vacuous 19,822 to 116,906** by PR #58 after finding that
-its fabricated conflict-psigs collapsed onto the base instance — recorded as
-finding F7: *a variant instance whose state space equals its base's is not
-exercising what it claims*).
+*Artifact:* `__fixtures__/model-check-summary.json#instances` (the
+partial-equivocation instance's state space was **repaired from a vacuous 19,822
+to 116,906** by PR #58 after finding that its fabricated conflict-psigs collapsed
+onto the base instance — recorded as finding **MC-F7**: *a variant instance whose
+state space equals its base's is not exercising what it claims*. The witness
+round found the same class one level down — **MC-F8**: the witness fixtures were
+all-digit hex, so the "uppercase hex" probe was a no-op until the new
+illegal-witness assertion caught it.)
 
 **The cost of checking is itself measured.** The signing machine's per-reduce
 cost — the inner loop of exhaustive checking — was **3,340 µs per transition
@@ -162,7 +187,7 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**157 invariants** (`INV-<machine>-<n>`), each extracted from the
+**158 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
 enforcement pointer (`file:line`) and the pinning test. Precision note
 (round-16 external review, finding A-3): the family is *predominantly*
@@ -171,12 +196,49 @@ the invariant family is stated over, INV-SEL-3 is statistical by nature
 (pinned by a paired-derivation statistical differential), and INV-VOTE-14
 is pinned as defense-in-depth only (F-10). The
 invariant↔guard↔test traceability matrix (§12 of that doc) is machine-checked
-via docs/CROSS_CHECK.md: **145/146 (99.3%) carry executable proof** (the one
-open entry, INV-VOTE-14, is a defense-in-depth capacity guard, FINDING-F-10).
-The audit produced 12 findings (F-1…F-12); the substantive F-12 (signing/DKG
+via docs/CROSS_CHECK.md: **156/158 (98.7%) carry executable proof**; the two
+exceptions are named — INV-VOTE-14 (a defense-in-depth capacity guard,
+FINDING-F-10) and INV-ATTRIB-3 (the batch-signing duty, spec-level until the
+manifest hash enters the signed FROST message). The two newest are
+**INV-ESC-8** (the escalation-log tamper barrier re-derived at `finalize`,
+round 29) and **INV-ESC-9** (per-round bond consumption, round 31). The audit
+produced 12 findings (F-1…F-12); the substantive F-12 (signing/DKG
 machines lacked a monotonic clock ledger — old-timestamped replays were
 admissible) shipped in v0.9.2 and is now checked on **every edge of the
 model-checked state space**.
+
+### 2.5 Statistical corpora — 1.19 million cases, one invocation
+
+**Artifact:** `docs/benchmarks/SCALE_CAMPAIGN.md` + the committed
+`docs/benchmarks/campaign-2026-11-11.json` (PR #96) · regenerable with
+`npx tsx scripts/campaign/run-campaign.mjs --full`; CI runs a bounded fast
+subset of **every** campaign (~10–15 s), so the corpora are enforced
+continuously rather than quoted.
+
+Nine seeded campaigns run **1,187,000 units and 3,745,566 assertions with zero
+failures in 10.1 minutes** of corpus time on the reference host (608.8 s;
+`declaredSizes` and `actualSizes` are identical for all nine — no corpus was
+silently reduced). The campaigns drive generated inputs against **independent
+oracles**, not against the implementation's own output:
+
+| Campaign | Corpus | Assertions | What it pins |
+|---|---|---|---|
+| confirmation | 10,000 sequences | 731,225 | legal-sequence invariants C1–C6 incl. the quorum-policy flag, monotone clock, freeze, verdict recomputation, typed rejection |
+| tally | 1,000,000 tallies | 2,010,400 | winner + whole supporting-id sequence vs a reduce-based UTF-8 oracle; 400,018 forced exact ties |
+| merkle | 1,000 batches | 151,538 | production root/leaves == independent RFC-6962 tree; 86,309 verified proofs; 45,829 tampered proofs rejected |
+| validator | 50,000 signed events | 50,000 | 25k accept / 25k reject, each rejection matching its **own** reason |
+| selection | 10,000 draws | 229,693 | determinism, ranking parity, chi-square weight proportionality (χ² = 5.994 < 24.322) |
+| encoding | 100,000 encodings | 420,005 | byte identity, round-trip, injectivity, prefix-freeness, fail-closed bounds |
+| **witness** | **10,000 witnesses** | **28,880** | 27-row illegal-witness matrix through the real reducer: 740 accepted, 9,260 typed refusals, **0 raw errors**; replay/cap/oversize probes |
+| **epochRotation** | **1,000 batches** | **15,139** | 39 rotations: epoch/cohort pins, re-signing refusals, cross-epoch re-batching, membership proofs |
+| **finality** | **5,000 chains** | **108,686** | challenge windows → witnessed escalations → verdict → batch finality; terminal phases refuse a *perfect* witness |
+
+**Scope:** these are *statistical* sweeps over generated inputs; the exhaustive
+counterpart is §2.1, and neither subsumes the other. The one production-bug
+count across all nine campaigns is **zero**; the one campaign bug (a mutation
+that was a no-op for hashes already ending in the target digit) is recorded —
+it is the same class as MC-F7/MC-F8, and it is why the corpus prints its own
+mutation coverage.
 
 ---
 
@@ -204,10 +266,17 @@ docs/CROSS_CHECK.md.
 | Formal audit | v0.9.2, PRs #47/#48 | 12 findings (F-1…F-12); 3 substantive fixed in v0.9.2 (F-12 clock ledgers, F-2 empty-pin fail-closed, F-3 outcome-history barrier) |
 | Crypto-literature audit | v0.9.3, PR #49 | 12 mechanisms reviewed — 3 MED shipped (reveal-set==commitment-set guard; DKG PoK canonical challenge; dispute-key fixed-width contract), 4 spec'd (S-1…S-4), 5 verified-OK, `@vbyte/frost` pin verdict KEEP |
 | Adversarial Nostr | v0.9.4, PR #51 | 3 real bugs (uncertified outcome-tag read steering resolution; ingest dedup without NIP-01 id verification; enumerable verifyEvent cache carried by spread) |
+| **Review round 3 — the fixes attacked** | v0.12.1, PR #95 | **1 EXPLOITABLE** (r29-1: the escalation bond was bound to the *case*, so a juror with no bond could escalate on another's accepted hash and the audit log named the wrong challenger), 1 EXPLOITABLE-at-host (r29-7: cap on a client-declared number), 3 PARTIAL (2 fixed — r29-2 escalation-log barrier, r29-10 vacuous budget; 1 registered), rest BLOCKED with guards cited; 8 residuals registered |
+| **Round-30 transport + ceremony** | v0.12.1, PR #98 | 1 operational brick (**T-1**: a wrap delivered by 65+ relays made the *whole* durable inbox unrestorable — no key needed), seal-layer and MLS attacks each pinned to the layer that catches them, inbox/outbox load under a 10k-event flood, and 4 multi-process ceremony scenarios (kill mid-DKG, kill mid-signing, cross-round replay) |
+| **Round-31 economic re-verify + per-round bond** | v0.13.0, PR #99/#100 | 5 economic attacks: **r30-1 MAJOR** (the bond was a *membership* test, so escalation was a free option worth 363 $b_0$) → fixed in the reducer; **r30-2 MAJOR** (frozen ladder is a ceiling; churn 135→45 is 2.47× short) → closed host-side; **r30-3 SAFE** (the brief's premise was wrong — a weaker quorum *tightens* the cap); r30-4 (idle decay's ramp dominates the cliff it replaced); r30-5 SAFE on the label |
 
-Condensed: **≈30 findings across the committed adversarial record, five of
-them top-severity** (1 CRITICAL + 4 HIGH), every one fixed with a regression
-test or dispositioned in the Gap register — none silently dropped.
+Condensed: **≈40 findings across the committed adversarial record, seven at the
+top of this document's own severity scale** — 1 CRITICAL and 4 HIGH from the
+pre-mainnet rounds, plus 2 EXPLOITABLE-class findings from the re-attack rounds
+(r29-1 and T-1) — every one fixed with a regression test or dispositioned in the
+Gap register; none silently dropped. That the last two top-severity entries sit
+in code written *after* the previous audit is the section's own thesis
+(§3.2) continuing to hold.
 
 **Finding-class distribution** (each class names its representative committed
 findings):
@@ -274,10 +343,14 @@ never "expire":
 | `__tests__/adversarialCrossModule.test.ts` | 24 | PR #41 |
 | `__tests__/adversarialNostr.test.ts` + `adversarialParserFuzz.test.ts` | 20 + fuzz | PR #51 / round-1 fuzz |
 | `__tests__/cryptoLiteratureAudit.test.ts` | literature pins (AUDIT-1…AUDIT-5+) | PR #49, extended PR #63 |
+| `__tests__/reviewRound3.test.ts` | 15 | PR #95 — the attacks that found r29-1/r29-2/r29-10 (4 failed before the fix) |
+| `__tests__/perRoundBond.test.ts` + `ladderEconomics.test.ts` + `penaltyAging.test.ts` | 12 + 12 + 13 | PR #100 — the consumption matrix, the derived cap/flip round, decay pairing |
+| `__tests__/r30{SealGames,MarmotTransport,InboxOutboxLoad}.test.ts` | 38 | PR #98 — transport layering, MLS contract, inbox/outbox load and provenance bounds |
+| `__tests__/r30MultiProcessCeremony.test.ts` | 4 scenarios | PR #98 — happy path + 2 kill points + replay, gated in CI |
 
 Any future change that reopens a closed finding fails a named test — the
 round-14 cross-check (PR #63/#64) additionally makes the *documentation* of
-those pins machine-verified (`node scripts/cross-check.mjs`, 493 refs, 0
+those pins machine-verified (`node scripts/cross-check.mjs`, 516 refs, 0
 dangling).
 
 ---
@@ -346,6 +419,42 @@ F1/F3/F5 (clock injection, deadline-pin clobber, coordinator CPU ceiling)
 (PR #2295) re-measured the before-state in the same harness (`--f6-stateless`)
 so the before/after table is one artifact, not two methodologies.
 
+### 4.3 The three-day soak — 30,000 settlements, deterministic faults (R11)
+
+**Artifact:** bao.markets PR **#2414** (`scripts/soak/court-soak.mts
+--days 3 --faults`; committed `docs/benchmarks/soak-3day.json` +
+`SOAK_3DAY.md`). Three virtual days at the spec's 10,000 settlements/day plus a
+38 h drain (110 virtual hours) in **5.7 minutes of wall clock** (1149.5×
+compression, budget 20 min): **32/32 assertions pass** — the 19 pre-existing
+invariants now measured *across* epoch boundaries rather than within one day,
+plus 13 new ones for rotation, retention, faults and the bonded-witness path.
+
+| Assertion | Result |
+|---|---|
+| Settlements / batches | 30,000 / 11 + 24 + 62 hourly batches (3 epoch boundaries) |
+| Lost deadlines · double-publishes · re-applications | **zero · zero · zero** |
+| Ledger parity | **sat-exact per day and cumulative** (150,180,128 sats == oracle, 60,067 entries) |
+| Epoch rotation | cases book into their *proposal day's* epoch, so rotation never strands in-flight work (10,535 cases finalized after the next day opened); the other era's pin rejects every batch (negative control 97/97) |
+| Retention | exact at **every** day boundary vs a fresh JS oracle (3/3); after 3 days the live set is O(window), not O(history) |
+| `§9.2` witness path at volume | 1,627 requests → 1,393 machine feeds, **0 duplicate feeds**, ≤ 2 escalations/case, one alert per escalated summons |
+| Injected faults (seeded) | relay partitions holding writes then delivering late/out-of-order; 10 % mid-day juror churn; coordinator restarts with volatile state dropped; 100 adversarial witness-storm events/day (replay, wrong round, stale, malformed, case mismatch, forged bond); PITR-style ack-cursor rollback of −2 h |
+| Unaccounted acks | **zero** (after SOAK-F7's lagged watermark) |
+| Wall / heap | 344.5 s; peak heap 962 MB |
+
+**The soak found three real defects, one of them about itself** — the most
+important evaluation result in this chapter, because it is the instrument
+refusing to stay green:
+
+| # | Finding | Status |
+|---|---|---|
+| **SOAK-F8** | The R9/R10 soak was **red on `main`**: the reference ladder handler emitted an unwitnessed `escalate`, which vendored v0.12.0 refuses. Measured on unmodified `main`: 11/17 assertions, **289 stuck cases, 48,089 handler retries**, confirm p99 6.53 h. Nothing re-ran the soak on protocol changes. | fixed — the soak now drives the real §9.2 path |
+| **SOAK-F7** | The 300 s reconcile overlap is a re-*serve* window, not a delivery-delay bound: a partition longer than the overlap walked the persisted cursor **past** unserved acks — **8 of 184,620 acks silently lost** (0.004 %), 510 more saved only by a targeted re-check. | fixed — the cursor lags one overlap behind `now` |
+| **SOAK-F11** | `court_summons` is unique on `(case, juror, kind)`, so a ladder rung re-drawing an already-served juror inserts nothing: that juror's ack binds to no row, participation never records, the board shows the summons as never sent — **no error, no alert**. | fixed — fresh-draw tracking + `ack_no_silent_loss` |
+
+Scope is the same as §4.2's and stated in the artifact: in-memory Postgres and a
+virtual clock, so this measures logic, ordering, retention and event volume at
+3× the horizon — not real-Postgres serialization, fsync latency or relay RTTs.
+
 ---
 
 ## 5. Threat-model coverage
@@ -359,11 +468,11 @@ so the before/after table is one artifact, not two methodologies.
 | Formalized adversaries | **9** (relay, juror <t, juror ≥t, coordinator, proposer, economic ×2 sub-species, LLM advisor, key compromise, network eclipse) | THREAT_MODEL §2 |
 | Proof obligations (honest-gap register) | **18** (PO-1…PO-18, each with stage-acceptability + closure path) | THREAT_MODEL §6 |
 | MUST-pin trust boundaries | 12 (P1–P12, each unpinned consequence reproduced by a named adversarial test) | THREAT_MODEL §5 |
-| Claims indexed | **283** across the four claim sources | CROSS_CHECK §2 |
-| **Claim coverage** | **95.1%** (269/283) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
+| Claims indexed | **285** across the four claim sources (158 invariants included) | CROSS_CHECK §2 |
+| **Claim coverage** | **95.1%** (271/285) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
 
 The 95.1% number is itself machine-checked: `node scripts/cross-check.mjs`
-parses the index, verifies all **512** evidence refs resolve against the tree
+parses the index, verifies all **516** evidence refs resolve against the tree
 today, prints the open/closed split of the gap register, and exits non-zero on
 a dangling pointer — the coverage claim cannot drift silently.
 
@@ -407,20 +516,40 @@ results:
    alongside every headline. CI budgets must baseline on a quiet box
    (load < 2) before wiring alerts (BASELINE.md §Track-B note).
 5. **"0 raw throws" is scoped to the explored space.** The typed-error
-   discipline result (112M typed throws, 0 raw) covers the enumerated state
+   discipline result (195M typed throws, 0 raw) covers the enumerated state
    spaces of three machines — parser-level hostility is covered
    separately (fuzz + validator property suites), and host-side code is
    outside this package entirely.
-6. **Economic claims are implemented, not equilibrium-proven.** The
-   majority-collusion bribe game (PO-1), selection-seed grindability cost
+6. **Economic claims are implemented and re-derived, not equilibrium-proven.**
+   The majority-collusion bribe game (PO-1), selection-seed grindability cost
    model (PO-2), and SLA-farming bounds are analyzed and mechanism-pinned,
    not modeled game-theoretically; THREAT_MODEL §7 marks the economic layer
-   as the argument's honest center of gravity.
-7. **Evaluation numbers age.** Suite counts (1,491), coverage (95.2%), and
-   bench medians are per-round records tied to a commit (v0.10.2,
-   2026-11-10). The cross-check script's exit-0 gate is the mechanism that
+   as the argument's honest center of gravity. Round 31 improved one row of
+   this (the ladder is now a consumption test with a derived cap, §4.2 of the
+   paper) and *found that the row above it had been wrong in our favour* —
+   which is exactly the class of error an in-house model cannot be trusted to
+   catch reliably.
+7. **The re-attack rounds are self-review, and the instruments are in-house
+   too.** Rounds 29–31 found three of this artifact's own defects (§3.1), but
+   the attacker and the author are the same people, working from the same
+   threat model: a specification-level misreading shared by both survives, as
+   it does in §6.3. Two concrete demonstrations that this is not a formality:
+   the model checker's escalation-bond property had **mirrored** the weak
+   predicate it was supposed to check (r29-1), and the soak was silently **red
+   on `main`** for two protocol rounds (SOAK-F8). Both were found by *attacking*,
+   not by restating — and both are why no row here is labelled independently
+   verified.
+8. **The multi-process ceremony is localhost.** N = 3…7 real OS processes, real
+   PIDs/identities/state dirs, signed events and relay-assigned ordering — on
+   one kernel and one clock, with an honest, always-available relay and no
+   packet loss, partitions, clock skew or custody (paper §11.7; PO-14 open).
+   It closes the *coordination* question, not the *distribution* one.
+9. **Evaluation numbers age.** Suite counts (1,656 at `c456fb4`), coverage
+   (95.1%), the model-check totals and the bench medians are per-round records
+   tied to a commit. The cross-check script's exit-0 gate is the mechanism that
    makes stale numbers *visible*; docs/REPRODUCIBILITY.md specifies how a
-   reviewer regenerates every number on this page from one command.
+   reviewer regenerates every number on this page from one command — and
+   SOAK-F8 is what happens when a harness is allowed to age unobserved.
 
 ---
 
@@ -428,16 +557,18 @@ results:
 
 | Section | Artifact | PR |
 |---|---|---|
-| §2.1 model-check totals + per-instance | `__fixtures__/model-check-summary.json`, `scripts/model-check.mjs` | #53, #63/#64 (fixture), #58 (F7 repair) |
+| §2.1 model-check totals + per-instance | `__fixtures__/model-check-summary.json`, `scripts/model-check.mjs` | #53, #63/#64 (fixture), #58 (MC-F7 repair), #96 (witness-aware) |
 | §2.2 differential parity | `__tests__/differentialParity.test.ts`, `__tests__/reference/*` | #52 |
 | §2.3 property suites | `__tests__/properties{Confirmation,Batch,Validator}.test.ts` | #44, #45, #46 |
-| §2.4 formal invariants | `docs/FORMAL_INVARIANTS.md` | #47, #48 |
-| §3.1 audit record | `docs/FIXES-2026-08-{15,18,21}.md` | #36, #37, #41, #49, #51 |
+| §2.4 formal invariants | `docs/FORMAL_INVARIANTS.md` | #47, #48, #95 (INV-ESC-8), #100 (INV-ESC-9) |
+| §2.5 statistical corpora | `docs/benchmarks/SCALE_CAMPAIGN.md`, `docs/benchmarks/campaign-2026-11-11.json`, `scripts/campaign/run-campaign.mjs` | #96 |
+| §3.1 audit record | `docs/FIXES-2026-08-{15,18,21}.md`, `docs/REVIEW_ROUND_3.md` | #36, #37, #41, #49, #51, #95, #98, #99/#100 |
 | §3.3 API pentest | `packages/api/src/routes/__tests__/courtPentest.test.ts` (host repo) | bao.markets #2287 |
 | §4.1 benchmarks + optimization | `docs/benchmarks/BASELINE.md`, `bench/court.bench.mjs` | #50, #54 |
-| §4.2 soak | `scripts/soak/court-soak.mts` + README (host repo) | bao.markets #2293, #2295 |
+| §4.2 soak (one day) | `scripts/soak/court-soak.mts` + README (host repo) | bao.markets #2293, #2295 |
+| §4.3 soak (three days, faults) | `scripts/soak/court-soak.mts --days 3 --faults`, `docs/benchmarks/soak-3day.json` + `SOAK_3DAY.md` (host repo) | bao.markets #2414 |
 | §5 threat model + coverage | `docs/THREAT_MODEL.md`, `docs/CROSS_CHECK.md`, `scripts/cross-check.mjs` | #62, #63, #64 |
-| §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats | #53, #50 |
+| §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats, `docs/MULTI_PROCESS_CEREMONY.md` | #53, #50, #98 |
 
 Every pointer above resolves on `main`; the doc-level check is
 `node scripts/cross-check.mjs` (exit 0) plus the one-command regeneration

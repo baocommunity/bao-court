@@ -128,11 +128,12 @@ npx tsx scripts/model-check.mjs --only "signing n=2"
 **Say:** "Every reachable state × every event application, asserting five
 property classes on **every edge** — phase legality, data invariants with
 real SHA-256 re-derivation and real secp256k1 nonce points, no dead ends,
-acyclic progress, determinism. The headline sweep is 13 instances:
-**3,149,142 states, 134.8 million event applications, 118 million typed
-throws, and zero untyped `TypeError`/`RangeError`** — that ran in 574 s
-committed in the reproduction log. This one instance is the same explorer,
-same machines, live."
+acyclic progress, determinism. The headline sweep is 15 instances:
+**3,869,232 states, 213.5 million event applications, 195 million typed
+throws, 60,020,684 illegal escalation-witness probes with none accepted, and
+zero untyped `TypeError`/`RangeError`** — full mode takes 2,525 s
+(witness probing, not exploration, is now the dominant cost). This one instance
+is the same explorer, same machines, live."
 
 Then show the committed headline numbers in one line:
 
@@ -143,10 +144,11 @@ node -e "const f=require('./__fixtures__/model-check-summary.json');console.log(
 (Fallback-safe: even if the fixture shape differs, the numbers below are the
 committed ones to quote from memory or the slide.)
 
-> **Committed full sweep (`__fixtures__/model-check-summary.json`, PR #53/#63):**
-> states **3,149,142** · applications **134,838,724** · typed throws
-> **118,387,556** · illegal-event checks **74,349,832** · **raw throws 0** ·
-> progress edges 11,718,124 · determinism paths 2,600, all byte-identical.
+> **Committed full sweep (`__fixtures__/model-check-summary.json`, witness-aware,
+> rounds 29/30):** states **3,869,232** · applications **213,521,172** · typed
+> throws **195,033,132** · illegal-event checks **145,907,861** · illegal
+> witnesses dispatched **60,020,684** (accepted **0**) · **raw throws 0** ·
+> progress edges 12,796,460 · determinism paths 3,000, all byte-identical.
 
 ---
 
@@ -203,7 +205,7 @@ confession."
 ```
 
 **Say:** "One command from a clean clone — `bash scripts/reproduce.sh` —
-regenerates every artifact the paper cites: the full 1,534-test suite, three
+regenerates every artifact the paper cites: the full 1,656-test suite, three
 typechecks, the simulation, the model-check fixture **digit-identical**,
 bench within ±20% of baseline, the cross-check, and the contract-suite
 pass-counts. Total: 17 minutes. This is the committed run — and the model
