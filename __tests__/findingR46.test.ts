@@ -1,27 +1,33 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
 /**
- * ROUND-46 CORPUS FINDING — r46-1: a signed CONCESSION was minted as an
- * ESCALATION.
+ * ROUND-46 CORPUS FINDING — a signed CONCESSION minted as an ESCALATION
+ * (upstream r9-3, reproduced independently here at 200,000-request scale).
  *
  * Found by campaign 10 (`__tests__/scale/escalationTransportCorpus.ts`) while
- * extending the transport fuzz over the v0.14.0 wire. `CourtEscalationRequest`
+ * extending the transport fuzz over the v0.14.0 wire, and reported as the
+ * round-46 corpus finding. **Review round 9 found and fixed the same defect in
+ * the same release window** (r9-3, v0.14.2: the mapper is now a typed refusal),
+ * so this file ships as an INDEPENDENT regression lock rather than as a fix of
+ * its own — two routes, one behaviour. It is kept because the campaign found it
+ * without reading the review, which is the point of a corpus.
+ *
+ * The defect. `CourtEscalationRequest`
  * carries `concession: boolean`, documented as "True when the challenger DROPS
  * the appeal (concede, never blocked)", and r8-3 made it a STRICT boolean
  * precisely because a coerced flag "flips a signed field". The flag is in the v2
  * hash preimage, so it is genuinely signed.
  *
- * `escalationRequestToMachineEvent` never read it. Any request — including one
- * the challenger signed as a concession — came back as an `escalate` event, the
- * reducer accepted it, the next rung opened, a per-round bond witness was spent
- * in the challenger's name, and the challenger was written into the append-only
- * `escalationLog` as the escalator. That is the r8-2 attribution harm (a
- * non-escalator recorded as having escalated) reproduced one signed flag over,
- * and it turned the one press a concession must never produce into the only
- * thing the transport could produce from it.
+ * On v0.14.1 `escalationRequestToMachineEvent` never read it. Any request —
+ * including one the challenger signed as a concession — came back as an
+ * `escalate` event, the reducer accepted it, the next rung opened, a per-round
+ * bond witness was spent in the challenger's name, and the challenger was
+ * written into the append-only `escalationLog` as the escalator. That is the
+ * r8-2 attribution harm (a non-escalator recorded as having escalated)
+ * reproduced one signed flag over.
  *
- * FIX (minimal, fail-closed): the mapper REFUSES a concession-bearing request.
- * The concession itself is not blocked — the host ends the ladder with the
+ * THE CONTRACT NOW (r9-3): the mapper REFUSES a concession-bearing request. The
+ * concession itself is not blocked — the host ends the ladder with the
  * machine's own `concede` event, the documented path while SPEC §9.2
  * ESC-RIGHT-3 (a *witnessed* concede) stays open.
  */
@@ -123,7 +129,7 @@ function request(concession: boolean): CourtEscalationRequest {
   });
 }
 
-describe('r46-1: a signed concession must never be minted as an escalation', () => {
+describe('a signed concession must never be minted as an escalation (r9-3, corpus-found)', () => {
   it('refuses a concession-bearing request (and names the concede path)', () => {
     const state = resolvedRoundOne();
     expect(state.phase).toBe('round_resolved');

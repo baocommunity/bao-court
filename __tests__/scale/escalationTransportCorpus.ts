@@ -558,12 +558,25 @@ export const TRANSPORT_ROWS: readonly TransportRow[] = [
     wire: rejectRow((context) => ({ kind: 'object', input: baseInput(context, { caseId: ' \t\n ' }) })),
   },
   {
-    name: 'caseid-surrounding-whitespace-trimmed',
+    // v0.14.2 / r9-1 reversed this: ids are validated EXACTLY. Trimming would
+    // give two different ids one request hash, so a padded id is a refusal.
+    name: 'caseid-surrounding-whitespace-refused',
     stage: 'wire',
-    expect: 'accept',
-    wire: accept((context) => ({
+    expect: 'reject',
+    wire: rejectRow((context) => ({
       kind: 'object',
       input: baseInput(context, { caseId: `  ${context.entry.caseId}\t` }),
+    })),
+  },
+  {
+    // NBSP is whitespace to `String.prototype.trim` but not to a `\s`-free
+    // ASCII fold test, so this pins the fold the exact-id rule has to refuse.
+    name: 'caseid-nbsp-padded-refused',
+    stage: 'wire',
+    expect: 'reject',
+    wire: rejectRow((context) => ({
+      kind: 'object',
+      input: baseInput(context, { caseId: `\u00A0${context.entry.caseId}` }),
     })),
   },
   // ── 8. the `'-'` preimage sentinel ───────────────────────────────────────
@@ -892,25 +905,37 @@ export const TRANSPORT_ROWS: readonly TransportRow[] = [
     }),
   },
   {
-    // r46-1 (found by THIS campaign): a request the challenger signed as a
-    // CONCESSION was minted as an escalation — opening a rung they never
-    // authorised, spending a bond witness in their name and writing them into
-    // the append-only log as the escalator. Refused now.
+    // A request the challenger signed as a CONCESSION must never be minted as
+    // an escalation (it would open a rung they never authorised, spend a bond
+    // witness in their name and write them into the append-only log as the
+    // escalator). This campaign reproduced the defect independently at 200k
+    // scale; v0.14.2 fixes it upstream as r9-3, and this row keeps it locked.
     name: 'concession-must-not-escalate',
     stage: 'binding',
     expect: 'reject',
     wire: (context) => ({ kind: 'object', input: baseInput(context, { concession: true }) }),
   },
   {
-    // The truthful binding, with the host's routing id carrying the padding a
-    // host's own storage might: the mapper trims both sides, so it accepts.
+    // r9-1: neither side folds. A host whose routing id carries padding cannot
+    // match the request it routed, so the conversion is refused rather than
+    // silently reconciled across two different ids.
     name: 'binding-caseid-padded-host-side',
     stage: 'binding',
-    expect: 'accept',
+    expect: 'reject',
     wire: (context) => ({ kind: 'object', input: baseInput(context) }),
     binding: (context) => ({
       caseId: `  ${context.entry.caseId} `,
       authenticatedPubkey: context.pubkey,
+    }),
+  },
+  {
+    // r9-2: the bond TXID is bound too, not only the proof hash.
+    name: 'binding-foreign-bondtxid',
+    stage: 'binding',
+    expect: 'reject',
+    wire: (context) => ({
+      kind: 'object',
+      input: baseInput(context, { bondTxid: id(context.unitSeed, 'never-accepted-bond-txid') }),
     }),
   },
 ];
