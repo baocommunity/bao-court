@@ -11,6 +11,37 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (review-round-6, the round-5 and round-37 fixes attacked)
+- **A restored challenge ledger bought a FREE rung at `escalate` (r40-1,
+  exploitable).** Round 5 bound one `bondProofHash` to one roster index and
+  taught `assertValidConfirmationLedger` the rule, but `onEscalate` ran only the
+  *log* barrier: the r29-1 witness test reads `state.challenges`, so a tampered
+  snapshot binding one hash to two indices satisfied `(idx, bondProofHash)` for a
+  juror that posted nothing. The rung opened on a borrowed bond, a round panel
+  was seated, and the case could then only brick at `resolve_round` (the ledger
+  barrier) — r38-1's harm one entry later, plus a DoS. `onEscalate` now re-derives
+  the challenge ledger before the witness is used.
+- **`open_ladder_round` ran NO barrier, so a deleted escalation record still
+  opened the rung (r40-2, exploitable).** `open_ladder_round` is the transition
+  that actually spends a panel seat; it validated the round number, the cap, the
+  deadline and the roster — and nothing else. A restored `ladder_pending` snapshot
+  with `escalationLog: []` opened round k+1, un-consuming the bond that record
+  paid with, and bricked at `resolve_round`. It now runs
+  `assertValidEscalationLog` **and** `assertValidConfirmationLedger` first.
+  **Consumer impact:** none for legal states (a 640-state legal-state hunt across
+  every policy/ladder/authority combination is pinned, 0 refusals); a host that
+  restored a tampered snapshot now gets a typed refusal *before* a panel is
+  seated, where it used to get a bricked case after one.
+- `docs/PER_ROUND_BOND.md` gains reducer rule 6 (the challenge-pool precondition
+  the witness test rests on), the barrier's three call sites, the `ladder_pending`
+  restore contract (r37-1) and the ownership boundary; `docs/FORMAL_INVARIANTS.md`
+  INV-CONF-17/INV-ESC-8/INV-ESC-9 keep up; `CourtChallengeRecord.bondProofHash`
+  now says **preemptable**, not merely collidable (r40-3: a derivable witness is
+  first-come-first-served, so the host verifier must bind it to the event author).
+- `__tests__/reviewRound6.test.ts` (23) — the two closures (6 red on the previous
+  head), the barrier-at-every-entry matrix, the legal-state hunt, and the
+  registered residuals. Suite **1,739 passed / 1 skipped (78 files)**.
+
 ### Fixed (review-round-5, the round-4 fixes attacked)
 - **One bond witness bought two challengers' standing (r38-1, exploitable).**
   `accept_challenge` deduped the challenge ledger by `idx` only, so a juror that
