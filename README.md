@@ -490,7 +490,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (1,656 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (1,677 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit

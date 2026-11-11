@@ -4,7 +4,7 @@ How the test suite is organized, what each category verifies, and how to add
 a test the house way. Read this before writing your first test here.
 
 ```
-npm test                        # full suite (74 files, 1,656 tests + 1 env-gated live test)
+npm test                        # full suite (75 files, 1,677 tests + 1 env-gated live test)
 npm run campaign                # scale campaign FAST subset (== the scaleCampaign tests)
 npm run campaign:full           # scale campaign FULL corpus → docs/benchmarks/campaign-<date>.json
 npx vitest run <file>           # one file

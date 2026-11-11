@@ -1254,8 +1254,8 @@ adapters. The module map is in App. A.2.
 ### 11.1 Suite, simulation, and review record
 
 - **Suite:** the full test suite is green and the typecheck is clean (source,
-  scripts, and tests are all typechecked) — **1,656 passing, 1
-  environment-gated live test skipped, over 74 files**, re-measured on this head
+  scripts, and tests are all typechecked) — **1,677 passing, 1
+  environment-gated live test skipped, over 75 files**, re-measured on this head
   (App. A.4; per-round record in App. A.1, S-12 §1). Coverage includes:
   BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
@@ -2009,7 +2009,7 @@ history itself is `CHANGELOG.md`.
 
 | Artifact | Command / location | Count (2026-11-11, at `c456fb4`) |
 |---|---|---|
-| Test suite | `npm test` | 1,656 passing, 1 environment-gated live test skipped, 74 files (measured on this head; the per-round pinned count is App. A.1, S-12 §1) |
+| Test suite | `npm test` | 1,677 passing, 1 environment-gated live test skipped, 75 files (measured on the review-round-4 head; the per-round pinned count is App. A.1, S-12 §1) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`, source + scripts + tests) | clean |
 | Model-check sweep | `npx tsx scripts/model-check.mjs` | 15 instances, 3,869,232 states, 60,020,684 illegal-witness probes (0 accepted), 0 raw throws |
 | Statistical corpora | `npm run campaign:full` | 9 campaigns, 1,187,000 units, 3,745,566 assertions, 0 failures (CI runs a fast subset) |

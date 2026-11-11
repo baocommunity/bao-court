@@ -511,6 +511,14 @@ export function onEscalate(
       `escalation log exceeds the ${MAX_LADDER_ROUNDS}-round ladder bound`,
     );
   }
+  // Restoration barrier (R33, r33-5): re-derive the log's invariants BEFORE a
+  // new rung is opened, not only at finalize. The consumption set lives in the
+  // log, so a restored snapshot that dropped an entry has also un-consumed the
+  // bond that entry paid with; waiting until finalize lets a free rung be
+  // opened (and its panel seated) on a bond this case already spent, and then
+  // bricks the case at finalize. `onFinalize` still calls this barrier — the
+  // verdict path must not depend on the escalate path having run.
+  assertValidEscalationLog(state);
   const expectedRound = state.ladderRound + 1;
   const authority = event.authority;
   if (authority !== 'challenger' && authority !== 'host') {
@@ -582,6 +590,19 @@ export function onEscalate(
       if (roundBondProofHash === (event.bondProofHash as string)) {
         throw new CourtConfirmationTransitionError(
           'escalation round bond proof hash must be distinct from the membership (challenge) bond',
+        );
+      }
+      // A round bond must not be ANY accepted challenge bond of this case
+      // (R33, r33-1). The membership bond is already paid to buy standing, so
+      // quoting another challenger's bond as "this round's payment" is a
+      // relabelling across jurors: it drains a witness its owner still needs and
+      // bills this challenger nothing. The machine holds that ledger, so it can
+      // refuse it; whether the hash is a bond AT ALL is the host's check.
+      const membershipBond = state.challenges.find((c) => c.bondProofHash === roundBondProofHash);
+      if (membershipBond) {
+        throw new CourtConfirmationTransitionError(
+          `escalation round bond proof hash is participant ${membershipBond.idx}'s accepted challenge `
+          + '(membership) bond: a per-round bond must be a fresh bond, not a relabelled membership bond',
         );
       }
       const consumed = log.find((r) => r.roundBondProofHash === roundBondProofHash);
