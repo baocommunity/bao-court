@@ -101,25 +101,37 @@ export function ladderSignBoundary(params: LadderParameters): number {
 /**
  * The SAFE ladder cap: the deepest escalation round with `E[π] < 0`, i.e.
  *
- *     floor( ln(ρ/(ρ+β)) / ln(a_f) ),  clamped to [1, MAX_LADDER_ROUNDS].
+ *     floor( ln(ρ/(ρ+β)) / ln(a_f) ),  capped at MAX_LADDER_ROUNDS.
  *
  * 06 §1.5's interim parameter rule, in code. Because the machine's own ceiling
  * is `MAX_LADDER_ROUNDS` (5), a derivation above it is reported as the ceiling
- * rather than as an unreachable number: the value returned is always a legal
- * `maxLadderRounds`. Monotone non-increasing in `a_f` (a less accurate jury
- * must not be given a deeper ladder) and non-decreasing in `β`.
+ * rather than as an unreachable number.
+ *
+ * **`0` means "no depth is safe" (R33, r33-6).** When `a_f` is at or below
+ * `ρ/(ρ+β)` — a jury that is no better than a coin on manufactured disputes, at
+ * `β = ρ` an accuracy of ½ — the sign boundary is `≤ 1`, so round 1 itself is
+ * already profitable and no legal ladder may be opened. The earlier version
+ * clamped that to `1` and its own contract ("E[π] < 0 for every R ≤ derived")
+ * was false there; `ladderCapWithinBound` then blessed the profitable cap. The
+ * clamp only applies upwards now.
+ *
+ * Monotone non-increasing in `a_f` (a less accurate jury must not be given a
+ * deeper ladder) and non-decreasing in `β`.
  *
  * @example
  * ```ts
  * deriveMaxLadderRounds({ a_f: 0.9, rho: 0.03, beta: 0.03 }); // 5 (derivation 6, ceiling 5)
  * deriveMaxLadderRounds({ a_f: 0.75, rho: 0.03, beta: 0.03 }); // 2 (derivation 2.41)
+ * deriveMaxLadderRounds({ a_f: 0.45, rho: 0.03, beta: 0.03 }); // 0 (no safe depth)
  * ```
  */
 export function deriveMaxLadderRounds(params: LadderParameters): number {
   const boundary = ladderSignBoundary(params);
   if (!Number.isFinite(boundary)) return MAX_LADDER_ROUNDS;
-  const derived = Math.floor(boundary);
-  return Math.min(MAX_LADDER_ROUNDS, Math.max(1, derived));
+  // `boundary === 1` is break-even at round 1 (E[π] = 0), not safe: the
+  // contract is strictly negative.
+  if (boundary <= 1) return 0;
+  return Math.min(MAX_LADDER_ROUNDS, Math.floor(boundary));
 }
 
 /**
@@ -158,6 +170,15 @@ export function escalationOptionEv(params: LadderParameters & { readonly rounds:
  * Does a configured cap respect the derived bound? The host pre-flight gate of
  * 06 §1.5 / §7 item 5: re-measure `a_f`, then re-derive the cap. Returns the
  * verdict plus both derived numbers so a refusal message can quote them.
+ *
+ * `ok` is decided by the SIGN, not by comparing with `derivedCap` (R33, r33-6):
+ * a cap is inside the bound iff it is BELOW the flip round, i.e. iff
+ * `E[π(cap)] < 0` strictly. That is the same comparison for every non-integer
+ * boundary, and it is the only correct one when the boundary is `≤ 1` — the
+ * case where `derivedCap` is `0` (no safe depth) and a naive `cap <= derivedCap`
+ * would still be false, but the old `derivedCap = 1` clamp made it TRUE. A host
+ * that only reads `derivedCap` must therefore treat `0` as "refuse every
+ * ladder", which is what the number means.
  */
 export function ladderCapWithinBound(params: LadderParameters & { readonly maxLadderRounds: number }): {
   readonly ok: boolean;
@@ -176,10 +197,11 @@ export function ladderCapWithinBound(params: LadderParameters & { readonly maxLa
     );
   }
   const derivedCap = deriveMaxLadderRounds(params);
+  const flipRound = deriveLadderFlipRound(params);
   return {
-    ok: maxLadderRounds <= derivedCap,
+    ok: maxLadderRounds < flipRound,
     derivedCap,
-    flipRound: deriveLadderFlipRound(params),
+    flipRound,
   };
 }
 

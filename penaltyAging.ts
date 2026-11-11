@@ -121,6 +121,20 @@ export function agePenalties(penalties: readonly PenaltyRecord[], epochs = 0): n
  * {@link agePenalties} on the participating clock. `w` is therefore
  * non-increasing in `idleEpochs` for every penalty strength, which is exactly
  * the loop 06 §4.3 measured as +26.0 % under the shipped ramp.
+ *
+ * The participating clock is a CALLER input, not a derivation (R33, r33-8)
+ * ----------------------------------------------------------------
+ * `ageEpochs` (per record) is whatever the host says it is. Passing
+ * "epochs since the penalty was incurred" — a wall-clock difference — restores
+ * the idle path r30-4 closed: the juror would serve the penalty by waiting.
+ * The only safe source is the stored count of epochs in which the juror
+ * actually participated since the penalty was incurred; this module cannot tell
+ * the two apart, so the host's reputation store must persist the participating
+ * count (`docs/proofs/economics/06-expert-verify.tex.md` §4.3).
+ *
+ * Also: `minWeightFactor: 1` is accepted but means `floor = w0`, and since the
+ * floor is ALSO the anchor for any penalised juror, no penalty can lower the
+ * weight — the reputation loss is disabled. Use `< 1` (the default 0.5).
  */
 export function pairedJurorWeight(input: {
   readonly w0: number;
@@ -156,6 +170,17 @@ export function pairedJurorWeight(input: {
   const idle = assertEpochs(idleEpochs, 'idleEpochs');
   const floor = minWeightFactor * w0;
   const earned = w0 * agePenalties(penalties, 0) * bonusMultiplier;
+  // Fail closed on overflow (R33, r33-9): a finite `w0` and a finite
+  // `bonusMultiplier` can still multiply past `Number.MAX_VALUE`, and the weight
+  // is a lottery/selection input — `Infinity` would silently dominate every
+  // comparison (and average) downstream. The rest of this module treats a
+  // non-finite parameter as a caller bug, so this is the same rule, detected one
+  // step later.
+  if (!Number.isFinite(earned)) {
+    throw new Error(
+      `earned weight must stay finite (w0 ${String(w0)} · bonus ${String(bonusMultiplier)} overflowed to ${String(earned)})`,
+    );
+  }
   const anchor = earned >= w0 ? w0 : floor;
   const weight = anchor + (earned - anchor) * Math.exp(-PENALTY_AGING_LAMBDA * idle);
   return Math.max(floor, weight);

@@ -307,10 +307,23 @@ export function assertValidOutcomeHistory(state: CourtConfirmationMachineState):
  *  - a `host` record requires the frozen `hostEscalation` policy and carries
  *    no challenger witness.
  *
- * A SHORT log is accepted on purpose: a pre-0.12 snapshot legitimately has no
+ * A SHORT log is accepted on purpose **only for a case that never opted into
+ * the per-round bond** (R33, r33-5): a pre-0.12 snapshot legitimately has no
  * entries, and refusing those would make legacy snapshots un-finalizable
- * (round-3 target 1.5). Deletions remain a host-attestation obligation
- * (INV-ESC-6) because they are indistinguishable from a legacy state.
+ * (round-3 target 1.5). That exemption is exactly the free option once a round
+ * bond exists, because deleting a record also un-consumes its bond hash — the
+ * hash becomes reusable for a later rung. So the barrier demands a COMPLETE
+ * ledger whenever it can tell what complete means:
+ *
+ *  - `log.length > 0` — the case records escalations, so it must have one
+ *    record per opened round (`ladderRound − 1`, or `ladderRound` while a
+ *    round is pending). Deleting ANY entry, including the last, is refused;
+ *  - `requireRoundBond === true` — the strict policy is never allowed to fall
+ *    back to the legacy shape, so a log emptied of every entry is refused too.
+ *
+ * A legacy case (`requireRoundBond` absent/false) with no records keeps the
+ * documented deletion residual: it is indistinguishable from a pre-0.12 state,
+ * which is why the strict policy is the one a new deployment must choose.
  */
 export function assertValidEscalationLog(state: CourtConfirmationMachineState): void {
   const log = state.escalationLog;
@@ -320,6 +333,21 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
   if (log.length > MAX_LADDER_ROUNDS) {
     throw new CourtConfirmationTransitionError(
       `escalation log exceeds the ${MAX_LADDER_ROUNDS}-round ladder bound`,
+    );
+  }
+  // Completeness (R33, r33-5): one record per escalation, and an escalation
+  // opens exactly one round. `ladder_pending` is the one phase between the two
+  // halves of that move (escalate appends, open_ladder_round advances
+  // `ladderRound`), so the offset differs there by one.
+  const expectedRecords = Math.max(
+    0,
+    state.phase === 'ladder_pending' ? state.ladderRound : state.ladderRound - 1,
+  );
+  if (log.length !== expectedRecords && (log.length > 0 || state.requireRoundBond === true)) {
+    throw new CourtConfirmationTransitionError(
+      `escalation log is incomplete: ${log.length} record(s) for ${state.ladderRound} opened round(s) `
+      + `(expected ${expectedRecords}) — a restored snapshot must not drop an escalation, because a `
+      + 'dropped record also un-consumes the per-round bond it paid with',
     );
   }
   let previousAt = Number.NEGATIVE_INFINITY;
@@ -382,6 +410,13 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
         if (roundBondProofHash === bondProofHash) {
           throw new CourtConfirmationTransitionError(
             'escalation log round bond must be distinct from the membership (challenge) bond',
+          );
+        }
+        // Same rule the reducer applies (R33, r33-1): no accepted challenge
+        // bond of ANY juror may be relabelled as a per-round bond.
+        if (state.challenges.some((c) => c.bondProofHash === roundBondProofHash)) {
+          throw new CourtConfirmationTransitionError(
+            'escalation log round bond is an accepted challenge (membership) bond of this case',
           );
         }
         if (seenRoundBonds.has(roundBondProofHash)) {
