@@ -438,7 +438,7 @@ the same seed reproduces the same dishonest relay record for record.
 ### Changed
 - Round-12's mechanical totality sweep, the 20,000-shape fuzz of the event validator (zero raw throws; the three narrowings vs nostr-tools are pinned as decisions), and the note that object spread copies nostr-tools' memoised `verified` symbol — so the binder's rebuild is load-bearing.
 - The round-11 parameter-rationalisation divergence is **closed by design**: `String(x)` *is* the shortest round-trip decimal, so no lossless merge exists; the obligation is to pass the literal decimal.
-- Suite **1,951 passed** (87 files); mutant catalogue 101.
+- Suite **1,953 passed** (90 files, per the clean-runner CI battery — the local count was 1,951 on a CPU-contended host); mutant catalogue 101.
 
 ## [0.15.1] — 2026-11-11
 
