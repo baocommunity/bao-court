@@ -1,12 +1,12 @@
 {
   "tool": "scripts/mutation/run-mutants.mjs",
-  "generatedAt": "2026-11-11T17:32:08.628Z",
+  "generatedAt": "2026-11-11T20:02:27.136Z",
   "repoRoot": "/home/bob/Documents/bao-court--mutation3",
   "precision": "single semantic mutation per source file, applied to a sandbox copy",
   "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
   "cleanTree": {
-    "pristineBefore": "M CHANGELOG.md\n M scripts/mutation/mutants.mjs\n M scripts/mutation/run-mutants.mjs\n M scripts/mutation/spot-check.mjs",
-    "pristineAfter": "M CHANGELOG.md\n M scripts/mutation/mutants.mjs\n M scripts/mutation/run-mutants.mjs\n M scripts/mutation/spot-check.mjs",
+    "pristineBefore": "M scripts/mutation/mutants.mjs",
+    "pristineAfter": "M scripts/mutation/mutants.mjs",
     "trackedTreeUnchanged": true,
     "sourceFilesHashed": [
       "courtCeremonyCore.ts",
@@ -19,8 +19,8 @@
       "batchAttestation.ts",
       "courtSession.ts",
       "confirmationMachineCore.ts",
-      "ladderEconomics.ts",
       "penaltyAging.ts",
+      "ladderEconomics.ts",
       "quorumEconomics.ts",
       "courtEscalationRequest.ts"
     ],
@@ -30,24 +30,24 @@
   "parallelism": 4,
   "testTimeoutSec": 900,
   "baseline": {
-    "totalTests": 1797,
-    "passedTests": 1796,
+    "totalTests": 1926,
+    "passedTests": 1925,
     "failedTests": 0,
     "failedSuites": 0,
     "failing": [],
     "success": true,
-    "wallMs": 64391
+    "wallMs": 290078
   },
   "summary": {
-    "total": 23,
-    "captured": 23,
+    "total": 24,
+    "captured": 24,
     "survived": 0,
     "score": 1,
     "byClass": {
       "caseid-injectivity": {
         "description": "caseId is encoded injectively into the hash preimage (canonical, NUL-free, bounded, trimmed)",
-        "total": 5,
-        "captured": 5,
+        "total": 6,
+        "captured": 6,
         "score": 1,
         "survivors": []
       },
@@ -131,17 +131,17 @@
     },
     "byDetector": {
       "tests": {
-        "total": 23,
-        "captured": 23,
+        "total": 24,
+        "captured": 24,
         "score": 1
       },
       "spot": {
-        "total": 23,
-        "captured": 23,
-        "score": 1
+        "total": 24,
+        "captured": 22,
+        "score": 0.9166666666666666
       },
       "model": {
-        "total": 23,
+        "total": 24,
         "captured": 0,
         "score": 0,
         "applicable": 0,
@@ -149,7 +149,7 @@
       }
     },
     "survivors": [],
-    "baselineTests": 1797
+    "baselineTests": 1926
   },
   "mutants": [
     {
@@ -172,21 +172,51 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 2,
+        "failedTests": 8,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=913 refuse=1087 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/mutationClosuresV014.test.ts",
             "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with a NUL id is refused, not hashed",
             "message": "AssertionError: expected function to throw an error, but it didn't"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends the refusal SHAPE: typed, self-describing, and it discloses nothing secret",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-1) — caseId encodes injectively, or not at all a NUL cannot blur a preimage field boundary, and the id is byte-bounded",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded U+0000 is refused at the start, the middle, the end, and alone",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-5) — the r8 injectivity pin measured sha256, not the encoding the differential pin: dangerous pairs differ in the PREIMAGE BYTES or are refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 15/1001 failed check(s)"
           }
         ],
-        "wallMs": 158935
+        "wallMs": 374871
       },
       "spot": {
         "failed": [
@@ -199,14 +229,14 @@
             "error": "Error: a hand-built request with a NUL caseId was hashed without re-validation"
           }
         ],
-        "wallMs": 823
+        "wallMs": 2265
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 159088
+      "wallMs": 374951
     },
     {
       "id": "M80",
@@ -228,16 +258,41 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 1,
+        "failedTests": 6,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=922 refuse=1078 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) honest relay: every juror completes with one group key and one signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends the refusal SHAPE: typed, self-describing, and it discloses nothing secret",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-1) — caseId encodes injectively, or not at all a NUL cannot blur a preimage field boundary, and the id is byte-bounded",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded the byte bound is exact at 256 bytes for every UTF-8 width",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 10/996 failed check(s)"
           }
         ],
-        "wallMs": 158790
+        "wallMs": 391237
       },
       "spot": {
         "failed": [
@@ -246,14 +301,14 @@
             "error": "Error: a 257-byte caseId was accepted"
           }
         ],
-        "wallMs": 862
+        "wallMs": 2141
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 158839
+      "wallMs": 391278
     },
     {
       "id": "M81",
@@ -275,21 +330,66 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 2,
+        "failedTests": 11,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=917 refuse=1083 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49 D3/D4) the two encoding corners the differential forced D4: leading U+FEFF is \"not canonical\", trailing U+FEFF is \"whitespace\"",
+            "message": "AssertionError: expected 'escalation request caseId must not ha…' to match /canonical UTF-8/"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49 D3/D4) the two encoding corners the differential forced a lone surrogate is still refused (the r8-1 injectivity rule)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/mutationClosuresV014.test.ts",
             "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with an unpaired surrogate is refused (the r8-1 guard runs in hash too)",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends the refusal SHAPE: typed, self-describing, and it discloses nothing secret",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-1) — caseId encodes injectively, or not at all a lone surrogate no longer collides with U+FFFD in the request hash",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded a trailing/leading whitespace id is refused instead of silently folded",
+            "message": "AssertionError: expected [Function] to throw error matching /canonical UTF-8/ but got 'escalation request caseId must not ha…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded lone surrogates are refused at every position; a real surrogate pair is accepted",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-5) — the r8 injectivity pin measured sha256, not the encoding the differential pin: dangerous pairs differ in the PREIMAGE BYTES or are refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 30/986 failed check(s)"
           }
         ],
-        "wallMs": 157034
+        "wallMs": 389767
       },
       "spot": {
         "failed": [
@@ -298,29 +398,28 @@
             "error": "Error: an unpaired surrogate was accepted into the hash preimage (r8-1)"
           }
         ],
-        "wallMs": 947
+        "wallMs": 3301
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 157076
+      "wallMs": 389811
     },
     {
       "id": "M82",
       "cls": "caseid-injectivity",
       "file": "courtEscalationRequest.ts",
-      "intent": "the id is validated untrimmed but hashed trimmed: `\"court:1\"` and `\" court:1\"` are two wire strings with ONE digest (H-6 one field over)",
+      "intent": "the r9-1 REGRESSION: the codec trims and returns the folded id, so `\"court:1\"`, `\"court:1 \"` and `\"court:1\\u{3000}\"` are ONE id with ONE digest and `build` returns an id the caller never supplied",
       "machine": null,
       "captured": true,
       "capturedBy": [
-        "tests",
-        "spot"
+        "tests"
       ],
       "detectors": {
         "tests": true,
-        "spot": true,
+        "spot": false,
         "model": false
       },
       "tests": {
@@ -331,34 +430,29 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
-            "name": "C11 (M82) — the id that is hashed is the id that was validated a padded id is trimmed ONCE, in build, and every later step sees the trimmed id",
-            "message": "AssertionError: expected '  court:market-r47-closure:1\\t' to be 'court:market-r47-closure:1' // Object.is equality"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) replaying relay: duplicates are idempotent and never yield a second signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
           }
         ],
-        "wallMs": 157501
+        "wallMs": 385886
       },
       "spot": {
-        "failed": [
-          {
-            "id": "S33",
-            "error": "Error: accepted id \" court:1 \" came back as \" court:1 \" — the codec rewrote a value it validated"
-          }
-        ],
-        "wallMs": 872
+        "failed": [],
+        "wallMs": 2044
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 157564
+      "wallMs": 385972
     },
     {
       "id": "M83",
       "cls": "caseid-injectivity",
       "file": "courtEscalationRequest.ts",
-      "intent": "the codec NORMALISES instead of refusing: an NFD id and its NFC twin are different wire strings with one digest",
+      "intent": "the codec NORMALISES instead of refusing: an NFD id and its NFC twin are different wire strings with one digest (the clause r9-1 states but does not enforce structurally)",
       "machine": null,
       "captured": true,
       "capturedBy": [
@@ -374,31 +468,51 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 4,
+        "failedTests": 8,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=898 refuse=1102 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49 D1) \"leading or trailing whitespace\" is the ECMAScript set, pinned no folding and no normalisation: edge characters are part of the digest",
+            "message": "AssertionError: expected 'a8eae27a4507e74f0e7590be46de702d49068…' not to be 'a8eae27a4507e74f0e7590be46de702d49068…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/mutationClosuresV014.test.ts",
             "name": "C12 (M83) — an accepted id is returned byte-for-byte (no silent normalisation) NFD is accepted unchanged, and NFC is a different id",
             "message": "AssertionError: expected 'café:1' to be 'café:1' // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/mutationClosuresV014.test.ts",
             "name": "C12 (M83) — an accepted id is returned byte-for-byte (no silent normalisation) the two forms do not share a digest, and the wire does not rewrite the id",
             "message": "AssertionError: expected '6b05859adb156b0e1be969618378782e9f5de…' not to be '6b05859adb156b0e1be969618378782e9f5de…' // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T5 (r9-5 attacked) — is the byte-differential pin actually strong? the pin has TEETH: lossy, folding and re-joining encoders all fail it",
+            "message": "AssertionError: court:café:1 vs court:café:1: expected Uint8Array[ 99, 111, 117, 114, …(238) ] to not deeply equal Uint8Array[ 99, 111, 117, 114, …(238) ]"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded there is NO Unicode normalisation — NFC and NFD are different ids (documented)",
+            "message": "AssertionError: expected '6083bff48f9ce1e1a560a5ac3e84a6d99d46a…' not to be '6083bff48f9ce1e1a560a5ac3e84a6d99d46a…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-5) — the r8 injectivity pin measured sha256, not the encoding the differential pin: dangerous pairs differ in the PREIMAGE BYTES or are refused",
+            "message": "AssertionError: court:café:1 vs court:café:1: expected Uint8Array[ 99, 111, 117, 114, …(238) ] to not deeply equal Uint8Array[ 99, 111, 117, 114, …(238) ]"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 10/986 failed check(s)"
           }
         ],
-        "wallMs": 459992
+        "wallMs": 332707
       },
       "spot": {
         "failed": [
@@ -411,14 +525,14 @@
             "error": "Error: case ids \"café\" and \"café\" share one digest"
           }
         ],
-        "wallMs": 4657
+        "wallMs": 2589
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 460061
+      "wallMs": 332731
     },
     {
       "id": "M84",
@@ -440,36 +554,41 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 5,
+        "failedTests": 6,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49 D2) a tampered snapshot is a typed refusal, never a raw TypeError a non-object descriptor is refused by every entry point of the codec",
+            "message": "AssertionError: expected error to be instance of CourtConfirmationTransitionError"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
             "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with a NUL id is refused, not hashed",
             "message": "AssertionError: expected function to throw an error, but it didn't"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
             "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with malformed hex is refused, not hashed",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
             "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with an unpaired surrogate is refused (the r8-1 guard runs in hash too)",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with a foldable id is refused (r9-1 applies in hash too)",
+            "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/r30MultiProcessCeremony.test.ts",
+            "name": "multi-process ceremony (round 30) fails closed with SIGN_MISSING_REVEAL when a process dies mid-signing",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
           }
         ],
-        "wallMs": 453213
+        "wallMs": 333654
       },
       "spot": {
         "failed": [
@@ -478,14 +597,14 @@
             "error": "Error: a hand-built request with a NUL caseId was hashed without re-validation"
           }
         ],
-        "wallMs": 3956
+        "wallMs": 2443
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 453240
+      "wallMs": 333686
     },
     {
       "id": "M85",
@@ -507,21 +626,36 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 2,
+        "failedTests": 5,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=898 refuse=1102 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the request hash binds the round-bond witness two requests differing ONLY in the round bond hash differently",
             "message": "AssertionError: expected 'court:market-r43-wire:1\\u00001\\u00007…' to contain '\\u0000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee…'"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound10.test.ts",
+            "name": "T5 (r9-5 attacked) — is the byte-differential pin actually strong? the pin has TEETH: lossy, folding and re-joining encoders all fail it",
+            "message": "AssertionError: expected '' to be '-' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound8.test.ts",
             "name": "T1 (H-6) — the \"-\" sentinel is a value no request field can be a literal \"-\" witness is refused, and absent ≠ present in the preimage",
             "message": "AssertionError: expected 'court:market-r48-wire:1\\u00001\\u00007…' to be 'court:market-r48-wire:1\\u00001\\u00007…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 5/986 failed check(s)"
           }
         ],
-        "wallMs": 454769
+        "wallMs": 319115
       },
       "spot": {
         "failed": [
@@ -530,14 +664,14 @@
             "error": "Error: the absent slot is not the \"-\" sentinel: \"court:market-r47-probe:1\\u00001\\u00007777777777777777777777777777777777777777777777777777777777777777\\u0000d200000000000000000000000000000000000000000000000000000000000000\\u0000e200000000000000000000000000000000000000000000000000000000000000\\u0000\\u00008888888888888888888888888888888888888888888888888888888888888888\\u00001790000000\\u00000\""
           }
         ],
-        "wallMs": 4154
+        "wallMs": 2107
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 454850
+      "wallMs": 319164
     },
     {
       "id": "M86",
@@ -559,26 +693,31 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 3,
+        "failedTests": 4,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=898 refuse=1102 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the wire stays scalar, so depth-1 duplicate detection is sufficient the domain is v2 and the digest is the shared known answer",
+            "message": "AssertionError: expected '3b54ce4600a38a68f53d793d28cf38616f53e…' to be '38f94655c82847e158c451d02e338db9f6742…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the request hash binds the round-bond witness pins the v2 domain and a known-answer digest shared with the host",
             "message": "AssertionError: expected '3b54ce4600a38a68f53d793d28cf38616f53e…' to be '38f94655c82847e158c451d02e338db9f6742…' // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) replaying relay: duplicates are idempotent and never yield a second signature",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
-          },
-          {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound10.test.ts",
+            "name": "T5 (r9-5 attacked) — is the byte-differential pin actually strong? a DOMAIN-ONLY change fails the pin: the domain is re-derived, not read back",
+            "message": "AssertionError: expected '4cc74e801ed12e767bd7a6d4c1f86db8c1fbc…' to be 'ad35c8ec7dec21f628218a916cc44c19197a0…' // Object.is equality"
           }
         ],
-        "wallMs": 453746
+        "wallMs": 329648
       },
       "spot": {
         "failed": [
@@ -587,14 +726,14 @@
             "error": "Error: digest 04938ef3b3cef371a60654c8eec7b3f963c58c30ef59a43e347c307fc1259698 != sha256(domain‖0x00‖preimage) 5021f7f1e3e8ffb78641adb6d327665afd05243566f0888db61b87111c1e1946"
           }
         ],
-        "wallMs": 4493
+        "wallMs": 2334
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 453797
+      "wallMs": 329708
     },
     {
       "id": "M87",
@@ -616,26 +755,46 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 3,
+        "failedTests": 7,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=952 refuse=1048 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the escalation request wire round-trips, and the parse is strict refuses unknown fields (additionalProperties: false is the wire contract)",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends r10-1: the other three echo sites are escaped too (round, unknown field, repeated field)",
+            "message": "Error: expected a refusal, got none"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T3 (r9-3 attacked) — is the claim bound at the SIGNATURE domain? r10-3: the same nonce/event id cannot carry two kinds — the kind is inside the id",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound11.test.ts",
+            "name": "T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real r11-1: every refusal that echoes a wire or snapshot value escapes it",
+            "message": "AssertionError: unknown field: expected 'escalation request round must be an i…' to match /\\\\u\\{a\\}|<not an integer>/"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-4) — a repeated field is refused, not silently resolved unknown fields, __proto__ and confusables are still refused",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 48/1014 failed check(s)"
           }
         ],
-        "wallMs": 401743
+        "wallMs": 120356
       },
       "spot": {
         "failed": [
@@ -644,14 +803,14 @@
             "error": "Error: unknown field accepted (JSON text)"
           }
         ],
-        "wallMs": 2098
+        "wallMs": 2285
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 402181
+      "wallMs": 120367
     },
     {
       "id": "M88",
@@ -673,21 +832,41 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 2,
+        "failedTests": 6,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=921 refuse=1079 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the escalation request wire round-trips, and the parse is strict refuses unknown fields (additionalProperties: false is the wire contract)",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends r10-1: the other three echo sites are escaped too (round, unknown field, repeated field)",
+            "message": "AssertionError: expected 'escalation request has an unknown fie…' not to match /[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}\\p{Cs}]/u"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound11.test.ts",
+            "name": "T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real r11-1: every refusal that echoes a wire or snapshot value escapes it",
+            "message": "AssertionError: unknown field: expected 'escalation request has an unknown fie…' not to match /[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}\\p{Cs}]/u"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-4) — a repeated field is refused, not silently resolved unknown fields, __proto__ and confusables are still refused",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 36/994 failed check(s)"
           }
         ],
-        "wallMs": 386468
+        "wallMs": 118666
       },
       "spot": {
         "failed": [
@@ -696,14 +875,14 @@
             "error": "Error: unknown field accepted (parsed object)"
           }
         ],
-        "wallMs": 2689
+        "wallMs": 1993
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 386485
+      "wallMs": 118679
     },
     {
       "id": "M89",
@@ -725,26 +904,56 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 3,
+        "failedTests": 9,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=975 refuse=1025 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49) the wire stays scalar, so depth-1 duplicate detection is sufficient every field is string | number | boolean | null, and the parser refuses a repeat",
+            "message": "Error: expected a refusal, got acceptance"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends r10-1: the other three echo sites are escaped too (round, unknown field, repeated field)",
+            "message": "AssertionError: expected 'escalation request has an unknown fie…' to match /repeats the field/"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-4) — a repeated field is refused, not silently resolved \"null then real\" no longer parses to the real witness (JSON.parse last-wins)",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-4) — a repeated field is refused, not silently resolved a repeated field spelled with a JSON escape is the same field",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-4) — a repeated field is refused, not silently resolved a repeated `concession` cannot flip a signed flag",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound the refusal is TYPED, and the scanner cannot be fooled by a value that looks like a key",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound an already-parsed object has lost the duplicate — the documented hole, pinned",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 12/998 failed check(s)"
           }
         ],
-        "wallMs": 400462
+        "wallMs": 111893
       },
       "spot": {
         "failed": [
@@ -753,14 +962,14 @@
             "error": "Error: a repeated roundBondProofHash was resolved last-wins"
           }
         ],
-        "wallMs": 2201
+        "wallMs": 1903
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 400852
+      "wallMs": 111907
     },
     {
       "id": "M90",
@@ -782,16 +991,36 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 1,
+        "failedTests": 5,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the wire stays scalar, so depth-1 duplicate detection is sufficient every field is string | number | boolean | null, and the parser refuses a repeat",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends r10-1: the other three echo sites are escaped too (round, unknown field, repeated field)",
+            "message": "AssertionError: expected 'escalation request repeats the field …' to contain '\\u{a}'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound11.test.ts",
+            "name": "T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real r11-1: every refusal that echoes a wire or snapshot value escapes it",
+            "message": "AssertionError: repeated field: expected 'escalation request repeats the field …' to match /\\\\u\\{a\\}|<not an integer>/"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-4) — a repeated field is refused, not silently resolved a repeated field spelled with a JSON escape is the same field",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 4/990 failed check(s)"
           }
         ],
-        "wallMs": 398553
+        "wallMs": 110373
       },
       "spot": {
         "failed": [
@@ -800,14 +1029,14 @@
             "error": "Error: an escaped duplicate key was not seen as a duplicate"
           }
         ],
-        "wallMs": 2602
+        "wallMs": 2446
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 398703
+      "wallMs": 110399
     },
     {
       "id": "M91",
@@ -829,36 +1058,61 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 5,
+        "failedTests": 10,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=904 refuse=1096 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49) the wire stays scalar, so depth-1 duplicate detection is sufficient every field is string | number | boolean | null, and the parser refuses a repeat",
+            "message": "Error: expected a refusal, got acceptance"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/mutationClosuresV014.test.ts",
             "name": "C14 (M91) — parse shape-checks caseId instead of coercing it a numeric id is refused (String() would mint the id \"42\")",
             "message": "AssertionError: expected function to throw an error, but it didn't"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/mutationClosuresV014.test.ts",
             "name": "C14 (M91) — parse shape-checks caseId instead of coercing it a MISSING id is refused (String(undefined) would mint the id \"undefined\")",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/mutationClosuresV014.test.ts",
             "name": "C14 (M91) — parse shape-checks caseId instead of coercing it an id that is not a string at all never reaches the preimage",
             "message": "AssertionError: expected function to throw an error, but it didn't"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) split-view after DKG: the key is agreed but the reveal gate starves on both sides",
+            "message": "AssertionError: expected 2 to be 1 // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound a nested duplicate object is refused by the type guard (typed), not silently parsed",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound an array with duplicate elements is refused the same way",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound a pathological body is still a typed refusal, never a raw RangeError",
+            "message": "AssertionError: expected RangeError: Maximum call stack size excee… to be an instance of CourtConfirmationTransitionError"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 16/1002 failed check(s)"
           }
         ],
-        "wallMs": 282510
+        "wallMs": 160464
       },
       "spot": {
         "failed": [
@@ -867,14 +1121,14 @@
             "error": "Error: a numeric caseId was coerced"
           }
         ],
-        "wallMs": 2923
+        "wallMs": 637
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 282534
+      "wallMs": 160479
     },
     {
       "id": "M92",
@@ -896,16 +1150,26 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 1,
+        "failedTests": 3,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=899 refuse=1101 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/mutationClosuresV014.test.ts",
             "name": "C15 (M92) — parse shape-checks round instead of coercing it a stringly round is refused (Number(\"2\") would accept it as 2)",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 4/990 failed check(s)"
           }
         ],
-        "wallMs": 272568
+        "wallMs": 157117
       },
       "spot": {
         "failed": [
@@ -914,14 +1178,14 @@
             "error": "Error: round \"2\" was coerced to an integer"
           }
         ],
-        "wallMs": 12712
+        "wallMs": 693
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 272635
+      "wallMs": 157126
     },
     {
       "id": "M93",
@@ -943,31 +1207,71 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 4,
+        "failedTests": 12,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=975 refuse=1025 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the escalation request wire round-trips, and the parse is strict refuses junk: bad JSON, non-objects, malformed hex, bad rounds, bad clock",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/mutationClosuresV014.test.ts",
             "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with malformed hex is refused, not hashed",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/mutationClosuresV014.test.ts",
             "name": "C15 (M92) — parse shape-checks round instead of coercing it a stringly round is refused (Number(\"2\") would accept it as 2)",
             "message": "AssertionError: expected [Function] to throw an error"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/mutationClosuresV014.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/mutationClosuresV014.test.ts",
             "name": "C15 (M92) — parse shape-checks round instead of coercing it a non-integer number is refused",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends r10-1: the other three echo sites are escaped too (round, unknown field, repeated field)",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound11.test.ts",
+            "name": "T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real r11-1: every refusal that echoes a wire or snapshot value escapes it",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound11.test.ts",
+            "name": "T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real r11-1: a hostile value OBJECT is described, never stringified",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound a nested duplicate object is refused by the type guard (typed), not silently parsed",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound an array with duplicate elements is refused the same way",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 24/1010 failed check(s)"
           }
         ],
-        "wallMs": 279411
+        "wallMs": 161906
       },
       "spot": {
         "failed": [
@@ -980,14 +1284,14 @@
             "error": "Error: round 0 was accepted"
           }
         ],
-        "wallMs": 17970
+        "wallMs": 822
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 279501
+      "wallMs": 161927
     },
     {
       "id": "M94",
@@ -1009,16 +1313,41 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 1,
+        "failedTests": 6,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=903 refuse=1097 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mechanisedArtifacts.test.ts",
+            "name": "escalation.qnt — invBinding: the recorded claims agree with the HOST binding (r8-2) refuses a request that disagrees with the binding (case, pubkey, round)",
+            "message": "AssertionError: expected 'NO THROW' to match /not the pubkey the request authentica…/"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check (a) challengerPubkey must be the pubkey the request authenticated as",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r9-6) — the binding is a TRUST ANCHOR a host can fill from the wire an echoed binding reproduces the r8-2 harm — registered, visible, pinned",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 4/990 failed check(s)"
           }
         ],
-        "wallMs": 270574
+        "wallMs": 163048
       },
       "spot": {
         "failed": [
@@ -1027,14 +1356,14 @@
             "error": "Error: an unverified challengerPubkey minted an escalation"
           }
         ],
-        "wallMs": 16035
+        "wallMs": 862
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 270615
+      "wallMs": 163061
     },
     {
       "id": "M95",
@@ -1056,51 +1385,141 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 8,
+        "failedTests": 26,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=621 refuse=1379 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49 D2) a tampered snapshot is a typed refusal, never a raw TypeError a null row in the ledger is skipped, not dereferenced",
+            "message": "TypeError: Cannot read properties of undefined (reading '0')"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the machine event built from the wire is field-for-field the reducer's carries every witness field, and takes only the host-known fields from the CASE",
             "message": "AssertionError: expected { type: 'escalate', …(8) } to deeply equal { type: 'escalate', …(8) }"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the strict path ACCEPTS a transported round bond a request with a round bond escalates a requireRoundBond case and is logged",
             "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the strict path ACCEPTS a transported round bond the SAME transported request without the witness is refused by the strict case",
             "message": "AssertionError: expected [Function] to throw error matching /requires a per-round bond witness/ but got 'escalation bond proof hash does not m…'"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/findingR46.test.ts",
+            "name": "a signed concession must never be minted as an escalation (r9-3, corpus-found) still mints the escalation for a NON-concession request (no regression)",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/mechanisedArtifacts.test.ts",
+            "name": "escalation.qnt — invBinding: the recorded claims agree with the HOST binding (r8-2) accepts the bound request and derives roundIndex from the CASE",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T2 (r9-2 attacked) — the hash, the txid, and the witness the txid is NOT the bond identity: one transaction may fund two bonds",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T2 (r9-2 attacked) — the hash, the txid, and the witness a derivable witness preemptor locks the PAYER out of the challenge, not just the attribution",
+            "message": "AssertionError: expected 1 to be 3 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T3 (r9-3 attacked) — is the claim bound at the SIGNATURE domain? r10-3: that guard is a FIELD check — the SAME signed event re-labelled escalates",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T3 (r9-3 attacked) — is the claim bound at the SIGNATURE domain? r10-3 closes r9-6: the binding is DERIVED from the signature, not echoed from the body",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader the machine never produces a skew — the counters agree at every step",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader r10-4: finalize accepted a skewed ladder and minted an EARLIER round's verdict",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader r10-4: the skew cannot be laundered through concede → finalize either",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader r10-4: escalate and open_ladder_round refuse a skew before spending a seat",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check (a) challengerPubkey must be the pubkey the request authenticated as",
             "message": "AssertionError: expected 1 to be 2 // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check the wire `now` is the HOST clock: the request cannot steer it, and NaN is refused",
             "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check over-strictness: the strict case still escalates end-to-end through the wire",
             "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check over-strictness: a request built for the round the case IS resolving is accepted",
             "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T3 (r8-6) — resolve_round re-checks that the history is ONE record per resolved round every legal resolve still passes (over-strictness control)",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r9-3) — a CONCESSION is not an ESCALATION a signed concession cannot be minted into an escalate event",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r9-6) — the binding is a TRUST ANCHOR a host can fill from the wire an echoed binding reproduces the r8-2 harm — registered, visible, pinned",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r9-6) — the binding is a TRUST ANCHOR a host can fill from the wire bond OWNERSHIP is still the host verifier's (r40-3 is not preempted)",
+            "message": "AssertionError: expected 1 to be 3 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r9-6) — the binding is a TRUST ANCHOR a host can fill from the wire the case state carries NO case identity, so the binding is the only case check",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r8-2) — the unambiguous parts of the bond ledger one hash bound to two owners is refused; the reverse is attributable",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound9.test.ts",
+            "name": "T4 (r8-6 attacked) — the history/ladder rule at every lag lag 0 is the only legal lag: exactly the resolved rounds are on the history",
             "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
           }
         ],
-        "wallMs": 388204
+        "wallMs": 262465
       },
       "spot": {
         "failed": [
@@ -1109,14 +1528,14 @@
             "error": "Error: challengerIdx 1 is not the bond owner (2)"
           }
         ],
-        "wallMs": 1338
+        "wallMs": 848
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 388422
+      "wallMs": 262513
     },
     {
       "id": "M96",
@@ -1138,21 +1557,31 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 2,
+        "failedTests": 4,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=901 refuse=1099 dis…' to contain 'disagreements=0'"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound10.test.ts",
+            "name": "T2 (r9-2 attacked) — the hash, the txid, and the witness a witness cannot be re-bound to a second challenge (one hash, one owner)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check an ambiguous bond ledger (one hash, two owners) is refused rather than resolved",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound9.test.ts",
+            "name": "T2 (r8-2) — the unambiguous parts of the bond ledger one hash bound to two owners is refused; the reverse is attributable",
             "message": "AssertionError: expected [Function] to throw an error"
           }
         ],
-        "wallMs": 414220
+        "wallMs": 318150
       },
       "spot": {
         "failed": [
@@ -1161,14 +1590,14 @@
             "error": "Error: an ambiguous bond ledger was resolved to the first owner"
           }
         ],
-        "wallMs": 1328
+        "wallMs": 830
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 414274
+      "wallMs": 318205
     },
     {
       "id": "M97",
@@ -1178,44 +1607,53 @@
       "machine": null,
       "captured": true,
       "capturedBy": [
-        "tests",
-        "spot"
+        "tests"
       ],
       "detectors": {
         "tests": true,
-        "spot": true,
+        "spot": false,
         "model": false
       },
       "tests": {
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 1,
+        "failedTests": 4,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=899 refuse=1101 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/mechanisedArtifacts.test.ts",
+            "name": "escalation.qnt — invBinding: the recorded claims agree with the HOST binding (r8-2) refuses a request that disagrees with the binding (case, pubkey, round)",
+            "message": "AssertionError: expected 'NO THROW' to match /signed to escalate past round/"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check (b) a stale request cannot open a round its signer never authorised",
-            "message": "AssertionError: expected [Function] to throw an error"
+            "message": "AssertionError: expected [Function] to throw error matching /signed to escalate past round 1 but t…/ but got 'the round counters disagree: ladderRo…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 8/994 failed check(s)"
           }
         ],
-        "wallMs": 410254
+        "wallMs": 316940
       },
       "spot": {
-        "failed": [
-          {
-            "id": "S44",
-            "error": "Error: a stale request opened a later rung"
-          }
-        ],
-        "wallMs": 1466
+        "failed": [],
+        "wallMs": 937
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 410299
+      "wallMs": 317006
     },
     {
       "id": "M98",
@@ -1237,31 +1675,61 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 4,
+        "failedTests": 10,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/escalationRequestWire.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=898 refuse=1102 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/escalationRequestWire.test.ts",
             "name": "(H-6) the machine event built from the wire is field-for-field the reducer's carries every witness field, and takes only the host-known fields from the CASE",
             "message": "AssertionError: expected { type: 'escalate', …(8) } to deeply equal { type: 'escalate', …(8) }"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader the machine never produces a skew — the counters agree at every step",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader r10-4: finalize accepted a skewed ladder and minted an EARLIER round's verdict",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader r10-4: the skew cannot be laundered through concede → finalize either",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T4 (r9-4 attacked) — the counters on EVERY reader r10-4: escalate and open_ladder_round refuse a skew before spending a seat",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check the wire `now` is the HOST clock: the request cannot steer it, and NaN is refused",
             "message": "AssertionError: expected 9999999999 to be 3200 // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check over-strictness: a request built for the round the case IS resolving is accepted",
             "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound8.test.ts",
             "name": "T3 (r8-6) — resolve_round re-checks that the history is ONE record per resolved round every legal resolve still passes (over-strictness control)",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T4 (r8-6 attacked) — the history/ladder rule at every lag lag 0 is the only legal lag: exactly the resolved rounds are on the history",
             "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
           }
         ],
-        "wallMs": 406939
+        "wallMs": 317073
       },
       "spot": {
         "failed": [
@@ -1270,14 +1738,14 @@
             "error": "Error: the request steered `now`"
           }
         ],
-        "wallMs": 1792
+        "wallMs": 856
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 406957
+      "wallMs": 317101
     },
     {
       "id": "M99",
@@ -1303,17 +1771,17 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=943 refuse=1057 dis…' to contain 'disagreements=0'"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-2/__tests__/reviewRound8.test.ts",
             "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check the wire `now` is the HOST clock: the request cannot steer it, and NaN is refused",
             "message": "AssertionError: expected [Function] to throw an error"
           }
         ],
-        "wallMs": 392506
+        "wallMs": 503855
       },
       "spot": {
         "failed": [
@@ -1322,14 +1790,14 @@
             "error": "Error: a bad host clock (NaN) was accepted or replaced by the wire clock"
           }
         ],
-        "wallMs": 16578
+        "wallMs": 2399
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 392545
+      "wallMs": 503920
     },
     {
       "id": "M100",
@@ -1351,51 +1819,37 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 4,
+        "failedTests": 2,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
-            "name": "C11 (M82) — the id that is hashed is the id that was validated a padded id is trimmed ONCE, in build, and every later step sees the trimmed id",
-            "message": "AssertionError: expected '  court:market-r47-closure:1\\t' to be 'court:market-r47-closure:1' // Object.is equality"
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/r30MultiProcessCeremony.test.ts",
+            "name": "multi-process ceremony (round 30) fails closed with SIGN_MISSING_REVEAL when a process dies mid-signing",
+            "message": "AssertionError: expected [ …(4) ] to deeply equal []"
           },
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r30MultiProcessCeremony.test.ts",
-            "name": "multi-process ceremony (round 30) completes a real 3-process DKG + signing round with one group key",
-            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
-          },
-          {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r33ByzantineRelay.test.ts",
-            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
-            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
-          },
-          {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-3/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-5) — validate what you return: no getter double-fetch a shifting getter cannot be validated as A and returned as B",
             "message": "AssertionError: expected 2 to be 1 // Object.is equality"
           }
         ],
-        "wallMs": 369483
+        "wallMs": 460420
       },
       "spot": {
         "failed": [
-          {
-            "id": "S33",
-            "error": "Error: accepted id \" court:1 \" came back as \" court:1 \" — the codec rewrote a value it validated"
-          },
           {
             "id": "S46",
             "error": "Error: caseId was read 2 times — a getter can return a different value per read"
           }
         ],
-        "wallMs": 2455
+        "wallMs": 2288
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 369523
+      "wallMs": 460460
     },
     {
       "id": "M101",
@@ -1417,16 +1871,46 @@
         "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
         "timedOut": false,
         "hitCap": false,
-        "failedTests": 1,
+        "failedTests": 7,
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/reviewRound8.test.ts",
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=1002 refuse=998 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) replaying relay: duplicates are idempotent and never yield a second signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound8.test.ts",
             "name": "T1 (r8-3) — a signed flag is not a truthiness test a non-boolean concession is refused instead of coerced to false",
             "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound a nested duplicate object is refused by the type guard (typed), not silently parsed",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/reviewRound9.test.ts",
+            "name": "T3 (r8-4 attacked) — the depth-1 scope, and why it is sound an array with duplicate elements is refused the same way",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-1/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 20/1002 failed check(s)"
           }
         ],
-        "wallMs": 378461
+        "wallMs": 454190
       },
       "spot": {
         "failed": [
@@ -1435,14 +1919,140 @@
             "error": "Error: concession \"true\" was coerced"
           }
         ],
-        "wallMs": 2105
+        "wallMs": 2690
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 378491
+      "wallMs": 454244
+    },
+    {
+      "id": "M102",
+      "cls": "caseid-injectivity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the r9-1 whitespace guard is removed: a host that generates ids never sends padding, so every padded id is accepted — and any consumer that folds (or compares trimmed, as r8-1's binding did) collapses `\"court:X\"`, `\"court:X \"` and `\"court:X\\u{3000}\"` onto one digest",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 16,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49) the differential harness agrees over the fast corpus run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements",
+            "message": "AssertionError: expected 'cases=2000 accept=976 refuse=1024 dis…' to contain 'disagreements=0'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49 D1) \"leading or trailing whitespace\" is the ECMAScript set, pinned every ECMAScript whitespace character at either edge is refused",
+            "message": "Error: expected a refusal, got acceptance"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/differentialWire.test.ts",
+            "name": "(r49 D3/D4) the two encoding corners the differential forced D4: leading U+FEFF is \"not canonical\", trailing U+FEFF is \"whitespace\"",
+            "message": "Error: expected a refusal, got acceptance"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C11 (M82) — the id is validated EXACTLY, never folded surrounding whitespace of any kind is refused, not trimmed away",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C11 (M82) — the id is validated EXACTLY, never folded two ids that differ only by the whitespace a fold would remove do not collide",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with a foldable id is refused (r9-1 applies in hash too)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends the whole ES-trim class is refused, at the front and at the back",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends the refusal is TOTAL: no id differing only by a refused character can verify",
+            "message": "AssertionError: U+0009 TAB: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T1 (r9-1 attacked) — every whitespace code point, both ends the refusal SHAPE: typed, self-describing, and it discloses nothing secret",
+            "message": "Error: expected a refusal, got none"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound10.test.ts",
+            "name": "T5 (r9-5 attacked) — is the byte-differential pin actually strong? the 2 000-id sweep is kept as a smoke test, not as the injectivity proof",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded a trailing/leading whitespace id is refused instead of silently folded",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded the binding compares EXACTLY, so a request cannot ride a case id across the whitespace class",
+            "message": "AssertionError: expected [Function] to throw error matching /binding caseId must not have leading …/ but got 'escalation request names case \"court:…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-1) — the case id is validated, never folded the byte bound is exact at 256 bytes for every UTF-8 width",
+            "message": "AssertionError: expected [Function] to throw error matching /whitespace/ but got 'escalation request caseId exceeds 256…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/reviewRound9.test.ts",
+            "name": "T1 (r9-5) — the r8 injectivity pin measured sha256, not the encoding the differential pin: dangerous pairs differ in the PREIMAGE BYTES or are refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-Qp9zxR/work-0/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation-request transport (v0.14.0 wire) fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement",
+            "message": "AssertionError: escalationTransport campaign: 10/996 failed check(s)"
+          }
+        ],
+        "wallMs": 460165
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S33",
+            "error": "Error: an id with surrounding whitespace (\" court:1\") was accepted or folded"
+          },
+          {
+            "id": "S48",
+            "error": "Error: a hand-built request with a foldable id was hashed without the r9-1 refusal"
+          }
+        ],
+        "wallMs": 2559
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 460253
     }
   ]
 }

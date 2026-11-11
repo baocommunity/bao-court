@@ -148,7 +148,7 @@ export const MUTANTS = [
     id: 'M08',
     cls: 'quorum-dropped',
     file: 'confirmationMachineHandlers.ts',
-    find: '  if (state.confirmations.length < state.confirmQuorum) {\n    throw new CourtConfirmationTransitionError(\n      `confirm quorum not met: ${state.confirmations.length}/${state.confirmQuorum}`,\n    );\n  }',
+    find: '  if (state.confirmations.length < state.confirmQuorum) {\n    throw new CourtConfirmationTransitionError(\n      `confirm quorum not met: ${quoteCounter(state.confirmations.length)}/${quoteCounter(state.confirmQuorum)}`,\n    );\n  }',
     replace: '',
     intent: 'close_confirmations proceeds with fewer confirmations than the quorum (silent under-quorum case)',
     machine: 'confirmation',
@@ -246,7 +246,7 @@ export const MUTANTS = [
     id: 'M18',
     cls: 'duplicate-idx',
     file: 'confirmationMachineHandlers.ts',
-    find: '  const existing = state.confirmations.find((c) => c.idx === event.idx);\n  if (existing) {\n    if (existing.confirmHash === event.confirmHash && existing.eventId === event.eventId) {\n      return freezeState(state);\n    }\n    throw new CourtConfirmationTransitionError(\n      `participant ${event.idx} published a conflicting confirmation`,\n    );\n  }',
+    find: '  const existing = state.confirmations.find((c) => c.idx === event.idx);\n  if (existing) {\n    if (existing.confirmHash === event.confirmHash && existing.eventId === event.eventId) {\n      return freezeState(state);\n    }\n    throw new CourtConfirmationTransitionError(\n      `participant ${quoteCounter(event.idx)} published a conflicting confirmation`,\n    );\n  }',
     replace: '  const existing = state.confirmations.find((c) => c.idx === event.idx);\n  if (existing && existing.confirmHash === event.confirmHash && existing.eventId === event.eventId) {\n    return freezeState(state);\n  }',
     intent: 'a juror can publish two different confirmations (one seat, two endorsements)',
     machine: 'confirmation',
@@ -449,7 +449,7 @@ export const MUTANTS = [
     id: 'M39',
     cls: 'phase-guard-loosened',
     file: 'courtConfirmationMachine.ts',
-    find: '  if (TERMINAL_PHASES.has(state.phase)) {\n    throw new CourtConfirmationTransitionError(`cannot process ${event.type} after ${state.phase}`);\n  }',
+    find: '  if (TERMINAL_PHASES.has(state.phase)) {\n    throw new CourtConfirmationTransitionError(`cannot process ${quoteWireUnknown(event.type)} after ${quoteWireUnknown(state.phase)}`);\n  }',
     replace: '',
     intent: 'the reducer-wide terminal guard is gone: unguarded handlers (record_fee) mutate a settled case',
     machine: 'confirmation',
@@ -468,7 +468,7 @@ export const MUTANTS = [
     id: 'M41',
     cls: 'phase-guard-loosened',
     file: 'confirmationMachineHandlers.ts',
-    find: '  if (TERMINAL_PHASES.has(state.phase)) {\n    throw new CourtConfirmationTransitionError(`cannot abort confirmation from ${state.phase}`);\n  }',
+    find: '  if (TERMINAL_PHASES.has(state.phase)) {\n    throw new CourtConfirmationTransitionError(`cannot abort confirmation from ${quoteWireUnknown(state.phase)}`);\n  }',
     replace: '',
     intent: 'abort from a terminal phase overwrites a settled verdict with an aborted failure',
     machine: 'confirmation',
@@ -603,7 +603,7 @@ export const MUTANTS = [
     id: 'M54',
     cls: 'round-bond-consumption',
     file: 'confirmationMachineHandlers.ts',
-    find: '      const consumed = log.find((r) => r.roundBondProofHash === roundBondProofHash);\n      if (consumed) {\n        throw new CourtConfirmationTransitionError(\n          `escalation round bond proof hash was already consumed by round ${consumed.round}`,\n        );\n      }',
+    find: '      const consumed = log.find((r) => r.roundBondProofHash === roundBondProofHash);\n      if (consumed) {\n        throw new CourtConfirmationTransitionError(\n          `escalation round bond proof hash was already consumed by round ${quoteCounter(consumed.round)}`,\n        );\n      }',
     replace: '',
     intent: 'one paid bond funds every rung: the round-bond consumption set is no longer consulted, so ΔC_{r+1} = 0 again (r30-1 reopened)',
     machine: 'confirmation',
@@ -612,7 +612,7 @@ export const MUTANTS = [
     id: 'M55',
     cls: 'round-bond-consumption',
     file: 'confirmationMachineHandlers.ts',
-    find: '      const membershipBond = state.challenges.find((c) => c.bondProofHash === roundBondProofHash);\n      if (membershipBond) {\n        throw new CourtConfirmationTransitionError(\n          `escalation round bond proof hash is participant ${membershipBond.idx}\'s accepted challenge `\n          + \'(membership) bond: a per-round bond must be a fresh bond, not a relabelled membership bond\',\n        );\n      }',
+    find: '      const membershipBond = state.challenges.find((c) => c.bondProofHash === roundBondProofHash);\n      if (membershipBond) {\n        throw new CourtConfirmationTransitionError(\n          `escalation round bond proof hash is participant ${quoteCounter(membershipBond.idx)}\'s accepted challenge `\n          + \'(membership) bond: a per-round bond must be a fresh bond, not a relabelled membership bond\',\n        );\n      }',
     replace: '',
     intent: 'a membership bond (some juror\'s accepted challenge bond) can be relabelled as the per-round payment — escalation is free again',
     machine: 'confirmation',
@@ -650,7 +650,7 @@ export const MUTANTS = [
     id: 'M59',
     cls: 'escalation-witness-binding',
     file: 'confirmationMachineHandlers.ts',
-    find: '  if (event.roundIndex !== expectedRound) {\n    throw new CourtConfirmationTransitionError(\n      `escalation roundIndex ${String(event.roundIndex)} does not open the next ladder round ${expectedRound}`,\n    );\n  }',
+    find: '  if (event.roundIndex !== expectedRound) {\n    throw new CourtConfirmationTransitionError(\n      `escalation roundIndex ${quoteWireUnknown(event.roundIndex)} does not open the next ladder round ${quoteCounter(expectedRound)}`,\n    );\n  }',
     replace: '',
     intent: 'a witness minted for another round (or no round at all) opens the next rung — the roundIndex binding is gone',
     machine: 'confirmation',
@@ -725,42 +725,17 @@ export const MUTANTS = [
   },
 
   // ── ladder bound decided by the sign (r33-6) ─────────────────────────────
-  {
-    id: 'M67',
-    cls: 'ladder-bound-sign',
-    file: 'ladderEconomics.ts',
-    find: '  if (boundary <= 1) return 0;',
-    replace: '  if (boundary <= 1) return 1;',
-    intent: 'the pre-R33 clamp is back: "no depth is safe" reports 1, so a host reading derivedCap blesses the one profitable round',
-    machine: null,
-  },
-  {
-    id: 'M68',
-    cls: 'ladder-bound-sign',
-    file: 'ladderEconomics.ts',
-    find: '    ok: maxLadderRounds < flipRound,',
-    replace: '    ok: maxLadderRounds <= derivedCap,',
-    intent: 'the gate compares with derivedCap instead of the sign of E[π]: at an EXACT integer boundary a cap at the break-even/flip round is approved',
-    machine: null,
-  },
-  {
-    id: 'M69',
-    cls: 'ladder-bound-sign',
-    file: 'ladderEconomics.ts',
-    find: '  return Math.min(MAX_LADDER_ROUNDS, Math.floor(boundary));',
-    replace: '  return Math.min(MAX_LADDER_ROUNDS, Math.ceil(boundary));',
-    intent: 'the SAFE cap rounds up to the first unsafe round (floor → ceil) — the cap legalises the profitable rung',
-    machine: null,
-  },
-  {
-    id: 'M70',
-    cls: 'ladder-bound-sign',
-    file: 'ladderEconomics.ts',
-    find: '  return Math.max(1, Math.ceil(boundary));',
-    replace: '  return Math.max(1, Math.floor(boundary));',
-    intent: 'the flip round is floored, so the monitoring alert fires on the last SAFE round and the gate refuses a legal cap',
-    machine: null,
-  },
+  //
+  // M67–M70 lived here. R52 (#125, `v0.15.0`) REPLACED the real-valued
+  // `floor(ln(ρ/(ρ+β))/ln a_f)` evaluation — and `ladderSignBoundary`'s role as
+  // the gate's input — with an exact-integer scan (`capFromExact`) over a
+  // predicate mechanised in Lean, so the expressions those four mutants edited
+  // no longer exist in any form. They are RETIRED (moved to `RETIRED_MUTANTS`
+  // below) rather than re-anchored: inventing four new expressions and keeping
+  // the old ids would report a capture for a mutant whose class description no
+  // longer describes it. The v0.13 evidence they produced is unchanged and
+  // lives in `docs/MUTATION_TESTING_V013.md` / `pass1-v013.json`. A future ladder
+  // campaign adds NEW ids against the exact predicate.
 
   // ── penalty aging (r30-4b) ───────────────────────────────────────────────
   {
@@ -859,7 +834,7 @@ export const MUTANTS = [
     id: 'M79',
     cls: 'caseid-injectivity',
     file: 'courtEscalationRequest.ts',
-    find: '  if (trimmed.includes(\'\\u0000\')) {\n    throw new CourtConfirmationTransitionError(\'escalation request caseId must not contain U+0000\');\n  }',
+    find: '  if (value.includes(\'\\u0000\')) {\n    throw new CourtConfirmationTransitionError(`${quoteWireValue(label)} must not contain U+0000`);\n  }',
     replace: '',
     intent: 'a NUL inside `caseId` blurs a preimage field boundary again — the codec depends on the field COUNT to stay sound instead of on the bytes',
     machine: null,
@@ -868,7 +843,7 @@ export const MUTANTS = [
     id: 'M80',
     cls: 'caseid-injectivity',
     file: 'courtEscalationRequest.ts',
-    find: '  if (textEncoder.encode(trimmed).length > MAX_ESCALATION_CASE_ID_BYTES) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request caseId exceeds ${MAX_ESCALATION_CASE_ID_BYTES} bytes`,\n    );\n  }',
+    find: '  if (textEncoder.encode(value).length > MAX_ESCALATION_CASE_ID_BYTES) {\n    throw new CourtConfirmationTransitionError(\n      `${quoteWireValue(label)} exceeds ${MAX_ESCALATION_CASE_ID_BYTES} bytes`,\n    );\n  }',
     replace: '',
     intent: 'the 256-byte cap on a routing key is gone: a megabyte caseId is hashed and written to the host log',
     machine: null,
@@ -877,7 +852,7 @@ export const MUTANTS = [
     id: 'M81',
     cls: 'caseid-injectivity',
     file: 'courtEscalationRequest.ts',
-    find: '  if (!isCanonicalUtf8Text(trimmed)) {\n    throw new CourtConfirmationTransitionError(\n      \'escalation request caseId must be canonical UTF-8 (no unpaired surrogates)\',\n    );\n  }',
+    find: '  if (!isCanonicalUtf8Text(value)) {\n    throw new CourtConfirmationTransitionError(\n      `${quoteWireValue(label)} must be canonical UTF-8 (no unpaired surrogates)`,\n    );\n  }',
     replace: '',
     intent: 'THE r8-1 BUG AS A MUTANT: the well-formedness guard is skipped, so `TextEncoder` maps an unpaired surrogate to U+FFFD and two different case ids share one digest',
     machine: null,
@@ -886,18 +861,19 @@ export const MUTANTS = [
     id: 'M82',
     cls: 'caseid-injectivity',
     file: 'courtEscalationRequest.ts',
-    find: '  const trimmed = value.trim();',
-    replace: '  const trimmed = value;',
-    intent: 'the id is validated untrimmed but hashed trimmed: `"court:1"` and `" court:1"` are two wire strings with ONE digest (H-6 one field over)',
+    find: '  return value;\n}\n\n/**\n * Validate and normalise a request.',
+    replace: '  return value.trim();\n}\n\n/**\n * Validate and normalise a request.',
+    intent: 'the r9-1 REGRESSION: the codec trims and returns the folded id, so `"court:1"`, `"court:1 "` and `"court:1\\u{3000}"` are ONE id with ONE digest and `build` returns an id the caller never supplied',
+    note: 'SURVIVED on v0.14.1 (the fold was live: r8-1 trimmed, nothing refused surrounding whitespace) and is EQUIVALENT from v0.15.0 on: r9-1 refuses every id where `value !== value.trim()`, so the added `trim()` is dead code — no accepted id can reach it with whitespace to remove. Kept because ids are permanent and because the pair M82/M102 is the honest split of the class: M102 removes the guard, M82 re-adds the fold the guard makes unreachable.',
     machine: null,
   },
   {
     id: 'M83',
     cls: 'caseid-injectivity',
     file: 'courtEscalationRequest.ts',
-    find: '  return trimmed;',
-    replace: '  return trimmed.normalize(\'NFC\');',
-    intent: 'the codec NORMALISES instead of refusing: an NFD id and its NFC twin are different wire strings with one digest',
+    find: '  return value;\n}\n\n/**\n * Validate and normalise a request.',
+    replace: '  return value.normalize(\'NFC\');\n}\n\n/**\n * Validate and normalise a request.',
+    intent: 'the codec NORMALISES instead of refusing: an NFD id and its NFC twin are different wire strings with one digest (the clause r9-1 states but does not enforce structurally)',
     machine: null,
   },
 
@@ -935,7 +911,7 @@ export const MUTANTS = [
     id: 'M87',
     cls: 'wire-unknown-field-acceptance',
     file: 'courtEscalationRequest.ts',
-    find: '  for (const key of Object.keys(value)) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);\n    }\n  }',
+    find: '  for (const key of Object.keys(value)) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(\n        `escalation request has an unknown field ${quoteWireValue(key)}`,\n      );\n    }\n  }',
     replace: '',
     intent: 'unknown fields are IGNORED rather than refused — `additionalProperties: false` is gone, and a peer silently drops the field that mattered (H-6)',
     machine: null,
@@ -944,7 +920,7 @@ export const MUTANTS = [
     id: 'M88',
     cls: 'wire-unknown-field-acceptance',
     file: 'courtEscalationRequest.ts',
-    find: '  for (const key of Object.keys(value)) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);\n    }\n  }',
+    find: '  for (const key of Object.keys(value)) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(\n        `escalation request has an unknown field ${quoteWireValue(key)}`,\n      );\n    }\n  }',
     replace: '  for (const key of typeof raw === \'string\' ? Object.keys(value) : []) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);\n    }\n  }',
     intent: 'the field whitelist runs on the JSON STRING path only: a host that hands over its own parsed body accepts any extra field',
     machine: null,
@@ -995,7 +971,7 @@ export const MUTANTS = [
     id: 'M93',
     cls: 'wire-round-bounds',
     file: 'courtEscalationRequest.ts',
-    find: '  if (\n    !Number.isSafeInteger(roundRaw)\n    || (roundRaw as number) < 1\n    || (roundRaw as number) > MAX_ESCALATION_REQUEST_ROUND\n  ) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request round must be an integer in 1..${MAX_ESCALATION_REQUEST_ROUND} `\n      + `(got ${String(roundRaw)})`,\n    );\n  }',
+    find: '  if (\n    !Number.isSafeInteger(roundRaw)\n    || (roundRaw as number) < 1\n    || (roundRaw as number) > MAX_ESCALATION_REQUEST_ROUND\n  ) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request round must be an integer in 1..${MAX_ESCALATION_REQUEST_ROUND} `\n      + `(got ${quoteWireUnknown(roundRaw)})`,\n    );\n  }',
     replace: '',
     intent: 'a fractional / out-of-ladder `round` is accepted by the codec, so the ceiling lives only in whatever the host happens to check',
     machine: null,
@@ -1037,7 +1013,7 @@ export const MUTANTS = [
     id: 'M97',
     cls: 'escalation-round-binding',
     file: 'courtEscalationRequest.ts',
-    find: '  if (normalised.round !== state.ladderRound) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request was signed to escalate past round ${normalised.round} but the case is `\n      + `resolving round ${state.ladderRound} — a stale request must not open a rung its signer never `\n      + \'authorised\',\n    );\n  }',
+    find: '  if (normalised.round !== state.ladderRound) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request was signed to escalate past round ${quoteCounter(normalised.round)} but the case is `\n      + `resolving round ${quoteWireUnknown(state.ladderRound)} — a stale request must not open a rung its signer never `\n      + \'authorised\',\n    );\n  }',
     replace: '',
     intent: 'the signed round is ignored: a request signed for round 1 opens round 3, replayable on every round of a legacy case',
     machine: null,
@@ -1068,8 +1044,8 @@ export const MUTANTS = [
     id: 'M100',
     cls: 'build-snapshot-purity',
     file: 'courtEscalationRequest.ts',
-    find: '  const caseId = normalizeCaseId(caseIdRaw);',
-    replace: '  normalizeCaseId(caseIdRaw);\n  const caseId = input.caseId;',
+    find: '  const caseId = normalizeCaseId(caseIdRaw, \'escalation request caseId\');',
+    replace: '  normalizeCaseId(caseIdRaw, \'escalation request caseId\');\n  const caseId = input.caseId;',
     intent: 'THE r8-5 BUG AS A MUTANT: `caseId` is validated from the SNAPSHOT and returned from a SECOND live read, so a getter validates A and the request carries B',
     machine: null,
   },
@@ -1082,6 +1058,63 @@ export const MUTANTS = [
     find: '  if (concessionRaw !== undefined && typeof concessionRaw !== \'boolean\') {\n    throw new CourtConfirmationTransitionError(\n      \'escalation request concession must be a boolean (or absent, meaning false)\',\n    );\n  }',
     replace: '',
     intent: 'a signed flag becomes a truthiness test: `"true"`, `1`, `{}` and `null` all parse as `false`, flipping a refusal into a dropped appeal',
+    machine: null,
+  },
+  {
+    id: 'M102',
+    cls: 'caseid-injectivity',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (value !== value.trim()) {\n    throw new CourtConfirmationTransitionError(\n      `${quoteWireValue(label)} must not have leading or trailing whitespace: folding it would give two different `\n      + \'ids one request hash (r9-1)\',\n    );\n  }',
+    replace: '',
+    intent: 'the r9-1 whitespace guard is removed: a host that generates ids never sends padding, so every padded id is accepted — and any consumer that folds (or compares trimmed, as r8-1\'s binding did) collapses `"court:X"`, `"court:X "` and `"court:X\\u{3000}"` onto one digest',
+    machine: null,
+  },
+
+];
+
+/** Mutants whose target code no longer exists. Kept for the record, never run. */
+/**
+ * RETIRED — NOT in `MUTANTS`, never applied, never scored.
+ *
+ * Contract: retirement is not renumbering. An id that leaves `MUTANTS` keeps its
+ * text here (so the campaign that produced it stays readable against the code it
+ * ran on) and is never reused for a different edit.
+ */
+export const RETIRED_MUTANTS = [
+  {
+    id: 'M67',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '  if (boundary <= 1) return 0;',
+    replace: '  if (boundary <= 1) return 1;',
+    intent: 'the pre-R33 clamp is back: "no depth is safe" reports 1, so a host reading derivedCap blesses the one profitable round',
+    machine: null,
+  },
+  {
+    id: 'M68',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '    ok: maxLadderRounds < flipRound,',
+    replace: '    ok: maxLadderRounds <= derivedCap,',
+    intent: 'the gate compares with derivedCap instead of the sign of E[π]: at an EXACT integer boundary a cap at the break-even/flip round is approved',
+    machine: null,
+  },
+  {
+    id: 'M69',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '  return Math.min(MAX_LADDER_ROUNDS, Math.floor(boundary));',
+    replace: '  return Math.min(MAX_LADDER_ROUNDS, Math.ceil(boundary));',
+    intent: 'the SAFE cap rounds up to the first unsafe round (floor → ceil) — the cap legalises the profitable rung',
+    machine: null,
+  },
+  {
+    id: 'M70',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '  return Math.max(1, Math.ceil(boundary));',
+    replace: '  return Math.max(1, Math.floor(boundary));',
+    intent: 'the flip round is floored, so the monitoring alert fires on the last SAFE round and the gate refuses a legal cap',
     machine: null,
   },
 ];

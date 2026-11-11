@@ -128,23 +128,34 @@ frozen.
   case identity). Suite **1,831 passed / 1 skipped (82 files + 1 skipped)**.
 
 ### Tests (mutation campaign 3 — the v0.14.0 escalation TRANSPORT)
-- **23 new mutants in 12 new classes** aimed only at `courtEscalationRequest.ts`
+- **24 new mutants in 12 new classes** aimed only at `courtEscalationRequest.ts`
   — the first campaign to touch the file (campaigns 1–2 predate it). The classes
-  are the codec's published claims: `caseId` injectivity (r8-1), the digest over
-  the *normalised* request with the `'-'` witness sentinel, unknown-field and
+  are the codec's published claims: `caseId` injectivity (r8-1/r9-1), the digest
+  over the re-validated request with the `'-'` witness sentinel, unknown-field and
   duplicate-key refusal (r8-4), no field coercion, the round ceiling, the
   identity/index/case binding (r8-2), bond ambiguity (r38-1), the signed round,
   host-clock authority, snapshot purity (r8-5) and the signed flag (r8-3).
-  Catalogue **101 mutants / 40 classes**.
-- Catalogue housekeeping: ids may now be three digits (ordered numerically) —
-  the catalogue passed M99 — and **M65's `find` was re-anchored**, because the
-  r40-1 barrier moved the statement it named and `check-catalogue` had begun
-  exiting 1 for the whole catalogue.
+  Catalogue **98 mutants / 40 classes**.
+- **Measured twice, because the base moved.** As found on v0.14.1 (`bc28ff3`, the
+  code the question was about): **78.3 %** (18/23 corrected), detector A only —
+  the probe detector scored **0/23 because it never imported the file**. On the
+  shipping head (v0.15.1) after closure: **23/24 corrected (95.8 %)**, with one
+  **equivalent** mutant (M82, whose fold r9-1 made unreachable). Review round 9
+  independently found and fixed two of the five survivors while this campaign ran.
+- Closures **C11–C15** (`__tests__/mutationClosuresV014.test.ts`), each verified
+  RED against its mutant applied to a sandbox copy.
 - Detector C grew by **16 probes (S33–S48)**, one per transport claim, including
   an independent recomputation of the digest and a wire-injectivity corpus.
-- Closures **C11–C15** (`__tests__/mutationClosuresV014.test.ts`): each was
-  verified RED against the corresponding mutant applied to a sandbox copy, so
-  the battery now sees what only the campaign probe saw.
+- Catalogue housekeeping (`scripts/mutation/**`): three-digit ids ordered
+  numerically (the catalogue passed M99); **M65 re-anchored** (the r40-1 barrier
+  moved its `find`, so `check-catalogue` had begun exiting 1 for the whole
+  catalogue); **M67–M70 retired** to `RETIRED_MUTANTS` (r52 replaced the code they
+  edited); **runner SIGTERM fix** — `cleanup()` is a single-flight promise and
+  children are spawned detached, so the process group dies before the sandbox is
+  removed (a leaked sandbox survived a SIGTERM before this).
+- Two recorded captures in the evidence are load flakes in multi-process
+  harnesses (`r30MultiProcessCeremony`, `r33ByzantineRelay`); both are disclosed
+  with their reproduction in the campaign document rather than doctored away.
 - Method, mutant table, per-detector scores and the honest reading of the
   transport's pinning: `docs/MUTATION_TESTING_V014.md`.
 
