@@ -54,12 +54,17 @@ round-16 review fixes; all contract stages PASS — see
 *(Round 30, 2026-11-11: **1,606 passed / 1 skipped (70 files)** — the transport
 and multi-process ceremony campaign (seal games, MLS surface, inbox/outbox load,
 4 ceremony scenarios) plus the economic re-verify's modules.)*
-*(Round 31 / R31, 2026-11-11 — **current head**, `c456fb4`: **1,656 passed / 1
+*(Round 31 / R31, 2026-11-11 — `c456fb4`: **1,656 passed / 1
 skipped (74 files)**, `npm run typecheck` clean, `node scripts/cross-check.mjs`
 exit 0 over **285 claims / 516 evidence refs** (95.1 % covered, gap register 18
 entries: 14 open, 4 closed). The +50 over round 30 are the per-round bond
 consumption matrix, the derived ladder economics, penalty ageing, and the
 churn/quorum cap arithmetic.)*
+*(Review round 4 / R33, 2026-11-11 — **current head**: **1,677 passed / 1 skipped
+(75 files)**, `npm run typecheck` clean. The +21 are `reviewRound4.test.ts`: the
+foreign-membership-bond and emptied-ledger closures, the escalate-time log
+barrier, the sign-based ladder pre-flight, the idle-gap penalty pins and the
+overflow guard. See `docs/REVIEW_ROUND_4.md`.)*
 
 ---
 
@@ -544,7 +549,8 @@ results:
    one kernel and one clock, with an honest, always-available relay and no
    packet loss, partitions, clock skew or custody (paper §11.7; PO-14 open).
    It closes the *coordination* question, not the *distribution* one.
-9. **Evaluation numbers age.** Suite counts (1,656 at `c456fb4`), coverage
+9. **Evaluation numbers age.** Suite counts (1,656 at `c456fb4`, 1,677 at the
+   review-round-4 head), coverage
    (95.1%), the model-check totals and the bench medians are per-round records
    tied to a commit. The cross-check script's exit-0 gate is the mechanism that
    makes stale numbers *visible*; docs/REPRODUCIBILITY.md specifies how a

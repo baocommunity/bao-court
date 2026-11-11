@@ -48,7 +48,7 @@ Conventions for evidence refs:
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,656 passed / 1 skipped (74 files)** — re-verified 2026-11-11 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Full suite | `npm test` | **1,677 passed / 1 skipped (75 files)** — re-verified 2026-11-11 at the review-round-4 head (r33 closures + pins); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `c456fb4`) |
 | Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `c456fb4`) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | witness-aware regeneration (2,525 s): **15 instances, 3,869,232 states, 213,521,172 event applications, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws, 3,000 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |

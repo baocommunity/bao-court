@@ -63,6 +63,39 @@ to −0.543 % (a 77 % loss of deterrence) at the protocol cap.
 
 ## [Unreleased]
 
+### Fixed — review-round-4 closures on the v0.13 surface (r33, `docs/REVIEW_ROUND_4.md`)
+- **A per-round bond may not be ANY accepted membership bond** (r33-1,
+  EXPLOITABLE): `onEscalate` compared the witness only with the *escalating*
+  challenger's own challenge bond, so in a case with two bonded challengers juror
+  B could quote juror A's accepted bond as its own per-round payment — burning a
+  witness A still needed and billing B nothing. The reducer now refuses any
+  `state.challenges[*].bondProofHash`, and `assertValidEscalationLog` applies the
+  same rule at `finalize`.
+- **The escalation log must be COMPLETE** (r33-5, EXPLOITABLE): the barrier
+  deliberately accepted a short log (pre-0.12 snapshots), but the log is also the
+  per-round bond CONSUMPTION ledger, so a restored snapshot with an entry (or
+  every entry) deleted un-consumed the bond it paid with and the next `escalate`
+  opened a free rung — then `finalize` bricked the case. One record per opened
+  round is now required whenever the case has records, and unconditionally under
+  `requireRoundBond: true`; `onEscalate` re-runs the barrier before a rung opens
+  instead of waiting for `finalize`.
+- **`deriveMaxLadderRounds` / `ladderCapWithinBound` no longer bless a profitable
+  round** (r33-6, EXPLOITABLE): the clamp `max(1, floor(boundary))` reported a cap
+  of 1 when the boundary was ≤ 1 (a jury at ≤ ½ accuracy, where round 1 is
+  already profitable), and the pre-flight compared `cap <= derivedCap`, returning
+  `ok: true` for exactly the round the economics forbids. The derivation now
+  returns **0 = no safe depth**, and `ok` is decided by the sign
+  (`maxLadderRounds < flipRound`), so `ok ⇒ E[π(cap)] < 0` holds for every input.
+- **`pairedJurorWeight` refuses an overflowing bonus** (r33-9): finite `w0` ×
+  finite `bonusMultiplier` could exceed `Number.MAX_VALUE` and return `Infinity`,
+  which would dominate any lottery/selection comparison downstream; it now throws
+  like every other non-finite input. The participating-clock provenance
+  requirement (r33-8) and the `minWeightFactor: 1` penalty-erasure hazard
+  (r33-8b) are documented in the module.
+- **Consumer impact:** none removed; `deriveMaxLadderRounds` can now return `0`
+  ("no safe depth"). Tests: `__tests__/reviewRound4.test.ts` (21 probes, 6 of
+  them red on the unfixed base).
+
 ### Documentation — paper + docs refresh with the round-29…31 artifacts (round 32)
 - **Paper** (`docs/FROST_COURT_ORACLE_PAPER.md`): witness-aware model checking in the
   abstract and §11.2 (15 instances / 3,869,232 states / 213,521,172 applications /

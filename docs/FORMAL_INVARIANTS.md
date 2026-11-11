@@ -775,10 +775,23 @@ escalate {
   `host` record must never carry one. `assertValidEscalationLog` re-derives all
   three rules at `finalize`, so a restored snapshot cannot re-open the option,
   and the log's `MAX_LADDER_ROUNDS` bound bounds the consumption set. Guards:
-  `confirmationMachineHandlers.ts:522-590` (`onEscalate`),
-  `confirmationMachineCore.ts:347-396` (`assertValidEscalationLog`). Tests:
+  `confirmationMachineHandlers.ts:566-620` (`onEscalate`),
+  `confirmationMachineCore.ts:377-430` (`assertValidEscalationLog`). Tests:
   `perRoundBond.test.ts` (the whole compatibility matrix, `docs/PER_ROUND_BOND.md`);
   `modelCheckingCore.ts` P2 (consumption invariant on every reachable state).
+  **Round-4 refinements (R33):** the reducer and the barrier also refuse a
+  round bond that is ANY accepted challenge bond of the case (r33-1 — a second
+  bonded challenger could otherwise bill its own rung to the first one's
+  membership bond), and the barrier requires the ledger to be COMPLETE — one
+  record per opened round whenever the case has records, and unconditionally
+  under `requireRoundBond` (r33-5), because a deleted record un-consumes the bond
+  it paid with. `onEscalate` re-runs the barrier before a rung opens, so a
+  tampered snapshot is refused before a 3× panel is seated rather than at
+  `finalize`. The witness is a UNIQUENESS test, not a payment test: the host
+  binds it to an escrow and to the challenger (r33-2/2b/3, registered).
+  Tests: `reviewRound4.test.ts` › 'refuses ANOTHER challenger's accepted
+  membership bond…', › 'a restored snapshot with EVERY record deleted cannot
+  reuse a consumed bond', › 'deleting only the LAST record is refused as well'.
 
 **Open (round 3):** `concede` carries no witness yet (SPEC §9.2 ESC-RIGHT-3
 asks for the challenger's own signed concession). A host may therefore still
@@ -1431,8 +1444,8 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-ESC-5 | bond bound to an accepted challenge; host behind frozen policy | confirmationMachineHandlers.ts:544-547,559-573 | escalationWitness.test.ts › bond must match; host is break-glass |
 | INV-ESC-6 | escalation witness log append-only (+ pre-0.12 normalisation) | confirmationMachineHandlers.ts:584-588; courtConfirmationMachine.ts:407-412 | escalationWitness.test.ts › witness recorded append-only; legacy snapshot normalises |
 | INV-ESC-7 | `ladder_pending` unreachable without a witness | confirmationMachineHandlers.ts:487-588 | escalationWitness.test.ts › ladder_pending is reachable ONLY through a witnessed escalation |
-| INV-ESC-8 | witness log tamper barrier at finalize (+ legacy short-log acceptance) | confirmationMachineCore.ts:313-413; confirmationMachineHandlers.ts:692 | reviewRound3.test.ts › forged escalation record refused at finalize |
-| INV-ESC-9 | per-round bond: distinct from the membership bond, consumed at most once, mandatory under `requireRoundBond` (R31) | confirmationMachineHandlers.ts:522-590; confirmationMachineCore.ts:347-396 | perRoundBond.test.ts › one bond cannot fund every round; › finalize refuses a restored record that reuses a per-round bond |
+| INV-ESC-8 | witness log tamper barrier at finalize + escalate; completeness (one record per opened round), strict cases never emptied | confirmationMachineCore.ts:315-430; confirmationMachineHandlers.ts:521,755 | reviewRound3.test.ts › forged escalation record refused at finalize; reviewRound4.test.ts › every-record / last-record deletion refused |
+| INV-ESC-9 | per-round bond: well-formed, never a membership bond (own OR another juror's), never consumed twice, mandatory under `requireRoundBond` (R31 + R33) | confirmationMachineHandlers.ts:566-620; confirmationMachineCore.ts:377-430 | perRoundBond.test.ts › one bond cannot fund every round; reviewRound4.test.ts › foreign membership bond refused (reducer + finalize) |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |
 | INV-CONF-32 | finality = last round | courtConfirmationMachine.ts:1145-1155 | multiRoundLadder.test.ts › finality = LAST resolved round… |
