@@ -9,7 +9,9 @@
  * ─── RUN-MODE SPLIT (keep npm test fast; keep the full sweep reproducible) ──
  *
  *   FULL exhaustive sweep (the publishable numbers — multi-million-state
- *   instances, several minutes of wall time):
+ *   instances, ~40 minutes of wall time since the v0.12.0 witness extension:
+ *   15 instances, 3.87M concrete states, 213.5M event applications, 60.0M of
+ *   which are illegal-witness probes):
  *
  *       npx tsx scripts/model-check.mjs           # full sweep, writes the fixture
  *       npx tsx scripts/model-check.mjs --fast    # skips vote n=4 (CI-friendly)
@@ -21,9 +23,11 @@
  *   REDUCED inline sweep (this module imported by
  *   `__tests__/modelChecking.test.ts`): vote n ≤ 3 and reduced-clock
  *   confirmation instances so `npm test` stays bounded (measured ≈ 9 minutes
- *   wall for the whole modelChecking file on the 16-core reference machine).
- *   NEVER move
- *   the n=4 / full-clock instances into the vitest suite — CI would die.
+ *   wall for the whole modelChecking file on the 16-core reference machine;
+ *   the inline confirmation instances now also carry the compact witness matrix,
+ *   which is ~20 % of their applications). NEVER move the n=4 / full-clock
+ *   instances — or the dedicated witness instances (62–309 s each) — into the
+ *   vitest suite; CI would die.
  *
  * ─── METHODOLOGY ────────────────────────────────────────────────────────────
  *
@@ -152,6 +156,21 @@
  *      the runtime budget — the machine re-validates every stored commitment
  *      against the curve on EVERY reduce), including nonce- and
  *      partial-equivocation paths to `aborted_peer`.
+ *   L8 ESCALATION WITNESS PROBES (v0.12.0). Every confirmation instance
+ *      dispatches a MATRIX of escalate-shaped events at every reachable state
+ *      (`illegalWitnessEvents`), separately from the transition graph: the
+ *      explorer asserts that none is ever ACCEPTED (an accepted illegal witness
+ *      would create a reachable escalation — a bypass) and counts the probes.
+ *      The matrix is derived from the state (round/roster/bond), so it tracks
+ *      the machine rather than a hardcoded fixture. Two dedicated instances
+ *      (`escalate-witness challengers=1,2`, `r=3 host-escalation`) explore the
+ *      legal witness ambiguity (several accepted bonds → several legal
+ *      witnesses) and the frozen break-glass policy (host escalation legal only
+ *      under `hostEscalation: true`). The compact matrix runs on every
+ *      confirmation instance; `deepWitness` adds the value-permutation rows.
+ *      Witness probing is the sweep's dominant new cost (+58 % applications);
+ *      the witness instances are FULL-sweep only (measured 62–309 s each —
+ *      adding them inline doubled the npm-test budget, see the run-mode split).
  *
  * ─── FINDINGS (see PR body for the full write-up) ──────────────────────────
  *
@@ -190,6 +209,21 @@
  *       peer blame, identical-psig re-submissions as self-loops. Lesson:
  *       when a variant instance's state space equals its base instance's,
  *       the variant is not exercising what it claims.
+ *   F8 (caught by the new witness assertion, fixed — same class as F7) The
+ *       witness fixtures were ALL-DIGIT hex (`hex('7')` = `'7777…'`), so the
+ *       "uppercase hex must be refused" probe produced a byte-identical LEGAL
+ *       witness and could never fire. The explorer's "illegal witness accepted"
+ *       assertion caught it on the first run of the new instance. Witness
+ *       fixtures now carry hex LETTERS (`'ab'.repeat(32)`, `'cd'.repeat(32)`).
+ *       Guarded generally: the assertion is REACHABLE (a degenerate probe fails
+ *       the run instead of passing silently), and the campaign's casing probe
+ *       uses a letters-only literal.
+ *   F9 (verified, no bug) The witness path is closed at the machine, not the
+ *       host API: over the full sweep 60,020,684 illegal-witness probes at
+ *       3.87M reachable states produce ZERO accepted escalations, the log never
+ *       exceeds `min(maxLadderRounds, MAX_LADDER_ROUNDS)` (max observed depth 2),
+ *       and every terminal phase refuses a PERFECT witness bound to its own
+ *       accepted bond (phase is checked before the witness).
  */
 
 /* eslint-disable no-console */
@@ -220,6 +254,7 @@ import {
   type CourtSigningMachineState,
 } from '../courtSigningMachine';
 import { HEX_32 } from '../courtCeremonyCore';
+import { MAX_LADDER_ROUNDS } from '../confirmationMachineCore';
 import { isValidSecp256k1Point } from '../crypto';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 
@@ -288,6 +323,17 @@ export interface ExploreStats {
   readonly parkingKinds: Record<string, number>;
   readonly tallyReachableStates: number;
   readonly determinismPathsReplayed: number;
+  /**
+   * Escalation-witness accounting (v0.12.0 `escalate` witness round). Every
+   * `illegalWitnessEvents(s)` application is counted as a probe; the explorer
+   * FAILS the instance outright if one is ever accepted, so a committed
+   * `illegalWitnessAccepted === 0` is the machine-checked form of "no illegal
+   * witness ever produces a reachable escalation".
+   */
+  readonly illegalWitnessProbes: number;
+  readonly illegalWitnessAccepted: number;
+  /** Deepest `escalationLog` observed at any reachable state (structural bound). */
+  readonly maxEscalationDepth: number;
   readonly wallMs: number;
 }
 
@@ -303,6 +349,19 @@ export interface MachineAdapter<S> {
   abstractKeyOf: (s: S) => string;
   /** ALL events to try: legal shape + illegal values, within bounds. */
   genEvents: (s: S) => { events: unknown[]; illegalCount: number };
+  /**
+   * ILLEGAL ESCALATION WITNESSES (v0.12.0): syntactically plausible `escalate`
+   * events that the machine must REFUSE at this state. They are dispatched
+   * separately from `genEvents` so the explorer can assert two things the
+   * typed-throw tally alone cannot: (a) that none of them is ever ACCEPTED
+   * (an accepted illegal witness would create a reachable escalation), and
+   * (b) how many witness probes each instance actually made.
+   */
+  illegalWitnessEvents?: (s: S) => unknown[];
+  /** Escalation-log depth of a state (structural-growth accounting). */
+  escalationDepth?: (s: S) => number;
+  /** Structural ceiling on {@link escalationDepth} over all reachable states. */
+  escalationBound?: number;
   isAbort: (e: unknown) => boolean;
   checkInvariants: (s: S) => void;
   reduce: (s: S, e: unknown) => S;
@@ -355,12 +414,23 @@ export function exploreMachine<S>(adapter: MachineAdapter<S>): ExploreStats {
   let typedThrows = 0;
   let rawThrows = 0;
   let illegalChecks = 0;
+  let illegalWitnessProbes = 0;
+  let illegalWitnessAccepted = 0;
+  let maxEscalationDepth = 0;
   const rawThrowSamples: string[] = [];
 
   while (queue.length > 0) {
     const idx = queue.pop()!;
     const s = states[idx];
     adapter.checkInvariants(s);
+    const depth = adapter.escalationDepth?.(s) ?? 0;
+    if (depth > maxEscalationDepth) maxEscalationDepth = depth;
+    if (adapter.escalationBound !== undefined) {
+      check(
+        depth <= adapter.escalationBound,
+        `${adapter.name}: escalation depth ${depth} exceeds the structural bound ${adapter.escalationBound}`,
+      );
+    }
     const { events, illegalCount } = adapter.genEvents(s);
     illegalChecks += illegalCount;
     const sourceKey = adapter.keyOf(s);
@@ -403,6 +473,38 @@ export function exploreMachine<S>(adapter: MachineAdapter<S>): ExploreStats {
         targetIdx = pushState(next, targetKey, idx, event);
       }
       if (!adapter.isAbort(event)) adj[idx].push(targetIdx);
+    }
+
+    // ── escalation witness probes: every illegal witness must be REFUSED ──
+    if (adapter.illegalWitnessEvents !== undefined) {
+      for (const witness of adapter.illegalWitnessEvents(s)) {
+        applications += 1;
+        illegalChecks += 1;
+        illegalWitnessProbes += 1;
+        let accepted = true;
+        try {
+          adapter.reduce(s, witness);
+        } catch (err) {
+          accepted = false;
+          if (!(err instanceof adapter.ErrorClass)) {
+            rawThrows += 1;
+            if (rawThrowSamples.length < 8) {
+              const e = err as Error | undefined;
+              rawThrowSamples.push(`${e?.name ?? typeof err}: ${e?.message ?? String(err)}`);
+            }
+          } else {
+            typedThrows += 1;
+          }
+        }
+        if (accepted) {
+          illegalWitnessAccepted += 1;
+          check(
+            false,
+            `${adapter.name}: ILLEGAL ESCALATION WITNESS ACCEPTED in ${adapter.phaseOf(s)} `
+            + `(state ${adapter.keyOf(s)}) — witness ${JSON.stringify(witness)}`,
+          );
+        }
+      }
     }
 
     check(
@@ -536,6 +638,9 @@ export function exploreMachine<S>(adapter: MachineAdapter<S>): ExploreStats {
     parkingKinds,
     tallyReachableStates,
     determinismPathsReplayed,
+    illegalWitnessProbes,
+    illegalWitnessAccepted,
+    maxEscalationDepth,
     wallMs: Date.now() - startedAt,
   };
   // Fail the instance if any non-typed error escaped anywhere.
@@ -560,6 +665,8 @@ export function printStats(stats: ExploreStats): void {
     + `  selfLoops=${stats.selfLoops}  applications=${stats.applications}\n`
     + `  terminal: ${terminals || 'none'}  parking: ${parking}\n`
     + `  typedThrows=${stats.typedThrows}  rawThrows=${stats.rawThrows}  illegalEventChecks=${stats.illegalChecks}\n`
+    + `  witnessProbes=${stats.illegalWitnessProbes} (accepted=${stats.illegalWitnessAccepted})`
+    + `  maxEscalationDepth=${stats.maxEscalationDepth}\n`
     + `  non-aborted-terminal-reachable (incl. terminals)=${stats.tallyReachableStates}/${stats.states}`
     + `  determinismPaths=${stats.determinismPathsReplayed}  wallMs=${stats.wallMs}`,
   );
@@ -825,6 +932,17 @@ export const BOND_TX = hex('b');
 export const BOND_PROOF = hex('c');
 export const FEE_EVENT = hex('f');
 export const MANUAL_REASON = 'manual-audit';
+/**
+ * Challenger x-only pubkey carried by the model-check escalation witnesses.
+ * NOTE: contains hex LETTERS (`a`/`b`) on purpose — a digits-only fixture makes
+ * the "uppercase hex" mutation a no-op and silently vacuous (finding F8, the
+ * same class as F7: a variant that cannot fire proves nothing).
+ */
+export const WITNESS_PUBKEY = 'ab'.repeat(32);
+/** Signed escalation-request hash carried by the model-check witnesses (letters on purpose). */
+export const WITNESS_REQUEST = 'cd'.repeat(32);
+/** A well-formed bond hash the case NEVER accepted (foreign-bond probe). */
+export const FOREIGN_BOND = hex('9');
 
 export interface ConfirmInstanceSpec {
   readonly name: string;
@@ -839,6 +957,22 @@ export interface ConfirmInstanceSpec {
   readonly massVoteEventIdVariants?: readonly ('own' | 'shared')[];
   /** Explore an explicit (identity) roundRoster on open_ladder_round (L4). */
   readonly roundRosterVariant?: boolean;
+  /**
+   * Frozen break-glass policy for the case (INV-ESC-5). When `true` the HOST
+   * escalation is a LEGAL transition too, so the instance explores both
+   * authorities in `escalationLog`; when `false` (default) every host
+   * escalation is an illegal-witness probe.
+   */
+  readonly hostEscalation?: boolean;
+  /**
+   * Probe the FULL illegal-witness matrix at every state (an escalate-shaped
+   * event must be refused everywhere except the one legal shape). The compact
+   * core matrix is always probed; `deepWitness` adds the value-permutation rows
+   * (uppercase hex, over-long hex, empty strings, foreign bond, regressed
+   * clock). Dedicated witness instances enable it — the exhaustive ledger
+   * instances pay the extra rejection cost on every state for the same guards.
+   */
+  readonly deepWitness?: boolean;
   /**
    * Reduced clock universe for INLINE (vitest) instances only:
    * [confirmDeadline, challengeDeadline] + top of the clock. Defaults to the
@@ -876,6 +1010,7 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       confirmDeadline: dA,
       challengeDeadline: dB,
       maxLadderRounds: spec.maxLadderRounds,
+      ...(spec.hostEscalation === true ? { hostEscalation: true } : {}),
     });
 
   const checkInvariants = (s: CourtConfirmationMachineState): void => {
@@ -889,6 +1024,10 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
     check(s.confirmQuorum === spec.quorum, 'P2: quorum immutable');
     check(s.confirmDeadline === dA && s.challengeDeadline === dB, 'P2: confirmation deadlines immutable');
     check(s.maxLadderRounds === spec.maxLadderRounds, 'P2: ladder cap immutable');
+    check(
+      s.hostEscalation === (spec.hostEscalation === true),
+      'P2: hostEscalation policy is frozen at creation (INV-ESC-5)',
+    );
     check(s.ladderRound >= 0 && s.ladderRound <= s.maxLadderRounds, 'P2: ladderRound within cap');
 
     // Confirmation ledger: re-derive each canonical binding.
@@ -1002,6 +1141,25 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       }
     }
     check(s.escalationLog.length <= s.ladderRound, 'P2: escalationLog bounded by rounds opened');
+    // The structural bound is the case's own ladder cap AND the protocol-wide
+    // ladder ceiling; a log longer than either is unreachable by construction.
+    check(
+      s.escalationLog.length <= s.maxLadderRounds,
+      'P2: escalationLog bounded by maxLadderRounds (structural INV-ESC-6 bound)',
+    );
+    check(
+      s.escalationLog.length <= MAX_LADDER_ROUNDS,
+      'P2: escalationLog bounded by the protocol ladder ceiling',
+    );
+    // Authorities in the log must be exactly the ones the frozen policy admits:
+    // a host record in a case without `hostEscalation` would mean the
+    // break-glass path leaked through the reducer (INV-ESC-5).
+    if (!spec.hostEscalation) {
+      check(
+        s.escalationLog.every((record) => record.authority === 'challenger'),
+        'P2: a case without the hostEscalation policy can never log a host escalation',
+      );
+    }
     check(
       s.phase !== 'ladder_pending'
       || s.ladderRound === 0
@@ -1076,6 +1234,151 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
         check(eqArray(s.verdict.supportingEventIds, winningIds), 'P2: final verdict backed by winning round votes');
       }
     }
+  };
+
+  /**
+   * ── ESCALATION WITNESS SHAPES (v0.12.0, SPEC §9.2 / INV-ESC-2…6) ────────
+   *
+   * The legal shape is the ONE witnessed challenger escalate the machine can
+   * accept, derived from the state exactly as `challengerEscalationEvent` does
+   * (round = ladderRound+1, bond bound to an accepted challenge). Every other
+   * shape below is ILLEGAL AT EVERY STATE and is dispatched by the explorer as
+   * a witness probe: if any of them were accepted anywhere, the instance fails
+   * with "ILLEGAL ESCALATION WITNESS ACCEPTED".
+   *
+   * Legal shapes enumerated per state:
+   *   - one challenger escalation per ACCEPTED bond (multi-challenger cases
+   *     admit several legally distinct witnesses → several log records);
+   *   - the host escalation when the case was created with `hostEscalation`.
+   *
+   * Illegal rows (all states, including terminals — a terminal must refuse a
+   * PERFECT witness too, which is the first row):
+   *   the perfect challenger witness; an unwitnessed escalate; an unknown
+   *   authority; a break-glass host carrying a challenger request; a host
+   *   escalation under the default policy; a replayed round; a skipped round;
+   *   a fractional / string / negative round; challenger index 0, above the
+   *   roster, null, or a string; a null / uppercase / over-long / non-hex
+   *   pubkey; an empty / over-long request hash; a foreign / null / non-hex
+   *   bond hash. `deepWitness` adds the remaining value permutations.
+   */
+  const witnessShapes = (
+    s: CourtConfirmationMachineState,
+  ): { legal: unknown[]; illegal: unknown[] } => {
+    const latest = s.latestTimestamp;
+    const nextRound = s.ladderRound + 1;
+    const logLength = s.escalationLog?.length ?? 0;
+    const canEscalate = s.phase === 'round_resolved'
+      && s.ladderRound < s.maxLadderRounds
+      && logLength < MAX_LADDER_ROUNDS;
+    const legal: unknown[] = [];
+    if (canEscalate) {
+      for (const bond of s.challenges) {
+        legal.push({
+          type: 'escalate',
+          authority: 'challenger',
+          challengerIdx: bond.idx,
+          challengerPubkey: WITNESS_PUBKEY,
+          requestHash: WITNESS_REQUEST,
+          bondProofHash: bond.bondProofHash,
+          roundIndex: nextRound,
+          now: latest,
+        });
+      }
+      if (spec.hostEscalation === true) {
+        legal.push({
+          type: 'escalate',
+          authority: 'host',
+          challengerIdx: null,
+          challengerPubkey: null,
+          requestHash: null,
+          bondProofHash: null,
+          roundIndex: nextRound,
+          now: latest,
+        });
+      }
+    }
+    // The perfect challenger witness — legal ONLY where `legal` produced it.
+    const perfect = {
+      type: 'escalate',
+      authority: 'challenger',
+      challengerIdx: s.challenges[0]?.idx ?? roster[0],
+      challengerPubkey: WITNESS_PUBKEY,
+      requestHash: WITNESS_REQUEST,
+      bondProofHash: s.challenges[0]?.bondProofHash ?? BOND_PROOF,
+      roundIndex: nextRound,
+      now: latest,
+    };
+    const withRosterIdx = (idx: unknown) => ({ ...perfect, challengerIdx: idx });
+    const hostShape = {
+      type: 'escalate',
+      authority: 'host',
+      challengerIdx: null,
+      challengerPubkey: null,
+      requestHash: null,
+      bondProofHash: null,
+      roundIndex: nextRound,
+      now: latest,
+    };
+    const illegal: unknown[] = [];
+    if (!canEscalate) illegal.push(perfect);
+    illegal.push(
+      { type: 'escalate', now: latest },
+      { ...perfect, authority: 'warden' },
+      // break-glass MUST NOT carry a challenger request, with or without policy
+      {
+        ...hostShape,
+        challengerIdx: s.challenges[0]?.idx ?? roster[0],
+        challengerPubkey: WITNESS_PUBKEY,
+        requestHash: WITNESS_REQUEST,
+        bondProofHash: s.challenges[0]?.bondProofHash ?? BOND_PROOF,
+      },
+      { ...perfect, roundIndex: s.ladderRound },
+      { ...perfect, roundIndex: s.ladderRound + 2 },
+      { ...perfect, roundIndex: nextRound + 0.5 },
+      { ...perfect, roundIndex: String(nextRound) },
+      { ...perfect, roundIndex: -1 },
+      withRosterIdx(0),
+      withRosterIdx(spec.n + 1),
+      withRosterIdx(null),
+      withRosterIdx(String(s.challenges[0]?.idx ?? roster[0])),
+      { ...perfect, challengerPubkey: null },
+      { ...perfect, challengerPubkey: WITNESS_PUBKEY.toUpperCase() },
+      { ...perfect, challengerPubkey: `${WITNESS_PUBKEY}00` },
+      { ...perfect, challengerPubkey: BAD_HEX },
+      { ...perfect, requestHash: '' },
+      { ...perfect, requestHash: `${WITNESS_REQUEST}00` },
+      { ...perfect, bondProofHash: FOREIGN_BOND },
+      { ...perfect, bondProofHash: null },
+      { ...perfect, bondProofHash: BAD_HEX },
+    );
+    // Under the default policy the plain break-glass host escalation is ALSO
+    // illegal; under `hostEscalation: true` it is legal exactly where the
+    // challenger witness is.
+    if (!(spec.hostEscalation === true && canEscalate)) illegal.push(hostShape);
+    // The deep matrix adds the remaining value-permutation rows (dedicated
+    // witness instances).
+    if (spec.deepWitness === true) {
+      illegal.push(
+        { ...perfect, challengerPubkey: '' },
+        { ...perfect, challengerPubkey: 'x'.repeat(64) },
+        { ...perfect, requestHash: WITNESS_REQUEST.toUpperCase() },
+        { ...perfect, requestHash: 'nothex' },
+        { ...perfect, bondProofHash: WITNESS_REQUEST }, // well-formed, unauthorised bond
+        { ...perfect, challengerIdx: spec.n + 2 },
+        { ...perfect, roundIndex: s.ladderRound + MAX_LADDER_ROUNDS + 1 },
+        { ...hostShape, roundIndex: s.ladderRound },
+        { ...hostShape, bondProofHash: FOREIGN_BOND },
+        { ...perfect, authority: 'challenger', challengerPubkey: null, requestHash: null, bondProofHash: null },
+      );
+      // A clock that regresses below the ledger is refused by the reducer's
+      // monotonic-clock barrier before the witness is even inspected.
+      if (latest >= 1) illegal.push({ ...perfect, now: latest - 1 });
+      if (spec.hostEscalation === true && canEscalate) {
+        // A host witness must carry NO challenger request: attach one.
+        illegal.push({ ...hostShape, requestHash: WITNESS_REQUEST });
+      }
+    }
+    return { legal, illegal };
   };
 
   const genEvents = (s: CourtConfirmationMachineState): { events: unknown[]; illegalCount: number } => {
@@ -1154,22 +1457,11 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       if (s.phase === 'fee_settlement') events.push({ type: 'finalize', now });
       else events.push({ type: 'finalize', now: latest });
     }
-    events.push(
-      // The legal escalation carries a full authority witness bound to the
-      // challenge bond the machine accepted (SPEC §9.2): a challenger from the
-      // case roster, a request hash, and the NEXT round index.
-      {
-        type: 'escalate',
-        authority: 'challenger',
-        challengerIdx: s.challenges[0]?.idx ?? roster[0],
-        challengerPubkey: BOND_PROOF,
-        requestHash: BOND_TX,
-        bondProofHash: s.challenges[0]?.bondProofHash ?? BOND_PROOF,
-        roundIndex: s.ladderRound + 1,
-        now: latest,
-      },
-      { type: 'concede', now: latest },
-    );
+    // ── escalation witnesses (v0.12.0 `escalate` witness round) ────────────
+    // The LEGAL shapes are dispatched here; every other shape lives in
+    // `illegalWitnessEvents` (probed at every state, asserted refused).
+    events.push(...witnessShapes(s).legal);
+    events.push({ type: 'concede', now: latest });
     if (s.phase === 'fee_settlement') {
       for (const now of stepCandidates(latest, tMax)) {
         events.push({ type: 'record_fee', feeEventId: FEE_EVENT, now });
@@ -1195,13 +1487,9 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       { type: 'open_ladder_round', round: wrongRound + 1, voteDeadline: 0, now: latest },
       { type: 'open_ladder_round', round: wrongRound + 1, voteDeadline: latest, now: latest }, // deadline not in the future
       { type: 'open_ladder_round', round: wrongRound + 1, voteDeadline: 21, roundRoster: [1, 2], now: latest }, // panel < 3
-      // escalation witness refusals (SPEC §9.2 / INV-ESC-2..5): an unwitnessed
-      // escalate, a host escalation under the default policy, a witness for the
-      // wrong round, and a bond hash the case never accepted.
-      { type: 'escalate', now: latest },
-      { type: 'escalate', authority: 'host', challengerIdx: null, challengerPubkey: null, requestHash: null, bondProofHash: null, roundIndex: s.ladderRound + 1, now: latest },
-      { type: 'escalate', authority: 'challenger', challengerIdx: roster[0], challengerPubkey: BOND_PROOF, requestHash: BOND_TX, bondProofHash: BOND_PROOF, roundIndex: wrongRound, now: latest },
-      { type: 'escalate', authority: 'challenger', challengerIdx: roster[0], challengerPubkey: BOND_PROOF, requestHash: BOND_TX, bondProofHash: BAD_HEX, roundIndex: s.ladderRound + 1, now: latest },
+      // NOTE: the escalation-witness refusals are NOT in this array — they are
+      // dispatched by `illegalWitnessEvents` so the explorer can assert that
+      // none of them is ever ACCEPTED (a typed throw alone does not say which).
       { type: 'flag_clawback', idx: roster[0], reason: '', now: latest },
       { type: 'flag_clawback', idx: 0, reason: MANUAL_REASON, now: latest },
       { type: 'record_fee', feeEventId: BAD_HEX, now: latest },
@@ -1231,7 +1519,12 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
       s.ladderRound,
       s.outcomeHistory.map((o) => `${o.round}${o.outcome[0]}`).join(','),
       s.clawbackFlags.map((f) => `${f.idx}.${f.reason[0]}.${f.round}`).join(','),
-      s.escalationLog.map((e) => `${e.round}${e.authority[0]}`).join(','),
+      // The witness that opened each round is part of the state's identity:
+      // two escalations of the same round by DIFFERENT challengers/bonds (or
+      // different authorities) are distinct states, not one abstract state.
+      s.escalationLog
+        .map((e) => `${e.round}${e.authority[0]}${e.challengerIdx ?? '-'}${(e.bondProofHash ?? '-').slice(0, 6)}${(e.requestHash ?? '-').slice(0, 6)}`)
+        .join(','),
       s.fees.length,
       s.verdict ? `V:${s.verdict.outcome}.${s.verdict.verdictHash === '' ? 'pending' : s.verdict.verdictHash.slice(0, 8)}.${s.verdict.upheld ? 'u' : 'o'}` : '-',
       s.failure ? `F:${s.failure.phase}` : '-',
@@ -1276,6 +1569,9 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
     keyOf,
     abstractKeyOf,
     genEvents,
+    illegalWitnessEvents: (s) => witnessShapes(s).illegal,
+    escalationDepth: (s) => s.escalationLog?.length ?? 0,
+    escalationBound: spec.maxLadderRounds,
     isAbort: (e) => (e as { type?: string })?.type === 'abort',
     checkInvariants,
     reduce: (s, e) => reduceCourtConfirmationMachine(s, e as CourtConfirmationMachineEvent),
@@ -1683,6 +1979,35 @@ export const CONFIRM_INSTANCES_FULL: readonly ConfirmInstanceSpec[] = [
     maxLadderRounds: 1,
     challengers: [1],
     roundRosterVariant: true,
+    inlineClock: [6, 12, 14],
+  },
+  // ── ESCALATION WITNESS instances (v0.12.0 `escalate` witness round) ──────
+  //
+  // W1 — every illegal witness form at every state, with TWO accepted bonds so
+  // the legal witness is genuinely ambiguous (challenger 1 or challenger 2) and
+  // the log distinguishes which bond authorised which round.
+  {
+    name: 'confirm n=3 q=1 r=2 escalate-witness challengers=1,2 [clock 6/12/14]',
+    n: 3,
+    quorum: 1,
+    maxLadderRounds: 2,
+    challengers: [1, 2],
+    deepWitness: true,
+    inlineClock: [6, 12, 14],
+  },
+  // W2 — the break-glass policy is FROZEN ON: the host escalation becomes a
+  // legal transition, so `escalationLog` carries host records too and the
+  // "host under the default policy" refusal is exercised in the negative
+  // instance above (same machine, opposite policy flag). Three rounds so the
+  // log actually grows (depth 2).
+  {
+    name: 'confirm n=3 q=1 r=3 host-escalation [clock 6/12/14]',
+    n: 3,
+    quorum: 1,
+    maxLadderRounds: 3,
+    challengers: [1],
+    hostEscalation: true,
+    deepWitness: true,
     inlineClock: [6, 12, 14],
   },
   // NOTE: n=3 is the publishable exhaustive confirmation instance, explored

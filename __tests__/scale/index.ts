@@ -25,6 +25,9 @@ import { runMerkleCampaign } from './merkleCorpus';
 import { runValidatorCampaign } from './validatorCorpus';
 import { runSelectionCampaign } from './selectionCorpus';
 import { runEncodingCampaign } from './encodingCorpus';
+import { runWitnessCampaign } from './witnessCorpus';
+import { runEpochRotationCampaign } from './epochRotationCorpus';
+import { runFinalityCampaign } from './finalityCorpus';
 
 /** The campaign names, in artifact order. */
 export const CORPUS_NAMES = [
@@ -34,6 +37,9 @@ export const CORPUS_NAMES = [
   'validator',
   'selection',
   'encoding',
+  'witness',
+  'epochRotation',
+  'finality',
 ] as const;
 
 export type CorpusName = (typeof CORPUS_NAMES)[number];
@@ -89,6 +95,27 @@ export const CAMPAIGNS: Record<CorpusName, CampaignDefinition> = {
     what: 'canonical encodings: byte identity, re-encode, parser round-trip, injectivity',
     sizes: SIZES.encodings,
     run: (size, seed) => runEncodingCampaign({ size, seed }),
+  },
+  witness: {
+    name: 'witness',
+    units: 'witnesses',
+    what: 'escalation witnesses (v0.12.0): valid + every illegal form through the real reducer',
+    sizes: SIZES.witnessEvents,
+    run: (size, seed) => runWitnessCampaign({ size, seed }),
+  },
+  epochRotation: {
+    name: 'epochRotation',
+    units: 'batches',
+    what: 'batch attestations across cohort rotations: epoch/cohort pins, re-signing, cross-epoch replay',
+    sizes: SIZES.epochBatches,
+    run: (size, seed) => runEpochRotationCampaign({ size, seed }),
+  },
+  finality: {
+    name: 'finality',
+    units: 'chains',
+    what: 'verdict finality chains: challenge windows + escalations → verdict → batch finality shapes',
+    sizes: SIZES.finalityChains,
+    run: (size, seed) => runFinalityCampaign({ size, seed }),
   },
 };
 

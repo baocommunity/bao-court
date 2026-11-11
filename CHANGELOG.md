@@ -51,6 +51,11 @@ frozen.
 - **Deterministic simulation budget** replaces the 5 s wall-clock gate (`SIM_BUDGET_MS`, default 30 s) — load-insensitive, still catches real regressions.
 - **Provenance reconciled**: cross-check parses the PO register (PO-1…18, 283 claims / 512 refs / 95.1 %, 14 open); invariants 149 → **156**; suite **1,546**.
 
+### Tests — round-29 corpora + witness model checking (test-only, no API change)
+- **Model checking WITH witness events**: the explorer dispatches an illegal-escalation-witness matrix at every reachable state and fails the instance if any is accepted. Full sweep now **15 instances / 3,869,232 states / 213,521,172 applications**, of which **60,020,684 are witness probes** — `illegalWitnessAccepted = 0` everywhere, `escalationLog` depth ≤ `min(maxLadderRounds, MAX_LADDER_ROUNDS)` (max observed 2), and every terminal phase refuses a perfect witness. Two new instances: `escalate-witness challengers=1,2` (537,825 states) and `r=3 host-escalation` (182,265 states). Finding **F8** (same class as F7): the all-digit witness fixtures made the "uppercase hex" probe a no-op — the new assertion caught it; fixtures now carry hex letters.
+- **Three new scale campaigns** (fast subset in CI): `witness` (10,000 escalate-shaped events over a 27-row matrix through the real reducer — 740 accepted / 9,260 typed refusals / 0 raw errors, cross-case bond replays, duplicate rounds, hand-restored cap, oversized values), `epochRotation` (1,000 kind-39018 batches across 40 cohorts / 39 rotations — epoch + cohort pins, re-signing refusals, cross-epoch re-batching, membership proofs) and `finality` (5,000 verdict chains: challenge windows + witnessed escalations → verdict → batch finality shapes, terminal-witness refusals). Campaign total **1,187,000 units / 3,745,566 assertions / 0 failures in 10.1 min**.
+- **Not covered here (documented, §3.1 of `docs/benchmarks/SCALE_CAMPAIGN.md`)**: the derived economic cap `deriveCourtEconomicCap()` ships in `bao.markets` (`courtEconomicRatio.ts`, PR #2409), not in `@bao/court`; its boundary corpus is deferred there rather than mirrored here.
+
 ## [0.11.0] — 2026-11-11
 
 ### Added — external-review response + verification campaign

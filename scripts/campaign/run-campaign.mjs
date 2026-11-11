@@ -20,10 +20,12 @@
  *   --out <path>           artifact path (default: docs/benchmarks/campaign-<date>.json
  *                          for --full, docs/benchmarks/campaign-<date>-fast.json for --fast)
  *   --no-write             print only, do not touch the filesystem
- *   --only <a,b,c>         restrict to campaigns (confirmation,tally,merkle,validator,selection,encoding)
+ *   --only <a,b,c>         restrict to campaigns (confirmation,tally,merkle,validator,
+ *                          selection,encoding,witness,epochRotation,finality)
  *   --seed <n>             campaign seed (default 20261111)
  *   --events <n> / --sequences <n> / --tallies <n> / --batches <n> / --draws <n> /
- *   --encodings <n> / --chi-square <n>
+ *   --encodings <n> / --witnesses <n> / --rotations <n> / --chains <n> /
+ *   --chi-square <n>
  *                          per-campaign corpus-size override (the documented split)
  *   --merge                merge into an existing artifact at --out instead of
  *                          replacing it (split invocations, one committed file)
@@ -55,13 +57,17 @@ const OVERRIDE_FLAGS = {
   '--events': 'validator',
   '--draws': 'selection',
   '--encodings': 'encoding',
+  '--witnesses': 'witness',
+  '--rotations': 'epochRotation',
+  '--chains': 'finality',
 };
 
 function usage() {
   console.log(`usage: npx tsx scripts/campaign/run-campaign.mjs [--fast|--full] [--json]
                           [--out <path>] [--no-write] [--only a,b,c] [--seed <n>] [--merge]
                           [--sequences n] [--tallies n] [--batches n] [--events n]
-                          [--draws n] [--encodings n] [--chi-square n]`);
+                          [--draws n] [--encodings n] [--witnesses n] [--rotations n]
+                          [--chains n] [--chi-square n]`);
 }
 
 function parseArgs(argv) {

@@ -115,6 +115,16 @@ const CONFIRM_INSTANCES_INLINE: readonly ConfirmInstanceSpec[] = [
     inlineClock: [4, 8, 10],
   },
 ];
+// NOTE (v0.12.0 escalate witness): the DEDICATED witness instances
+// (`... escalate-witness challengers=1,2`, `... r=3 host-escalation`) are in
+// `CONFIRM_INSTANCES_FULL` only. They are state-heavy (182k–538k states,
+// 62–309 s each) for the same reason the ledger instances are: the ladder ×
+// escalation × witness-log product dominates, not the clock. MEASURED: adding
+// them inline cost 503 s on the reference machine, which would have doubled
+// this file's npm-test time — the documented run-mode split (§ header) is
+// exactly for this. The witness machinery is still exercised on EVERY inline
+// confirmation instance, because the adapter probes the illegal-witness matrix
+// at every reachable state (asserted below).
 
 describe('exhaustive model checking — courtVoteMachine (reduced inline instances)', () => {
   for (const spec of VOTE_INSTANCES_INLINE) {
@@ -140,6 +150,15 @@ describe('exhaustive model checking — courtConfirmationMachine (reduced inline
         printStats(stats);
         expect(stats.rawThrows).toBe(0);
         expect(stats.states).toBeGreaterThan(0);
+        // W1–W4 (v0.12.0 escalate witness): illegal witnesses were actually
+        // probed, none was ever accepted, and the escalation log never grew
+        // past the case's own ladder cap.
+        expect(stats.illegalWitnessProbes).toBeGreaterThan(0);
+        expect(stats.illegalWitnessAccepted).toBe(0);
+        expect(stats.maxEscalationDepth).toBeLessThanOrEqual(spec.maxLadderRounds);
+        // The ladder instances actually ESCALATE (a witness log that stays
+        // empty would make the witness invariant vacuous at this size).
+        if (spec.maxLadderRounds >= 2) expect(stats.maxEscalationDepth).toBeGreaterThanOrEqual(1);
       },
       600_000,
     );
@@ -199,9 +218,25 @@ describe('model checking — committed full-sweep fixture (__fixtures__/model-ch
       expect(instance, `fixture is missing instance ${name} — re-run scripts/model-check.mjs`).toBeDefined();
       expect(instance!.states).toBeGreaterThan(0);
       expect(instance!.rawThrows).toBe(0);
+      // v0.12.0 escalate witness: the committed fixture must record that NO
+      // illegal witness was ever accepted, and that the escalation log never
+      // grew past the instance's own ladder cap.
+      expect(instance!.illegalWitnessAccepted).toBe(0);
+      const confirmSpec = CONFIRM_INSTANCES_FULL.find((spec) => spec.name === instance!.name);
+      if (confirmSpec !== undefined) {
+        expect(
+          instance!.illegalWitnessProbes,
+          `${instance!.name}: a confirmation instance must probe the escalation-witness matrix`,
+        ).toBeGreaterThan(0);
+        expect(instance!.maxEscalationDepth).toBeLessThanOrEqual(confirmSpec.maxLadderRounds);
+      }
     }
     expect(fixture.totals.rawThrows).toBe(0);
     expect(fixture.totals.instances).toBe(fixture.instances.length);
+    // The witness probes are the round's headline number: a fixture whose
+    // confirmation instances probed nothing would be silently vacuous.
+    const witnessProbes = fixture.instances.reduce((sum, instance) => sum + instance.illegalWitnessProbes, 0);
+    expect(witnessProbes).toBeGreaterThan(1_000_000);
   });
 
   it('vacuity guard (round-16 review, finding A-2): instance state counts are pairwise distinct', () => {

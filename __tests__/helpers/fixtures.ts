@@ -103,6 +103,12 @@ export interface ModelCheckSummaryInstance {
   readonly parkingStates: number;
   readonly tallyReachableStates: number;
   readonly determinismPathsReplayed: number;
+  /** v0.12.0 escalate witness: illegal-witness probes dispatched at every state. */
+  readonly illegalWitnessProbes: number;
+  /** Illegal witnesses that were ACCEPTED (always 0 — a non-zero value fails the run). */
+  readonly illegalWitnessAccepted: number;
+  /** Deepest `escalationLog` observed at any reachable state (structural bound). */
+  readonly maxEscalationDepth: number;
   readonly wallMs: number;
 }
 

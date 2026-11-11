@@ -1,9 +1,9 @@
 {
   "tool": "scripts/model-check.mjs",
   "description": "Exhaustive finite-state-space model checking of the BAO Court phase machines (courtVoteMachine, courtConfirmationMachine, courtSigningMachine). Regenerate with: npx tsx scripts/model-check.mjs",
-  "generatedAt": "2026-11-11T02:54:56.897Z",
+  "generatedAt": "2026-11-11T05:11:11.759Z",
   "mode": "full",
-  "totalWallMs": 1196087,
+  "totalWallMs": 2525767,
   "propertiesChecked": [
     "P1 phase legality — phase ∈ the machine's declared phase set, at every reachable state",
     "P2 data invariants — ledger ⊆ roster with unique indices, reveals ⊆ commits, ballot closure, real SHA-256 commit-reveal / canonical confirmation-hash / signing-session-hash re-derivation, real secp256k1 nonce points, signer-set freeze == distinct commitment set (A-1), partials ⊆ finalized signer set (A-1), verdict⇔phase coherence, failure⇔expired/aborted, configuration immutability, deep-frozen states, monotonic clock on every edge, tally re-derivation at terminal phases",
@@ -13,16 +13,16 @@
     "typed-error discipline — every illegal event application throws the machine's OWN error class (CourtVoteTransitionError / CourtConfirmationTransitionError / CourtSigningTransitionError); any raw TypeError/RangeError fails the instance"
   ],
   "totals": {
-    "instances": 13,
-    "states": 3149142,
-    "abstractStates": 1100867,
-    "progressEdges": 11718124,
-    "selfLoops": 4733044,
-    "applications": 134838724,
-    "typedThrows": 118387556,
+    "instances": 15,
+    "states": 3869232,
+    "abstractStates": 1662503,
+    "progressEdges": 12796460,
+    "selfLoops": 5691580,
+    "applications": 213521172,
+    "typedThrows": 195033132,
     "rawThrows": 0,
-    "illegalEventChecks": 74349832,
-    "determinismPathsReplayed": 2600
+    "illegalEventChecks": 145907861,
+    "determinismPathsReplayed": 3000
   },
   "instances": [
     {
@@ -47,7 +47,10 @@
       },
       "tallyReachableStates": 164,
       "determinismPathsReplayed": 200,
-      "wallMs": 101
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 110
     },
     {
       "name": "vote n=2 k=2",
@@ -71,7 +74,10 @@
       },
       "tallyReachableStates": 1148,
       "determinismPathsReplayed": 200,
-      "wallMs": 637
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 694
     },
     {
       "name": "vote n=3 k=2",
@@ -95,7 +101,10 @@
       },
       "tallyReachableStates": 16628,
       "determinismPathsReplayed": 200,
-      "wallMs": 11203
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 13415
     },
     {
       "name": "vote n=4 k=2",
@@ -119,7 +128,10 @@
       },
       "tallyReachableStates": 470348,
       "determinismPathsReplayed": 200,
-      "wallMs": 497058
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 515728
     },
     {
       "name": "vote n=2 k=3",
@@ -143,7 +155,10 @@
       },
       "tallyReachableStates": 2348,
       "determinismPathsReplayed": 200,
-      "wallMs": 1557
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 1620
     },
     {
       "name": "confirm n=3 q=3 r=1 challengers=all [clock 6/12/14]",
@@ -151,10 +166,10 @@
       "abstractStates": 225852,
       "progressEdges": 672074,
       "selfLoops": 501186,
-      "applications": 15679902,
-      "typedThrows": 14506642,
+      "applications": 22196730,
+      "typedThrows": 21023470,
       "rawThrows": 0,
-      "illegalChecks": 10371334,
+      "illegalChecks": 17250208,
       "terminalStates": 234078,
       "terminalPhaseCounts": {
         "expired": 21744,
@@ -168,7 +183,10 @@
       },
       "tallyReachableStates": 127608,
       "determinismPathsReplayed": 200,
-      "wallMs": 120030
+      "illegalWitnessProbes": 8327058,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 287103
     },
     {
       "name": "confirm n=3 q=1 r=1 dup-event-ids [clock 6/12/14]",
@@ -176,10 +194,10 @@
       "abstractStates": 593409,
       "progressEdges": 1893188,
       "selfLoops": 1489458,
-      "applications": 45995466,
-      "typedThrows": 42612820,
+      "applications": 64190226,
+      "typedThrows": 60807580,
       "rawThrows": 0,
-      "illegalChecks": 28971184,
+      "illegalChecks": 48176764,
       "terminalStates": 668382,
       "terminalPhaseCounts": {
         "expired": 116307,
@@ -194,7 +212,10 @@
       },
       "tallyReachableStates": 316926,
       "determinismPathsReplayed": 200,
-      "wallMs": 378328
+      "illegalWitnessProbes": 23248860,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 872590
     },
     {
       "name": "confirm n=3 q=1 r=2 [clock 6/12/14]",
@@ -202,10 +223,10 @@
       "abstractStates": 82458,
       "progressEdges": 180398,
       "selfLoops": 150588,
-      "applications": 4715517,
-      "typedThrows": 4384531,
+      "applications": 6729987,
+      "typedThrows": 6399001,
       "rawThrows": 0,
-      "illegalChecks": 3202597,
+      "illegalChecks": 5325472,
       "terminalStates": 69009,
       "terminalPhaseCounts": {
         "expired": 6114,
@@ -219,7 +240,10 @@
       },
       "tallyReachableStates": 40476,
       "determinismPathsReplayed": 200,
-      "wallMs": 32635
+      "illegalWitnessProbes": 2570535,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 1,
+      "wallMs": 102832
     },
     {
       "name": "confirm n=3 q=1 r=1 roundRoster [clock 6/12/14]",
@@ -227,10 +251,10 @@
       "abstractStates": 37878,
       "progressEdges": 117113,
       "selfLoops": 84828,
-      "applications": 2676882,
-      "typedThrows": 2474941,
+      "applications": 3783072,
+      "typedThrows": 3581131,
       "rawThrows": 0,
-      "illegalChecks": 1760377,
+      "illegalChecks": 2928022,
       "terminalStates": 39669,
       "terminalPhaseCounts": {
         "expired": 3744,
@@ -244,7 +268,66 @@
       },
       "tallyReachableStates": 21726,
       "determinismPathsReplayed": 200,
-      "wallMs": 18917
+      "illegalWitnessProbes": 1413465,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 32732
+    },
+    {
+      "name": "confirm n=3 q=1 r=2 escalate-witness challengers=1,2 [clock 6/12/14]",
+      "states": 537825,
+      "abstractStates": 413538,
+      "progressEdges": 814718,
+      "selfLoops": 722298,
+      "applications": 38045170,
+      "typedThrows": 36508154,
+      "rawThrows": 0,
+      "illegalChecks": 31512230,
+      "terminalStates": 332484,
+      "terminalPhaseCounts": {
+        "expired": 28764,
+        "aborted": 191220,
+        "final": 112500
+      },
+      "parkingStates": 14460,
+      "parkingKinds": {
+        "ladder_pending:clock-universe-exhausted": 14100,
+        "ladder_vote_closed:resolve-refuses": 360
+      },
+      "tallyReachableStates": 190881,
+      "determinismPathsReplayed": 200,
+      "illegalWitnessProbes": 18271978,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 1,
+      "wallMs": 395019
+    },
+    {
+      "name": "confirm n=3 q=1 r=3 host-escalation [clock 6/12/14]",
+      "states": 182265,
+      "abstractStates": 148098,
+      "progressEdges": 263618,
+      "selfLoops": 236238,
+      "applications": 12805030,
+      "typedThrows": 12305174,
+      "rawThrows": 0,
+      "illegalChecks": 10670825,
+      "terminalStates": 107709,
+      "terminalPhaseCounts": {
+        "expired": 8484,
+        "aborted": 66285,
+        "final": 32940
+      },
+      "parkingStates": 14160,
+      "parkingKinds": {
+        "ladder_pending:clock-universe-exhausted": 14055,
+        "ladder_vote_closed:resolve-refuses": 105
+      },
+      "tallyReachableStates": 60396,
+      "determinismPathsReplayed": 200,
+      "illegalWitnessProbes": 6188788,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 2,
+      "wallMs": 98334
     },
     {
       "name": "signing n=2 t=1 [clock 10/25]",
@@ -267,7 +350,10 @@
       "parkingKinds": {},
       "tallyReachableStates": 300,
       "determinismPathsReplayed": 200,
-      "wallMs": 1264
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 1284
     },
     {
       "name": "signing n=3 t=2 [clock 10/25]",
@@ -290,7 +376,10 @@
       "parkingKinds": {},
       "tallyReachableStates": 2270,
       "determinismPathsReplayed": 200,
-      "wallMs": 9507
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 10467
     },
     {
       "name": "signing n=3 t=2 commitment-equivocation [clock 6/12]",
@@ -313,7 +402,10 @@
       "parkingKinds": {},
       "tallyReachableStates": 15920,
       "determinismPathsReplayed": 200,
-      "wallMs": 69439
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 124930
     },
     {
       "name": "signing n=3 t=2 partial-equivocation [clock 6/12]",
@@ -336,7 +428,10 @@
       "parkingKinds": {},
       "tallyReachableStates": 10490,
       "determinismPathsReplayed": 200,
-      "wallMs": 55386
+      "illegalWitnessProbes": 0,
+      "illegalWitnessAccepted": 0,
+      "maxEscalationDepth": 0,
+      "wallMs": 68886
     }
   ]
 }

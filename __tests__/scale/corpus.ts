@@ -49,6 +49,12 @@ export const SIZES = {
   selectionDraws: { fast: 200, full: 10_000 },
   /** campaign 6 — canonical encodings. */
   encodings: { fast: 2_000, full: 100_000 },
+  /** campaign 7 — escalation witnesses (valid + every illegal form). */
+  witnessEvents: { fast: 250, full: 10_000 },
+  /** campaign 8 — batch attestations across cohort rotations. */
+  epochBatches: { fast: 40, full: 1_000 },
+  /** campaign 9 — verdict finality chains (challenge windows + escalations). */
+  finalityChains: { fast: 100, full: 5_000 },
   /** campaign 5 — single-juror clock draws feeding the chi-square check. */
   chiSquareDraws: { fast: 20_000, full: 100_000 },
 } as const satisfies Record<string, SizeSplit>;
