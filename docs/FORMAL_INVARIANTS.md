@@ -476,9 +476,22 @@ ladder_pending → ladder_vote_open → ladder_vote_closed → resolve paths)` w
   Test: `courtConfirmationMachine.test.ts` › 'requires the proposal to be a
   member of the allowlist', 'requires at least two unique outcomes'.
 - **INV-CONF-4 (quorum range — economic).** `1 ≤ confirmQuorum ≤
-  |participants|` (lines 621-630, default 1). The quorum is never larger than
-  the panel and never zero.
-  Test: `courtConfirmationMachine.test.ts` › 'bounds the quorum to the roster'.
+  |participants|` (fail-closed typed error on violation). **Default: ⌈2N/3⌉**
+  (R25 — it used to be 1). A sub-supermajority quorum is ALLOWED but recorded:
+  `state.quorumBelowSupermajority === (confirmQuorum < ⌈2N/3⌉)`, so hosts and
+  policies gate on the state rather than on their own call site. Rationale:
+  with the old default of 1 a single compromised juror confirmed every case
+  (capture 0.8683 at ρ=⅓, 0.9655 at ρ=0.49 on the 5-seat round-0 panel), and
+  the shipped 3-of-5 captures at 0.2099 / 0.4813 versus 0.0453 / 0.1752 at the
+  4-of-5 that ⌈2N/3⌉ prescribes —
+  `docs/proofs/economics/05-review-gapfills.tex.md` §1.3, Findings 1.1–1.2.
+  Guard: `courtConfirmationMachine.ts` (factory, `confirmSupermajority` in
+  `confirmationMachineCore.ts`).
+  Test: `courtConfirmationMachine.test.ts` › 'bounds the quorum to the roster',
+  and the R25 block › 'defaults to the supermajority ⌈2N/3⌉ (3 seats → 2, not
+  1)', 'defaults 5-of-7 = 5 on a 7-seat roster', 'records an explicit 3-of-5
+  quorum as BELOW the supermajority (still allowed)', 'enforces the default
+  quorum behaviourally: 3 of 5 confirmations cannot close'.
 - **INV-CONF-5 (deadline ordering).** `confirmDeadline ∈ 𝔻` and
   `challengeDeadline > confirmDeadline` (lines 631-639).
   Test: `courtConfirmationMachine.test.ts` › 'requires the challenge deadline to

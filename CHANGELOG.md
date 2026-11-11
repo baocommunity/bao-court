@@ -11,6 +11,31 @@ frozen.
 
 ## [Unreleased]
 
+### Changed (parameter hardening — R25, from the R22b quantitative findings)
+
+- **`confirmQuorum` default is now the roster supermajority ⌈2N/3⌉, not 1.**
+  `createCourtConfirmationMachine` previously defaulted the confirmation quorum
+  to **1**, so a host that omitted the parameter got a one-confirmation round 0
+  — capture probability **0.8683** at $\rho = ⅓$ and **0.9655** at
+  $\rho = 0.49$ on the 5-seat shipped panel
+  (`docs/proofs/economics/05-review-gapfills.tex.md` §1.3, Finding 1.2). The
+  default is now `confirmSupermajority(N) = ⌈2N/3⌉` — 2-of-3, 4-of-5, 10-of-15,
+  30-of-45, 90-of-135 — and is exported so hosts can compare policy against it.
+- **Sub-supermajority quorums stay ALLOWED but are recorded.** An explicit
+  quorum below ⌈2N/3⌉ (the shipped 3-of-5 rollout is one) is accepted, and the
+  state now carries `quorumBelowSupermajority: true`, so a host, pre-flight
+  gate or auditor can see the declared exposure (3-of-5 captures at 0.2099 /
+  0.4813 versus 0.0453 / 0.1752 at 4-of-5) instead of inferring it from the
+  caller's own config. The typed error for `quorum < 1` or `> roster` is
+  unchanged.
+- **Consumer impact:** machines created without `confirmQuorum` now need
+  ⌈2N/3⌉ confirmations instead of one before `close_confirmations` can pass.
+  A host that wants the old behaviour must pass `confirmQuorum` explicitly
+  (which then flags `quorumBelowSupermajority` where applicable). Existing
+  snapshots stay readable — the field is derived, not accepted as input.
+  `docs/FORMAL_INVARIANTS.md` INV-CONF-4, paper §6.1,
+  `docs/proofs/economics/00-model.tex.md` §3 and
+  `05-review-gapfills.tex.md` §1.3 updated.
 ### Changed (docs — paper hygiene: the editorial verdicts of the three external reviews)
 
 - **`docs/FROST_COURT_ORACLE_PAPER.md` reads as a paper again.** Version

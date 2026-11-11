@@ -571,6 +571,7 @@ export {
 export {
   COURT_CONFIRMATION_DOMAIN,
   CourtConfirmationTransitionError,
+  confirmSupermajority,
   createCourtConfirmationMachine,
   hashCourtConfirmation,
   reduceCourtConfirmationMachine,

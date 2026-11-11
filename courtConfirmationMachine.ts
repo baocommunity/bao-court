@@ -19,6 +19,7 @@ import {
   TERMINAL_PHASES,
   assertBoundedOutcome,
   assertHex32,
+  confirmSupermajority,
   freezeState,
 } from './confirmationMachineCore';
 import {
@@ -129,6 +130,7 @@ export {
 } from './confirmationMachineTypes';
 
 export { hashCourtConfirmation } from './confirmationMachineCore';
+export { confirmSupermajority } from './confirmationMachineCore';
 
 /**
  * Create the initial state of a universal-confirmation case (phase
@@ -161,6 +163,20 @@ export function createCourtConfirmationMachine(params: {
    * rejected up front instead of dead-ending mid-challenge.
    */
   readonly participantIndices: readonly number[];
+  /**
+   * Confirmations required before `close_confirmations` may pass.
+   *
+   * **Default: ⌈2N/3⌉ of the roster** (0.8.0 review-response R25 — it used to
+   * be 1, which let a single compromised juror confirm every case: capture
+   * probability 0.8683 at ρ=⅓ and 0.9655 at ρ=0.49 on a 5-seat round-0 panel,
+   * `docs/proofs/economics/05-review-gapfills.tex.md` §1.3 Finding 1.2).
+   *
+   * A host MAY pass an explicit smaller quorum (the shipped 3-of-5 rollout is
+   * a host policy, and every existing snapshot keeps working), but the
+   * factory then RECORDS `quorumBelowSupermajority: true` in the state so
+   * policies, hosts and auditors can gate on it instead of discovering the
+   * threshold by reading the caller's config.
+   */
   readonly confirmQuorum?: number;
   readonly confirmDeadline: number;
   readonly challengeDeadline: number;
@@ -220,7 +236,7 @@ export function createCourtConfirmationMachine(params: {
   for (const id of evidenceIds) {
     assertHex32(id, 'evidence ids must be 32-byte lowercase hex');
   }
-  const confirmQuorum = params.confirmQuorum ?? 1;
+  const confirmQuorum = params.confirmQuorum ?? confirmSupermajority(participants.length);
   if (
     !Number.isSafeInteger(confirmQuorum)
     || confirmQuorum < 1
@@ -230,6 +246,10 @@ export function createCourtConfirmationMachine(params: {
       'confirmQuorum must be a safe integer in [1, roster size]',
     );
   }
+  // R25: an explicit sub-supermajority quorum stays ALLOWED (the shipped
+  // 3-of-5 rollout depends on it) but it is RECORDED, so a host/policy layer
+  // can gate on it rather than re-deriving it from its own call site.
+  const quorumBelowSupermajority = confirmQuorum < confirmSupermajority(participants.length);
   assertPositiveDeadline(params.confirmDeadline, 'confirmDeadline', CourtConfirmationTransitionError);
   if (
     !Number.isSafeInteger(params.challengeDeadline)
@@ -257,6 +277,7 @@ export function createCourtConfirmationMachine(params: {
     evidenceIds: [...evidenceIds],
     participantIndices: participants,
     confirmQuorum,
+    quorumBelowSupermajority,
     confirmDeadline: params.confirmDeadline,
     challengeDeadline: params.challengeDeadline,
     latestTimestamp: 0,

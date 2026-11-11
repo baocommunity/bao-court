@@ -151,6 +151,17 @@ Two findings that the reviewers' $N$-set could not surface:
 code default of 1* — an honest-parameters correction carried into that file in
 this PR.
 
+> **Status — fixed by R25 (parameter-hardening round).** Finding 1.2 is closed
+> in code: `createCourtConfirmationMachine`'s `confirmQuorum` **default is now
+> $\lceil 2N/3 \rceil$** (4-of-5, 10-of-15, 30-of-45, 90-of-135) via
+> `confirmSupermajority`, so the one-juror row of the table above ($q = 1$) is
+> unreachable by omission. Finding 1.1 stays a *policy* choice, but it is no
+> longer invisible: an explicit sub-supermajority quorum (the shipped 3-of-5)
+> is accepted and recorded in state as `quorumBelowSupermajority: true`, so a
+> host or a pre-flight gate can refuse it without re-deriving it. The 3-of-5
+> row is therefore a **declared** exposure, not a silent one — an operator who
+> keeps it is choosing 0.2099 / 0.4813 over 0.0453 / 0.1752.
+
 ### 1.4 Minimum panel size vs market value (the guidance the reviewers wanted)
 
 "Which $N$ for which market?" has **two legs**, and they have different shapes.
