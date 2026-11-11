@@ -194,6 +194,21 @@ export function onAcceptChallenge(
       `participant ${event.idx} published a conflicting challenge`,
     );
   }
+  // A bond witness buys exactly ONE challenger's standing (R38, r38-1). The
+  // ledger deduped by `idx` only, so a juror that posted nothing could name a
+  // bonded juror's `bondProofHash` as its own, mint an "accepted" challenge
+  // with a bond it never paid, and then escalate: the `(idx, bondProofHash)`
+  // binding r29-1 added is satisfied once the borrowed record exists. The
+  // machine holds this ledger, so uniqueness is a STATE property here, not a
+  // host attestation — and the r33-1 rule ("no accepted challenge bond may be
+  // relabelled as a per-round bond") assumes the hash has one owner.
+  const bondOwner = state.challenges.find((c) => c.bondProofHash === event.bondProofHash);
+  if (bondOwner) {
+    throw new CourtConfirmationTransitionError(
+      `challenge bond proof hash is already bound to participant ${bondOwner.idx}'s accepted `
+      + 'challenge: one bond witness buys one challenger\'s standing',
+    );
+  }
   return freezeState({
     ...state,
     challenges: [
