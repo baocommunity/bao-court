@@ -407,6 +407,17 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.15.1] — 2026-11-11
+
+### Fixed (review-round-11, PR #128)
+- **`quoteWireValue` was not total (three exploits):** four call sites escaped but ten exist — `event.kind` from the wire and `state.ladderRound`/`state.phase` from a snapshot were raw, so a restored `ladderRound: "3\nESCALATION ACCEPTED"` **forged a log line inside the barrier's own refusal message**. The documented 64-char bound was also spent on the *input*, so a legal 60-char zero-width id produced a 387-char echo (now 59); and `String(Object.create(null))` threw a `TypeError` **out of** a refusal (`quoteWireUnknown` now never calls `toString`).
+- **`verifyEvent` ran on an unvalidated event:** `tags: null` raised `Cannot read properties of null (reading 'map')`. The shape is validated first.
+- **`flag_clawback` was the one ladder reader the round-10 sweep missed** — it wrote a round-3 clawback on a round-2 ladder. Now behind `assertRoundCountersAgree`.
+- Message honesty (a string `kind`), and the core comment that described a reverted pre-dispatch placement.
+
+### Changed
+- Suite **1,932 passed** (86 files).
+
 ## [0.15.0] — 2026-11-11
 
 ### Changed (semantics — the exported ladder bound)
