@@ -176,12 +176,12 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 
 ## 7. (f) What's next — the proof obligations
 
-### Slide 15 — "PO-1…PO-14: the honest-gap register as a roadmap"
-- 14 registered proof obligations, each with **stage-acceptability** (why it's safe to ship now) and a **closure path** (what would close it).
-- Highlights: **PO-1** game-theoretic model of the majority-collusion bribe game; **PO-2** multi-block selection beacon + committed reputation roots; **PO-3** liveness theorem under ≤1/3 relay control; **PO-13** external-assumption watch (LDVR / Crites et al. CRYPTO 2025; ChillDKG/BIP-445 upgrade trigger); **PO-14** cross-client ceremonies close the prototype assumption gap.
-- Production gates beyond the proofs: rail *execution* adapters, contract-enforced phase deadlines on-chain, independent side-channel audit, and the cross-implementation FROST differential (the second half of the parity gate).
+### Slide 15 — "PO-1…PO-17: the honest-gap register as a roadmap"
+- 17 registered proof obligations, each with **stage-acceptability** (why it's safe to ship now) and a **closure path** (what would close it).
+- Highlights: **PO-1** game-theoretic model of the majority-collusion bribe game; **PO-2** multi-block selection beacon + committed reputation roots; **PO-3** liveness theorem under ≤1/3 relay control; **PO-13** external-assumption watch (LDVR / Crites et al. CRYPTO 2025; ChillDKG/BIP-445 upgrade trigger); **PO-14** cross-client ceremonies close the prototype assumption gap; **PO-15** settlement binding (host-mediated release in v1); **PO-16** Lightning preimage is publicly computable (forfeiture is host policy); **PO-17** cross-engine selection ordering.
+- Production gates beyond the proofs: rail *execution* adapters, contract-enforced phase deadlines on-chain, independent side-channel audit, and the third-party FROST differential (the second half of the parity gate).
 - Close on the methodology, not the marketing: *the design is backed by an evaluation methodology, not a claim — and every pin regenerates from one command.*
-- *Artifact:* THREAT_MODEL §6 (register); paper §12 (honest status).
+- *Artifact:* THREAT_MODEL §6 (register); paper §12 (honest status), §13 (scope of verification: proven / machine-checked / empirically evaluated / open obligation).
 
 ### Q&A quick pulls
 | Likely question | Answer + artifact |

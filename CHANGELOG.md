@@ -11,6 +11,58 @@ frozen.
 
 ## [Unreleased]
 
+### Changed (docs — paper hygiene: the editorial verdicts of the three external reviews)
+
+- **`docs/FROST_COURT_ORACLE_PAPER.md` reads as a paper again.** Version
+  numbers, test counts, finding codes and file paths are out of the body;
+  provenance is consolidated in **Appendix A** (normative documents S-1…S-14,
+  proofs/machine-checked artifacts T1–T5, the finding-code mapping,
+  artifact inventory + regeneration commands, review record, and the newly
+  registered obligations). The assurance claim is now explicit instead of
+  rank-shaped: §13 separates *proven* (with premises), *machine-checked*
+  (within stated bounds), *empirically evaluated*, and *open obligation*.
+- **New §1.5 Related work** — a six-row comparison (Discreet Log Contracts,
+  UMA optimistic oracle, Augur, Chainlink OCR, ROAST, Kleros): what each
+  provides, what BAO Court adds, and **what each does better**. FROST is
+  cited as **SAC 2020** (Komlo–Goldberg), not IEEE S&P; added references:
+  Dryja (DLC), UMA, Augur, Chainlink OCR/2.0, ROAST (CCS 2022), the Kleros
+  Yellow Paper, Crites–Katz–Komlo–Tessaro–Zhu (CRYPTO 2025 — adaptive FROST
+  under LDVR), and the ZF-FROST refresh vulnerability record
+  (CVE-2025-58359).
+- **New §13 Scope of verification** — five claim classes (cryptographic
+  security, protocol safety, operational resilience, economic robustness,
+  real-world validity) as *separate* claims with separate evidence and
+  status labels; the Conclusion becomes §14.
+- **Statement corrections** (each now stated, not implied): "structurally
+  invalid" → **publicly detectable**, with the recomputation procedure
+  (§3.3); "independent reimplementations" → **in-house differential**
+  (§11.3, §12.5); the privacy claim reconciled with the P2WSH
+  `OP_CHECKMULTISIG` `M`,`N` disclosure (§1.2, §9.2); commit–reveal stops
+  **copying, not buying** (§5); the `M−1` corruption and `N−M` fault bounds
+  stated together (§1.2, §10.1); the complaint argument rewritten around what
+  an **outsider** learns from the public transcript (§2.4); the **Lightning
+  preimage has no secret input** — the exposure is stated (§9.1, §10.2 O) and
+  registered as **PO-16**; the selection formula reconciled with the code
+  (√stake default vs `/weight` mode, `max(1,·)` floor, boundary clamping,
+  32-bit collisions and the pubkey tie-break, cross-engine `Math.log`) and
+  registered as **PO-17** (§4.2); proactive refresh specified rather than
+  asserted (§10.2 D); the duplicated attack-vector label fixed (the relay
+  vector is now N).
+- **Disclosure and benchmark context:** §11.5 names who reviewed what — the
+  in-house audit/symposium rounds, the three-round multi-agent editorial
+  audit, and the three external AI reviews (GPT, Claude, Gemini;
+  2026-11-10; **paper text only, no code access, no execution, no
+  cryptographic analysis**) — and states what none of them is (no
+  independent human cryptographer, no third-party audit, no peer review).
+  §11.4 names the host (AMD Ryzen 7 PRO 8840HS, 16 threads, Node v22.23.2,
+  linux x64, shared box), reports the 27/29 reproducibility result with the
+  two µs-scale outliers and the excluded saturated run, and adds the
+  end-to-end figures (per-case batch verification, full-epoch construction,
+  jury draw).
+- **`docs/THREAT_MODEL.md`:** two new obligation rows — **PO-16** (Lightning
+  preimage publicly computable: forfeiture is host policy, not cryptography)
+  and **PO-17** (cross-engine selection ordering).
+
 ### Fixed (settlement binding — what the FROST judge key actually signs)
 
 - **New doc `docs/SETTLEMENT-BINDING.md`** (normative): the three achievable

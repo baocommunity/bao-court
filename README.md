@@ -19,9 +19,11 @@ no persistence — hosts inject clocks, storage, and transport.
 package. It is developed alongside the `baocommunity/bao.markets`
 reference implementation and published here under the AGPL-3.0.
 
-**Paper.** The protocol paper — architecture, math, security analysis, and
-production gates — is
-[`docs/FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md).
+**Paper.** The protocol paper — architecture, math, security analysis, related
+work, scope of verification, and production gates — is
+[`docs/FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md). Its
+§13 states, claim by claim, what is proven, machine-checked, empirically
+evaluated, or an open obligation; Appendix A carries the artifact provenance.
 
 **FAQ.** Short answers to common questions —
 [`docs/FAQ.md`](docs/FAQ.md) (also rendered on the landing page's FAQ
@@ -35,7 +37,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 
 | Doc | What it is |
 |---|---|
-| [`FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md) | the protocol paper — architecture, math, security analysis, evaluation, production gates |
+| [`FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md) | the protocol paper — architecture, math, security analysis, related work, evaluation, scope of verification, production gates, artifact provenance (App. A) |
 | [`FAQ.md`](docs/FAQ.md) | short answers to common questions |
 | [`GLOSSARY.md`](docs/GLOSSARY.md) | normative domain vocabulary |
 | [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 146 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
