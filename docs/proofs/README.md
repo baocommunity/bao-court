@@ -1,7 +1,7 @@
 # docs/proofs/ — The Proofs Index
 
 Round 18 of the symposium program: complete, line-checked mathematical proofs
-of the five core properties of the BAO Court protocol. Every proof cites the
+of the six core properties of the BAO Court protocol. Every proof cites the
 actual guards (`file:lines`), states its premises explicitly, and maps to
 executable evidence (tests / model checking / differential parity). A proof
 step that could not be made rigorous is recorded as an explicit LEMMA-GAP in
@@ -22,6 +22,7 @@ model checking to all roster sizes (Theorem 4, §7 there).
 | 3 | [`03-tally.tex.md`](03-tally.tex.md) | **Tally well-definedness** | The verdict is a function of the reveal MULTISET: counting is a commutative monoid; the winner is the unique (max-count, min-UTF-8-tie-break) extremum; `compareOutcomeUtf8` is proven a strict total order (full lexicographic transitivity case analysis). |
 | 4 | [`04-machine-safety.tex.md`](04-machine-safety.tex.md) | **Machine safety** (crown) | For each phase machine (vote, confirmation, signing, DKG), EVERY reachable state satisfies the INV-* invariant bundle — structural induction on event sequences: creation guards (base), preamble/append/barrier lemmas (step, per-handler walk with line references). Generalizes the model checking (n ≤ 4 exhaustive) to all n; the relationship is stated honestly. |
 | 5 | [`05-threshold-soundness.tex.md`](05-threshold-soundness.tex.md) | **Attestation soundness** | A valid kind-89/39007 attestation under the pinned group key implies ≥ t partial signatures from DISTINCT certified roster shares — pipeline direction unconditional; verification direction conditional on Schnorr unforgeability + FROST (KG20/RFC 9591) soundness under the nonce rules; v2 makes the signer set verifiable in-band, v1 does not (stated). |
+| 6 | [`attribution.tex.md`](attribution.tex.md) | **Attribution** | A published signing-session journal (nonce commitments + partials + signer set + threshold + aggregate) decomposes the aggregate to the contributing shares: each partial satisfies `s_i·G = R_i + c·λ_i·(π·Y_i)`, the partials reconstruct `s = Σ s_i + c·π·τ` byte-exactly, and a failing partial is attributable to its index. The signer set is fixed by `R` (Lemma 6.4); the per-partial x-only sign ambiguity leaves every index unchanged. Identity is conditional on the certified-share pin (P1) + authenticated append-only entries (P2); the bare aggregate is proven unlinkable (Lemma 6.0), which is why the record must exist. Includes the batch-signing duty (D-BATCH). |
 
 ## 2. Dependency graph
 
@@ -48,10 +49,20 @@ Premises (§3 below)
      T1 for the SignerSet commitment injectivity,
      T3's domain for the 39007 tally binding;
      premises S1–S5)
+        │
+        ▼
+    T6 Attribution ◄── H3 (hash collision resistance), P1 (certified shares), P2 (authenticated log)
+    (uses T5 for the aggregate it explains,
+     T1 for the journal hash determinism;
+     adds the forensic direction: WHO signed)
+        │
+        ▼
+    D-BATCH duty (docs/ATTRIBUTABLE_SIGNING.md §4)
 ```
 
-Reading order for a reviewer: 01 → 02 → 03 → 04 → 05. T2 and T3 are
-independent of each other; T4 needs T1+T3; T5 needs T4 (machine guards) and T1.
+Reading order for a reviewer: 01 → 02 → 03 → 04 → 05 → attribution. T2 and T3
+are independent of each other; T4 needs T1+T3; T5 needs T4 (machine guards) and
+T1; T6 needs T5 (the aggregate) and T1 (the canonical journal hash).
 
 ## 3. Premises registry — everything assumed, nothing hidden
 
@@ -79,6 +90,7 @@ independent of each other; T4 needs T1+T3; T5 needs T4 (machine guards) and T1.
 | **S3** | Nonce rules: aux-randomness-mixed HKDF derivation (RFC 9591 §4.1/§7.3), one-consumption NonceGuard, per-attempt equivocation aborts, message bound pre-commitment | Enforced in code (`signing.ts:88–194, 266–271`; INV-SIGN-1/4/8) + CRYPTO_AUDIT §1.1/§1.4 | T5 (ii) preconditions |
 | **S4** | DKG: group secret Shamir-shared t-of-n, never materializes; unanimous single-transcript certification (INV-DKG-6) | Machine guards + `dkg.ts`/`independentDkg.ts` | T5 (ii), "certified" |
 | **S5** | `@vbyte/frost` 1.1.5 implements the S2 semantics | Empirical probes + AUDIT-4 differential pins (**GAP-5a**) | T5 (i), (ii) |
+| **H3** | SHA-256 / tagged-hash collision resistance, in the journal's binding-factor prefix (`H1`/`H5`) | Same family as H1; stated in T6 §3 — used only to make the signer set unique for a given `R` (Lemma 6.4) | T6 (ii) |
 
 ### 3.4 Host/environment premises (stated honestly)
 
@@ -86,6 +98,8 @@ independent of each other; T4 needs T1+T3; T5 needs T4 (machine guards) and T1.
 |---|---|---|---|
 | **H-JS1** | Machine states are only produced by `create`/`reduce` (TS cannot enforce) | freeze discipline (INV-X-4) + state-shape barriers (FC-4) + session-hash re-derivation (INV-SIGN-2) + ledger barriers + adversarial restore tests (**GAP-4a**) | T4 |
 | **H-JS2** | `reduce` executes atomically (pure, synchronous, no awaits) | inspection + P5 determinism checks | T4 |
+| **P1** | verification shares `Y_i` in a journal are the **certified** DKG shares | caller supplies `DkgRecord.verificationShares`; `identityPinned` is reported (Theorem 6 Lemma 6.3) | T6 (iii) |
+| **P2** | journal entries are authenticated per signer and append-only | ceremony events are NIP-01-signed by each juror; log design `docs/ATTRIBUTABLE_SIGNING.md` §3.4; per-participant entries are v0.11 | T6 (iii) |
 
 ## 4. Lemma-gap register (complete list)
 
@@ -95,6 +109,8 @@ independent of each other; T4 needs T1+T3; T5 needs T4 (machine guards) and T1.
 | **GAP-4b** | T4 §8 | The allowlist membership proof goes through the FC-4 string-vs-array barrier; recorded because the substring hazard is the classic version of this bug. Covered by the barrier; noted for precision. |
 | **GAP-5a** | T5 §7 | Dependency fidelity S5: `@vbyte/frost`'s RFC-9591 semantics are probe- and differential-pinned, not formally verified from source; an upgrade must re-establish the pins (they are designed to fail loudly). |
 | **GAP-5b** | T5 §7 | Part (ii) is a conditional reduction ("unless S1/S2/S4 fall"), not an unconditional theorem — the honest ceiling for any result of this shape. |
+| **GAP-6a** | T6 §9 | Attribution identity rests on the certified-share pin (P1) and authenticated append-only entries (P2) — both deployment obligations, tested negatively but not enforced by cryptography alone. A journal without the pin proves consistency only. |
+| **GAP-6b** | T6 §8/§9 | The batch-signing duty (D-BATCH) is normative but not mechanically enforced: the batch manifest is not inside the signed FROST message, so `aggregateAttestation` cannot see a root. Journaled duty records are the current evidence; the signing-schema binding is v0.11. |
 
 Theorem 1 and Theorem 3 are complete with no gaps beyond their stated
 premises; Theorem 2's completeness direction is unconditional and its
@@ -110,6 +126,7 @@ stated conditional, as cryptological soundness theorems always are).
 | T3 | **PR #52** refTally: exhaustive 3ⁿ ballot assignments n=1..4 (120 machines) + 10×300-juror random tallies + UTF-16-divergence pin; `adversarialMachines.test.ts` › reorder → identical verdict (INV-VOTE-20); `invariantAssertions.test.ts` comparator oracle (INV-X-9, 500 pairs). |
 | T4 | Model checking: `__tests__/modelChecking.test.ts` (reduced sweep in CI) + `scripts/model-check.mjs` full sweep — committed numbers in `__fixtures__/model-check-summary.json`: 13 instances, 3 145 632 states, 128 522 740 applications, **0 raw throws**; `invariantAssertions.test.ts` (27 always-on cross-machine assertions); `adversarialMachines.test.ts` (tamper/restore discipline). |
 | T5 | `signing.test.ts` + `courtSigningMachine.test.ts` (end-to-end attempt; equivocation aborts with blame; threshold-over-distinct-signers), `validator.test.ts` + `propertiesValidator.test.ts` PV1–PV6 (tamper matrix; PV3 signer-set pins; PV4 downgrade refusal), `cryptoLiteratureAudit.test.ts` AUDIT-3/4, `independentDkg.test.ts` / `independentSigning.test.ts`. |
+| T6 | `attribution.test.ts`: honest journal reconstructs the aggregate and attributes both signers; forged partial attributed by index; missing partial ⇒ no reconstruction; tampered aggregate rejected; wrong signer set rejected; certified-share pin enforced (`SHARE_MISMATCH`); wrong group key rejected; malformed record fails closed; `hashSigningJournal` determinism. |
 
 ## 6. Reviewer's checking guide (one hour total)
 

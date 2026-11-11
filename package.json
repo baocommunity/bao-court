@@ -36,6 +36,10 @@
       "types": "./batchAttestation.ts",
       "default": "./batchAttestation.ts"
     },
+    "./attribution": {
+      "types": "./attribution.ts",
+      "default": "./attribution.ts"
+    },
     "./epoch-cohort": {
       "types": "./epochCohort.ts",
       "default": "./epochCohort.ts"

@@ -599,6 +599,21 @@ export {
 } from './batchAttestation';
 
 export {
+  SIGNING_JOURNAL_DOMAIN,
+  AttributionError,
+  buildSigningJournal,
+  hashSigningJournal,
+  verifyAggregateAttribution,
+  type AggregateSignature,
+  type AttributionFailure,
+  type AttributionResult,
+  type JournalCommitment,
+  type JournalPartial,
+  type SigningJournal,
+  type SigningJournalInput,
+} from './attribution';
+
+export {
   COURT_EPOCH_COHORT_DOMAIN,
   COURT_EPOCH_HANDOFF_DOMAIN,
   CourtEpochCohortError,

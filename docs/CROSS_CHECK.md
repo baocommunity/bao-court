@@ -6,7 +6,7 @@
 This is the single artifact a reviewer uses to verify any claim about the
 system. Every meaningful claim from the three claim sources —
 
-1. `docs/FORMAL_INVARIANTS.md` — all 146 `INV-*` invariants;
+1. `docs/FORMAL_INVARIANTS.md` — all 149 `INV-*` invariants;
 2. `docs/FROST_COURT_ORACLE_PAPER.md` — every technical claim (the §6–§7
    universal-confirmation / cohort / batch sections **and** the classic
    ceremony, escrow, and settlement-rail sections);
@@ -63,7 +63,7 @@ breakdown).
 
 | Claim source | Claims | With executable proof | Coverage | Open gaps |
 |---|---|---|---|---|
-| `FORMAL_INVARIANTS.md` (146 INV-*) | 146 | 145 | 99.3% | 1 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10) |
+| `FORMAL_INVARIANTS.md` (149 INV-*) | 149 | 147 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
 | `FROST_COURT_ORACLE_PAPER.md` | 71 | 68 | 95.8% | 3 (host-side / spec'd protocol work) |
 | `CRYPTO_AUDIT.md` §7 + §8 | 21 | 17 | 81.0% | 4 (spec'd S-1…S-4) |
 | Model-check meta-claims | 7 | 7 | 100% | 0 |
@@ -71,7 +71,7 @@ breakdown).
 | Suite / simulation claims | 4 | 4 | 100% | 0 |
 | Error-taxonomy claims (§15) | 5 | 5 | 100% | 0 |
 | Findings (F-1…F-12 dispositions) | 12 | 7 | 58.3% | 5 (F-5, F-7, F-8, F-10, F-11 — documented conventions/holds) |
-| **Total** | **273** | **260** | **95.2%** | **13 open** |
+| **Total** | **276** | **262** | **94.9%** | **14 open** |
 
 Gaps **closed this round**: 4 — three with new pinning tests (the stale
 `AUDIT-4` pointer / binding-factor message dependence, the F-4 clawback-reason
@@ -79,9 +79,15 @@ convention, the A-11/§5.1 `seededScalar` contract) and SUITE-4 by replacing
 the drifting suite-size adjective with a per-round recorded count. See the
 Gap register.
 
+**Round-23 delta (attribution).** `FORMAL_INVARIANTS.md` §16 adds
+INV-ATTRIB-1..3 (Theorem 6, `docs/proofs/attribution.tex.md`).
+INV-ATTRIB-1/2 are pinned by `__tests__/attribution.test.ts` (8 tests) and
+counted above; INV-ATTRIB-3 (batch-signing duty) is spec-level and is the
+second open gap (gap register).
+
 ---
 
-## 3. Invariant claims (source a — 146 INV-*)
+## 3. Invariant claims (source a — 149 INV-*)
 
 Each row of the Machine-checkable index with kind `invariant` is one
 invariant of `docs/FORMAL_INVARIANTS.md` §3–§11 (its full statement lives
@@ -157,6 +163,7 @@ round` (pinning test written in round 14).
 | CA-7-8a (AUDIT-4) | `@vbyte/frost` binding factors/challenge depend on the message over a fixed commitment set (anti-Drijvers pin claimed by CRYPTO_AUDIT §1.1 but absent from the suite) | CLOSED this round | `__tests__/cryptoLiteratureAudit.test.ts` › 'AUDIT-4' describe (context difference + no cross-message signature replay) |
 | FINDING-A-11 | `seededScalar` counter/bias contract (CRYPTO_AUDIT §5.1: counter inside `info`, no cross-`(seed,info)` collision) — analysis only, untested | CLOSED this round | `__tests__/cryptoLiteratureAudit.test.ts` › 'AUDIT-5' describe (determinism, sensitivity, range, 200-pair no-collision) |
 | INV-VOTE-14 | Capacity guards MAX_REVEALS etc. (the invariant whose Test column is "—"; see FINDING-F-10) | OPEN | see FINDING-F-10 |
+| INV-ATTRIB-3 | Batch-signing duty D1–D5 (verify epoch/cohort/count/root before contributing to a batch root) — normative for hosts, not mechanically enforced because the batch manifest is not in the signed FROST message | OPEN | v0.11 signing-schema binding of the manifest hash into the FROST message; today the duty record lives in the journal entry (`docs/ATTRIBUTABLE_SIGNING.md` §4–§5.2) |
 | FINDING-F-5 | `weightFn` purity is unenforceable — `verifyJurySelection` recomputes with the caller's function, so a non-identical `weightFn` makes verification vacuous | OPEN | snapshot-pinned `reputationRoot` committed in the dispute-open event (`selection.ts` §future-work, CRYPTO_AUDIT S-1) |
 | FINDING-F-7 | Selection seed hashes raw fixed-length concat outside the CanonicalWriter grammar — injective only because inputs are 32-byte hex | OPEN | migrate `deriveSelectionSeed`/`jurorRandomValue` to the writer grammar in the v2 selection format (with a round-trip compat test); today pinned only by the differential-parity draw tests |
 | FINDING-F-8 | `verifyEvent` memoization is caller-visible (nostr-tools caches the verdict on the event object) — residual hazard documented, not enforceable in-package | OPEN | consumer-side pins exist (outbox/inbox/validator re-verification tests); the full fix is a wrapper type in the consumer layer — planned in the host repo |
@@ -332,6 +339,9 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | INV-X-9 | invariant | test | test:__tests__/invariantAssertions.test.ts#agrees with the Buffer.compare UTF-8 oracle on all pairs; test:__tests__/invariantAssertions.test.ts#is a total order: antisymmetric and transitive |
 | INV-X-10 | invariant | test | test:__tests__/invariantAssertions.test.ts#the confirmation machine mints its verdict hash with the vote machine; test:__tests__/adversarialCrossModule.test.ts#BY DESIGN: a confirmation verdict and a vote-machine verdict with identical |
 | INV-SETTLE-1 | invariant | test | test:__tests__/liquidEscrow.test.ts#serializes <winner> CHECKSIGVERIFY <group> CHECKSIG; test:__tests__/liquidEscrow.test.ts#is byte-identical in shape to the legacy judge leaf (no new consensus risk); test:__tests__/liquidEscrow.test.ts#refuses a shared winner/group key (authority collapse) |
+| INV-ATTRIB-1 | invariant | test | test:__tests__/attribution.test.ts#builds a journal that verifies and attributes both signers; test:__tests__/attribution.test.ts#rejects a wrong signer set |
+| INV-ATTRIB-2 | invariant | test | test:__tests__/attribution.test.ts#builds a journal that verifies and attributes both signers; test:__tests__/attribution.test.ts#attributes a forged partial to its signer index; test:__tests__/attribution.test.ts#fails reconstruction when a partial is missing; test:__tests__/attribution.test.ts#rejects a signature the published partials do not reconstruct |
+| INV-ATTRIB-3 | invariant | gap | gap |
 | PAPER-ABS-1 | paper | doc | doc:docs/FROST_COURT_ORACLE_PAPER.md |
 | PAPER-ABS-2 | paper | fixture | fixture:__fixtures__/model-check-summary.json#totals.rawThrows=0 |
 | PAPER-ABS-3 | paper | test | test:__tests__/validator.test.ts#accepts a valid FROST attestation event; test:__tests__/batchAttestation.test.ts#accepts a correctly signed batch attestation |

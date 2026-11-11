@@ -64,6 +64,7 @@ import { calculateBondAmount } from '../escrow';
 import { deriveDisputeGroupPubkey, hashCommit } from '../dispute';
 import { selectJury, weightedPriority } from '../selection';
 import { buildBatchMerkleTree } from '../batchAttestation';
+import { AttributionError } from '../attribution';
 import { hashSignerSetRoot } from '../validator';
 
 // The full registry — every exported error class in the package.
@@ -85,6 +86,7 @@ const ALL_CLASSES = [
   CourtCryptoError,
   CourtSignerError,
   AppealError,
+  AttributionError,
   // legacy classes (grafted onto CourtError in v0.10.1, names/signals unchanged)
   BatchAttestationError,
   CourtConfirmationTransitionError,
@@ -120,6 +122,7 @@ const SCREAMING = [
   CourtCryptoError,
   CourtSignerError,
   AppealError,
+  AttributionError,
   BatchAttestationError,
   CourtConfirmationTransitionError,
   CourtDkgTransitionError,

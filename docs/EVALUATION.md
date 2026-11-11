@@ -156,7 +156,7 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**146 invariants** (`INV-<machine>-<n>`), each extracted from the
+**149 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
 enforcement pointer (`file:line`) and the pinning test. Precision note
 (round-16 external review, finding A-3): the family is *predominantly*
