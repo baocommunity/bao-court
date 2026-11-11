@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   COURT_CONFIRMATION_DOMAIN,
   CourtConfirmationTransitionError,
+  confirmSupermajority,
   createCourtConfirmationMachine,
   hashCourtConfirmation,
   reduceCourtConfirmationMachine,
@@ -117,6 +118,89 @@ describe('createCourtConfirmationMachine', () => {
     expect(s.phase).toBe('confirm_open');
     expect(s.confirmations).toHaveLength(0);
     expect(s.ladderRound).toBe(0);
+  });
+});
+
+// R25 — parameter hardening (review-response round). The factory DEFAULT
+// quorum is now the roster supermajority ⌈2N/3⌉ instead of 1, and an explicit
+// smaller quorum is recorded in state rather than silently accepted.
+// Evidence: docs/proofs/economics/05-review-gapfills.tex.md §1.3.
+describe('R25 — confirmation quorum defaults', () => {
+  /** Build a machine for an N-seat roster, omitting or overriding the quorum. */
+  function machineFor(rosterSize: number, confirmQuorum?: number) {
+    const participantIndices = Array.from({ length: rosterSize }, (_, i) => i + 1);
+    return createCourtConfirmationMachine({
+      sessionHash: SESSION,
+      proposalHash: PROPOSAL,
+      proposedOutcome: 'YES',
+      allowedOutcomes: OUTCOMES,
+      participantIndices,
+      ...(confirmQuorum === undefined ? {} : { confirmQuorum }),
+      confirmDeadline: 2000,
+      challengeDeadline: 3000,
+    });
+  }
+
+  it('defaults to the supermajority ⌈2N/3⌉ (3 seats → 2, not 1)', () => {
+    const s = machineFor(3);
+    expect(s.confirmQuorum).toBe(2);
+    expect(confirmSupermajority(3)).toBe(2);
+    expect(s.quorumBelowSupermajority).toBe(false);
+  });
+
+  it('defaults 5-of-7 = 5 on a 7-seat roster', () => {
+    const s = machineFor(7);
+    expect(s.confirmQuorum).toBe(5);
+    expect(s.quorumBelowSupermajority).toBe(false);
+  });
+
+  it('defaults 4-of-5 = 4 on the shipped round-0 panel size', () => {
+    const s = machineFor(5);
+    expect(s.confirmQuorum).toBe(4);
+    expect(s.quorumBelowSupermajority).toBe(false);
+  });
+
+  it('records an explicit 3-of-5 quorum as BELOW the supermajority (still allowed)', () => {
+    const s = machineFor(5, 3);
+    expect(s.confirmQuorum).toBe(3);
+    expect(s.quorumBelowSupermajority).toBe(true);
+  });
+
+  it('does not flag an explicit quorum at or above ⌈2N/3⌉', () => {
+    expect(machineFor(5, 4).quorumBelowSupermajority).toBe(false);
+    expect(machineFor(5, 5).quorumBelowSupermajority).toBe(false);
+    expect(machineFor(15, 10).quorumBelowSupermajority).toBe(false);
+    expect(machineFor(15, 9).quorumBelowSupermajority).toBe(true);
+  });
+
+  it('keeps the typed quorum-range error for < 1 or > roster', () => {
+    expect(() => machineFor(5, 0)).toThrow(CourtConfirmationTransitionError);
+    expect(() => machineFor(5, 6)).toThrow(/confirmQuorum must be a safe integer in \[1, roster size\]/);
+  });
+
+  it('enforces the default quorum behaviourally: 3 of 5 confirmations cannot close', () => {
+    let s = machineFor(5);
+    for (const idx of [1, 2, 3]) {
+      s = reduceCourtConfirmationMachine(s, {
+        type: 'accept_confirmation',
+        idx,
+        confirmHash: hashCourtConfirmation({ sessionHash: SESSION, proposalHash: PROPOSAL, idx }),
+        eventId: id(String(idx)),
+        now: 1000 + idx,
+      });
+    }
+    expect(() => reduceCourtConfirmationMachine(s, { type: 'close_confirmations', now: 2000 }))
+      .toThrow(/quorum not met: 3\/4/);
+    // The fourth confirmation satisfies the default 4-of-5 supermajority.
+    s = reduceCourtConfirmationMachine(s, {
+      type: 'accept_confirmation',
+      idx: 4,
+      confirmHash: hashCourtConfirmation({ sessionHash: SESSION, proposalHash: PROPOSAL, idx: 4 }),
+      eventId: id('4'),
+      now: 1004,
+    });
+    const closed = reduceCourtConfirmationMachine(s, { type: 'close_confirmations', now: 2000 });
+    expect(closed.phase).toBe('confirm_closed');
   });
 });
 

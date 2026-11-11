@@ -140,6 +140,14 @@ export interface CourtConfirmationMachineState {
   readonly evidenceIds: readonly string[];
   readonly participantIndices: readonly number[];
   readonly confirmQuorum: number;
+  /**
+   * True when the configured quorum is below the roster's supermajority
+   * ⌈2N/3⌉. Explicitly an ALLOWED configuration (the shipped 3-of-5 rollout
+   * uses it) — recorded so hosts, policies and auditors can see the exposure
+   * without re-deriving it from the caller's own config (R25,
+   * `docs/proofs/economics/05-review-gapfills.tex.md` §1.3).
+   */
+  readonly quorumBelowSupermajority: boolean;
   readonly confirmDeadline: number;
   readonly challengeDeadline: number;
   /** Greatest caller-supplied timestamp accepted by the reducer. */

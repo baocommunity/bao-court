@@ -582,6 +582,15 @@ confirm_open → confirm_closed → challenge_window
   confirmation hash (`hashCourtConfirmation`) binds the session, the
   proposal, and the roster index, so a confirmation is the juror's own
   attributable, non-replayable signed statement.
+- **The confirmation quorum defaults to the roster supermajority.** The
+  factory's `confirmQuorum` default is $\lceil 2N/3 \rceil$ (4-of-5, 10-of-15,
+  30-of-45, 90-of-135) — not 1. A host may configure a smaller quorum (the
+  shipped 3-of-5 rollout is such a policy), and the machine then records
+  `quorumBelowSupermajority: true` in its state so a policy layer can gate on
+  it. The capture cost of both choices is tabulated in App. A, S-15, §1.3: the
+  one-confirmation default captured most of the time at every plausible
+  adversary weight share, and the shipped 3-of-5 captures several times more
+  often than the $\lceil 2N/3\rceil$ standard the threat model names.
 - **The challenge window is bond-witnessed.** A challenge must carry a
   verified bond witness: the host verifies the bond *before* dispatching the
   event, and the reducer binds the witness hash so any observer can

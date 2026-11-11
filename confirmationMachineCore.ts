@@ -39,6 +39,19 @@ export const MAX_LADDER_ROUNDS = 5;
 export const DEFAULT_LADDER_ROUNDS = 2;
 export const MIN_ROUND_ROSTER = 3;
 
+/**
+ * The supermajority confirm quorum for an N-seat roster: ⌈2N/3⌉.
+ *
+ * This is the threshold the threat model names (PO-1) and the one the capture
+ * table in `docs/proofs/economics/05-review-gapfills.tex.md` §1 assumes:
+ * 4-of-5, 10-of-15, 30-of-45, 90-of-135. R25 makes it the FACTORY DEFAULT
+ * (it used to be 1) and keeps it exported so hosts can compare their own
+ * policy against it (`state.quorumBelowSupermajority` is derived from it).
+ */
+export function confirmSupermajority(rosterSize: number): number {
+  return Math.ceil((2 * rosterSize) / 3);
+}
+
 export const TERMINAL_PHASES = new Set<CourtConfirmationPhase>(['final', 'expired', 'aborted']);
 
 /** Phases a clock tick may expire, with the deadline that governs each. */
