@@ -63,6 +63,9 @@ const EVENT_ID = hexId('8');
 const CASE_ID = 'court:market-r43-wire:1';
 const ROUND_BOND = padHexId('a2');
 
+/** The host half of the binding (r8-2): routed case id + NIP-98 pubkey. */
+const BINDING = { caseId: CASE_ID, authenticatedPubkey: CHALLENGER_PUBKEY } as const;
+
 function request(overrides: Partial<CourtEscalationRequest> = {}): CourtEscalationRequest {
   return buildCourtEscalationRequest({
     caseId: CASE_ID,
@@ -174,7 +177,7 @@ describe('(H-6) the escalation request wire round-trips, and the parse is strict
 describe('(H-6) the machine event built from the wire is field-for-field the reducer\'s', () => {
   it('carries every witness field, and takes only the host-known fields from the CASE', () => {
     const state = resolvedRoundOne();
-    const event = escalationRequestToMachineEvent(state, request(), 3200);
+    const event = escalationRequestToMachineEvent(state, request(), 3200, BINDING);
     expect(event).toEqual({
       type: 'escalate',
       authority: 'challenger',
@@ -199,7 +202,7 @@ describe('(H-6) the machine event built from the wire is field-for-field the red
 
   it('omits the optional witness (rather than sending null) on a legacy request', () => {
     const state = resolvedRoundOne();
-    const event = escalationRequestToMachineEvent(state, request({ roundBondProofHash: null }), 3200);
+    const event = escalationRequestToMachineEvent(state, request({ roundBondProofHash: null }), 3200, BINDING);
     expect('roundBondProofHash' in event).toBe(false);
   });
 
@@ -209,6 +212,7 @@ describe('(H-6) the machine event built from the wire is field-for-field the red
       state,
       request({ bondProofHash: hexId('f') }),
       3200,
+      BINDING,
     )).toThrow(/no accepted challenge bond/);
   });
 });
@@ -218,7 +222,7 @@ describe('(H-6) the strict path ACCEPTS a transported round bond', () => {
     const state = resolvedRoundOne({ requireRoundBond: true });
     expect(state.requireRoundBond).toBe(true);
     const transported = parseCourtEscalationRequest(serializeCourtEscalationRequest(request()));
-    const event = escalationRequestToMachineEvent(state, transported, 3200);
+    const event = escalationRequestToMachineEvent(state, transported, 3200, BINDING);
     const next = reduceCourtConfirmationMachine(state, event);
     expect(next.phase).toBe('ladder_pending');
     // `escalate` records round 2 and parks at `ladder_pending`; the round itself
@@ -243,6 +247,7 @@ describe('(H-6) the strict path ACCEPTS a transported round bond', () => {
       state,
       parseCourtEscalationRequest(serializeCourtEscalationRequest(request({ roundBondProofHash: null }))),
       3200,
+      BINDING,
     );
     expect(() => reduceCourtConfirmationMachine(state, withoutWitness)).toThrow(
       /requires a per-round bond witness/,

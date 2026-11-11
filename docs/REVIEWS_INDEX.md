@@ -85,7 +85,8 @@ attacker is a caller — it holds the reducer, the HTTP route, or the env var.
 | **4** | `REVIEW_ROUND_4.md` | the v0.13.0 surface from the inside: per-round bond, derived ladder bound, decay pairing, host churn cap | **2 EXPLOITABLE fixed** (r33-1: another juror's *membership* bond was a legal per-round payment; r33-5: an emptied log un-consumed a bond and opened a free rung — then bricked the case); **1 EXPLOITABLE-at-host** (r33-10: unmeasured cohort ⇒ no cap change on demo/mainnet); **4 PARTIAL** (1 fixed *r33-9* `Infinity` from finite inputs, 1 barrier hardened, 2 registered) | v0.13.1 (#103/#106) | 10 registered residuals with fix shapes; **6 of 21 tests red on the unfixed base** |
 | **5** | `REVIEW_ROUND_5.md` | the round-4 closures, attacked on the premise they rest on | **1 EXPLOITABLE fixed** (r38-1: the challenge pool had **no uniqueness** — one paid bond bought N challengers' standing, a two-step r29-1 bypass); **2 PARTIAL** (r38-2 `requireRoundBond` × `hostEscalation` prices nothing — documented + pinned + owner decision; r38-3 pubkey unverifiable — v0.14); **1 host** (r38-4: the host vendors the *pre-fix* `ladderEconomics.ts`, so wiring the r33-7 gate would wire the bug) | #107 | 8 residual rows, each with a disposition; 3 closures red on v0.13.1 |
 | **6** | `REVIEW_ROUND_6.md` | the round-5 and round-37 fixes, at the entries that **spend a rung** | **2 EXPLOITABLE fixed** (r40-1: `escalate` re-derived the log but not the challenge pool it reads — and `open_ladder_round` ran no barrier at all; r40-2: a restored `ladder_pending` with its record deleted opened the rung); **1 PARTIAL in-package** (r40-3: the hash is unique but not **owned** — a derivable witness is preemptable); **2 PARTIAL host** (r40-4 composed predicate ≠ sign rule; r40-5 boot backfill bypasses the creation gate); docs drift fixed (r40-6) | #109, release **v0.13.2** (#110) | **490-state legal-state hunt: 0 refusals**; 6 closures red on #108 |
-| **7** | `REVIEW_ROUND_7.md` | the v0.13.2 surface | **in flight at the time of this index** — lands as its own document and PR; no numbers are asserted here | — | see that file when it merges |
+| **7** | `REVIEW_ROUND_7.md` | the v0.13.2 surface: the sign-rule predicate, the legacy depth clamp, the three stated non-readers, the strict round-bond default | **1 EXPLOITABLE fixed** (r41-1: `finalize` minted a verdict from a vote ledger it never re-derived — `concede` was the route in; `upheld` was caller-supplied and absent from the hash); **1 doc defect fixed** (r41-T1-doc: the `a_f` monotonicity sentence pointed the wrong way); **6 host findings** (H-1 ρ/β ≠ the enforced cap, H-2 ρ unmeasurable, H-3/H-4/H-5 the clamp's readers, metric and permanence, H-6 the escalate body cannot carry the witness) | #112; release **v0.14.0** (#114), which also shipped the H-6 transport | 4 closures red on `1b33b2f`; 40/40 legal flows finalize unchanged |
+| **8** | `REVIEW_ROUND_8.md` | the v0.14.0 **escalation transport** and the r41-1 finality barrier, re-attacked from outside | **2 EXPLOITABLE fixed** (r8-1: `caseId` encoded lossily — unpaired surrogate and U+FFFD, two requests, **one digest**; r8-2: the transport **bound nothing** — an unverified `challengerPubkey` wrote a non-escalator into the append-only log, a stale `round` opened a rung nobody authorised, a `caseId` crossed cases); **4 PARTIAL fixed** (r8-3 `concession` coerced to false, r8-4 duplicate JSON keys silently resolved, r8-5 `build` validated A and returned B, r8-6 `resolve_round` bricked a case on a history that outran the ladder); the finality barrier **BLOCKED on all four paths to `finalize`** | this PR | 13 red on v0.14.0; the four r41-1 closures confirmed real (4 red on `1b33b2f`); consistent-forgery residual host-owned |
 
 Between rounds 3 and 6 the campaign also ran the instrument rounds that produce
 the numbers in §3: **29** corpora extension (#96), **30** transport + ceremony
@@ -172,12 +173,14 @@ column *Reproduce* names the command or file.
 | Review round 4 | 17 attacks | **2** (r33-1, r33-5) | 1 (r33-10) | 4 | — | rest | 3 + 1 partial |
 | Review round 5 | 17 attacks | **1** (r38-1) | — | 2 | — | rest | 1 |
 | Review round 6 | 16 attacks | **2** (r40-1, r40-2) | — | 3 | — | rest | 2 + 3 doc |
-| Review round 7 | in flight | — | — | — | — | — | — |
+| Review round 7 | 21 attacks | **1** (r41-1) | — | 1 | — | rest | 3 |
+| Review round 8 | 34 attacks | **2** (r8-1, r8-2) | — | 4 | — | rest | 6 + 1 doc |
 
 **Every exploitable finding in the review rounds was fixed in the round that
-found it**: r29-1, r33-1, r33-5, r33-6, r38-1, r40-1, r40-2 — seven named
-closures, each with a test that is red on the pre-fix head (4 of 15 in round 3,
-6 of 21 in round 4, 3 of 27 in round 5, 6 of 23 in round 6). The one CRITICAL
+found it**: r29-1, r33-1, r33-5, r33-6, r38-1, r40-1, r40-2, r41-1, r8-1, r8-2 —
+ten named closures, each with a test that is red on the pre-fix head (4 of 15 in
+round 3, 6 of 21 in round 4, 3 of 27 in round 5, 6 of 23 in round 6, 4 in round
+7, **13 red of 34 in round 8**). The one CRITICAL
 finding in the whole record is from the pre-mainnet August round (complaint
 protocol without possession binding → group-secret extraction), and no review
 round has ever found a REJECT-level defect in the paper.

@@ -11,6 +11,66 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (review-round-8 — the escalation transport and the r41-1 barrier attacked)
+- **The transport bound nothing: three unchecked wire claims (r8-2,
+  exploitable).** `escalationRequestToMachineEvent` filled `challengerIdx` from
+  the bond owner and then forwarded the wire's `challengerPubkey`, giving the
+  impression it had verified a pairing it cannot see — `CourtConfirmationMachineState`
+  carries indices, not pubkeys (r29-5). Measured on v0.14.0: a bonded challenger
+  minted an escalation the reducer accepted whose append-only `escalationLog`
+  named **juror 3's** pubkey (attribution forgery, the r29-2 harm at mint time);
+  a request signed to escalate past round 1 was accepted at round 3
+  (`roundIndex` comes from the case, the wire's `round` was inert — replayable on
+  every rung of a legacy case, where nothing is consumed); and a request for one
+  case reduced on another (`caseId` was in the hash but never compared). The
+  mapping now requires the host's `CourtEscalationBinding` — the case id it
+  ROUTED on and the pubkey NIP-98 PROVED — and refuses a request that disagrees
+  with either, or whose `round` is not the round being resolved. An ambiguous
+  bond ledger (one hash, two owners on a restored snapshot) is refused rather
+  than resolved by `Array.find`. **Consumer impact:** source-compatible (the
+  fourth parameter is optional in the type) but behaviour-breaking by design — a
+  3-argument call now throws instead of minting an unbound escalation. No
+  downstream consumer exists yet (the vendored `@bao/frost-court` is 0.7.2);
+  `PER_ROUND_BOND.md` states the requirement.
+- **`caseId` was encoded lossily, so two requests could share one hash (r8-1,
+  exploitable).** The preimage is `TextEncoder`-encoded, and an unpaired UTF-16
+  surrogate is replaced by U+FFFD — so `"…:1\uD800"` and `"…:1\uFFFD"`, two
+  different ids and two different wire strings, produced the **same** request
+  hash (measured: `6fbca7ac…` for both). That is the r7 H-6 collision (one
+  digest, two meanings) one field over, on the value hosts dedupe and audit by.
+  `caseId` is now canonical UTF-8, `U+0000`-free and bounded at 256 bytes
+  (`MAX_ESCALATION_CASE_ID_BYTES`), which makes the encoding injective over the
+  accepted domain (pinned with a 2 000-id sweep).
+- **`concession` was read as a truthiness test (r8-3).** `"true"`, `1`, `"yes"`,
+  `{}`, `[]`, `null` all parsed to `false`, dropping a signed flag while the hash
+  committed to `'0'`. A non-boolean is now a typed refusal, at `parse` and at
+  `build`; absent still means `false`.
+- **`parse` resolved duplicate JSON keys silently (r8-4).**
+  `{"roundBondProofHash":null,"roundBondProofHash":"<real>"}` is one request to
+  the codec and two claims to anyone reading the body (`JSON.parse` keeps the
+  last). The string form is now scanned at depth 1 and a repeated field — after
+  decoding, so `"c\u0061seId"` counts — is a typed refusal. An already-parsed
+  object cannot be checked; hosts must hand `parse` the body text.
+- **`build` validated one `caseId` and returned another (r8-5).** Each field was
+  read twice, so a getter/`Proxy` could fail the emptiness check on one value and
+  populate the request with another, and a non-string second read escaped as a
+  raw `TypeError` instead of this module's typed refusal. Every field is now
+  snapshotted exactly once before any check.
+- **`resolve_round` appended onto a history that outran nothing (r8-6).** A
+  restored `ladder_vote_closed` snapshot with `ladderRound = 4` and one record
+  resolved and appended round 4, producing `[1,4]` — a history **no later barrier
+  accepts**, so the case could never finalize again (the r40-2 brick, value
+  locked). `onResolveRound` now requires
+  `outcomeHistory.length === ladder.round − 1`, which the live path always
+  satisfies. A legal two-round ladder still resolves `[1,2]` (pinned).
+- `__tests__/reviewRound8.test.ts` (34) — the two exploitable closures, the four
+  PARTIAL closures, the four finality paths re-attacked from the outside, the
+  registered consistent-forgery boundary, and the over-strictness controls:
+  **13 red on v0.14.0**, 34 green here. `docs/REVIEW_ROUND_8.md` records the
+  attack, repro, measured outcome and disposition per target, and confirms the
+  four r41-1 closures are real pins (4 red on `1b33b2f`, pre-#112). Suite
+  **1,804 passed / 1 skipped (81 files + 1 skipped)**.
+
 ### Added (review-round-7 H-6 — the escalation request wire)
 - **`courtEscalationRequest.ts` — the challenger's escalation request as a
   versioned wire codec, carrying the per-round bond witness.** The machine has

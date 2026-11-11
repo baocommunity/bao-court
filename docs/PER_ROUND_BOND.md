@@ -164,6 +164,15 @@ request hash. Both halves now ship: the package codec (domain **v2**, witness in
 the preimage) and the host's byte-identical `hashEscalationRequest` / body field.
 Ship the transport before enforcing the policy.
 
+**The mapping needs the host's binding (r8-2).** `escalationRequestToMachineEvent`
+takes a fourth argument, `{ caseId, authenticatedPubkey }` — the case id the
+host routed on and the pubkey the request authenticated as (NIP-98). The reducer
+carries indices, not pubkeys, so it cannot pair `challengerPubkey` with the bond
+owner (r29-5); without the binding the transport used to mint an escalation
+whose append-only log could name ANY juror, apply a request signed for one case
+to another, and accept a request signed for round 1 at round 3. All three are
+refused now, and a 3-argument call is a refusal rather than a silent pass.
+
 **Never compose `requireRoundBond: true` with `hostEscalation: true`** (R38,
 r38-2). The break-glass row above exempts a *challenger* escalation from the
 round-bond requirement, not just the host's, so the strict policy prices
