@@ -330,6 +330,11 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
   if (!Array.isArray(log)) {
     throw new CourtConfirmationTransitionError('escalation log must be an array');
   }
+  // The log's completeness rule is sized from `ladderRound`, so a snapshot whose
+  // two round counters disagree must not reach it (r10-4). Enforced by the three
+  // entries that consume the log — `escalate`, `open_ladder_round`, `finalize`
+  // — each of which calls `assertRoundCountersAgree` first; this barrier keeps
+  // its own (log-shaped) job so a caller can still ask it about a log alone.
   if (log.length > MAX_LADDER_ROUNDS) {
     throw new CourtConfirmationTransitionError(
       `escalation log exceeds the ${MAX_LADDER_ROUNDS}-round ladder bound`,
@@ -463,6 +468,45 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
         'escalation log authority must be "challenger" or "host"',
       );
     }
+  }
+}
+
+/**
+ * One round number per case — `ladderRound` and `ladder.round` must agree
+ * (r9-4, r10-4).
+ *
+ * The state carries TWO round counters. `ladderRound` is the machine's own
+ * count: `escalate` derives `roundIndex = ladderRound + 1`, `open_ladder_round`
+ * advances it, and `assertValidEscalationLog` sizes the log from it.
+ * `ladder.round` is the round the VOTE ledger belongs to, and it is what
+ * `deriveFinalVerdict` compares the last history record against. The machine
+ * writes both in the same transition, so they agree in every state it can
+ * produce.
+ *
+ * Round 9 found that the r8-6 history rule read one of the two, and taught
+ * `resolve_round` and the transport mapper to refuse a snapshot where they
+ * disagree. Round 10 measured that this was still LOCAL: a restored
+ * `fee_settlement` snapshot with `ladderRound = 3` (two escalations on the
+ * append-only log — two round bonds consumed, two panels seated) and
+ * `ladder.round = 2` passed every barrier `finalize` runs and minted ROUND 2's
+ * verdict over the round the last paid panel actually decided
+ * (`docs/REVIEW_ROUND_10.md` §4). The invariant therefore lives here — beside
+ * the barriers — and is enforced at the ONE point every event passes (the
+ * reducer's pre-dispatch block), so no present or future transition inherits
+ * the gap.
+ */
+export function assertRoundCountersAgree(state: CourtConfirmationMachineState): void {
+  const ladder = state.ladder;
+  // Before the first rung opens there is no ladder round to compare with, and
+  // `ladderRound` is 0 (`challenge_window`, `ladder_pending`'s first half).
+  if (ladder === undefined || ladder === null) return;
+  if (ladder.round !== state.ladderRound) {
+    throw new CourtConfirmationTransitionError(
+      `the round counters disagree: ladderRound is ${String(state.ladderRound)} but the open round is `
+      + `${String(ladder.round)} — the machine writes both in the same transition, and the history `
+      + 'rule reads one while every escalation rule reads the other, so a restored snapshot with two '
+      + 'round numbers is not one it could have produced (r9-4/r10-4)',
+    );
   }
 }
 

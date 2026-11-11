@@ -30,6 +30,7 @@ import {
   assertBeforeDeadline,
   assertHex32,
   assertParticipant,
+  assertRoundCountersAgree,
   assertRoundParticipant,
   assertValidConfirmationLedger,
   assertValidEscalationLog,
@@ -255,6 +256,12 @@ export function onOpenLadderRound(
       `cannot open a ladder round during ${state.phase}`,
     );
   }
+  // One round number per case (r10-4). `event.round` is checked against
+  // `ladderRound` below and then written to BOTH counters — so a skewed snapshot
+  // would silently heal into a jump (`ladder.round` 2 -> 4) that the outcome
+  // history, which is sized by the same number, can never satisfy: the case
+  // resolves never again. Refused before the seat is spent.
+  assertRoundCountersAgree(state);
   // Rung-spend barrier (round-40 finding r40-2). `open_ladder_round` is where a
   // pending escalation actually costs a panel seat, and it used to be the ONE
   // rung-opening transition with no barrier: a restored `ladder_pending`
@@ -376,22 +383,17 @@ export function onResolveRound(
   // Round-9 finding r9-4: the r8-6 rule below compared the history with
   // `ladder.round` — ONE of the two counters — and never checked that
   // `ladder.round` is the machine's own round. `ladderRound` is the counter every
-  // other transition reads (`escalate` derives `roundIndex = ladderRound + 1`,
-  // `open_ladder_round` advances it, `assertValidEscalationLog` sizes the log
-  // from it), and both are written together, so they agree in every state this
-  // machine can produce. A restored snapshot that disagrees is not a state the
-  // machine could have made, and choosing the smaller counter is exactly how the
-  // r8-6 guard was bypassed: `ladderRound = 4` with `ladder.round = 2` and ONE
-  // history record passed the length check and appended round 2 — three rungs on
-  // the escalation log, two on the history (measured; see
-  // `docs/REVIEW_ROUND_9.md` §4).
-  if (state.ladderRound !== state.ladder.round) {
-    throw new CourtConfirmationTransitionError(
-      `the round counters disagree: ladderRound is ${state.ladderRound} but the open round is `
-      + `${state.ladder.round} — a restored snapshot must not carry two round numbers, because the `
-      + 'history rule below reads one and every escalation rule reads the other (r9-4)',
-    );
-  }
+  // other transition reads, and both are written together, so they agree in
+  // every state this machine can produce. A restored snapshot that disagrees is
+  // not a state the machine could have made, and choosing the smaller counter is
+  // exactly how the r8-6 guard was bypassed: `ladderRound = 4` with
+  // `ladder.round = 2` and ONE history record passed the length check and
+  // appended round 2 (measured; see `docs/REVIEW_ROUND_9.md` §4).
+  //
+  // Round 10 (r10-4) hoisted the same invariant into a shared barrier that the
+  // reducer runs before EVERY event, so this entry can no longer be the only
+  // place it is checked — see `assertRoundCountersAgree`.
+  assertRoundCountersAgree(state);
   if (state.outcomeHistory.length !== state.ladder.round - 1) {
     throw new CourtConfirmationTransitionError(
       `cannot resolve round ${state.ladder.round}: the outcome history holds `
@@ -558,6 +560,13 @@ export function onEscalate(
       `cannot escalate during ${state.phase}`,
     );
   }
+  // One round number per case (r10-4): the rung this event opens is derived from
+  // `ladderRound`, while `ladder.round` is the number the history and the
+  // verdict are read against. A snapshot where they disagree opens a rung the
+  // ladder will never be able to resolve (the case bricks with value in escrow),
+  // so it is refused before a panel seat is spent — and before the cap check,
+  // which reads the same counter.
+  assertRoundCountersAgree(state);
   // Fail closed: a hand-restored snapshot parked at round_resolved with
   // the cap already reached must not re-open the ladder.
   if (state.ladderRound >= state.maxLadderRounds) {
@@ -804,6 +813,13 @@ export function onFinalize(
   if (state.phase !== 'fee_settlement') {
     throw new CourtConfirmationTransitionError(`cannot finalize during ${state.phase}`);
   }
+  // One round number per case (r10-4). The verdict below is derived from the
+  // round `ladder.round` names, while the log completeness rule above sizes
+  // itself from `ladderRound`: a restored snapshot where they disagree let the
+  // case mint ROUND 2's outcome on top of an append-only log recording that
+  // rounds 2 AND 3 were opened and paid — the verdict discards the decision of
+  // the last panel that was actually seated (`docs/REVIEW_ROUND_10.md` §4).
+  assertRoundCountersAgree(state);
   // Ledger barrier (cross-module round 2, SEQUENCE-4): the confirmation
   // ledger becomes the verdict's supporting event ids, so a restored or
   // hand-tampered snapshot is re-verified against the canonical
