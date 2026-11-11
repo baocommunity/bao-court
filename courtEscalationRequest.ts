@@ -96,6 +96,7 @@
 
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { verifyEvent } from 'nostr-tools/pure';
 
 import { HEX_32, isRecord } from './courtEventParseCore';
 import { isCanonicalUtf8Text } from './courtCeremonyCore';
@@ -163,6 +164,47 @@ const WIRE_FIELDS = [
 ] as const;
 
 const textEncoder = new TextEncoder();
+
+/**
+ * Characters that may not travel into an error message verbatim (r10-1).
+ *
+ * `Cc` = C0/C1 controls (newline, tab, NEL U+0085, …), `Cf` = format characters
+ * (zero-width space/joiners, bidi marks and overrides U+200B–U+200F,
+ * U+202A–U+202E, U+2066–U+2069, soft hyphen, U+180E, BOM), `Zl`/`Zp` = the line
+ * and paragraph separators, `Cs` = lone surrogates.
+ */
+const UNSAFE_ECHO = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/gu;
+
+/** Longest value echoed into a refusal (chars), so one refusal cannot flood a log. */
+const MAX_ECHO_CHARS = 64;
+
+/**
+ * Quote an attacker-supplied wire value for an ERROR MESSAGE (r10-1).
+ *
+ * Every refusal in this module is meant to be logged — the append-only
+ * escalation log, an operator's stderr, a bug ticket — so a refusal that
+ * interpolates the offending value VERBATIM is a log-injection channel. A case
+ * id may carry any character that survives the id rules: only the ENDS are
+ * whitespace-checked, so `"court:A\nESCALATION ACCEPTED for …"` is a legal id,
+ * and a host that logs the refusal prints a forged, well-formed line after the
+ * newline. U+202E (RIGHT-TO-LEFT OVERRIDE) does the same to a rendered line
+ * without any newline at all, and a 256-byte id doubled into a two-id message
+ * makes every refusal a 512-byte log entry.
+ *
+ * Escaping the value (never re-interpreting it) is the fix that keeps the
+ * diagnostic: the reason and the bytes are both still on the line, they just
+ * cannot BE a line.
+ */
+function quoteWireValue(value: string): string {
+  const chars = [...value];
+  const clipped = chars.length <= MAX_ECHO_CHARS
+    ? value
+    : `${chars.slice(0, MAX_ECHO_CHARS).join('')}…`;
+  return clipped.replace(
+    UNSAFE_ECHO,
+    (ch) => `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`,
+  );
+}
 
 function assertHex32(value: unknown, field: string): string {
   if (typeof value !== 'string' || !HEX_32.test(value)) {
@@ -288,7 +330,7 @@ export function buildCourtEscalationRequest(input: {
   ) {
     throw new CourtConfirmationTransitionError(
       `escalation request round must be an integer in 1..${MAX_ESCALATION_REQUEST_ROUND} `
-      + `(got ${String(roundRaw)})`,
+      + `(got ${quoteWireValue(String(roundRaw))})`,
     );
   }
   const roundBondProofHash = roundBondProofHashRaw == null
@@ -475,7 +517,7 @@ function assertNoRepeatedWireFields(text: string): void {
     index += 1;
     if (seen.has(key.value)) {
       throw new CourtConfirmationTransitionError(
-        `escalation request repeats the field ${key.value}`,
+        `escalation request repeats the field ${quoteWireValue(key.value)}`,
       );
     }
     seen.add(key.value);
@@ -517,7 +559,9 @@ export function parseCourtEscalationRequest(raw: unknown): CourtEscalationReques
   }
   for (const key of Object.keys(value)) {
     if (!(WIRE_FIELDS as readonly string[]).includes(key)) {
-      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);
+      throw new CourtConfirmationTransitionError(
+        `escalation request has an unknown field ${quoteWireValue(key)}`,
+      );
     }
   }
   return buildCourtEscalationRequest({
@@ -564,6 +608,145 @@ export function parseCourtEscalationRequest(raw: unknown): CourtEscalationReques
 export interface CourtEscalationBinding {
   readonly caseId: string;
   readonly authenticatedPubkey: string;
+}
+
+/**
+ * The published request EVENT, as its signature sees it (r10-3).
+ *
+ * Only the seven fields a Nostr id commits to: `id = sha256(canonical
+ * [0, pubkey, created_at, kind, tags, content])`, and the signature covers
+ * `id`. That is why this — not the request body — is the authority: the body is
+ * a set of fields a caller can retype, while `content` is bytes the signer
+ * signed.
+ */
+export interface CourtEscalationRequestEvent {
+  readonly kind: number;
+  readonly pubkey: string;
+  readonly created_at: number;
+  readonly tags: readonly (readonly string[])[];
+  readonly content: string;
+  readonly id: string;
+  readonly sig: string;
+}
+
+/**
+ * The bytes a request is SIGNED over (r10-3): the canonical wire form WITHOUT
+ * `eventId`.
+ *
+ * The field is the id of the very event that carries these bytes, so it cannot
+ * be inside them — a hash cannot contain its own digest. Publishing
+ * `content: courtEscalationRequestSignedContent(request)` and then setting
+ * `eventId` to the resulting event id is the only non-circular shape, which is
+ * why the builder ships with the verifier: a host that invents its own content
+ * layout is outside the binding below.
+ */
+export function courtEscalationRequestSignedContent(request: CourtEscalationRequest): string {
+  const normalised = buildCourtEscalationRequest(request);
+  const wire = JSON.parse(serializeCourtEscalationRequest(normalised)) as Record<string, unknown>;
+  delete wire.eventId;
+  return JSON.stringify(wire);
+}
+
+/**
+ * Derive the host binding from the SIGNED request event (r10-3), instead of
+ * accepting two strings the host might have copied out of the body (r9-6).
+ *
+ * WHY THIS EXISTS. r9-3 refused a request whose `concession` flag was `true`, so
+ * the mapper could not mint an ESCALATION from the body of a signed CONCESSION.
+ * That guard is a FIELD check, and the flag is a field: the same signed event
+ * re-presented with `concession: false` was accepted (measured — `docs/
+ * REVIEW_ROUND_10.md` §3), minting an escalation whose `requestHash` was the
+ * hash of a request nobody signed (`H(concession=0)` for bytes that said `1`).
+ * The mirror direction is worse and has no guard at all: the package offers no
+ * concession transition, so nothing refused a signed ESCALATION re-labelled
+ * `concession: true` — and it is the flag, not the signature, that a host reads
+ * to decide whether the appeal is dropped.
+ *
+ * WHAT BINDS IT. `content` must equal {@link courtEscalationRequestSignedContent}
+ * of THE request being verified (the canonical wire form minus `eventId`, which
+ * is the event's own id and therefore cannot be inside it), and the id and
+ * signature must cover that content. The flag, the case id, the round, both bond
+ * witnesses and `signedAtSec` are all inside those bytes, so:
+ *
+ *  - a SIGNED concession cannot become an escalation and a SIGNED escalation
+ *    cannot become a concession — flipping the flag changes `content`, so the
+ *    event id no longer names this request (both directions pinned);
+ *  - a request cannot be replayed under another KIND, because `kind` is inside
+ *    the id (`expectedKind` is the host's request kind, checked here);
+ *  - `caseId` needs no host binding at all: it is signed;
+ *  - `authenticatedPubkey` is the event's author, derived from the signature —
+ *    never an echo of the body (this is what r9-6 registered as impossible for a
+ *    pure string comparison).
+ *
+ * A host that publishes requests with `serializeCourtEscalationRequest(request)`
+ * as `content` can therefore close r9-6 and r10-3 in one call: pass the result
+ * to {@link escalationRequestToMachineEvent}. A host that keeps its own event
+ * shape must do the same two comparisons itself.
+ *
+ * @throws {@link CourtConfirmationTransitionError} when the event is not of
+ *         `expectedKind`, does not carry this request's id, fails signature
+ *         verification, was authored by a key other than the claimed
+ *         challenger, was created at another time, or carries content that is
+ *         not this request's canonical serialization.
+ */
+export function escalationRequestBindingFromSignedEvent(
+  request: CourtEscalationRequest,
+  event: CourtEscalationRequestEvent,
+  expectedKind: number,
+): CourtEscalationBinding {
+  const normalised = buildCourtEscalationRequest(request);
+  if (!isRecord(event)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request event must be an object',
+    );
+  }
+  if (!Number.isSafeInteger(expectedKind) || expectedKind < 0 || event.kind !== expectedKind) {
+    throw new CourtConfirmationTransitionError(
+      `escalation request event has kind ${String(event.kind)} but this route publishes kind `
+      + `${String(expectedKind)}: a request signed for another kind is another claim (r10-3)`,
+    );
+  }
+  if (event.id !== normalised.eventId) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request names an event id that is not the id of the signed event presented with it',
+    );
+  }
+  // Rebuilt as a plain object before verification: nostr-tools memoises the
+  // verdict ON the object it is handed (see `validator.ts`), so a caller's
+  // object that already carries a verdict must not be reused as the input.
+  const plain = {
+    kind: event.kind,
+    pubkey: event.pubkey,
+    created_at: event.created_at,
+    tags: event.tags.map((tag) => [...tag]),
+    content: event.content,
+    id: event.id,
+    sig: event.sig,
+  };
+  if (!verifyEvent(plain as Parameters<typeof verifyEvent>[0])) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request event signature does not verify: the request is not what its author signed',
+    );
+  }
+  if (plain.pubkey !== normalised.challengerPubkey) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request challengerPubkey is not the author of the signed event: the wire claim has '
+      + 'no signature over it',
+    );
+  }
+  if (plain.created_at !== normalised.signedAtSec) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request signedAtSec is not the created_at of the signed event',
+    );
+  }
+  if (plain.content !== courtEscalationRequestSignedContent(normalised)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request is not the canonical serialization the signed event carries: a field of the '
+      + 'body (the concession flag, the case id, a bond witness, the round) differs from what was '
+      + 'signed, so the digest of this request is a claim nobody authorised (r10-3)',
+    );
+  }
+  return { caseId: normalised.caseId, authenticatedPubkey: plain.pubkey };
 }
 
 /**
@@ -636,8 +819,8 @@ export function escalationRequestToMachineEvent(
   }
   if (normalised.caseId !== boundCaseId) {
     throw new CourtConfirmationTransitionError(
-      `escalation request names case "${normalised.caseId}" but the host bound it to `
-      + `"${boundCaseId}" — a request must not cross cases`,
+      `escalation request names case "${quoteWireValue(normalised.caseId)}" but the host bound it to `
+      + `"${quoteWireValue(boundCaseId)}" — a request must not cross cases`,
     );
   }
   if (normalised.challengerPubkey !== authenticatedPubkey) {

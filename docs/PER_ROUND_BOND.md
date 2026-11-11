@@ -69,10 +69,19 @@ transaction, which a batch payout shares) must mix the juror index into the
 witness. Note *why* that is mandatory rather than tidy: a **derivable** witness is
 **preemptable**. `hash(bondTxid)` is computable the moment the bond is on chain,
 and uniqueness is first-come-first-served, so a juror that owns no bond can
-register it under its own index and lock the payer out (R40, r40-3). The machine
-cannot tell owner from copier — the state carries no idx→pubkey registry (r38-3)
-— so the host's bond verifier must bind the witness to the **event author**, and
-v0.14's `accept_challenge` pubkey makes it re-derivable.
+register it under its own index and lock the payer out (R40, r40-3) — twice over,
+because the payer's OWN `accept_challenge` is then refused and a challenger with
+no challenge record cannot escalate either. The machine cannot tell owner from
+copier — `accept_challenge` carries no pubkey and the state keeps no idx→pubkey
+registry (r38-3) — so the host's bond verifier must bind the witness to the
+**event author**, the one value the reducer is never given
+(`__tests__/reviewRound10.test.ts` › `T2` pins the lockout, not just the
+attribution).
+
+Round 10 (r10-3) also gave the escalation request a signature-domain binding
+(`escalationRequestBindingFromSignedEvent`), so the binding the mapper trusts no
+longer has to be filled from the wire: the request's `content` is checked against
+its canonical serialization and the author is taken from the signature.
 
 The hash is bound to the round by construction: the witness's `roundIndex` must
 open exactly `ladderRound + 1`, the record stores that round, and the log is

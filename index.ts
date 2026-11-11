@@ -605,12 +605,15 @@ export {
   MAX_ESCALATION_CASE_ID_BYTES,
   buildCourtEscalationRequest,
   courtEscalationRequestPreimage,
+  courtEscalationRequestSignedContent,
+  escalationRequestBindingFromSignedEvent,
   escalationRequestToMachineEvent,
   hashCourtEscalationRequest,
   parseCourtEscalationRequest,
   serializeCourtEscalationRequest,
   type CourtEscalationBinding,
   type CourtEscalationRequest,
+  type CourtEscalationRequestEvent,
 } from './courtEscalationRequest';
 
 export {
