@@ -1,11 +1,12 @@
-# Mechanical verification run — proofs/mechanized/court.qnt
+# Mechanical verification run — proofs/mechanized/court.qnt + escalation.qnt
 # tool: 0.33.1
-# date: 2026-11-10T22:16:22Z
+# date: 2026-11-11T15:59:59Z
 
-═══ 1/5 quint typecheck ═══
+═══ 1/6 quint typecheck ═══
 [ok] typecheck clean
 
-═══ 2/5 quint test --main voteTests ═══
+═══ 2/6 quint test — court.qnt phase machines ═══
+--- --main voteTests ---
 
   voteTests
     ok voteHappyPathTest passed 1 test(s)
@@ -28,8 +29,8 @@
     ok voteFinalizeWithoutRevealsRejectedTest passed 1 test(s)
     ok voteVerdictReachableTest passed 1 test(s)
 
-  19 passing (956ms)
-═══ 2/5 quint test --main confirmTests ═══
+  19 passing (5550ms)
+--- --main confirmTests ---
 
   confirmTests
     ok confirmHappyPathNoChallengeTest passed 1 test(s)
@@ -52,26 +53,54 @@
     ok confirmAbortFromNonTerminalTest passed 1 test(s)
     ok confirmLadderOverturnReachableTest passed 1 test(s)
 
-  19 passing (1039ms)
-═══ 2/5 quint test --main confirmQuorumTests ═══
+  19 passing (2037ms)
+--- --main confirmQuorumTests ---
 
   confirmQuorumTests
     ok confirmQuorumNotMetCloseRejectedTest passed 1 test(s)
     ok confirmQuorumMetCloseAcceptedTest passed 1 test(s)
     ok confirmUnformedQuorumExpiresTest passed 1 test(s)
 
-  3 passing (172ms)
-═══ 2/5 quint test --main confirmCapOneTests ═══
+  3 passing (277ms)
+--- --main confirmCapOneTests ---
 
   confirmCapOneTests
     ok confirmSingleRoundSettlesDirectlyTest passed 1 test(s)
 
-  1 passing (63ms)
+  1 passing (96ms)
 
-═══ 3/5 quint run voteSim — 10 000 seeded random runs, invariants on ═══
+═══ 3/6 quint test — escalation.qnt transport scenarios ═══
+--- --main escalationTests ---
+
+  escalationTests
+    ok escalationHappyPathTest passed 1 test(s)
+    ok escalationCaseMismatchRejectedTest passed 1 test(s)
+    ok escalationPubkeyMismatchRejectedTest passed 1 test(s)
+    ok escalationStaleRoundRejectedTest passed 1 test(s)
+    ok escalationReusedRoundBondRejectedTest passed 1 test(s)
+    ok escalationMembershipBondAsRoundBondRejectedTest passed 1 test(s)
+    ok escalationForeignMembershipBondRejectedTest passed 1 test(s)
+    ok escalationUnacceptedBondRejectedTest passed 1 test(s)
+    ok openRoundSkipsRungRejectedTest passed 1 test(s)
+    ok openRoundWithoutRungRejectedTest passed 1 test(s)
+    ok escalationCapRejectedTest passed 1 test(s)
+    ok challengeDuplicateBondRejectedTest passed 1 test(s)
+    ok escalationConcedeTest passed 1 test(s)
+    ok parseAcceptsButMapRejectsTest passed 1 test(s)
+
+  14 passing (439ms)
+--- --main escalationStrictTests ---
+
+  escalationStrictTests
+    ok strictLegacyRequestRejectedTest passed 1 test(s)
+    ok strictRoundBoundAcceptedTest passed 1 test(s)
+
+  2 passing (66ms)
+
+═══ 4/6 quint run voteSim — 10 000 seeded random runs, invariants on ═══
 }
 
-[ok] No violation found (2595ms at 3854 traces/second).
+[ok] No violation found (3292ms at 3038 traces/second).
 Trace length statistics: max=16, min=2, average=3.48
 You may increase --max-samples and --max-steps.
 Use --verbosity to produce more (or less) output.
@@ -82,8 +111,8 @@ wExpired was witnessed in 3845 trace(s) out of 10000 explored (38.45%)
 wAborted was witnessed in 6130 trace(s) out of 10000 explored (61.30%)
 Use --seed=0xc8f1d --backend=rust to reproduce.
 
-═══ 4/5 quint run confirmSim — 10 000 seeded random runs, invariants on ═══
-[ok] No violation found (2675ms at 3738 traces/second).
+═══ 5/6 quint run confirmSim — 10 000 seeded random runs, invariants on ═══
+[ok] No violation found (3655ms at 2736 traces/second).
 Trace length statistics: max=21, min=2, average=3.65
 You may increase --max-samples and --max-steps.
 Use --verbosity to produce more (or less) output.
@@ -96,15 +125,46 @@ wExpired was witnessed in 4516 trace(s) out of 10000 explored (45.16%)
 wAborted was witnessed in 5409 trace(s) out of 10000 explored (54.09%)
 Use --seed=0x143784 --backend=rust to reproduce.
 
-═══ 5/5 quint verify (Apalache symbolic model checking, exhaustive to depth 10) ═══
+═══ 6a/6 quint run — escalation transport (non-strict + strict) ═══
+[ok] No violation found (2446ms at 2044 traces/second).
+Trace length statistics: max=11, min=4, average=7.14
+You may increase --max-samples and --max-steps.
+Use --verbosity to produce more (or less) output.
+Witnesses:
+wPending was witnessed in 3270 trace(s) out of 5000 explored (65.40%)
+wRung was witnessed in 3270 trace(s) out of 5000 explored (65.40%)
+wOpened was witnessed in 3270 trace(s) out of 5000 explored (65.40%)
+wTwoRungs was witnessed in 1123 trace(s) out of 5000 explored (22.46%)
+Use --seed=0x69e0d --backend=rust to reproduce.
+[ok] No violation found (1092ms at 2747 traces/second).
+Trace length statistics: max=11, min=4, average=6.96
+You may increase --max-samples and --max-steps.
+Use --verbosity to produce more (or less) output.
+Witnesses:
+wPending was witnessed in 1465 trace(s) out of 3000 explored (48.83%)
+wRung was witnessed in 1465 trace(s) out of 3000 explored (48.83%)
+wOpened was witnessed in 1465 trace(s) out of 3000 explored (48.83%)
+Use --seed=0x3e2ba --backend=rust to reproduce.
+
+═══ 6b/6 quint verify (Apalache symbolic model checking, exhaustive to depth 10) ═══
 --- voteSim ---
-The outcome is: NoError                                           I@22:29:05.153
-[ok] No violation found (741311ms).
+The outcome is: NoError                                           I@16:30:48.765
+[ok] No violation found (1794945ms).
 You may increase --max-steps.
 Use --verbosity to produce more (or less) output.
 --- confirmSim ---
-The outcome is: NoError                                           I@22:37:10.569
-[ok] No violation found (482107ms).
+The outcome is: NoError                                           I@16:50:13.305
+[ok] No violation found (1157794ms).
+You may increase --max-steps.
+Use --verbosity to produce more (or less) output.
+--- escalationSim ---
+The outcome is: NoError                                           I@16:50:36.567
+[ok] No violation found (17697ms).
+You may increase --max-steps.
+Use --verbosity to produce more (or less) output.
+--- escalationStrictSim ---
+The outcome is: NoError                                           I@16:50:44.918
+[ok] No violation found (6722ms).
 You may increase --max-steps.
 Use --verbosity to produce more (or less) output.
 

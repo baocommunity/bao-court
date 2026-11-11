@@ -1,13 +1,15 @@
-# Lean 4 mechanisation run — proofs/lean4/SingleFinality.lean
+# Lean 4 mechanisation run — proofs/lean4/{SingleFinality,LadderBound,EscalationLedger}.lean
 # tool: Lean (version 4.14.0, x86_64-unknown-linux-gnu, commit 410fab728470, Release)
-# date: 2026-11-11T00:16:00Z
+# date: 2026-11-11T15:54:11Z
 
-═══ 1/2 lake build (kernel-checks every proof) ═══
-✔ [2/3] Built SingleFinality
+═══ 1/3 lake build (kernel-checks every proof) ═══
 Build completed successfully.
 [ok] build clean, no 'sorry'
 
-═══ 2/2 axiom audit (no sorryAx / ofReduceBool / custom axioms) ═══
+═══ 2/3 no 'sorry' in the sources (belt and braces) ═══
+[ok] sources contain no 'sorry' / 'admit'
+
+═══ 3/3 axiom audit (no sorryAx / ofReduceBool / custom axioms) ═══
 'BAOCourt.terminal_untouched' depends on axioms: [propext, Quot.sound]
 'BAOCourt.final_stable' depends on axioms: [propext, Quot.sound]
 'BAOCourt.finalized_outcome_unique' does not depend on any axioms
@@ -25,5 +27,50 @@ oracle_single_finality : ∀ (s : SystemState) (e : Epoch) (m1 m2 : Message),
       look (e, c) s.sessions = some se ∧
         se.phase = Phase.feeSettlement ∧
           se.verdict.isSome = true ∧ s' = { sessions := updateAt (e, c) (Effect.advance Phase.final) s.sessions }
+'BAOCourt.Ladder.break_even_not_safe' does not depend on any axioms
+'BAOCourt.Ladder.safe_zero' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.safe_step_down' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.safe_monotone' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.pow_mul_ge' depends on axioms: [propext]
+'BAOCourt.Ladder.unsafe_witness' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.exists_unsafe' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.flipRound_spec' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.flipRound_pos' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.safe_depth_bound' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.derivedCapZero_no_safe_depth' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.safe_mono_accuracy' does not depend on any axioms
+'BAOCourt.Ladder.safe_mono_bond' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.flipRound_mono_accuracy' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.flipRound_mono_bond' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.derivedCap_mono_accuracy' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.derivedCap_mono_bond' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Ladder.perfect_jury_all_depths_safe' depends on axioms: [propext, Quot.sound]
+@Ladder.safe_depth_bound : ∀ {A D R B : Nat},
+  0 < A → A < D → 0 < R → 0 < B → ∀ (d : Nat), Ladder.safe A D R B d ↔ d < Ladder.flipRound A D R B
+@Ladder.derivedCapZero_no_safe_depth : ∀ {A D R B : Nat},
+  0 < A → A < D → 0 < R → 0 < B → Ladder.derivedCap A D R B = 0 → ∀ (d : Nat), 1 ≤ d → ¬Ladder.safe A D R B d
+'BAOCourt.Escalation.reachable_wellFormed' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.one_hash_one_index' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.one_index_one_hash' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.round_bond_consumed_once' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.round_bond_not_membership' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.round_bond_not_accepted' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.strict_case_has_round_bond' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.consumed_not_reused' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.rounds_consecutive' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.opened_rounds_from_one' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.openedRounds_strict_mono' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.rounds_strict_mono' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.log_length_bounded' depends on axioms: [propext, Quot.sound]
+'BAOCourt.Escalation.escalation_opens_next_round' depends on axioms: [propext, Quot.sound]
+@Escalation.consumed_not_reused : ∀ {strict : Bool} {c : Escalation.Case},
+  Escalation.Reachable strict c →
+    ∀ (r : Escalation.Rung),
+      r ∈ c.log →
+        ∀ (f : Escalation.Hash),
+          r.roundBond = some f → ∀ (r' : Escalation.Rung), r' ∈ c.log → r.round < r'.round → r'.roundBond ≠ some f
+@Escalation.one_hash_one_index : ∀ {strict : Bool} {c : Escalation.Case},
+  Escalation.Reachable strict c →
+    ∀ (i₁ i₂ : Escalation.Idx) (f : Escalation.Hash), (i₁, f) ∈ c.accepted → (i₂, f) ∈ c.accepted → i₁ = i₂
 
 ═══ ALL CHECKS COMPLETED ═══

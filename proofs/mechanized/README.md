@@ -6,16 +6,18 @@ An **independent second model** of the two BAO Court phase machines, written in
 | Backend | What it does | Result (see `quint-run.log`) |
 |---|---|---|
 | `quint typecheck` | type/effect checking of the spec | clean |
-| `quint test` | 42 deterministic scenario tests mirroring the TS test matrix | **42 passing, 0 failed** |
-| `quint run --invariants` | **10 000 seeded random simulation runs** (60 steps each) with all invariants checked on every state | no violation (vote + confirmation machines) |
-| `quint verify` (Apalache) | **exhaustive symbolic model checking** of the full state space to depth 10, all invariants | no violation (vote + confirmation machines) |
+| `quint test` | 58 deterministic scenario tests mirroring the TS test matrix (42 phase-machine + 16 escalation-transport) | **58 passing, 0 failed** |
+| `quint run --invariants` | **10 000 seeded random simulation runs** (60 steps) for the phase machines, plus 5 000 + 3 000 for the escalation transport (14 steps) | no violation (vote, confirmation, escalation) |
+| `quint verify` (Apalache) | **exhaustive symbolic model checking** to depth 10 (phase machines) and 8 (escalation) | no violation where a JVM is available (see the log) |
 
 The spec is a re-model, not a transcription: it was written from the TS guard
 clauses and then cross-checked against them. Differences discovered during that
 cross-check are recorded below under **Divergences & findings**.
 
-Modeled: `courtVoteMachine.ts` (paper §5) and `courtConfirmationMachine.ts` +
-`confirmationMachine{Types,Core,Handlers}.ts` (paper §6). This directory
+Modeled: `courtVoteMachine.ts` (paper §5), `courtConfirmationMachine.ts` +
+`confirmationMachine{Types,Core,Handlers}.ts` (paper §6), and the v0.14.0
+escalation WIRE (`courtEscalationRequest.ts`) landing on the reducer
+(`escalation.qnt`, Theorem 7 of `docs/proofs/07-mechanised-escalation.tex.md`). This directory
 **machine-checks the Vote/Confirmation instances of Theorem 4 — ceremony-
 machine safety** (`docs/proofs/04-machine-safety.tex.md`: "every state
 reachable from `create_M(params)` satisfies the machine's INV-* bundle") and
@@ -125,6 +127,38 @@ INV-CONF-8/9) are exercised by the TS suite with real cryptography and are
 out of scope here — the model checks the *structure* (what binds to what),
 the TS suite checks the *encoding*.
 
+## The escalation transport (`escalation.qnt`)
+
+**Theorem 7.4 (transport binding), model-checked.** An independent re-model of
+`parse → map → reduce`: `canParse` is the codec's shape check, `canMap` the
+host-binding check of `escalationRequestToMachineEvent` (r8-2), `canReduce` the
+reducer's witness checks of `onEscalate` (INV-ESC-5/9, r33-1, R42).
+
+| Quint invariant | Paper / doc reference |
+|---|---|
+| `invBinding` — every recorded escalation's wire claims (case id, pubkey) agree with the HOST binding | r8-2 (`courtEscalationRequest.ts:536–554`), Theorem 7.4 |
+| `invRoundBound` — a witness opens only `ladderRound + 1`; `roundIndex` is derived from the case, never the wire | INV-ESC-8, r40-2 (`handlers.ts:578–583`) |
+| `invRungRounds` — log rounds are a consecutive `2..ladderRound` | INV-ESC-8 (`core.ts:366–370`) |
+| `invSeatNeedsRung` — `open_ladder_round` seats only a round a pending record names | r40-2 (the rung-spend barrier) |
+| `invBondConsumption` — round bond ≠ membership bond, ≠ any accepted bond, never consumed twice | INV-ESC-9, r33-1 (`handlers.ts:640–662`, `core.ts:433–438`) |
+| `invStrict` — `requireRoundBond` ⇒ every rung has one | R42 (`handlers.ts:630–637`) |
+| `invChallenges` — one bond witness, one challenger | r38-1 (`handlers.ts:165–211`, `core.ts:565–589`) |
+| `invRungMembership` — a rung is bound to THAT challenger's accepted bond | INV-ESC-5, r29-1 |
+| `invLogBound`, `invLadderRange`, `invLadderShape` | INV-CONF-6, INV-CONF-19 |
+
+The simulation deliberately offers HOSTILE wires (another case, another juror's
+pubkey, a stale round, a legacy witness, a relabelled membership bond, an
+unaccepted bond), so a leak in the binding surfaces as a violation rather than
+passing silently. 16 scenario tests pin the negative/positive matrix, including
+"parses but does not map" (parsing ≠ binding) and the strict instance's
+legacy-refusal pair.
+
+**Abstractions:** hashes/pubkeys/case ids are `int` literals (only injectivity
+and distinctness matter); `roundBond == 0` stands for the wire's `null`. The
+codec's canonicalisation (UTF-8 injectivity, duplicate-key refusal, the v2 hash
+preimage) is TS-suite-checked, not modelled — see
+`docs/proofs/07-mechanised-escalation.tex.md` §8.
+
 ## Divergences & findings
 
 Found while building the independent model — none is a protocol bug; all are
@@ -188,7 +222,9 @@ modeling-scope notes plus two observations worth recording:
   (10k seeded runs) AND exhaustive symbolic checking (Apalache, depth 10).
 - **Not verified here:** real SHA-256 hash bindings, secp256k1/FROST math,
   event-id canonicalization, roster expansion, network/relay behavior
-  (`courtInbox`/`courtOutbox`), the DKG and signing machines. Those remain
+  (`courtInbox`/`courtOutbox`), the DKG and signing machines, the escalation
+  wire's UTF-8/duplicate-key canonicalisation, and the HOST's authentication
+  (`invBinding` relates the log to the binding, it does not prove the binding). Those remain
   with the TS suite (`npm test`) and the pen-and-paper proofs (`docs/proofs/`).
 - Apalache depth 10 covers every reachable state up to 10 transitions from
   init; the full unbounded state space is not exhausted (the deep multi-round
@@ -216,8 +252,11 @@ TS checker and Theorem 4's prose.
 
 ## Files
 
-- `court.qnt` — the spec: `protocolUtil`, `voteMachine`, `confirmationMachine`,
-  sim runners (`voteSim`, `confirmSim`), 42 scenario tests.
+- `court.qnt` — the phase-machine spec: `protocolUtil`, `voteMachine`,
+  `confirmationMachine`, sim runners (`voteSim`, `confirmSim`), 42 scenario tests.
+- `escalation.qnt` — the transport spec: `escalationTransport` (wire, binding,
+  reducer), sim runners (`escalationSim`, `escalationStrictSim`), 16 scenario
+  tests.
 - `run.sh` — deterministic re-run script (the one-command bar).
 - `quint-run.log` — committed output of the full run.
 - `README.md` — this file.

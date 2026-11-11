@@ -21,42 +21,64 @@ cd "$(dirname "$0")"
 
 QUINT="${QUINT:-quint}"
 
-echo "# Mechanical verification run — proofs/mechanized/court.qnt"
+echo "# Mechanical verification run — proofs/mechanized/court.qnt + escalation.qnt"
 echo "# tool: $($QUINT --version)"
 echo "# date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
 
-echo "═══ 1/5 quint typecheck ═══"
+echo "═══ 1/6 quint typecheck ═══"
 "$QUINT" typecheck court.qnt
+"$QUINT" typecheck escalation.qnt
 echo "[ok] typecheck clean"
 echo
 
+echo "═══ 2/6 quint test — court.qnt phase machines ═══"
 for m in voteTests confirmTests confirmQuorumTests confirmCapOneTests; do
-  echo "═══ 2/5 quint test --main $m ═══"
+  echo "--- --main $m ---"
   "$QUINT" test court.qnt --main "$m"
 done
 echo
 
-echo "═══ 3/5 quint run voteSim — 10 000 seeded random runs, invariants on ═══"
+echo "═══ 3/6 quint test — escalation.qnt transport scenarios ═══"
+for m in escalationTests escalationStrictTests; do
+  echo "--- --main $m ---"
+  "$QUINT" test escalation.qnt --main "$m"
+done
+echo
+
+echo "═══ 4/6 quint run voteSim — 10 000 seeded random runs, invariants on ═══"
 "$QUINT" run court.qnt --main voteSim --invariants inv \
   --witnesses wTallyFinal wFullLedger wExpired wAborted \
   --max-samples 10000 --max-steps 60 --seed 42 2>&1 | tail -12
 echo
 
-echo "═══ 4/5 quint run confirmSim — 10 000 seeded random runs, invariants on ═══"
+echo "═══ 5/6 quint run confirmSim — 10 000 seeded random runs, invariants on ═══"
 "$QUINT" run court.qnt --main confirmSim --invariants inv \
   --witnesses wFinal wOverturned wFlip wTwoRounds wExpired wAborted \
   --max-samples 10000 --max-steps 60 --seed 42 2>&1 | tail -12
 echo
 
-echo "═══ 5/5 quint verify (Apalache symbolic model checking, exhaustive to depth 10) ═══"
+echo "═══ 6a/6 quint run — escalation transport (non-strict + strict) ═══"
+"$QUINT" run escalation.qnt --main escalationSim --invariants inv \
+  --witnesses wPending wRung wOpened wTwoRungs \
+  --max-samples 5000 --max-steps 14 --seed 42 2>&1 | tail -10
+"$QUINT" run escalation.qnt --main escalationStrictSim --invariants inv \
+  --witnesses wPending wRung wOpened \
+  --max-samples 3000 --max-steps 14 --seed 42 2>&1 | tail -9
+echo
+
+echo "═══ 6b/6 quint verify (Apalache symbolic model checking, exhaustive to depth 10) ═══"
 if command -v java >/dev/null 2>&1; then
   echo "--- voteSim ---"
   "$QUINT" verify court.qnt --main voteSim --invariants inv --max-steps 10 2>&1 | tail -4
   echo "--- confirmSim ---"
   "$QUINT" verify court.qnt --main confirmSim --invariants inv --max-steps 10 2>&1 | tail -4
+  echo "--- escalationSim ---"
+  "$QUINT" verify escalation.qnt --main escalationSim --invariants inv --max-steps 8 2>&1 | tail -4
+  echo "--- escalationStrictSim ---"
+  "$QUINT" verify escalation.qnt --main escalationStrictSim --invariants inv --max-steps 8 2>&1 | tail -4
 else
-  echo "[skip] java not on PATH — Apalache steps skipped (simulator runs above still executed)"
+  echo "[skip] java not on PATH — Apalache steps skipped (the seeded simulator runs above still executed)"
 fi
 
 echo

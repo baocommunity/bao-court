@@ -1,20 +1,37 @@
-# proofs/lean4 — single finality, mechanised in Lean 4
+# proofs/lean4 — the mechanised Court layer (Lean 4)
 
-A Lean 4 mechanisation of **single finality** for the BAO Court universal
-confirmation machine: *at most one message is finalized per epoch, and at most
-one outcome per case.* This is the interactive-theorem-prover (ITP) layer of the
-proof stack — the complement to `proofs/mechanized` (Quint), which machine-checks
-a **bounded** state space.
+Three Mathlib-free Lean 4 developments, all kernel-checked:
+
+| Module | What it mechanises | Doc |
+|---|---|---|
+| `SingleFinality.lean` | **single finality** — at most one message finalized per epoch, at most one outcome per case (Theorem 4's finality arm; the machine-alone boundary is proved as a counterexample) | this file, §4–6 |
+| `LadderBound.lean` | **the sign-based ladder bound** — `E[π](d) < 0 ↔ d < flipRound`, monotonicity in `a_f` and `β`, `derivedCap = 0` ⇒ no safe depth (r33-6/r40-4) | `docs/proofs/07-mechanised-escalation.tex.md` §2–3 |
+| `EscalationLedger.lean` | **bond consumption + one-hash-one-index** — per-round bonds never re-used (INV-ESC-9), one bond one challenger (r38-1), rounds consecutive from 1 (INV-ESC-8), and the entry-matrix barriers never refuse a legal history (r40-1/r40-2) | `docs/proofs/07-mechanised-escalation.tex.md` §4 |
+
+This is the interactive-theorem-prover (ITP) layer of the proof stack — the
+complement to `proofs/mechanized` (Quint), which machine-checks a **bounded**
+state space.
 
 **Status: CHECKED.** Lean 4.14.0 (pinned by `lean-toolchain`), `lake build`
-green, **no `sorry`**, and the axiom audit shows only Lean's own core axioms
-(`propext`, `Quot.sound`). Log: `lean-run.log`. Mathlib-free — pure Lean core, so
-the whole check is a few seconds and there is no dependency/cache surface.
+green for all three modules, **no `sorry`**, and the axiom audit shows only
+Lean's own core axioms (`propext`, `Quot.sound`) — the ladder module avoids
+`Nat.lt_of_mul_lt_mul_right` precisely because it drags in `Classical.choice`
+(see `lt_of_mul_lt_mul_right'`). Log: `lean-run.log`.
 
 ```lean
--- as mechanised (proofs/lean4/SingleFinality.lean §10)
+-- as mechanised (SingleFinality.lean §10) — single finality
 theorem oracle_single_finality (s : SystemState) (e : Epoch) (m1 m2 : Message) :
     State.Finalized s e m1 ∧ State.Finalized s e m2 → m1 = m2
+
+-- as mechanised (LadderBound.lean §3) — the ladder gate
+theorem safe_depth_bound {A D R B : Nat} (hA : 0 < A) (hAD : A < D) (hR : 0 < R)
+    (hB : 0 < B) (d : Nat) :
+    safe A D R B d ↔ d < flipRound A D R B
+
+-- as mechanised (EscalationLedger.lean §7) — a consumed bond is spent
+theorem consumed_not_reused {strict : Bool} {c : Case} (h : Reachable strict c) :
+    ∀ r ∈ c.log, ∀ f, r.roundBond = some f →
+      ∀ r' ∈ c.log, r.round < r'.round → r'.roundBond ≠ some f
 ```
 
 ---
@@ -238,8 +255,10 @@ breadth in a bounded depth, Lean covers depth for a narrow, central property.
 
 | File | What it is |
 |---|---|
-| `SingleFinality.lean` | the whole model + proofs (~600 lines, Mathlib-free) |
-| `Axioms.lean` | axiom audit for every headline theorem (run by `run.sh`) |
+| `SingleFinality.lean` | the confirmation-machine model + single-finality proofs (~600 lines) |
+| `LadderBound.lean` | the ladder-sign model + `safe_depth_bound` and its corollaries |
+| `EscalationLedger.lean` | the escalation/challenge ledgers + consumption and ordering theorems |
+| `Axioms.lean` | axiom audit for every headline theorem of all three modules (run by `run.sh`) |
 | `lakefile.toml`, `lean-toolchain` | project + pinned toolchain (`v4.14.0`), no dependencies |
 | `run.sh` | one-command re-run: build, `sorry` guard, axiom audit |
 | `lean-run.log` | output of the recorded run (this checkout) |
