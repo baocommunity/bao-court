@@ -1,12 +1,12 @@
 {
   "tool": "scripts/mutation/run-mutants.mjs",
-  "generatedAt": "2026-11-11T01:25:36.484Z",
+  "generatedAt": "2026-11-11T01:46:32.624Z",
   "repoRoot": "/home/bob/Documents/bao-court--test-mutation",
   "precision": "single semantic mutation per source file, applied to a sandbox copy",
   "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
   "cleanTree": {
-    "pristineBefore": "M README.md\n M docs/CROSS_CHECK.md\n M docs/EVALUATION.md\n M docs/MUTATION_TESTING.md\n M docs/REPRODUCIBILITY.md\n M docs/TESTING_GUIDE.md\n M docs/presentation/DEMO_SCRIPT.md",
-    "pristineAfter": "M README.md\n M docs/CROSS_CHECK.md\n M docs/EVALUATION.md\n M docs/MUTATION_TESTING.md\n M docs/REPRODUCIBILITY.md\n M docs/TESTING_GUIDE.md\n M docs/presentation/DEMO_SCRIPT.md",
+    "pristineBefore": "",
+    "pristineAfter": "",
     "trackedTreeUnchanged": true,
     "sourceFilesHashed": [
       "courtCeremonyCore.ts",
@@ -23,15 +23,15 @@
     "unchanged": true
   },
   "parallelism": 3,
-  "testTimeoutSec": 420,
+  "testTimeoutSec": 900,
   "baseline": {
-    "totalTests": 1506,
-    "passedTests": 1505,
+    "totalTests": 1513,
+    "passedTests": 1512,
     "failedTests": 0,
     "failedSuites": 0,
     "failing": [],
     "success": true,
-    "wallMs": 38844
+    "wallMs": 38555
   },
   "summary": {
     "total": 7,
@@ -102,7 +102,7 @@
       }
     },
     "survivors": [],
-    "baselineTests": 1506
+    "baselineTests": 1513
   },
   "mutants": [
     {
@@ -128,23 +128,23 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-1/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C5 (M07) — jury draw tie-break is pubkey-ascending orders exactly-tied jurors by ascending pubkey bytes (not descending)",
             "message": "AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]"
           }
         ],
-        "wallMs": 55022
+        "wallMs": 49770
       },
       "spot": {
         "failed": [],
-        "wallMs": 654
+        "wallMs": 563
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 55031
+      "wallMs": 49777
     },
     {
       "id": "M15",
@@ -169,16 +169,16 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-2/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-0/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C3 (M15) — resolve_round re-verifies the confirmation ledger refuses to resolve on a confirmation ledger whose hashes were never accepted",
             "message": "AssertionError: expected [Function] to throw an error"
           }
         ],
-        "wallMs": 55186
+        "wallMs": 50156
       },
       "spot": {
         "failed": [],
-        "wallMs": 652
+        "wallMs": 544
       },
       "model": {
         "instances": [
@@ -186,12 +186,12 @@
             "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
             "ok": true,
             "states": 108157,
-            "wallMs": 40573
+            "wallMs": 38234
           }
         ],
-        "wallMs": 41109
+        "wallMs": 38671
       },
-      "wallMs": 96314
+      "wallMs": 88844
     },
     {
       "id": "M24",
@@ -216,23 +216,23 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-1/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-2/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C6 (M24) — quadraticPriority clamps r = 1 clamps r = 1 to 1 - EPS (a positive priority, never 0)",
             "message": "AssertionError: expected 0 to be greater than 0"
           }
         ],
-        "wallMs": 55132
+        "wallMs": 49990
       },
       "spot": {
         "failed": [],
-        "wallMs": 766
+        "wallMs": 563
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 55149
+      "wallMs": 50009
     },
     {
       "id": "M30",
@@ -257,28 +257,28 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-1/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C1 (M30) — v2 finality: |signerSet| must equal threshold rejects a correctly-rooted signer set that is smaller than the threshold",
             "message": "AssertionError: expected true to be false // Object.is equality"
           },
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-1/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C1 (M30) — v2 finality: |signerSet| must equal threshold rejects a correctly-rooted signer set that is LARGER than the threshold",
             "message": "AssertionError: expected true to be false // Object.is equality"
           }
         ],
-        "wallMs": 50926
+        "wallMs": 49482
       },
       "spot": {
         "failed": [],
-        "wallMs": 569
+        "wallMs": 476
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 50938
+      "wallMs": 49489
     },
     {
       "id": "M31",
@@ -303,16 +303,16 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-1/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-2/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C2 (M31) — signing restore barrier: finalizedSignerSet ⊆ commitments rejects a restored signer set that is a PREFIX of the committed set",
             "message": "AssertionError: expected [Function] to throw an error"
           }
         ],
-        "wallMs": 50800
+        "wallMs": 49324
       },
       "spot": {
         "failed": [],
-        "wallMs": 594
+        "wallMs": 534
       },
       "model": {
         "instances": [
@@ -320,18 +320,18 @@
             "name": "signing n=2 t=1 [inline clock 4/8]",
             "ok": true,
             "states": 877,
-            "wallMs": 758
+            "wallMs": 569
           },
           {
             "name": "signing n=3 t=2 [inline clock 4/8]",
             "ok": true,
             "states": 6862,
-            "wallMs": 5295
+            "wallMs": 3399
           }
         ],
-        "wallMs": 6522
+        "wallMs": 4348
       },
-      "wallMs": 57329
+      "wallMs": 53681
     },
     {
       "id": "M35",
@@ -356,23 +356,23 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-2/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-0/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C7 (M35) — batch size cap is inclusive at MAX accepts exactly MAX_BATCH_VERDICTS leaves",
             "message": "BatchAttestationError: verdictHashes length 10000 exceeds maximum of 10000"
           }
         ],
-        "wallMs": 51781
+        "wallMs": 44077
       },
       "spot": {
         "failed": [],
-        "wallMs": 589
+        "wallMs": 577
       },
       "model": {
         "instances": [],
         "note": "not modelled (no phase machine in this file)",
         "wallMs": 0
       },
-      "wallMs": 51794
+      "wallMs": 44084
     },
     {
       "id": "M37",
@@ -397,16 +397,16 @@
         "failedSuites": 0,
         "failing": [
           {
-            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "file": "/tmp/bao-court-mutation-4mQLJD/work-1/__tests__/mutationClosures.test.ts",
             "name": "mutation closure C4 (M37) — round_flip flags stay idempotent does not duplicate a round_flip flag already present for that round",
             "message": "AssertionError: expected [ 1, 1, 2 ] to deeply equal [ 1, 2 ]"
           }
         ],
-        "wallMs": 51054
+        "wallMs": 40901
       },
       "spot": {
         "failed": [],
-        "wallMs": 601
+        "wallMs": 459
       },
       "model": {
         "instances": [
@@ -414,12 +414,12 @@
             "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
             "ok": true,
             "states": 108157,
-            "wallMs": 42435
+            "wallMs": 25217
           }
         ],
-        "wallMs": 42873
+        "wallMs": 25516
       },
-      "wallMs": 93937
+      "wallMs": 66423
     }
   ]
 }

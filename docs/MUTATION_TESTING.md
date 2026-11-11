@@ -285,8 +285,8 @@ node scripts/mutation/run-mutants.mjs --only M07,M15,M24,M30,M31,M35,M37 --jobs 
 
 | | Result |
 |---|---|
-| Base | round-25 `main` (pass 1 measured pre-R25; the catalogue was re-validated after every rebase — all 53 `find` strings still occur exactly once on round-26 `main`) |
-| Baseline in sandbox | 1,505/1,506 green (the 1 is the env-gated live test) |
+| Base | round-26 `main` for the recorded re-run (pass 1 was measured pre-R25; the catalogue was re-validated after every rebase — all 53 `find` strings still occur exactly once) |
+| Baseline in sandbox | 1,512/1,513 green (the 1 is the env-gated live test) |
 | Survivors re-applied | 7 |
 | Captured | **7 / 7** — all by detector **A**, each pin failing exactly as required |
 | Survived | **0** |
@@ -322,9 +322,9 @@ have to catch its removal. It is kept in the catalogue as a known equivalent
 rather than deleted: ids are stable, and a future refactor that drops the
 per-handler checks would make it live again.
 
-Suite delta: **+1 file, +14 tests** — 63 files / 1,520 tests on the base
-(round-26 `main`), **64 files / 1,534 tests** with the pins (1,534 passing + 1
-env-gated skip).
+Suite delta: **+1 file, +14 tests** — 63 files / 1,521 tests on the base
+(round-26 `main`: 1,520 passing + the env-gated skip), **64 files / 1,535 tests**
+with the pins (1,534 passing + 1 env-gated skip).
 
 ---
 
