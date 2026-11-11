@@ -1,4 +1,4 @@
-# BAO Court — Threat Model & Security Argument (v0.10.2)
+# BAO Court — Threat Model & Security Argument (v0.13.0)
 
 **Status:** Track D opener, symposium round 14. This is the paper's security
 chapter backbone: the formalized adversary model (§2), the per-asset argument

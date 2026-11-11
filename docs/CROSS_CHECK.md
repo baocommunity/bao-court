@@ -1,7 +1,8 @@
 # BAO Court — Cross-Check: every claim, verified in one place
 
-**Version:** tracks `@bao/court` v0.10.2 · **Date:** 2026-11-10 · **Round:** 14 (re-verified round 17 — final polish)
-(symposium deep cross-check)
+**Version:** tracks `@bao/court` v0.13.0 · **Date:** 2026-11-11 · **Round:** 14
+(symposium deep cross-check; §1 re-verified per round — latest at `608e6dc`,
+rounds 30–34)
 
 This is the single artifact a reviewer uses to verify any claim about the
 system. Every meaningful claim from the three claim sources —
@@ -44,13 +45,13 @@ Conventions for evidence refs:
 
 ---
 
-## 1. Verification runs recorded for this round (2026-11-11, worktree at v0.13.0 `main`, `c456fb4`)
+## 1. Verification runs recorded for this round (2026-11-11, worktree at v0.13.0+, `608e6dc`)
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,677 passed / 1 skipped (75 files)** — re-verified 2026-11-11 at the review-round-4 head (r33 closures + pins); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
-| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `c456fb4`) |
-| Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `c456fb4`) |
+| Full suite | `npm test` | **1,686 passed / 1 skipped (76 files)** — re-measured at `608e6dc` (round 34); 1,677 at the review-round-4 head `841b012` (the +9 are `r33ByzantineRelay.test.ts` ×8, merged as #102 after that count was taken, and the r29-11 timeout pin); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `608e6dc`) |
+| Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `608e6dc`) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | witness-aware regeneration (2,525 s): **15 instances, 3,869,232 states, 213,521,172 event applications, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws, 3,000 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
 | Statistical corpora | `npx tsx scripts/campaign/run-campaign.mjs --full` | 9 campaigns — **1,187,000 units / 3,745,566 assertions / 0 failures** in 608.8 s (artifact `docs/benchmarks/campaign-2026-11-11.json`) |
 | Multi-process ceremony | `npm run simulate:multiprocess` | 4 scenarios green (N = 3…7 OS processes; kill mid-DKG, kill mid-signing, cross-round replay) |
@@ -73,7 +74,7 @@ breakdown).
 | Suite / simulation claims | 4 | 4 | 100% | 0 |
 | Error-taxonomy claims (§15) | 5 | 5 | 100% | 0 |
 | Findings (F-1…F-12 dispositions) | 12 | 7 | 58.3% | 5 (F-5, F-7, F-8, F-10, F-11 — documented conventions/holds) |
-| **Total** | **276** | **262** | **94.9%** | **14 open** |
+| **Total** | **285** | **271** | **95.1%** | **14 open** |
 
 Gaps **closed this round**: 4 — three with new pinning tests (the stale
 `AUDIT-4` pointer / binding-factor message dependence, the F-4 clawback-reason

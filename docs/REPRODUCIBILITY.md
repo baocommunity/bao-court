@@ -1,7 +1,21 @@
 # REPRODUCIBILITY — the one-command contract
 
-Every artifact the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`) and
-`docs/CROSS_CHECK.md` cite is regenerable from a clean clone with ONE command:
+The contract regenerates, from a clean clone with ONE command, every **in-repo,
+toolchain-free** artifact the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`)
+and `docs/CROSS_CHECK.md` cite: the suite, the typechecks, the end-to-end
+simulation, the model-check fixture, the benchmark pair, and the evidence
+pointers themselves. **It is not the whole artifact set**, and the paper says so
+where it cites the rest. Outside the contract, each with its own command:
+
+| Artifact | Command | Why it is outside |
+|---|---|---|
+| Statistical corpora (§11.7) | `npx tsx scripts/campaign/run-campaign.mjs --full` (~10 min) | long-running; CI runs a bounded fast subset |
+| Mutation campaign + closure re-check (§11.6) | `node scripts/mutation/run-mutants.mjs --only M07,M15,M24,M30,M31,M35,M37` | ~35–40 min full sweep; per-release, not per-PR |
+| Economics arithmetic (§8.4, App. A S-15/S-21) | `node scripts/review-quant/economics.mjs` | a printed derivation, not a pass/fail stage |
+| Multi-process ceremony matrix (§11.7) | `npm run simulate:multiprocess` | spawns N OS processes |
+| Three-day soak (S-22) | host repo `bao.markets`: `scripts/soak/court-soak.mts --days 3 --faults` | host-side services, in-memory Postgres, virtual clock |
+| Quint re-model (`proofs/mechanized`) | `proofs/mechanized/run.sh` | needs `quint` 0.33.1 + Java 21 (Apalache) |
+| Lean 4 single finality (`proofs/lean4`) | `cd proofs/lean4 && ./run.sh` | needs `lean`/`elan` 4.14.0 |
 
 ```bash
 bash scripts/reproduce.sh                 # full contract (~17 min measured)
@@ -22,7 +36,7 @@ exact pre-run bytes restored afterwards).
 |---|---|---|---|
 | a | clean-environment check | Node ≥ 22, npm, git, lockfile present; warns if tree is dirty | none (boolean) |
 | b | `npm ci` | lockfile-exact dependency install | registry latency only |
-| c | `npm test` (full suite) → json + junit | the full suite is green (1,677 passed / 1 skipped at the 2026-11-11 review-round-4 record, 1,656 at `c456fb4`; pass-counts re-pinned per round in CROSS_CHECK §1); machine-readable reports | pass/fail is boolean; wall time is load-dependent |
+| c | `npm test` (full suite) → json + junit | the full suite is green (**1,686 passed / 1 skipped at `608e6dc`**, the current head; 1,677 at `841b012`, 1,656 at `c456fb4`; pass-counts re-pinned per round in CROSS_CHECK §1); machine-readable reports | pass/fail is boolean; wall time is load-dependent |
 | d | typechecks ×3 | `tsc --noEmit` green for impl / scripts / tests | none (boolean) |
 | e | `simulate:court` | end-to-end deterministic whole-court sim ends `RESULT: ALL GREEN` | none (seeded; same seed → same result, asserted in-suite) |
 | f | `model-check --fast` + fixture comparison | state-space sweep is **digit-identical** to the committed fixture `__fixtures__/model-check-summary.json` (only timing fields excluded) | digits: **zero tolerance**; wall time: load-dependent |

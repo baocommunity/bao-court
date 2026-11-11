@@ -60,11 +60,16 @@ exit 0 over **285 claims / 516 evidence refs** (95.1 % covered, gap register 18
 entries: 14 open, 4 closed). The +50 over round 30 are the per-round bond
 consumption matrix, the derived ladder economics, penalty ageing, and the
 churn/quorum cap arithmetic.)*
-*(Review round 4 / R33, 2026-11-11 — **current head**: **1,677 passed / 1 skipped
-(75 files)**, `npm run typecheck` clean. The +21 are `reviewRound4.test.ts`: the
-foreign-membership-bond and emptied-ledger closures, the escalate-time log
-barrier, the sign-based ladder pre-flight, the idle-gap penalty pins and the
-overflow guard. See `docs/REVIEW_ROUND_4.md`.)*
+*(Review round 4 / R33, 2026-11-11 — **1,677 passed / 1 skipped
+(75 files)** at `841b012`, `npm run typecheck` clean. The +21 are
+`reviewRound4.test.ts`: the foreign-membership-bond and emptied-ledger closures,
+the escalate-time log barrier, the sign-based ladder pre-flight, the idle-gap
+penalty pins and the overflow guard. See `docs/REVIEW_ROUND_4.md`.)*
+*(Round 34 / readiness review, 2026-11-11 — **current head `608e6dc`:
+1,686 passed / 1 skipped (76 files)**, `npm run typecheck` clean,
+`node scripts/cross-check.mjs` exit 0 over 285 claims / 516 evidence refs. The
++9 over the R33 count are the round-33 Byzantine-relay suite (`#102`, 8 tests,
+merged after that count was taken) and the r29-11 budget-derived timeout pin.)*
 
 ---
 

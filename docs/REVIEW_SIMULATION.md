@@ -1,6 +1,7 @@
 # BAO Court — External-Review Simulation (Round 16)
 
-**Version:** tracks `@bao/court` v0.10.2 · **Date:** 2026-11-10 · **Round:** 16
+**Version:** tracks `@bao/court` v0.13.0 · **Date:** 2026-11-11 · **Round:** 16
+(rounds 29–34 recorded in REVIEW_ROUND_3/4 and App. A.5 of the paper)
 (symposium external-review simulation)
 
 **Method.** Three reviewer personas — a formal-methods skeptic (A), an applied
@@ -52,8 +53,9 @@ tick-exempt `certified`, six sink phases — and it is the machine whose
 failure mode (a wrongly-derived group key) is the most expensive. Why is the
 exhaustive explorer not pointed at it?
 
-**Evidence-check.** `__fixtures__/model-check-summary.json`: 13 instances,
-all vote/confirm/signing. The `modelCheckingCore.ts` header names exactly
+**Evidence-check.** `__fixtures__/model-check-summary.json`: the committed
+witness-aware sweep has 15 instances, all vote/confirm/signing; the pre-witness
+fixture had 13. The `modelCheckingCore.ts` header names exactly
 three machines. `courtDkgMachine.ts` is verified only by pinning tests
 (courtDkgMachine.test.ts, invariantAssertions.test.ts). The paper nowhere
 states the exclusion or a rationale.
