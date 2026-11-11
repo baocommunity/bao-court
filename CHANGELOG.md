@@ -99,6 +99,25 @@ frozen.
   v2 shape together.
 
 ### Added (docs)
+- **Paper + evaluation refresh (round 45) for review rounds 7–8 and v0.14.x.**
+  `docs/FROST_COURT_ORACLE_PAPER.md` now carries the two severe finds of the
+  period — **r41-1** (§6.1's three-ledger barrier and the derived verdict, §6.3's
+  derivation-from-history rationale) and **r8-1** (§6.2, §10.2-Q) — plus the
+  **v0.14.0 escalation transport** and its required `{caseId,
+  authenticatedPubkey}` binding (§6.2), the realised-β gate drift (H-1) and the
+  frozen-depth clamp (H-3/H-5) in §8.4, the preemption residual (r40-3) in the
+  same section, the canonicalisation class stated as a per-field rule in §11.6,
+  a new §12 gate 9 (the transport must be wired before the strict policy is
+  enforced), Appendix A.1 entries S-23/S-24, the r41-*/r8-*/H-* rows in A.3, and
+  the 1,804-test count in §11.1/A.4. `docs/EVALUATION.md` gains four audit rows
+  (rounds 5–8), the re-attack totals, the canonicalisation and attribution
+  classes, and the per-round suite ledger to `bc28ff3`. `docs/REVIEWS_INDEX.md`
+  indexes rounds 7–8, the v0.14.0/v0.14.1 releases, and a **ninth** failure
+  class — identifier canonicalisation, with its three instances (the pre-mainnet
+  surrogate collision, H-6, r8-1) and the rule they teach. **Docs only** — no
+  code, fixture or test touched; `npm test` 1,804 and `cross-check.mjs` exit 0
+  re-verified on this head.
+
 - **`docs/REVIEWS_INDEX.md` — the map of the self-verification campaign.** Every
   review/simulation round in order (improvement 1–4, symposium 5–21, the
   2026-11-10 GPT/Claude/Gemini reviews, review rounds 2–6, instrument rounds
