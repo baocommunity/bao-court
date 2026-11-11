@@ -39,8 +39,8 @@ visible boundary with a named owner). No finding this round needed
 | `npx vitest run __tests__/reviewRound12.test.ts` (**new**, 20 tests) | **20 passed** |
 | the same file against the pre-fix sources (`e489fe5`, §10.1) | **9 failed / 11 passed** |
 | 4 mutations, each reverting one of #128's fixes in turn (§6.1) | **4/4 red** |
-| `npm test` (full suite) | **1,953 passed / 1 skipped (90 files)** |
-| `npm run typecheck` · `typecheck:tests` | clean |
+| `npm test` (full suite, same commit) | **green on a clean runner** — CI verification battery (§10.5); the local runs were CPU-contended |
+| `npm run typecheck` · `typecheck:tests` · `typecheck:scripts` | clean |
 
 **Verdict summary.** **1 EXPLOITABLE cluster (7 sites, fixed), 1 PARTIAL
 (fixed), 2 BLOCKED, 1 CLOSED-BY-DESIGN.** Round 11's three fixes are *right*:
@@ -482,7 +482,7 @@ have blocked both.
 |---|---|---|
 | `reviewRound12.test.ts` | — (new, 20 tests) | 20 passed |
 | the same file on the pre-fix sources | — | **9 failed / 11 passed** |
-| full suite | 1,953 passed / 1 skipped (90 files) | **1,953 passed / 1 skipped (90 files)** |
+| full suite | 1,953 tests / 90 files | **green on a clean runner** (CI: `typecheck` ×3 + `npm test` + `simulate:court`, §10.5) |
 | typecheck / tests / scripts | clean | clean |
 | unquoted refusal interpolations (static sweep) | **66** | **0** |
 | echo characters for a clipped astral value | 65 | **63** |
@@ -561,14 +561,26 @@ because it is the argument for the static sweep being a *property* test: the
 sweep would have flagged the site's expression only if it were unquoted, and the
 totality guard is what makes "quoted" sufficient.
 
-### 10.5 Suite stability
+### 10.5 Suite stability — and where the green full run comes from
 
-The full suite was run twice. The first run, taken while the parallel campaign's
-worker pools held the machine, reported timing failures in `appealWatcher` (4),
-`independentDkg` (1) and `r33ByzantineRelay` (1) — the pattern
-`REVIEW_ROUND_11.md` §9.3 recorded — plus one **real** regression (§10.4). After
-the fix, each of the three files was re-run in isolation and passed (25/25), and
-the final full run is green (§9).
+The full suite is 1,953 tests in 90 files (1 skipped). It was run three times on
+this machine while the parallel campaign's worker pools held it:
+
+| run | result |
+|---|---|
+| 1 (parallel workers) | 11 failed / 1,941 passed — `appealWatcher` (4), `independentDkg` (1), `r33ByzantineRelay` (1) **plus one real regression** (§10.4) |
+| 2 (parallel workers) | 9 failed / 1,943 passed — a **disjoint** set of 9 `Test timed out in 5000ms` failures across 8 files (`appealWatcher`, `appealCoordinator`, `hardening20260815`, `courtInbox`, `batchAttestation`, `attestationV2Validator`, `r30SealGames`, `r33ByzantineRelay`) |
+| isolation (`--no-file-parallelism`, the 8 files + the 3 from run 1) | **116 passed / 116** and **25 passed / 25** |
+
+Every failure in runs 1–2 is the vitest 5-second default being blown by CPU
+starvation (grep the logs: `Test timed out in 5000ms`, no assertion), the same
+pattern `REVIEW_ROUND_11.md` §9.3 recorded — and the sets are disjoint between
+runs, which is the signature of contention rather than of a regression. The
+**authoritative** full run is therefore the CI verification battery on a clean
+runner at this commit: `typecheck`, `typecheck:scripts`, `typecheck:tests`,
+`npm test`, `simulate:court` — **all green** (2m37s). A sandboxed sequential run
+of the full suite was started as a third check and killed by the harness before
+it reported; the CI run supersedes it and is the one quoted in §9.
 
 ---
 
