@@ -1,5 +1,6 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
+import { quoteWireUnknown } from './courtEcho';
 import {
   assertNow,
   assertPositiveDeadline,
@@ -463,7 +464,7 @@ export function reduceCourtConfirmationMachine(
     default: break;
   }
   if (TERMINAL_PHASES.has(state.phase)) {
-    throw new CourtConfirmationTransitionError(`cannot process ${event.type} after ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot process ${quoteWireUnknown(event.type)} after ${quoteWireUnknown(state.phase)}`);
   }
 
   switch (event.type) {
@@ -487,5 +488,5 @@ export function reduceCourtConfirmationMachine(
   // Unreachable for well-typed events; fail closed instead of silently
   // returning an unfrozen clock-advanced copy for a hostile unknown type.
   const unknownType = (event as { readonly type?: unknown }).type;
-  throw new CourtConfirmationTransitionError(`unknown confirmation event type: ${String(unknownType)}`);
+  throw new CourtConfirmationTransitionError(`unknown confirmation event type: ${quoteWireUnknown(unknownType)}`);
 }
