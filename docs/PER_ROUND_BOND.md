@@ -43,6 +43,17 @@ CourtConfirmationMachineState.requireRoundBond : boolean   (frozen policy)
    and unconditionally under `requireRoundBond`, so a restored snapshot cannot
    delete an entry to un-consume the bond it paid with.
 
+The membership pool the rules above read has its own uniqueness invariant
+(R38, r38-1): `accept_challenge` binds one `bondProofHash` to at most ONE roster
+index per case, and `assertValidConfirmationLedger` re-checks it on a restored
+ledger. Without it the whole list was attackable in two steps — mint an
+"accepted challenge" that reuses a bonded juror's hash (the ledger deduped by
+`idx` only), then escalate on `(idx, bondProofHash)`, which is exactly the pair
+r29-1 taught the reducer to require. One paid bond bought unlimited standing. A
+host whose proof derivation can collide across jurors (a hash of the funding
+transaction, which a batch payout shares) must mix the juror index into the
+witness.
+
 The hash is bound to the round by construction: the witness's `roundIndex` must
 open exactly `ladderRound + 1`, the record stores that round, and the log is
 append-only, so "one fresh witness per rung" is a property of the state, not of
@@ -98,6 +109,15 @@ consumer keeps the v0.12 semantics until it opts in.
 | `requireRoundBond: true` | **another** juror's accepted challenge bond | **refused** (R33, r33-1 — see the reducer list) |
 | any policy, authority `host` | any non-null | **refused** (`a host escalation must not carry a challenger request witness`) |
 
+**Never compose `requireRoundBond: true` with `hostEscalation: true`** (R38,
+r38-2). The break-glass row above exempts a *challenger* escalation from the
+round-bond requirement, not just the host's, so the strict policy prices
+nothing on such a case. The exemption is a pinned decision (it is how a
+break-glass case stays compatible), and it is now recorded as a hazard: a
+deployment that wants break-glass recovery should leave `requireRoundBond`
+false, or wait for the v0.14 policy split (host authority vs challenger
+authority).
+
 Restored snapshots: an **absent** `requireRoundBond` reads as `false` and an
 **absent** `roundBondProofHash` reads as `null`, so pre-0.13 snapshots still
 load and finalize. A strict case (`requireRoundBond: true`, not break-glass)
@@ -142,6 +162,12 @@ opened (`r33-5`), because a dropped entry un-consumes the bond it paid with.
   log reusing a consumed bond, the escalate-time barrier, the no-challenge
   finalize path, and the registered limits (uniqueness-not-payment, front-run,
   cross-case, the default).
+- `__tests__/reviewRound5.test.ts` — the R38 attacks on these rules: the
+  borrowed membership bond (two-step r29-1 bypass, closed here), the union of
+  the consumption sets, the round-bond-as-membership direction (phase + barrier),
+  ledger order/duplicates/gaps/mismatched challenger, the escalate-time barrier,
+  and the registered limits (break-glass exemption, the unverifiable
+  `challengerPubkey`).
 - `__tests__/ladderEconomics.test.ts` — the derived cap and flip round against
   06's published numbers, the EV sign at the boundary, monotonicity, and the
   bond schedule.

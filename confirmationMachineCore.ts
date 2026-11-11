@@ -547,6 +547,11 @@ export function assertValidConfirmationLedger(state: CourtConfirmationMachineSta
   }
   const seenChallengeIndices = new Set<number>();
   const seenChallengeEventIds = new Set<string>();
+  // One bond witness, one owner (R38, r38-1): a restored ledger that binds the
+  // same `bondProofHash` to two roster indices would grant two escalation
+  // rights for one payment — and it would let the second owner satisfy the
+  // `(idx, bondProofHash)` witness test of r29-1 with a bond it never posted.
+  const challengeBondOwners = new Map<string, number>();
   for (const record of state.challenges) {
     if (typeof record !== 'object' || record === null) {
       throw new CourtConfirmationTransitionError('challenge ledger contains a malformed record');
@@ -563,6 +568,14 @@ export function assertValidConfirmationLedger(state: CourtConfirmationMachineSta
     if (seenChallengeEventIds.has(record.eventId)) {
       throw new CourtConfirmationTransitionError('challenge event ids must be unique');
     }
+    const bondOwner = challengeBondOwners.get(record.bondProofHash);
+    if (bondOwner !== undefined) {
+      throw new CourtConfirmationTransitionError(
+        `challenge ledger binds one bond proof hash to participants ${bondOwner} and ${record.idx}: `
+        + 'a bond witness buys one challenger\'s standing',
+      );
+    }
+    challengeBondOwners.set(record.bondProofHash, record.idx);
     seenChallengeIndices.add(record.idx);
     seenChallengeEventIds.add(record.eventId);
   }

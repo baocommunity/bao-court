@@ -11,6 +11,24 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (review-round-5, the round-4 fixes attacked)
+- **One bond witness bought two challengers' standing (r38-1, exploitable).**
+  `accept_challenge` deduped the challenge ledger by `idx` only, so a juror that
+  posted nothing could name a bonded juror's `bondProofHash` as its own, mint an
+  "accepted" challenge with it, and then escalate — the `(idx, bondProofHash)`
+  binding r29-1 added is satisfied once the borrowed record exists. That made the
+  membership bond free for the first layer and undermined the premise of the
+  r33-1 fix (which enumerates `state.challenges`, i.e. a pool that was not
+  unique). `accept_challenge` now binds one proof hash to one roster index, and
+  `assertValidConfirmationLedger` re-checks it on restored ledgers. **Consumer
+  impact:** a host whose `bondProofHash` derivation collides across jurors (e.g.
+  a hash of the funding transaction, which a batch payout shares) must mix the
+  juror index into the witness; every per-juror proof is unaffected.
+- `docs/PER_ROUND_BOND.md` now records the membership-pool uniqueness invariant
+  and names the `requireRoundBond` × `hostEscalation` composition hazard
+  (r38-2): the break-glass exemption is granted to *challenger* escalations too,
+  so the two flags together price nothing.
+
 ### Added — Byzantine-relay multi-process ceremony (R33)
 R30 proved the ceremony survives process death and cross-round replay over an
 **honest** relay. R33 removes that assumption: the loopback relay now keeps a

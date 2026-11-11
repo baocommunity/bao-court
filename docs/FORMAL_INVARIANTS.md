@@ -577,14 +577,21 @@ ladder_pending → ladder_vote_open → ladder_vote_closed → resolve paths)` w
   ledger barrier (511-520).
   Test: `courtConfirmationMachine.test.ts` › 'treats identical redelivery as
   idempotent and conflicting redelivery as fatal'.
-- **INV-CONF-17 (challenge bond binding).** Every challenge carries
-  `bondTxid, bondProofHash, eventId ∈ HEX_32` (lines 823-825); one challenge per
-  idx, identical idempotent / conflicting fatal (831-843); the bond-ownership
-  witness hash is bound so observers can re-verify (interface `CourtChallengeRecord`,
-  lines 111-122; the witness-vs-UTXO check is the host's pre-dispatch duty —
-  boundary, not machine).
-  Test: `courtConfirmationMachine.test.ts` › 'rejects challenges after the
-  deadline, off-roster, or malformed'.
+- **INV-CONF-17 (challenge bond binding — one witness, one owner).** Every
+  challenge carries `bondTxid, bondProofHash, eventId ∈ HEX_32` (lines 823-825);
+  one challenge per idx, identical idempotent / conflicting fatal (831-843);
+  **and one `bondProofHash` is bound to at most ONE roster idx per case**
+  (R38, r38-1: the ledger deduped by idx only, so an unbonded juror could mint
+  an accepted challenge carrying a bonded juror's hash and then escalate on the
+  `(idx, bondProofHash)` pair of INV-ESC-5 — one payment, N challengers'
+  standing). Re-checked in the challenge-ledger barrier, so a restored ledger
+  cannot reintroduce the duplicate. The bond-ownership witness hash is bound so
+  observers can re-verify (interface `CourtChallengeRecord`, lines 111-122; the
+  witness-vs-UTXO check is the host's pre-dispatch duty — boundary, not machine).
+  Tests: `courtConfirmationMachine.test.ts` › 'rejects challenges after the
+  deadline, off-roster, or malformed'; `reviewRound5.test.ts` › 'one bond
+  witness cannot buy TWO challengers\' standing (r38-1, EXPLOITABLE)',
+  '… the restore barrier refuses a duplicated bond hash'.
 - **INV-CONF-18 (no-challenge routing).** `close_challenge_window` routes to
   `ladder_pending` iff `|challenges| > 0`, else `fee_settlement` with the
   provisional verdict `{outcome: proposedOutcome, upheld: true}` (lines
@@ -1424,7 +1431,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-CONF-14 | terminal absorption + abort | courtConfirmationMachine.ts:729-741 | courtConfirmationMachine.test.ts › aborts from any non-terminal phase… |
 | INV-CONF-15 | quorum gate (economic) | courtConfirmationMachine.ts:795-801 | courtConfirmationMachine.test.ts › fails closed when the confirm quorum never formed |
 | INV-CONF-16 | one confirmation per idx | courtConfirmationMachine.ts:768-776,511-520 | courtConfirmationMachine.test.ts › treats identical redelivery… |
-| INV-CONF-17 | challenge bond binding | courtConfirmationMachine.ts:823-843 | courtConfirmationMachine.test.ts › rejects challenges after the deadline… |
+| INV-CONF-17 | challenge bond binding + one bond witness, one owner (r38-1) | courtConfirmationMachine.ts:823-843; confirmationMachineHandlers.ts:197-210; confirmationMachineCore.ts:550-578 | courtConfirmationMachine.test.ts › rejects challenges after the deadline…; reviewRound5.test.ts › one bond witness cannot buy TWO challengers' standing |
 | INV-CONF-18 | no-challenge routing | courtConfirmationMachine.ts:864-874 | courtConfirmationMachine.test.ts › routes to fee_settlement… |
 | INV-CONF-19 | consecutive rounds + cap | courtConfirmationMachine.ts:882-897 | multiRoundLadder.test.ts › hand-restored snapshots…; courtConfirmationMachine.test.ts › enforces consecutive rounds… |
 | INV-CONF-20 | round deadline validity | courtConfirmationMachine.ts:898-899 | courtConfirmationMachine.test.ts › enforces consecutive rounds… |

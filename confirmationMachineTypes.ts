@@ -63,6 +63,12 @@ export interface CourtChallengeRecord {
    * 32-byte lowercase hex hash of the verified bond-ownership witness. The
    * host verifies the witness against the bond UTXO BEFORE dispatching this
    * event; the reducer binds the hash so observers can re-verify later.
+   *
+   * Uniqueness is a state invariant (R38, r38-1): one proof hash is bound to at
+   * most ONE roster index per case, so a bond buys exactly one challenger's
+   * standing. A host whose proof derivation can collide across jurors (e.g. a
+   * hash of the funding transaction, which a batch payout shares) must mix the
+   * juror index into the witness — otherwise the second challenge is refused.
    */
   readonly bondProofHash: string;
   readonly eventId: string;
