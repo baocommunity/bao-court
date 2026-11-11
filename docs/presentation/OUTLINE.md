@@ -166,7 +166,7 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 - *Artifact:* docs/benchmarks/BASELINE.md; EVALUATION §4; FIGURES.md F4.
 
 ### Slide 14 — "Claim coverage: 94.9% → 95.2%, machine-checked"
-- 272 claims indexed across the four sources (invariants, paper, crypto audit, model-check/bench/suite meta-claims); **259/272 (95.2%) carry executable proof**; all 14 open gaps are registered with a planned proof — the open list *is* the roadmap.
+- 276 claims indexed across the four sources (invariants, paper, crypto audit, model-check/bench/suite meta-claims); **502 evidence refs resolve**, and the **13 open gaps** are registered with a planned proof — the open list *is* the roadmap.
 - The coverage number is itself machine-checked: `node scripts/cross-check.mjs` verifies every evidence pointer (tests exist, fixtures hold, instances match) and **exits non-zero on a dangling pointer** — the claims cannot drift silently.
 - **The audit program as methodology** (paper §11.5): each round picks an attack surface, records what it finds, lands the disposition — rounds 1–3 adversarial, formal audit, model checking, literature audit, differential parity, performance, host-side mechanism audit. Not "the authors assert" but "the round that owns this claim pinned it, and the pin regenerates from one command."
 - One-command reproducibility: `bash scripts/reproduce.sh` regenerates every artifact from a clean clone — committed run: **REPRODUCED, every artifact PASS** (999.9s).

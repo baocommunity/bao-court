@@ -11,6 +11,23 @@ frozen.
 
 ## [Unreleased]
 
+### Added (docs — review round 2: does the response answer the reviewers?)
+
+- **`docs/REVIEW_ROUND_2.md`** — the three-persona audit of the v0.11.0
+  review-response round, one verdict per original objection (5 satisfied, 3
+  partial, 0 not) with its evidence pointer and residual, a new-issues list
+  (notably: the economic-ratio cap is advisory-by-default and the shipped
+  round-2 rung fails its own invariant; escalation authority has no
+  machine-level witness; the 5 s wall-clock gate the mutation round condemned is
+  still in the suite), and what round 3 still owes (the distributed run,
+  external replication, related-work and benchmark depth).
+- Provenance edits it found: the paper now cites **T6 / S-16** (attribution) in
+  Appendix A and §13, the model-checking scope reads *three of the four*
+  ceremony machines in the Abstract and Conclusion, the conclusion no longer
+  implies release requires a verdict, §6.2 states the host's challenger-right
+  rule without claiming the machine verifies it, and the gap-fills record the
+  shipped gate's γ = 0.45 (advisory default) beside the derived 0.5.
+
 ### Added (scale campaign — the large-corpus round)
 
 - **`__tests__/scale/` + `scripts/campaign/run-campaign.mjs`**: six

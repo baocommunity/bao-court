@@ -369,6 +369,21 @@ Substituting the shipped schedule makes it a **two-regime rule**:
    There is no fourth move — the alternative is to accept a dispute the
    colluders can profitably capture.
 
+> **Shipped status (R25, host repository).** The check exists as
+> `assessCourtEconomicRatio` on the market-creation path, but two qualifiers
+> travel with it. (i) **It is advisory by default**: with `BAO_COURT_ECON_RATIO`
+> off, the ratio is logged and the market is created; only with the flag on is
+> an over-cap market refused (`422 ECON_RATIO_BELOW_MINIMUM`). (ii) **The
+> shipped gate pins $\gamma = 0.45$** (`BAO_COURT_ECON_GAMMA`, fail-closed),
+> whereas this file derives $\gamma = \alpha\,p_{\text{flip}} = 0.5$ from the
+> shipped escrow; the gate's own tests use 0.45, so its ratio is $0.009\,N$ and
+> its guardian arithmetic is $2{,}222{,}222$ sats bonded per $1{,}000{,}000$-sat
+> dispute rather than the $2{,}000{,}000$ below. At the shipped
+> `maxLadderRounds = 2` the deepest rung is 45 seats, where the ratio is
+> **0.405** — below 1. The rule therefore binds on nothing today, and even
+> switched on it refuses the class of markets it was introduced to price unless
+> the ladder cap rises to 3 (135 seats, 1.215).
+
 ### 2.6 The finding this exposes at the shipped parameters
 
 $$\frac{\gamma\sum_i S_i}{V} \;=\; \gamma\,\sigma\,N \;=\; 0.01\,N

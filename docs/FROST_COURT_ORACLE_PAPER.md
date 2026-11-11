@@ -49,8 +49,9 @@ this repository: platform-neutral TypeScript with a deterministic end-to-end
 simulation harness that runs the entire pipeline — selection, DKG, voting,
 threshold signing, attestation validation, slashing, and both settlement rails
 — in one process with no network. The evaluation methodology is itself part of
-the design: line-checked proofs of five core properties, exhaustive
-finite-state model checking of the ceremony machines, in-house differential
+the design: line-checked proofs of six core properties, exhaustive finite-state
+model checking of three of the four ceremony machines (the DKG machine is
+invariant-pinned only), in-house differential
 parity over every critical pure function, a regenerable performance baseline,
 and a round-by-round cryptographic literature audit (§11, §13).
 
@@ -618,14 +619,24 @@ semantics (§5, steps 5–6), and the majority outcome against the proposal
 decides. Round panels grow host-side — reference sizes r1 = 15, r2 = 45,
 r3 = 135 (×3 per round; FROST-subset selection is host policy, the machine
 tracks rounds and votes) — and `maxLadderRounds` (default 2, bounded 1..5)
-caps the round count. Escalation is **host-driven and explicit**: after a
-non-final round resolves, the machine parks in `round_resolved`, where the
-host plays `escalate` (next round) or `concede` (the current outcome becomes
-final) — the machine never auto-escalates and never auto-concedes.
+caps the round count. Escalation is **explicit, and the caller is whoever the
+deployment authorises**: after a non-final round resolves, the machine parks in
+`round_resolved`, where a caller plays `escalate` (next round) or `concede` (the
+current outcome becomes final) — the machine never auto-escalates and never
+auto-concedes.
 `open_ladder_round` may carry an expanded per-round roster (a superset of
 the previous round is *not* required); mass votes validate against the
 round panel, and round rosters re-verify at the close/resolve ledger
-barrier.
+barrier. **In the host deployment, escalation is not the operator's to
+grant.** The host's confirmation spec makes `escalate` a **bonded
+challenger's right** (ESC-RIGHT-1…5): while the challenger's window is open
+the host may neither escalate nor concede, and operator discretion is
+break-glass only (`BAO_COURT_HOST_ESCALATION`, default off). What the
+protocol machine does *not* yet do is verify that authorisation itself — the
+`escalate`/`concede` events carry no proposer, challenger or request-hash
+witness, so the binding is enforced by the host API and not by the reducer.
+The wire shape for the machine-level witness is specified in the host's
+confirmation spec and is not shipped here.
 
 ### 6.3 Clawbacks, flip-flop flags, and outcome history
 
@@ -1323,7 +1334,8 @@ round; a performance round that also records the optimizations it *refused*;
 a host-side mechanism audit; a quantitative gap-fills round (capture
 probability, per-rail cost of corruption, the P+ε argument, the seed-grinding
 bound, and √k stake splitting — App. A, S-15); and a proofs round producing
-five line-checked theorems (App. A.2). The reviewers were AI agents working in
+six line-checked theorems (App. A.2 — T1–T5 on the core protocol, T6 on
+attribution under its two named premises). The reviewers were AI agents working in
 the repository,
 directed by the project. They are not disinterested — they wrote the code they
 audited — and that is why §13 labels the evidence by kind rather than treating
@@ -1415,7 +1427,7 @@ Remains **host-side or pre-production** (engineering, not design):
 A single sentence such as "the court is secure" would hide five different
 claims with five different kinds of evidence. Table 2 separates them. The
 column "Status" uses four labels and nothing else: **proven** (a written
-argument with its premises stated — line-checked for T1–T5 in App. A.2, and a
+argument with its premises stated — line-checked for T1–T6 in App. A.2, and a
 reduction to a cited theorem elsewhere); **machine-checked** (exhaustive or
 bounded exploration of the implementation itself, within declared abstraction
 limits); **empirically evaluated** (measured or differentially tested, with the
@@ -1427,7 +1439,7 @@ listed with the weakest link named.
 
 | Claim class | The claim, precisely | Assumptions | Evidence | Status |
 |---|---|---|---|---|
-| **Cryptographic security** — attestation unforgeability | No attestation validates under the pinned group key unless $\ge M$ distinct certified shares signed that exact message triple (session, outcome, round, signer set). | Schnorr EUF-CMA; FROST binding-factor soundness (KG20/RFC 9591, adaptive form under LDVR [19]); honest-key generation; the pinned library implements those semantics (probe- and differential-pinned, not verified from source — GAP-5a). | Theorem T5 (App. A.2), proved; the verification direction is conditional on the crypto premises; the pipeline direction (valid attestation ⇒ distinct partials) is unconditional. | **Proven** (conditional) + **open obligation** PO-13 (assumption watch) and GAP-5a (dependency fidelity) |
+| **Cryptographic security** — attestation unforgeability | No attestation validates under the pinned group key unless $\ge M$ distinct certified shares signed that exact message triple (session, outcome, round, signer set). | Schnorr EUF-CMA; FROST binding-factor soundness (KG20/RFC 9591, adaptive form under LDVR [19]); honest-key generation; the pinned library implements those semantics (probe- and differential-pinned, not verified from source — GAP-5a). | Theorem T5 (App. A.2), proved; the verification direction is conditional on the crypto premises; the pipeline direction (valid attestation ⇒ distinct partials) is unconditional. Who signed a given attestation is Theorem T6: the bare aggregate names no one, and the session journal is what attributes it (conditional on the certified-share pin P1 and authenticated entries P2). | **Proven** (conditional) + **open obligation** PO-13 (assumption watch), GAP-5a (dependency fidelity) and PO-18 (attribution is detective; the journal is host-side in v0.11) |
 | **Cryptographic security** — secrecy of the group key | Fewer than $M$ corrupted jurors learn nothing about $f(0)$, and the public ceremony transcript yields at most $m$ interpolation points to a coalition of size $m$ under possession-bound complaints. | Shamir perfect privacy [2]; honest majority $m+1 \le t$ for the complaint bound; the DKG never has a dealer. | Shamir privacy (§2.3) and the transcript-counting argument (§2.4), both with premises stated; the complaint-binding suite pins the mechanism the argument relies on. The transcript bound is *not* a line-checked theorem. | **Proven** (reduction to Shamir privacy + counting argument) + **empirically evaluated** (forged- and unattributable-complaint rejection) |
 | **Protocol safety** — state machines | Every reachable state of the vote, confirmation, signing and DKG machines satisfies the INV-* bundle; no illegal transition is accepted; no raw `TypeError`/`RangeError` escapes. | ECMAScript semantics (premise J1), canonical UTF-8/hex inputs, monotone host clock. | Theorem T4 (structural induction over event sequences, all roster sizes) plus exhaustive model checking of three machines (13 instances, 3.15M states, 0 raw throws) within n ≤ 3–4 and reduced clocks. | **Proven** (T4) + **machine-checked** (three machines; DKG machine is invariant-pinned only, RS-1) |
 | **Protocol safety** — tally and encoding | The verdict is a function of the reveal multiset; the tie-break is a strict total order; canonical encodings are injective and prefix-free per schema. | J1; SHA-256 collision resistance for the hash bindings. | Theorems T1 and T3 (proved); exhaustive differential over small domains; the UTF-8-vs-UTF-16 divergence pinned. | **Proven** + **empirically evaluated** (in-house differential, §11.3) |
@@ -1455,8 +1467,9 @@ independently audited".
 BAO Court replaces the single-key dispute fallback with a just-in-time FROST
 threshold oracle — and, in its current form, with a *universal* one:
 juries form only when needed (or once per epoch for standing cohorts), no
-party ever holds the group secret, every settlement rests on panel evidence
-rather than the platform's word, and a verdict is a single ordinary Schnorr
+party ever holds the group secret, every verdict rests on panel evidence
+rather than the platform's word — though v1 release is host-mediated and can
+proceed without one (PO-15) — and a verdict is a single ordinary Schnorr
 signature — or one signature covering an entire epoch's verdict cohort via
 a Merkle batch — that any observer can verify with an $O(\log n)$ inclusion
 proof. The economic layer (ownership proofs, escrow ledger, Kleros-style
@@ -1464,8 +1477,9 @@ slashing, flip-flop clawbacks) and the dual-rail settlement specification
 (Lightning hold invoices, Liquid script escrow) are deterministic and
 publicly recomputable; custody, execution, retention, and SLA policy stay
 with hosts. The design is backed by an evaluation methodology rather than an
-assertion: five line-checked theorems, exhaustive model checking of the
-ceremony machines, in-house differential parity, a regenerable performance
+assertion: six line-checked theorems, exhaustive model checking of three of the
+four ceremony machines (the DKG machine is invariant-pinned only), in-house
+differential parity, a regenerable performance
 baseline, and a literature-anchored audit record (§11), with §13 stating which
 claim rests on which kind of evidence. What remains is not protocol design but
 deployment engineering and independent auditing — including the two
@@ -1538,7 +1552,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-3 | Universal-confirmation design proposal | host repository `bao.markets`: `docs/proposals/UNIVERSAL_JURY_CONFIRMATION.md` |
 | S-4 | Escrow and slashing | `docs/ESCROW-SLASHING.md` |
 | S-5 | Settlement rails (Lightning, Liquid) | `docs/SETTLEMENT-RAILS.md` |
-| S-6 | Review register and open-obligation register (PO-1…PO-17) | `docs/REVIEW_SIMULATION.md`; `docs/THREAT_MODEL.md` §6 |
+| S-6 | Review register and open-obligation register (PO-1…PO-18) | `docs/REVIEW_SIMULATION.md`; `docs/THREAT_MODEL.md` §6 |
 | S-7 | Cryptographic literature audit (mechanisms as used) | `docs/CRYPTO_AUDIT.md` |
 | S-8 | Invariant reference (INV-*, extracted from the guards) | `docs/FORMAL_INVARIANTS.md` |
 | S-9 | Threat model (adversary classes, attack tree, residuals) | `docs/THREAT_MODEL.md` |
@@ -1548,6 +1562,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-13 | Performance baseline (methodology, full tables, repro log) | `docs/benchmarks/BASELINE.md`, `baseline-medians.json`, `repro-log-2026-11-10.txt` |
 | S-14 | Module map | `README.md` §10 |
 | S-15 | Economics gap-fills (capture probability, per-rail cost of corruption, P+ε, seed-grinding bound, √k stake splitting — the external reviews' quantitative asks, each with derivation and residual) | `docs/proofs/economics/05-review-gapfills.tex.md`; numbers reproducible from `scripts/review-quant/economics.mjs` |
+| S-16 | Attributable signing (session journal, RFC 9162 log, batch-signing duty) | `docs/ATTRIBUTABLE_SIGNING.md` |
 
 ### A.2 Proofs and machine-checked artifacts
 
@@ -1558,6 +1573,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | T3 | Tally well-definedness (verdict as a function of the reveal multiset; strict total tie-break) | `docs/proofs/03-tally.tex.md` |
 | T4 | Machine safety for all roster sizes (structural induction over event sequences) | `docs/proofs/04-machine-safety.tex.md` |
 | T5 | Attestation soundness (pipeline direction unconditional; verification direction under Schnorr/FROST premises) | `docs/proofs/05-threshold-soundness.tex.md` |
+| T6 | Signing-session attribution (the bare aggregate is unlinkable; the journal reconstructs and attributes it) — conditional on the certified-share pin (P1) and authenticated append-only entries (P2) | `docs/proofs/attribution.tex.md` |
 | — | Premise registry (J1, E1–E2, H-JS1/2, S1–S5), lemma gaps (GAP-5a: dependency fidelity, probe-pinned not source-verified) | `docs/proofs/README.md` |
 | — | Protocol-level games: DEF-1…DEF-4 (`ATTFORGE`, `VERDICTCONS`, `CHAINFORGE`, `CONFLIVE`), THE-1…THE-4, residuals and GAP-20a/b | `docs/proofs/security/` |
 | — | Economics layer proofs | `docs/proofs/economics/` |
