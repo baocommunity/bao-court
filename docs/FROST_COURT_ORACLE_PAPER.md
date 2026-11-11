@@ -1,5 +1,7 @@
 # BAO Court: A Just-in-Time FROST Threshold Oracle for Prediction-Market Disputes
 
+**Pablo Denver**
+
 **Artifact:** this repository — the reference implementation, its proofs, and
 its audit record. Provenance (normative documents, finding codes, artifact
 inventory, review record) is consolidated in Appendix A, so that the body
