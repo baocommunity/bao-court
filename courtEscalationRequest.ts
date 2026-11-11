@@ -244,6 +244,13 @@ function normalizeCaseId(value: unknown, label: string): string {
  * `TypeError` (`input.caseId.trim is not a function`) instead of this module's
  * typed refusal. Snapshot first, then validate the snapshot.
  *
+ * The same rule covers a non-OBJECT argument (r49-d): `build(null)`,
+ * `hash(null)` and `escalationRequestToMachineEvent(state, null, …)` used to
+ * escape as a raw `TypeError` (`Cannot read properties of null (reading
+ * 'caseId')`) — a foreign error type at the fail-closed boundary. A non-object
+ * descriptor is now a typed refusal, so every entry point of this module
+ * refuses with {@link CourtConfirmationTransitionError} or not at all.
+ *
  * @throws {@link CourtConfirmationTransitionError} on any malformed field.
  */
 export function buildCourtEscalationRequest(input: {
@@ -257,6 +264,12 @@ export function buildCourtEscalationRequest(input: {
   readonly signedAtSec: number;
   readonly concession?: boolean;
 }): CourtEscalationRequest {
+  if (!isRecord(input)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request must be an object: a null, array or primitive descriptor cannot be read '
+      + 'field by field, and a raw TypeError must not escape the codec (r49-d)',
+    );
+  }
   const caseIdRaw: unknown = input.caseId;
   const roundRaw: unknown = input.round;
   const challengerPubkeyRaw: unknown = input.challengerPubkey;
@@ -633,6 +646,21 @@ export function escalationRequestToMachineEvent(
       + 'claim is unverified, so an escalation may not be attributed to it',
     );
   }
+  // r49-d: a restored or tampered SNAPSHOT must fail closed with this module's
+  // typed refusal, never with a raw TypeError. `state.ladderRound` is read
+  // below, so `escalationRequestToMachineEvent(null, …)` used to escape as
+  // `Cannot read properties of null (reading 'ladderRound')` — a foreign error
+  // type at the boundary `@bao/court` documents as typed-only (`errors.ts`,
+  // r3-1/r41-1), on the exact shape a host restores from disk. The package
+  // already owns this guard (`assertStateArrays`, `courtCeremonyCore.ts`) and
+  // every other machine guard uses it; this path did not, and neither did the
+  // bond filter (`state.challenges.filter` on a non-array).
+  if (!isRecord(state)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request landed on a case snapshot that is not an object: an escalation must not be '
+      + 'minted against a snapshot the machine could not have produced (r49-d)',
+    );
+  }
   if (normalised.round !== state.ladderRound) {
     throw new CourtConfirmationTransitionError(
       `escalation request was signed to escalate past round ${normalised.round} but the case is `
@@ -659,7 +687,15 @@ export function escalationRequestToMachineEvent(
       + 'could not have produced (r9-4)',
     );
   }
-  const bonds = state.challenges.filter((c) => c.bondProofHash === normalised.bondProofHash);
+  if (!Array.isArray(state.challenges)) {
+    // r49-d: `challenges.filter` on a restored snapshot whose ledger is not an
+    // array was a raw `TypeError` (`state.challenges.filter is not a function`).
+    throw new CourtConfirmationTransitionError(
+      `the case snapshot has no challenge ledger (challenges is ${typeof state.challenges}): an `
+      + 'escalation must not be minted against a snapshot the machine could not have produced (r49-d)',
+    );
+  }
+  const bonds = state.challenges.filter((c) => isRecord(c) && c.bondProofHash === normalised.bondProofHash);
   if (bonds.length === 0) {
     throw new CourtConfirmationTransitionError(
       'no accepted challenge bond to bind an escalation witness to',
