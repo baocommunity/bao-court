@@ -428,6 +428,18 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.15.2] — 2026-11-11
+
+### Fixed (review-round-12, PR #131)
+- **The echo path was total over two files of four (exploitable).** A mechanical sweep discovers every site that interpolates a value into a typed refusal; on `v0.15.1` it finds **66 raw sites** (44 in `confirmationMachineHandlers.ts`, 9 in `confirmationMachineCore.ts` incl. `state.ladderRound`, 3 in `courtConfirmationMachine.ts` incl. the front-door `event.type`, 10 in `courtEscalationRequest.ts`). Measured: `Object.create(null) as event.type` threw a raw `TypeError` **and ran caller code inside a refusal**; a newline in an outcome was echoed verbatim. Fixed with one shared escape module (`courtEcho.ts`), a runtime-total `quoteWireValue`, and a **static test that fails on any future raw site** (with a teeth test and a one-implementation assertion).
+- **The counters barrier accepted agreement as integrity.** Two counters forged to the SAME non-integer passed the `===` check and `flag_clawback` persisted the forged round (`{"round":"3\nESCALATION ACCEPTED…"}`, `{"round":2.5}`). The barrier now enforces the counters' write domain.
+- **The echo clip** was documented as 64 characters and returned 65, and counted UTF-16 units (40 astral characters measured 65; now 63).
+
+### Changed
+- Round-12's mechanical totality sweep, the 20,000-shape fuzz of the event validator (zero raw throws; the three narrowings vs nostr-tools are pinned as decisions), and the note that object spread copies nostr-tools' memoised `verified` symbol — so the binder's rebuild is load-bearing.
+- The round-11 parameter-rationalisation divergence is **closed by design**: `String(x)` *is* the shortest round-trip decimal, so no lossless merge exists; the obligation is to pass the literal decimal.
+- Suite **1,951 passed** (87 files); mutant catalogue 101.
+
 ## [0.15.1] — 2026-11-11
 
 ### Fixed (review-round-11, PR #128)
