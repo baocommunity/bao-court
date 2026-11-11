@@ -1591,6 +1591,19 @@ the release being green). And a fix that nobody attacks is not evidence of
 anything. That is why this tier is *added to* the taxonomy of §13, not
 substituted for the independent audit that section still lists as absent.
 
+**The full record.** Every round this method has produced — the improvement
+rounds 1–4, symposium rounds 5–21, the 2026-11-10 external reviews
+(GPT/Claude/Gemini), review rounds 2–6, and the instrument rounds 29–37 that
+supply the measurements quoted here — is mapped in
+[`REVIEWS_INDEX.md`](REVIEWS_INDEX.md): per round, the attack surface, the
+findings by severity, where the fix landed (PR and release), and how each
+residual was dispositioned; plus the **eight-class failure taxonomy** the
+campaign has actually found (trust-boundary pinning, state-restore divergence and
+its over-strictness mirror, bond/economics binding, report-vs-decision mismatch,
+vacuity, flood/eviction, attribution) and every headline number with the artifact
+that produced it. The `REVIEW_ROUND_*.md` documents remain the authoritative
+statements; the index is the map, and it names the source for each number.
+
 ### 11.7 Evidence at scale, across processes, and over time
 
 Three artifacts extend the evidence beyond single-process, single-instance

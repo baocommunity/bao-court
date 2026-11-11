@@ -11,6 +11,18 @@ frozen.
 
 ## [Unreleased]
 
+### Added (docs)
+- **`docs/REVIEWS_INDEX.md` — the map of the self-verification campaign.** Every
+  review/simulation round in order (improvement 1–4, symposium 5–21, the
+  2026-11-10 GPT/Claude/Gemini reviews, review rounds 2–6, instrument rounds
+  29–37), per round: attack surface, findings by severity, fix (PR + release),
+  and residual disposition; the **eight-class failure taxonomy** (trust-boundary
+  pinning, state-restore divergence and its over-strictness mirror,
+  bond/economics binding, report-vs-decision mismatch, vacuity, flood/eviction,
+  attribution); and every headline number with its artifact. Cross-referenced
+  from `README.md`, paper §11.6 and `CROSS_CHECK.md`. Docs only — no code, no
+  fixture, no test touched.
+
 ### Fixed (review-round-6, the round-5 and round-37 fixes attacked)
 - **A restored challenge ledger bought a FREE rung at `escalate` (r40-1,
   exploitable).** Round 5 bound one `bondProofHash` to one roster index and

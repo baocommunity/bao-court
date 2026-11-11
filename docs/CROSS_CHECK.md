@@ -43,6 +43,17 @@ Conventions for evidence refs:
 - `pkg:<name>@<version>` — package.json pins that dependency version;
 - `gap` — no executable proof; the claim id MUST appear in the Gap register.
 
+**Where the review history lives.** The rounds that produced these claims and the
+rounds that attacked them are mapped in [`REVIEWS_INDEX.md`](REVIEWS_INDEX.md):
+every review/simulation round in order (improvement rounds 1–4, symposium 5–21,
+the 2026-11-10 external reviews, review rounds 2–6, the instrument rounds 29–37),
+the findings by severity, the fix (PR and release) and the disposition of every
+residual — plus the eight-class failure taxonomy and the artifact behind each
+headline number. This file remains the **claim→proof** index; the reviews index
+is the **round→finding** index, and the two are joined by claim id (the pinning
+duty, for example, is `PAPER-7.3-3` here and class 1 in the taxonomy) and by
+finding code (`r29-*`, `r33-*`, `r38-*`, `r40-*`).
+
 ---
 
 ## 1. Verification runs recorded for this round (2026-11-11, worktree at v0.13.0+, `608e6dc`)

@@ -46,9 +46,13 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`CRYPTO_AUDIT.md`](docs/CRYPTO_AUDIT.md) | cryptography literature audit — design choices vs the FROST literature, dispositions |
 | [`CROSS_CHECK.md`](docs/CROSS_CHECK.md) | the claim→proof index: every documented claim mapped to the test/bench/model-check/fixture that proves it (`scripts/cross-check.mjs` machine-verifies it) |
 | [`EVALUATION.md`](docs/EVALUATION.md) | the paper's evaluation chapter as a standalone artifact (parity, model checking, benchmarks, audit program) |
+| [`REVIEWS_INDEX.md`](docs/REVIEWS_INDEX.md) | **the map of the whole self-verification campaign**: every review/simulation round in order (improvement rounds 1–4, symposium 5–21, the external reviews, review rounds 2–7), the eight-class failure taxonomy, and every headline number with the artifact that produced it |
 | [`REVIEW_SIMULATION.md`](docs/REVIEW_SIMULATION.md) | external-review simulation: reviewer findings and dispositions |
 | [`REVIEW_ROUND_2.md`](docs/REVIEW_ROUND_2.md) | round-2 audit: does each shipped fix answer the reviewer's objection? verdicts, new issues, and what round 3 still owes |
 | [`REVIEW_ROUND_3.md`](docs/REVIEW_ROUND_3.md) | round-3 audit: attacks the surface the round-2 fixes created (escalate witness, economic cap, deterministic budget, witness×finality) — findings, shipped fixes, registered residuals |
+| [`REVIEW_ROUND_4.md`](docs/REVIEW_ROUND_4.md) | round-4 audit: the v0.13.0 surface from the inside (per-round bond, derived ladder bound, decay pairing, host churn cap) — 2 exploitable fixed, 10 registered |
+| [`REVIEW_ROUND_5.md`](docs/REVIEW_ROUND_5.md) | round-5 audit: the round-4 closures attacked on their own premise — the challenge pool had no uniqueness (r38-1), one payment bought unlimited standing |
+| [`REVIEW_ROUND_6.md`](docs/REVIEW_ROUND_6.md) | round-6 audit: the entries that **spend a rung** re-derived nothing — 2 exploitable fixed, the 490-state legal-state hunt, and the ownership (preemption) residual |
 | [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
 | [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: **1,187,000** seeded cases / **3,745,566** assertions across nine campaigns (incl. the witness-aware model-check tables) and what the sizes buy statistically |
 | [`PER_ROUND_BOND.md`](docs/PER_ROUND_BOND.md) | the v0.13 escalation bond: a **consumption** test per rung (`ΔC_R = 3^R b₀`), the compatibility matrix, the derived ladder cap and flip round |
