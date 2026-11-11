@@ -45,6 +45,9 @@ round-16 review fixes; all contract stages PASS — see
 *(Round 21, 2026-11-11: full suite now **1,534 passed / 1 skipped (64 files)** —
 14 mutation-closure tests added by the mutation campaign; see
 `docs/MUTATION_TESTING.md`.)*
+*(Review round 3, 2026-11-11: full suite now **1,561 passed / 1 skipped (66 files)** —
+15 adversarial tests added while attacking the shipped escalate witness; see
+`docs/REVIEW_ROUND_3.md`.)*
 
 ---
 
@@ -159,7 +162,7 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**156 invariants** (`INV-<machine>-<n>`), each extracted from the
+**157 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
 enforcement pointer (`file:line`) and the pinning test. Precision note
 (round-16 external review, finding A-3): the family is *predominantly*

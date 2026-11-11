@@ -80,7 +80,7 @@ import {
  * `round_resolved`, where a caller plays `escalate` (next round pending) or
  * `concede` (the current round's outcome becomes final) — the machine never
  * auto-escalates and never auto-concedes. `escalate` carries an authority
- * witness the REDUCER validates (SPEC §9.2, INV-ESC-1…7): the authority
+ * witness the REDUCER validates (SPEC §9.2, INV-ESC-1…8): the authority
  * (`challenger` | `host`), the challenger's roster index and x-only pubkey,
  * the signed request hash, a bond-proof hash bound to a challenge the machine
  * already accepted, and the round index, which must equal `ladderRound + 1`.

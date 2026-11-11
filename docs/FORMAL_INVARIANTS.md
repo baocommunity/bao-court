@@ -707,18 +707,24 @@ escalate {
   32-byte lowercase hex. Guard: `confirmationMachineHandlers.ts:522-543`.
   Tests: `escalationWitness.test.ts` › 'a challenger outside the case roster
   cannot escalate'; `… › 'request hash and pubkey must be well-formed 32-byte
-  lowercase hex'`.
-- **INV-ESC-5 (bond bound to state, host behind policy).** The challenger's
-  `bondProofHash` must match a bond the machine **already accepted**
-  (`state.challenges`) — a well-formed hash for a foreign bond proves nothing;
-  and `authority: "host"` is refused unless the frozen case policy sets
-  `hostEscalation: true` (default **false**, SPEC §9.2 ESC-RIGHT-2), in which
-  case it must carry no challenger request. Guards:
-  `confirmationMachineHandlers.ts:544-547,559-573`, policy frozen at
+  lowercase hex'`. **Residual (round 3, r29-5):** the pubkey is not bound to the
+  index — state carries no idx→pubkey registry, so a relaying host can pair
+  juror A's index with juror B's key. Binding it is a v0.13 case-state change.
+- **INV-ESC-5 (bond bound to STATE *and to the CHALLENGER*, host behind policy).**
+  The challenger's `bondProofHash` must match a challenge bond the machine
+  already accepted **for that same `challengerIdx`** (`state.challenges`) — a
+  well-formed hash for a foreign bond proves nothing, and a bonded juror's hash
+  quoted by a juror who posted no bond proves nothing either (round-3 finding
+  r29-1: before the fix a non-bonded juror escalated on another juror's bond and
+  the audit log named the wrong challenger). `authority: "host"` is refused
+  unless the frozen case policy sets `hostEscalation: true` (default **false**,
+  SPEC §9.2 ESC-RIGHT-2), in which case it must carry no challenger request.
+  Guards: `confirmationMachineHandlers.ts:544-555,559-573`, policy frozen at
   `courtConfirmationMachine.ts:307`. Tests: `escalationWitness.test.ts` › 'the
-  bond witness must match a bond the machine already accepted'; `… › 'host
-  authority is break-glass: refused by default, legal only under the frozen
-  policy'`.
+  bond witness must match a bond the machine already accepted';
+  `reviewRound3.test.ts` › 'a juror with NO bond cannot escalate on another
+  juror's accepted bond hash'; `escalationWitness.test.ts` › 'host authority is
+  break-glass: refused by default, legal only under the frozen policy'.
 - **INV-ESC-6 (append-only witness log).** A legal escalation appends exactly
   one `escalationLog` record — `{round, authority, challengerIdx,
   challengerPubkey, requestHash, bondProofHash, at}` — to the frozen log; the
@@ -739,6 +745,24 @@ escalate {
   the escalation log invariants on every reachable state. Test:
   `escalationWitness.test.ts` › 'ladder_pending is reachable ONLY through a
   witnessed escalation'.
+- **INV-ESC-8 (witness log tamper barrier at finalize).** `finalize` re-verifies
+  the escalation log exactly as it re-verifies the confirmation ledger and the
+  outcome history: rounds are a consecutive `2..k` sequence, no record names a
+  round the case never opened, timestamps are finite and non-decreasing, every
+  `challenger` record names a roster participant **and that participant's own
+  accepted challenge bond**, and a `host` record requires the frozen
+  `hostEscalation` policy and carries no challenger witness. A SHORT log is
+  accepted deliberately: a pre-0.12 snapshot has no entries and must stay
+  finalizable, and a deleted entry is indistinguishable from a legacy state
+  (deletion stays host-attested, INV-ESC-6). Round-3 finding r29-2: before this
+  barrier a restored `fee_settlement` snapshot could append a fabricated record
+  and finalize on top of it, because the verdict hash deliberately does not cover
+  the log. Guards: `confirmationMachineCore.ts:313-413`
+  (`assertValidEscalationLog`), called at
+  `confirmationMachineHandlers.ts:692`. Tests: `reviewRound3.test.ts`
+  › 'a forged escalation record on a restored snapshot is refused at finalize';
+  › 'a host-authority record cannot appear on a case that never allowed it';
+  › 'a pre-0.12 snapshot (no escalationLog) still finalizes'.
 
 **Open (round 3):** `concede` carries no witness yet (SPEC §9.2 ESC-RIGHT-3
 asks for the challenger's own signed concession). A host may therefore still
@@ -1391,6 +1415,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-ESC-5 | bond bound to an accepted challenge; host behind frozen policy | confirmationMachineHandlers.ts:544-547,559-573 | escalationWitness.test.ts › bond must match; host is break-glass |
 | INV-ESC-6 | escalation witness log append-only (+ pre-0.12 normalisation) | confirmationMachineHandlers.ts:584-588; courtConfirmationMachine.ts:407-412 | escalationWitness.test.ts › witness recorded append-only; legacy snapshot normalises |
 | INV-ESC-7 | `ladder_pending` unreachable without a witness | confirmationMachineHandlers.ts:487-588 | escalationWitness.test.ts › ladder_pending is reachable ONLY through a witnessed escalation |
+| INV-ESC-8 | witness log tamper barrier at finalize (+ legacy short-log acceptance) | confirmationMachineCore.ts:313-413; confirmationMachineHandlers.ts:692 | reviewRound3.test.ts › forged escalation record refused at finalize |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |
 | INV-CONF-32 | finality = last round | courtConfirmationMachine.ts:1145-1155 | multiRoundLadder.test.ts › finality = LAST resolved round… |
@@ -1598,10 +1623,10 @@ lack an enforcing test. Ordered by audit significance.
   `__tests__/invariantAssertions.test.ts` (27 always-on global assertions).
 - Typecheck: `npm run typecheck && npm run typecheck:tests`.
 - The invariant count: 8 core + 23 vote + 36 confirmation + **7 escalation
-  (INV-ESC-1…7)** + 15 signing +
+  (INV-ESC-1…8)** + 15 signing +
   12 DKG + 9 selection + 16 batch + 16 validator + 10 cross-machine +
-  3 attribution + INV-SETTLE-1 = **156 stated invariants**, each with an
-  enforcement pointer; 147 pinned by a named test, and the cross-machine/global
+  3 attribution + INV-SETTLE-1 = **157 stated invariants**, each with an
+  enforcement pointer; 148 pinned by a named test, and the cross-machine/global
   set pinned by the 27 executable assertions of
   `__tests__/invariantAssertions.test.ts` (INV-ATTRIB-3 is spec-level —
   see §16). Twelve findings

@@ -48,7 +48,7 @@ Conventions for evidence refs:
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,546 passed / 1 skipped (65 files)** — re-verified 2026-11-11 (escalation witness + budget round); 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Full suite | `npm test` | **1,561 passed / 1 skipped (66 files)** — re-verified 2026-11-11 (review round 3: escalate-witness attacks); 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified round 17) |
 | Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (re-verified round 17; output in the PR body) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (20 min): **13 instances, 3,149,142 states, 134,838,724 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
@@ -176,7 +176,7 @@ round` (pinning test written in round 14).
 | FINDING-A-6 | Node-side nonce guard is memory-only; a restarted process can re-consume a persisted commitment package | OPEN | S-3: file-backed Node guard or session-bound `(secret, sessionHash)` HKDF derivation (never share-only, per RFC 9591 §7.3) |
 | FINDING-A-7 | Nothing enforces at the type level that `seededScalar`-derived values never reach a signing nonce | OPEN | S-4: `@: SigningNonce` brand (or lint rule) separating demo-derivation from signing nonces |
 | PAPER-12-5 | Differential parity against a *second independent FROST implementation* (cross-implementation differential) remains open | OPEN | cross-implementation FROST vector exchange once a ChillDKG/BIP-445 reference implementation is available (production gate, not a protocol change) |
-| SUITE-4 | The paper's suite-size claim ("1,300-test-strong") drifts as the suite evolves | CLOSED this round | abstract now carries no fixed count; the live count (1,546) is recorded per round in CROSS_CHECK §1 and re-measured by `npm test` |
+| SUITE-4 | The paper's suite-size claim ("1,300-test-strong") drifts as the suite evolves | CLOSED this round | abstract now carries no fixed count; the live count (1,561) is recorded per round in CROSS_CHECK §1 and re-measured by `npm test` |
 
 Closed-before-this-round findings (evidence verified today): F-2 (empty-pin
 fail-closed), F-3 (outcome-history barrier), F-9 (commit version bit), F-12

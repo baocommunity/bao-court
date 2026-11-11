@@ -1,7 +1,7 @@
 // Copyright © 2026 baocommunity — licenced under AGPL-3.0 (see LICENSE.txt).
 
 /**
- * Machine-level escalation authority witness (SPEC §9.2, INV-ESC-1…7).
+ * Machine-level escalation authority witness (SPEC §9.2, INV-ESC-1…8).
  *
  * Review round 2's sharpest finding: `onEscalate` used to IGNORE its event, so
  * a host that bypassed its own API kept the appeal power — the machine moved
@@ -148,8 +148,10 @@ describe('escalation authority witness: the machine refuses what the host used t
     // Well-formed, but for a bond this case never saw.
     const foreign = escalateEvent(resolved, 3200, { bondProofHash: hexId('9') });
     expect(() => reduceCourtConfirmationMachine(resolved, foreign)).toThrow(
-      /does not match any accepted challenge bond/,
+      /does not match an accepted challenge bond/,
     );
+    // …and it must be THIS challenger's bond (R29 r29-1,
+    // `reviewRound3.test.ts` › a juror with NO bond cannot escalate).
   });
 
   it('request hash and pubkey must be well-formed 32-byte lowercase hex', () => {

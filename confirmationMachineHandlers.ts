@@ -32,6 +32,7 @@ import {
   assertParticipant,
   assertRoundParticipant,
   assertValidConfirmationLedger,
+  assertValidEscalationLog,
   assertValidMassVoteLedger,
   assertValidOutcomeHistory,
   freezeState,
@@ -539,11 +540,16 @@ export function onEscalate(
       event.bondProofHash as string,
       'escalation bond proof hash must be 32-byte lowercase hex',
     );
-    // Bind the witness to a bond the machine already accepted: a
-    // well-formed hash for a bond this case never saw proves nothing.
-    if (!state.challenges.some((c) => c.bondProofHash === event.bondProofHash)) {
+    // Bind the witness to a bond THIS challenger posted: a well-formed hash for
+    // a bond the case never saw proves nothing, and a bond some OTHER juror
+    // posted proves nothing either. Without the `idx` half (round-3 finding
+    // r29-1) a juror who posted no bond could escalate by quoting a bonded
+    // juror's hash, and the witness log would name the wrong challenger.
+    if (!state.challenges.some(
+      (c) => c.idx === (idx as number) && c.bondProofHash === event.bondProofHash,
+    )) {
       throw new CourtConfirmationTransitionError(
-        'escalation bond proof hash does not match any accepted challenge bond',
+        'escalation bond proof hash does not match an accepted challenge bond of this challenger',
       );
     }
     record = {
@@ -679,6 +685,11 @@ export function onFinalize(
   // re-verify (consecutive rounds, ballot closure, well-formed winners)
   // before the machine reaches `final` on top of it.
   assertValidOutcomeHistory(state);
+  // Witness-log barrier (round-3 finding r29-2, INV-ESC-8): the escalation
+  // log is an audit input hosts use to attribute misconduct and price fees,
+  // so a restored snapshot must not be able to ADD a record naming a juror
+  // who never escalated, a round never opened, or a bond never posted.
+  assertValidEscalationLog(state);
   const pending = state.verdict;
   if (!pending) {
     throw new CourtConfirmationTransitionError('cannot finalize without a resolved round');

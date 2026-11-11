@@ -48,6 +48,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`EVALUATION.md`](docs/EVALUATION.md) | the paper's evaluation chapter as a standalone artifact (parity, model checking, benchmarks, audit program) |
 | [`REVIEW_SIMULATION.md`](docs/REVIEW_SIMULATION.md) | external-review simulation: reviewer findings and dispositions |
 | [`REVIEW_ROUND_2.md`](docs/REVIEW_ROUND_2.md) | round-2 audit: does each shipped fix answer the reviewer's objection? verdicts, new issues, and what round 3 still owes |
+| [`REVIEW_ROUND_3.md`](docs/REVIEW_ROUND_3.md) | round-3 audit: attacks the surface the round-2 fixes created (escalate witness, economic cap, deterministic budget, witness×finality) — findings, shipped fixes, registered residuals |
 | [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
 | [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: 1.17M seeded cases / 3.5M assertions across the six production surfaces, the committed artifact, and what the sizes buy statistically |
 | [`MUTATION_TESTING.md`](docs/MUTATION_TESTING.md) | the spec's blindness audit: 53 mutants × 18 bug classes, 3 detectors, the 7 survivors found and the pins that close them |
@@ -317,7 +318,7 @@ persist states.
   accepted, and a host escalation outside the frozen `hostEscalation` policy
   (default false), and appends the accepted witness to the append-only
   `escalationLog` (`challengerEscalationEvent` / `hostEscalationEvent` build the
-  event; SPEC §9.2, INV-ESC-1…7). Automatic `overturned_confirmation`
+  event; SPEC §9.2, INV-ESC-1…8). Automatic `overturned_confirmation`
   clawback flags plus `round_flip` flags when consecutive rounds disagree
   (flip-flop rule), an append-only `outcomeHistory`, a fee ledger, and a
   final verdict (= LAST resolved round's winner) reusing `hashCourtVerdict`.
@@ -484,7 +485,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (1,546 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (1,561 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit
