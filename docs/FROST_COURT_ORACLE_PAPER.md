@@ -1254,8 +1254,8 @@ adapters. The module map is in App. A.2.
 ### 11.1 Suite, simulation, and review record
 
 - **Suite:** the full test suite is green and the typecheck is clean (source,
-  scripts, and tests are all typechecked) — **1,677 passing, 1
-  environment-gated live test skipped, over 75 files**, re-measured on this head
+  scripts, and tests are all typechecked) — **1,686 passing, 1
+  environment-gated live test skipped, over 76 files**, re-measured on this head
   (App. A.4; per-round record in App. A.1, S-12 §1). Coverage includes:
   BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
@@ -1889,9 +1889,12 @@ round documents (App. A, S-17, S-18, S-21).
 19. E. Crites, J. Katz, C. Komlo, S. Tessaro, C. Zhu. *On the Adaptive Security
     of FROST.* CRYPTO 2025 (IACR ePrint 2025/1061) — FROST's fully adaptive
     security under the low-dimensional vector representation (LDVR) assumption.
-20. CVE-2025-58359 — ZF FROST: share refresh with a reduced `min_signers`
-    silently lowered the effective threshold (2025). The refresh invariant of
-    §10.2 D exists because of this failure class.
+20. CVE-2025-58359 — ZF FROST: the `frost_core::keys::refresh` path accepted a
+    reduced `min_signers` without validation, which did **not** lower the
+    threshold (signing at the smaller threshold still failed) but did reduce the
+    security of participants' shares; fixed in 2.2.0 (2025), which validates the
+    parameter. The refresh invariant of §10.2 D exists because of this failure
+    class, not because the group threshold silently moved.
 
 ---
 
@@ -1943,6 +1946,8 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | — | Premise registry (J1, E1–E2, H-JS1/2, S1–S5), lemma gaps (GAP-5a: dependency fidelity, probe-pinned not source-verified) | `docs/proofs/README.md` |
 | — | Protocol-level games: DEF-1…DEF-4 (`ATTFORGE`, `VERDICTCONS`, `CHAINFORGE`, `CONFLIVE`), THE-1…THE-4, residuals and GAP-20a/b | `docs/proofs/security/` |
 | — | Economics layer proofs | `docs/proofs/economics/` |
+| — | Independent second model of the vote/confirmation machines (Quint 0.33.1 + Apalache): 42 scenario tests, 10 000 seeded simulation runs per machine with all invariants checked per state, and a bounded symbolic check to depth 10 — no violation; committed run log. **Outside the one-command reproduce contract** (needs `quint` + Java 21) | `proofs/mechanized/court.qnt`, `run.sh`, `quint-run.log`, `README.md` |
+| — | Lean 4 mechanisation of single finality (`oracle_single_finality`, `machine_final_certified_unique`, `finalize_barrier`, `machine_alone_insufficient`): build clean with no `sorry`, axiom audit limited to `propext`/`Quot.sound`; the signature scheme is *abstracted* (`Signed` is uninterpreted), so this checks the finality machine, not the cryptography. **Outside the reproduce contract** (needs `lean`/`elan`) | `proofs/lean4/SingleFinality.lean`, `Axioms.lean`, `run.sh`, `lean-run.log`, `README.md` |
 | — | Exhaustive model-check fixture (15 instances, 3,869,232 states, 60,020,684 illegal-witness probes, 0 accepted) and its generator | `__fixtures__/model-check-summary.json`; `scripts/model-check.mjs` |
 | — | Witness-aware model-check tables and the nine-campaign statistical corpora | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json`; `scripts/campaign/run-campaign.mjs` |
 | — | Multi-process ceremony (N = 3…7 OS processes, kill/replay chaos, Byzantine-relay split-view/loss/reorder/replay/silence matrix) | `scripts/court/multi-process-ceremony.mjs`, `scripts/court/juror-child.ts`; gated by `__tests__/r30MultiProcessCeremony.test.ts`, `__tests__/r33ByzantineRelay.test.ts` |
@@ -2009,7 +2014,7 @@ history itself is `CHANGELOG.md`.
 
 | Artifact | Command / location | Count (2026-11-11, at `c456fb4`) |
 |---|---|---|
-| Test suite | `npm test` | 1,677 passing, 1 environment-gated live test skipped, 75 files (measured on the review-round-4 head; the per-round pinned count is App. A.1, S-12 §1) |
+| Test suite | `npm test` | 1,686 passing, 1 environment-gated live test skipped, 76 files (measured at `608e6dc`, round 34; the per-round pinned count is App. A.1, S-12 §1) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`, source + scripts + tests) | clean |
 | Model-check sweep | `npx tsx scripts/model-check.mjs` | 15 instances, 3,869,232 states, 60,020,684 illegal-witness probes (0 accepted), 0 raw throws |
 | Statistical corpora | `npm run campaign:full` | 9 campaigns, 1,187,000 units, 3,745,566 assertions, 0 failures (CI runs a fast subset) |

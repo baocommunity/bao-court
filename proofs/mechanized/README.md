@@ -22,7 +22,8 @@ reachable from `create_M(params)` satisfies the machine's INV-* bundle") and
 the state-machine part of **Theorem 3 — tally well-definedness**
 (`docs/proofs/03-tally.tex.md`), as a third verification channel that shares
 no harness with either the TS model checker (`__tests__/modelCheckingCore.ts`
-— 13 instances, 3.1M states) or the prose induction. Invariant identifiers
+— the committed witness-aware sweep: 15 instances, 3.87M states; 13 / 3.1M
+before the two witness instances) or the prose induction. Invariant identifiers
 cross-reference `docs/FORMAL_INVARIANTS.md` §4 (INV-VOTE-1..23) and §5
 (INV-CONF-1..36); the machine-checked subset is tabulated below.
 

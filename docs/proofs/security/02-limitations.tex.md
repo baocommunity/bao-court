@@ -64,8 +64,9 @@ junction deployment model that is policy, not protocol.
 **Covered empirically by.** Soak validation at 10k disputes/day
 (`docs/THREAT_MODEL.md` §4-C residual; `docs/EVALUATION.md`); the
 model-checking sweep's terminal-absorption coverage (every non-terminal
-phase has an outgoing edge — `__fixtures__/model-check-summary.json`, 13
-instances / 3 145 632 states, 0 raw throws) and its Quint re-model
+phase has an outgoing edge — `__fixtures__/model-check-summary.json`, the
+witness-aware sweep: 15 instances / 3 869 232 states, 0 raw throws) and its
+Quint re-model
 (`proofs/mechanized/court.qnt`, mechanized round); the Path-C refund tests
 in `courtConfirmationMachine.test.ts`.
 
