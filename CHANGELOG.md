@@ -272,6 +272,17 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.14.1] — 2026-11-11
+
+### Fixed (review-round-8, PR #115)
+- **`caseId` encoded lossily (exploitable):** `TextEncoder` maps an unpaired surrogate to U+FFFD, so `"…:1\uD800"` and `"…:1\uFFFD"` — different ids on different wires — hashed to one digest (the H-6 collision one field over). Escalation-request ids are now canonical UTF-8, NUL-free and ≤256 bytes, with a 2,000-id injectivity pin.
+- **The wire's `challengerPubkey` forwarded uncompared (exploitable):** a bonded juror could write another juror's pubkey into the append-only escalation log (mint-time r29-2 harm); a request signed for round 1 could open round 4 (the wire `round` was inert); a `caseId` could cross cases. The mapper now requires a host-supplied `{caseId, authenticatedPubkey}` binding and `round === ladderRound`; ambiguous bond ledgers are refused.
+- `concession` truthiness, duplicate JSON keys (last-win), and a double `caseId` read (raw TypeError) in the builder.
+
+### Changed
+- The round-7 finality barrier is verified blocked on all four paths to `finalize`; `resolve_round` no longer bricks a case when it appends onto a lagging history.
+- Suite **1,804 passed** (82 files).
+
 ## [0.14.0] — 2026-11-11
 
 ### Added
