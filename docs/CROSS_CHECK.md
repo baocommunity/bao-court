@@ -416,8 +416,8 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | PAPER-10.2-M | paper | test | test:__tests__/adversarialNostr.test.ts#R8 FIX: a hostile re-publisher appending an extra `o` tag cannot steer the reported outcome; test:__tests__/adversarialNostr.test.ts#R8 FIX: a same-id different-content wrap served by a hostile relay is malformed |
 | PAPER-11.2-1 | model-check | test | test:__tests__/modelChecking.test.ts#exists and covers every required instance, all green; fixture:__fixtures__/model-check-summary.json#propertiesChecked |
 | MC-2 | model-check | fixture | fixture:__fixtures__/model-check-summary.json#totals.rawThrows=0 |
-| MC-3 | model-check | fixture | fixture:__fixtures__/model-check-summary.json#totals.instances=13 |
-| MC-4 | model-check | fixture | fixture:__fixtures__/model-check-summary.json#totals.determinismPathsReplayed=2600 |
+| MC-3 | model-check | fixture | fixture:__fixtures__/model-check-summary.json#totals.instances=15 |
+| MC-4 | model-check | fixture | fixture:__fixtures__/model-check-summary.json#totals.determinismPathsReplayed=3000 |
 | MC-5 | model-check | test | test:__tests__/modelChecking.test.ts#A-1 guard: partials from outside the frozen commitment set are refused with typed errors |
 | MC-6 | model-check | test | test:__tests__/modelChecking.test.ts#cross-check: re-exploring the cheap instances reproduces the fixture numbers exactly |
 | MC-7 | model-check | model-check | model-check:vote n=4 k=2; model-check:confirm n=3 q=1 r=1 dup-event-ids [clock 6/12/14]; model-check:signing n=3 t=2 commitment-equivocation [clock 6/12] |

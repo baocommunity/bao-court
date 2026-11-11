@@ -59,8 +59,19 @@ describe('scale campaign: declared corpus table', () => {
     expect(SIZES.attestationEvents).toEqual({ fast: 250, full: 50_000 });
     expect(SIZES.selectionDraws).toEqual({ fast: 200, full: 10_000 });
     expect(SIZES.encodings).toEqual({ fast: 2_000, full: 100_000 });
+    expect(SIZES.witnessEvents).toEqual({ fast: 250, full: 10_000 });
+    expect(SIZES.epochBatches).toEqual({ fast: 40, full: 1_000 });
+    expect(SIZES.finalityChains).toEqual({ fast: 100, full: 5_000 });
     expect(declaredSizes('fast')).toEqual({
-      confirmation: 250, tally: 15_000, merkle: 40, validator: 250, selection: 200, encoding: 2_000,
+      confirmation: 250,
+      tally: 15_000,
+      merkle: 40,
+      validator: 250,
+      selection: 200,
+      encoding: 2_000,
+      witness: 250,
+      epochRotation: 40,
+      finality: 100,
     });
     expect(Object.keys(CAMPAIGNS).sort()).toEqual([...CORPUS_NAMES].sort());
   });
@@ -153,5 +164,70 @@ describe('scale campaign: canonical encodings', () => {
     expect(num(campaign, 'unicodeEncodings')).toBeGreaterThan(0);
     expect(num(campaign, 'emptyPayloadEncodings')).toBeGreaterThan(0);
     expect(num(campaign, 'boundaryRejections')).toBeGreaterThan(0);
+  });
+});
+
+describe('scale campaign: escalation witnesses (v0.12.0 escalate witness)', () => {
+  it('refuses every illegal witness and accepts only the witnessed escalation', { timeout: 300_000 }, () => {
+    const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['witness'] });
+    const campaign = result.results[0]!;
+    expectGreen(campaign);
+    // Coverage: both outcomes are exercised, the whole matrix runs, and the
+    // adversarial rows (replay across cases, duplicate rounds, oversized
+    // values, hand-restored cap) each fire.
+    expect(num(campaign, 'accepted')).toBeGreaterThan(0);
+    expect(num(campaign, 'rejected')).toBeGreaterThan(num(campaign, 'accepted'));
+    expect(num(campaign, 'typedRejections')).toBeGreaterThan(0);
+    expect(num(campaign, 'rawErrors')).toBe(0);
+    expect(num(campaign, 'logRecordsAppended')).toBeGreaterThan(0);
+    expect(num(campaign, 'maxLogDepth')).toBeGreaterThanOrEqual(1);
+    expect(num(campaign, 'crossCaseReplays')).toBeGreaterThan(0);
+    expect(num(campaign, 'duplicateRoundAttempts')).toBeGreaterThan(0);
+    expect(num(campaign, 'capReachedProbes')).toBeGreaterThan(0);
+    expect(num(campaign, 'oversizedValues')).toBeGreaterThan(0);
+    // FAST (250 units) covers every accept row and most reject rows; the FULL
+    // corpus covers all 27 rows × both outcomes.
+    expect(num(campaign, 'distinctRows')).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe('scale campaign: batch attestations across epoch rotations', () => {
+  it('binds epoch + cohort, refuses neighbour pins, and re-batches across epochs', { timeout: 300_000 }, () => {
+    const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['epochRotation'] });
+    const campaign = result.results[0]!;
+    expectGreen(campaign);
+    expect(num(campaign, 'validBatches')).toBe(SIZES.epochBatches.fast);
+    expect(num(campaign, 'epochPinRejections')).toBeGreaterThan(0);
+    expect(num(campaign, 'crossEpochReplays')).toBeGreaterThan(0);
+    expect(num(campaign, 'caseProofs')).toBeGreaterThan(0);
+    expect(num(campaign, 'foreignEpochProofRejections')).toBeGreaterThan(0);
+    // 40 batches at 25 per epoch = 2 epochs, so at least one rotation exists.
+    expect(num(campaign, 'epochs')).toBeGreaterThanOrEqual(2);
+    expect(num(campaign, 'rotations')).toBe(num(campaign, 'epochs') - 1);
+  });
+});
+
+describe('scale campaign: verdict finality chains', () => {
+  it('drives windows + escalations to a verdict and applies every finality shape', { timeout: 300_000 }, () => {
+    const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['finality'] });
+    const campaign = result.results[0]!;
+    expectGreen(campaign);
+    expect(num(campaign, 'chains')).toBe(SIZES.finalityChains.fast);
+    expect(num(campaign, 'finalChains')).toBeGreaterThan(0);
+    expect(num(campaign, 'abortedChains')).toBeGreaterThan(0);
+    expect(num(campaign, 'expiredChains')).toBeGreaterThan(0);
+    expect(num(campaign, 'challengeWindows')).toBeGreaterThan(0);
+    expect(num(campaign, 'escalations')).toBeGreaterThan(0);
+    expect(num(campaign, 'hostEscalations')).toBeGreaterThan(0);
+    expect(num(campaign, 'verdictRecomputations')).toBe(num(campaign, 'finalChains'));
+    expect(num(campaign, 'provenanceChecks')).toBe(num(campaign, 'finalChains'));
+    expect(num(campaign, 'batchVerifications')).toBe(num(campaign, 'finalChains'));
+    expect(num(campaign, 'caseProofs')).toBe(num(campaign, 'finalChains'));
+    expect(num(campaign, 'epochPinRejections')).toBe(num(campaign, 'finalChains'));
+    expect(num(campaign, 'tamperRejections')).toBe(num(campaign, 'finalChains') * 2);
+    // Every terminal chain (final + aborted + expired) refuses a perfect witness.
+    expect(num(campaign, 'terminalWitnessRejections')).toBe(num(campaign, 'chains'));
+    expect(num(campaign, 'overturns')).toBeGreaterThan(0);
+    expect(num(campaign, 'flipFlops')).toBeGreaterThan(0);
   });
 });
