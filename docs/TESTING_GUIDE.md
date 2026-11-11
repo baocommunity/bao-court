@@ -4,7 +4,9 @@ How the test suite is organized, what each category verifies, and how to add
 a test the house way. Read this before writing your first test here.
 
 ```
-npm test                        # full suite (60 files, 1,492 tests + 1 env-gated live test)
+npm test                        # full suite (62 files, 1,520 tests + 1 env-gated live test)
+npm run campaign                # scale campaign FAST subset (== the scaleCampaign tests)
+npm run campaign:full           # scale campaign FULL corpus → docs/benchmarks/campaign-<date>.json
 npx vitest run <file>           # one file
 npx vitest run -t "name"        # by test name
 npm run typecheck:tests         # tsc over __tests__ (CI gate, same as tests)
@@ -30,6 +32,7 @@ Every test must pass deterministically — no sleeps, no `Date.now()`, no
 | **Regressions / findings** | `regressions.test.ts`, `r3Findings.test.ts`, `hardening20260815.test.ts` | Every past finding is a permanent named lock (r3-1, F-12, …). New findings get a test here, named after the finding. |
 | **Vectors / crypto audit** | `cryptoLiteratureAudit.test.ts` | Known-answer vectors from the cryptographic literature (RFC 6962-style folds, NIP-44 vectors). |
 | **Escrow / rails** | `escrow.test.ts`, `taprootSpend.test.ts`, `lnSettlement.test.ts`, `bondVerification.test.ts`, `liquidEscrow.test.ts` | Settlement-rail contracts against the fakes/real-minicraft scripts (Taproot key-path spends, LN hold invoices, covenant PSETs). |
+| **Scale campaign** | `scale/scaleCampaign.test.ts` + `scale/*Corpus.ts` (`scripts/campaign/run-campaign.mjs`) | The large-corpus campaigns over six production surfaces — confirmation sequences, plurality tallies, Merkle batches, signed v2 attestations, jury selection, canonical encodings. `npm test` runs the declared FAST subset; the FULL corpus is the standalone runner, whose JSON artifact is committed under `docs/benchmarks/`. Read `docs/benchmarks/SCALE_CAMPAIGN.md` before changing a corpus size or the artifact. |
 | **Live (env-gated)** | `taprootSpend-live.test.ts` | Real-network spend; skipped unless `BAO_LIVE_TAPROOT=true` (`npm run test:live`). The `1 skipped` in every run is this file. |
 
 Category markers in `describe` titles are the convention: a file's describes

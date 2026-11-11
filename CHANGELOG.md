@@ -11,6 +11,41 @@ frozen.
 
 ## [Unreleased]
 
+### Added (scale campaign — the large-corpus round)
+
+- **`__tests__/scale/` + `scripts/campaign/run-campaign.mjs`**: six
+  deterministic (seeded) large-corpus campaigns over the production surfaces,
+  with a FAST/FULL split. CI runs the declared FAST subset inside `npm test`
+  (`scale/scaleCampaign.test.ts`); the FULL corpus is the standalone runner
+  (`npm run campaign:full`), which prints a summary table, exits non-zero on any
+  failed check, and writes `docs/benchmarks/campaign-<date>.json`.
+  - **confirmation** — 10,000 legal event sequences (rosters 3..25, outcomes
+    2..5, challenge/ladder/escalate/concede interleavings): phase/terminal-set,
+    the R25 derived quorum-policy flag, monotone clock, freeze, verdict
+    recomputation and typed-error discipline after every transition.
+  - **tally** — 1,000,000 plurality tallies finalized through the public vote
+    machine; winner and full supporting-id sequence must equal the independent
+    reduce-based oracle, including the UTF-8 tie-break (forced exact ties in 40%
+    of draws, with the UTF-16/UTF-8 divergence pairs in the ballot).
+  - **merkle** — 1,000 batches (n = 1..2048): root + leaf sequence re-derived by
+    the independent reference tree, 86,309 proofs independently verified, root
+    determinism per batch, and a tamper matrix on 10% of proofs.
+  - **validator** — 50,000 real signed v2 attestation events through a 34-row
+    accept/reject matrix; a rejection only counts as correct when the returned
+    error names the expected failure mode.
+  - **selection** — 10,000 draws over rosters 3..500 in both weight modes:
+    determinism, duplicate-free rosters, `verifyJurySelection`, independent
+    ranking agreement, and a 10⁵-trial weight-proportionality chi-square.
+  - **encoding** — 100,000 canonical encodings: byte identity with the
+    independent writer, re-encode identity, independent parser round-trip,
+    injectivity/prefix-freeness, and fail-closed boundaries.
+- **`docs/benchmarks/SCALE_CAMPAIGN.md`** + **`docs/benchmarks/campaign-2026-11-11.json`**
+  (the committed FULL-run artifact): 1,171,000 corpus units, 3,592,861
+  assertions, 0 failures, 9.2 min of corpus wall time in one invocation. No production finding:
+  no oracle mismatch, no untyped error, no accepted tamper. One campaign bug was
+  found and fixed by the campaign itself (a no-op forgery mutation that left a
+  genuinely valid event).
+
 ### Changed (parameter hardening — R25, from the R22b quantitative findings)
 
 - **`confirmQuorum` default is now the roster supermajority ⌈2N/3⌉, not 1.**
