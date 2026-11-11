@@ -1,10 +1,20 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "types": ["node"],
-    "lib": ["ES2022"],
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2022"
+    ],
     "noEmit": true
   },
-  "include": ["simulateCourt.ts"],
-  "exclude": ["node_modules", "__tests__"]
+  "include": [
+    "simulateCourt.ts",
+    "court/juror-child.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "__tests__"
+  ]
 }
