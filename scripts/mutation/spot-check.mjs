@@ -660,13 +660,22 @@ function transportRequest(overrides = {}) {
 
 const wireOfTransport = (req) => JSON.parse(escalation.serializeCourtEscalationRequest(req));
 
-// ── S33 an accepted caseId is returned UNCHANGED (trim only) ───────────────
-probe('S33', 'the codec trims a caseId and normalises nothing else (r8-1: no silent rewrite)', () => {
-  const accepted = ['court:1', ' court:1 ', 'a"b\\c{}[],:', '-', 'caf\u00e9', 'cafe\u0301', '\u{1F600}'];
+// ── S33 an accepted caseId is returned UNCHANGED (validate, do not fold) ──
+probe('S33', 'the codec validates a caseId EXACTLY: whitespace is refused, accepted ids are not rewritten (r8-1, r9-1)', () => {
+  // A FOLD is a lossy map: `"court:1"`, `"court:1 "` and `"court:1\u{3000}"`
+  // would become one id with ONE digest, and `build` would return an id the
+  // caller never supplied.
+  for (const id of [' court:1', 'court:1 ', 'court:1\t', 'court:1\u{3000}', 'court:1\n']) {
+    expectThrow(
+      () => escalation.buildCourtEscalationRequest({ ...transportRequest(), caseId: id }),
+      `an id with surrounding whitespace (${JSON.stringify(id)}) was accepted or folded`,
+    );
+  }
+  const accepted = ['court:1', 'court: a b:1', 'a"b\\c{}[],:', '-', 'caf\u00e9', 'cafe\u0301', '\u{1F600}'];
   for (const id of accepted) {
     const built = escalation.buildCourtEscalationRequest({ ...transportRequest(), caseId: id });
     assert(
-      built.caseId === id.trim(),
+      built.caseId === id,
       `accepted id ${JSON.stringify(id)} came back as ${JSON.stringify(built.caseId)} — the codec rewrote a value it validated`,
     );
   }
@@ -922,11 +931,10 @@ probe('S48', 'hashCourtEscalationRequest re-validates its argument (a hand-built
     () => escalation.hashCourtEscalationRequest({ ...req, bondProofHash: 'deadbeef' }),
     'a hand-built request with malformed hex was hashed without re-validation',
   );
-  // …and the digest of an untrimmed hand-built id is the digest of the trimmed one.
-  assert(
-    escalation.hashCourtEscalationRequest({ ...req, caseId: ` ${TRANSPORT_CASE} ` })
-      === escalation.hashCourtEscalationRequest(req),
-    'the digest depends on whitespace the codec trims away',
+  // …and r9-1 applies here too: a foldable id is refused, never trimmed on the way in.
+  expectThrow(
+    () => escalation.hashCourtEscalationRequest({ ...req, caseId: ` ${TRANSPORT_CASE} ` }),
+    'a hand-built request with a foldable id was hashed without the r9-1 refusal',
   );
 });
 

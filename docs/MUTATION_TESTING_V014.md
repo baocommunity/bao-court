@@ -1,9 +1,10 @@
 # Mutation testing — the v0.14.0 escalation TRANSPORT (CAMPAIGN 3)
 
-*Round 47. Evidence: `scripts/mutation/pass1-v014.json` (as found, base
-**v0.14.1 `bc28ff3`**) and `scripts/mutation/pass2-v014-postclosure.json` (after
-closure, same base). Closures: `__tests__/mutationClosuresV014.test.ts`
-(C11–C15). Probe detector: `scripts/mutation/spot-check.mjs` (S33–S48).*
+*Round 47. Evidence: `scripts/mutation/pass1-v014.json` (**as found**, base
+**v0.14.1 `bc28ff3`**) and `scripts/mutation/pass2-v014-postclosure.json`
+(**after closure**, base **v0.15.1 `e489fe5`**). Closures:
+`__tests__/mutationClosuresV014.test.ts` (C11–C15). Probe detector:
+`scripts/mutation/spot-check.mjs` (S33–S48).*
 
 The two earlier campaigns measured a spec that predates this file:
 
@@ -27,9 +28,28 @@ pinned?** Not "is the protocol right" — the transport is the one place where t
 package decides what a challenger's request *is*, and every field in it is a byte
 a host will hash, log, route on, and later audit.
 
-This round adds **23 mutants in 12 new classes** for that surface (catalogue
-**101 mutants / 40 classes**), runs the same three detectors, and closes what the
+This round adds **24 mutants in 12 new classes** for that surface (catalogue
+**98 mutants / 40 classes**), runs the same three detectors, and closes what the
 pre-round instruments could not see.
+
+### Provenance — main moved three times under this campaign
+
+The round was planned against **v0.14.1** (`bc28ff3`), which is the code the
+question is about. While it ran, `main` advanced to v0.14.2 (round 9), v0.15.0
+(r52's exact ladder bound + round 10) and **v0.15.1** (round 11, which touched
+this very file's escape/diagnostic path). The campaign therefore keeps **two
+measurements on two bases**, which is what campaign 2 also did:
+
+| Pass | Base | Instruments | Answers |
+|---|---|---|---|
+| **1** | v0.14.1 `bc28ff3` | the **pre-round** repository (no C11–C15, probes S01–S32) | what v0.14.1 actually pinned |
+| **2** | v0.15.1 `e489fe5` | + C11–C15, + S33–S48 | what the **shipping** head pins |
+
+The rebase was not a formality, and the honest record is that it changed the
+campaign's own conclusions — see §5.1. Two things had to be done to the
+catalogue: eleven mutants were **re-anchored** (the r9-1 rewrite changed
+`normalizeCaseId`, the round-11 fix changed two diagnostic expressions), and
+**M67–M70 were retired** (§1.1).
 
 ---
 
@@ -41,29 +61,14 @@ same guarantees:
 - **Sandboxed.** The tree is copied under `/tmp/bao-court-mutation-<pid>/`; the
   repository is never written to. Tracked `git status` and a sha256 of every
   mutable file must be identical before and after, or the run reports a *runner
-  bug* (exit 1). Both passes certify `cleanTree.unchanged: true`.
+  bug* (exit 1). Every pass here certifies `cleanTree.unchanged: true`.
 - **Green baseline first** — the pristine sandbox must pass the suite, or every
-  capture is noise (pass 1: 1781/1782, pass 2: 1796/1797 — the 1 is the
+  capture is noise (pass 1: 1781/1782; pass 2: 1925/1926 — the 1 is the
   env-gated live-Taproot test).
 - **Unambiguous by construction** — every `find` occurs exactly once;
-  `node scripts/mutation/check-catalogue.mjs` proves the whole catalogue in ~1 s.
+  `node scripts/mutation/check-catalogue.mjs` proves the catalogue in ~1 s.
 - **Deterministic and crash-safe** — mutants run in id order; each finished
   mutant is appended to `<out>.partial.jsonl`.
-
-### Two instruments were (re)built this round, and that is the point
-
-A mutation score is only as interesting as the difference between "what the
-repository already pinned" and "what this round can now see". So the sweep was
-run **twice**, on the same 23 mutants and the same base:
-
-| Pass | Detector A | Detector C | Reads as |
-|---|---|---|---|
-| **1 — as found** | the pre-round battery (no `mutationClosuresV014.test.ts`) | the pre-round probe set, **S01–S32** — which never imported `courtEscalationRequest.ts` at all | what v0.14.1 actually pinned |
-| **2 — after closure** | + C11–C15 | + **S33–S48** | what the repository pins now |
-
-That is not a re-labelling of one run: pass 1 was executed with
-`git show origin/main:scripts/mutation/spot-check.mjs` in place and the closure
-file moved out of the tree, and pass 2 with both in place.
 
 ### Three detectors
 
@@ -84,26 +89,32 @@ vote 2,650 + 5,482, signing 877 + 6,862) and stay green under every mutant —
 which is itself the useful negative result (no transport mutant perturbs a
 ceremony model).
 
-### Catalogue housekeeping (both repairs in `scripts/mutation/**`)
+### 1.1 Catalogue housekeeping (`scripts/mutation/**` only)
 
 - `validateCatalogue` now accepts **three-digit ids** and orders them
   numerically: this round passed M99, and string order would have placed `M100`
   before `M99`.
 - **M65 had drifted.** Its `find` named a statement sequence the r40-1 barrier
-  moved (`assertValidEscalationLog(state)` no longer sits immediately before
-  `const expectedRound = …` in `confirmationMachineHandlers.ts`), so
-  `check-catalogue` exited **1 for the whole catalogue** — a sweep would have
-  aborted on a file it never meant to touch. Its `find` was re-anchored to the
-  current source; the mutation (drop the escalate-time ledger barrier) is
+  had moved, so `check-catalogue` exited **1 for the whole catalogue** — a sweep
+  would have aborted on a file it never meant to touch. Its `find` was re-anchored
+  to the current source; the mutation (drop the escalate-time ledger barrier) is
   unchanged.
-- One runner bug found by exercising the signal path: **SIGTERM leaked the
-  sandbox.** `cleanup()` used a boolean guard, so the signal handler started the
-  `rm` and `main()`'s own `cleanup()` returned immediately — `process.exit`
-  then killed the in-flight removal. Worse, `child.kill('SIGKILL')` killed only
-  the `vitest.mjs` parent; a surviving pool worker re-created files inside the
-  tree being removed. `cleanup()` is now a single-flight **promise** and children
-  are spawned **detached** so the whole process group is killed, with a 250 ms
-  drain before the removal. Verified: `SIGTERM` mid-baseline now leaves
+- **M67–M70 retired** (moved to `RETIRED_MUTANTS`). R52 (#125) replaced the
+  real-valued `floor(ln(ρ/(ρ+β))/ln a_f)` evaluation, and `ladderSignBoundary`'s
+  role as the gate's input, with an exact-integer scan over a predicate mechanised
+  in Lean; the four expressions those mutants edited no longer exist in any form.
+  They were **not** re-anchored: inventing four new expressions and keeping the
+  old ids would report a capture for a mutant whose class description no longer
+  describes it. Retirement is not renumbering — the entries and their v0.13
+  evidence (`docs/MUTATION_TESTING_V013.md`, `pass1-v013.json`) are unchanged. A
+  future ladder campaign adds NEW ids against the exact predicate.
+- **SIGTERM leaked the sandbox.** `cleanup()` used a boolean guard, so the signal
+  handler started the `rm` and `main()`'s own `cleanup()` returned immediately —
+  `process.exit` then killed the in-flight removal. Worse, `child.kill('SIGKILL')`
+  killed only the `vitest.mjs` parent; a surviving pool worker re-created files
+  inside the tree being removed. `cleanup()` is now a single-flight **promise**
+  and children are spawned **detached** so the whole process group is killed, with
+  a 250 ms drain before the removal. Verified: `SIGTERM` mid-baseline now leaves
   `/tmp/bao-court-mutation-*` empty (it did not before).
 
 ### How to reproduce
@@ -111,8 +122,8 @@ ceremony model).
 ```bash
 node scripts/mutation/check-catalogue.mjs                  # applicability, ~1 s
 node scripts/mutation/run-mutants.mjs --jobs 4 \
-  --out scripts/mutation/pass1-v014.json \
-  --only M79,M80,M81,M82,M83,M84,M85,M86,M87,M88,M89,M90,M91,M92,M93,M94,M95,M96,M97,M98,M99,M100,M101
+  --out scripts/mutation/pass2-v014-postclosure.json \
+  --only M79,M80,M81,M82,M83,M84,M85,M86,M87,M88,M89,M90,M91,M92,M93,M94,M95,M96,M97,M98,M99,M100,M101,M102
 ```
 
 ---
@@ -143,8 +154,8 @@ after. Baseline 1781/1782 green in 101 s.
 | M79 | `caseid-injectivity` | NUL check deleted from `normalizeCaseId` | A (`reviewRound8` T1) | captured |
 | M80 | `caseid-injectivity` | 256-byte cap deleted | A (`reviewRound8` T1) | captured |
 | M81 | `caseid-injectivity` | **r8-1 as a mutant** — `isCanonicalUtf8Text` guard deleted (an unpaired surrogate becomes U+FFFD) | A (`reviewRound8` T1) | captured |
-| M82 | `caseid-injectivity` | `const trimmed = value.trim()` → `value` (validated untrimmed, hashed trimmed) | — | **survived** |
-| M83 | `caseid-injectivity` | `return trimmed` → `return trimmed.normalize('NFC')` (normalise instead of refuse) | — | **survived** |
+| M82 | `caseid-injectivity` | the id is folded: validated untrimmed, returned trimmed | — | **survived** |
+| M83 | `caseid-injectivity` | `normalize('NFC')` instead of refuse (normalise a wire value) | — | **survived** |
 | M84 | `wire-hash-preimage` | `hash` digests the caller's value, not the re-validated one | A* (see §3.2) | **survived** |
 | M85 | `wire-hash-preimage` | `'-'` witness sentinel → `''` | A (both wire suites) | captured |
 | M86 | `wire-hash-preimage` | domain/body separator `0x00` → `0x2d` (the field sentinel byte) | A (known-answer digest) | captured |
@@ -184,55 +195,73 @@ Per class, pass 1:
 **What the round-8 findings cost to leave uncaught.** Every fix that round 8
 shipped *with its own test* was caught (M81/r8-1, M94/r8-2, M100/r8-5,
 M101/r8-3, M89–M90/r8-4, M85–M86/H-6): the review round's pins are real. The
-survivors are all in the seams *around* those pins — the fields the fixes touched
-but the tests only exercised with well-formed values.
+survivors are all in the seams *around* those pins — the values the fixes touched
+but the tests only ever exercised with well-formed input.
 
 ---
 
 ## 3. The survivors, and how each is closed
 
-Five mutants survived the pre-round repository. Each is closed by a pin in
-`__tests__/mutationClosuresV014.test.ts`, and **each pin was proven RED** by
-applying its mutation to a sandbox copy of the tree and re-running the pin file
-there (`/tmp/opencode/proofs.sh`; transcript in `/tmp/opencode/proofs.log`):
+Five mutants survived the v0.14.1 repository. Four are closed by a pin in
+`__tests__/mutationClosuresV014.test.ts`; the fifth became an **equivalence** when
+the base moved (§3.4). **Each pin was proven RED** by applying its mutation to a
+sandbox copy of the tree and re-running the pin file there (`/tmp/opencode/proofs.sh`;
+transcript `/tmp/opencode/proofs.log`, repeated on the rebased base in
+`/tmp/opencode/proofs2.log`):
 
 ```
 base (unmutated)      : Test Files 1 passed (1) · Tests 15 passed (15)
-M82 applied           : Test Files 1 failed (1)
 M83 applied           : Test Files 1 failed (1)
 M84 applied           : Test Files 1 failed (1)
 M91 applied           : Test Files 1 failed (1)
 M92 applied           : Test Files 1 failed (1)
+M102 applied          : Test Files 1 failed (1)   ← the live member of M82's class
 ```
 
-### 3.1 M82 + M83 (`caseid-injectivity`) → C11, C12
+(C11 was restated on the branch after round 9 landed: the shipped text pins the
+r9-1 *exact-validation* contract — a padded id is refused at `build` and cannot
+be hashed — rather than the superseded trim. The red proof above was re-run
+against that shipped text, not against the campaign's first wording.)
+
+### 3.1 M82 + M83 (`caseid-injectivity`) → C11, C12 — and round 9
 
 Both are the **r8-1 class re-opened through a different door**. r8-1 was "two
-ids, one digest"; these are "two ids, one digest" produced by *normalisation*
-instead of by *lossy encoding*:
+ids, one digest" caused by *lossy encoding*; these are the same harm caused by
+*normalisation*:
 
-- **M82** drops `trim()` from `normalizeCaseId`. `build` then returns the
-  untrimmed id while `courtEscalationRequestPreimage` still trims — validate A,
-  hash B. Two wire strings (`"court:1"`, `" court:1"`) with one digest, and the
-  host routes on a key that is not the key the digest covers.
-- **M83** replaces `return trimmed` with `return trimmed.normalize('NFC')`: an
-  NFD id and its NFC twin are different wire strings, one digest, and the id the
-  host reads is not the id the client sent.
+- **M82** folds the id: it is validated untrimmed and returned trimmed, so
+  `build` returns an id the caller never supplied and every consumer that
+  compares trimmed (r8-1's own binding did) puts `"court:X"`, `"court:X "` and
+  `"court:X\u{3000}"` on one digest.
+- **M83** replaces `return value` with `return value.normalize('NFC')`: an NFD id
+  and its NFC twin are different wire strings, one digest, and the id the host
+  routes on is not the id the client sent.
 
-**Pins.** C11 asserts the trimming authority is single (build, once) and that a
-hand-built untrimmed id hashes as the trimmed one; C12 asserts an accepted id
-comes back **byte-for-byte** (NFD stays NFD, full-width stays full-width) and
-that the two forms do not share a digest. C12 also pins NFKC folding
-(`\uFF21` ≠ `A`), which was never defended by anything.
+**Pin.** C11 asserts the r9-1 rule structurally — surrounding whitespace of any
+kind is *refused*, an accepted id comes back **byte-for-byte**, field 1 of the
+preimage is the id itself (no trim authority anywhere), and the padded twin never
+shares the digest. C12 pins the normalisation clause (NFD/NFC/NFKC distinct,
+full-width preserved).
+
+> **Convergence, disclosed.** Review round 9 (`v0.14.2`, #119) found the same
+> seam independently and *fixed* it: `r9-1` refuses ids that differ from their
+> trimmed form and states "no Unicode normalisation, deliberately". So M82's fold
+> is **dead code** on the shipping base — the guard above it excludes every id a
+> fold could change — and the live member of the class is the guard itself, which
+> this round added as **M102** (its removal is caught by C11). The two instruments
+> agreeing is worth recording: a hand-written mutant catalogue and a review round
+> aimed at the same file landed on the same defect within days. C11/C12 stay in
+> the suite as the campaign's own pins; they overlap `reviewRound9.test.ts` on
+> purpose (a refactor of that file must not silently drop the property).
 
 ### 3.2 M84 (`wire-hash-preimage`) → C13
 
 `hashCourtEscalationRequest` re-validates through `buildCourtEscalationRequest`
 before hashing. M84 hashes the caller's object directly, so a hand-built request
-— untrimmed, wrong-shaped, unpaired-surrogate id, malformed hex — gets a digest
-without the codec ever seeing it. **Pins.** C13 asserts the digest of a
-hand-built NUL id / malformed hex / fractional round / unpaired surrogate is a
-typed refusal, and that the digest of an untrimmed id equals the trimmed one's.
+— foldable id, wrong-shaped, unpaired surrogate, malformed hex — gets a digest
+without the codec ever seeing it. **Pin.** C13 asserts the digest of a hand-built
+NUL id / malformed hex / fractional round / unpaired surrogate / foldable id is a
+typed refusal.
 
 > **False capture, disclosed.** Pass 1 recorded M84 as *captured by A*, on a
 > single failure in `__tests__/r30MultiProcessCeremony.test.ts` ("rejects a
@@ -240,17 +269,15 @@ typed refusal, and that the digest of an untrimmed id equals the trimmed one's.
 > []`). That file spawns child processes and is load-sensitive; the transport is
 > not imported by the ceremony. Re-running the detector-A scope on a tree holding
 > **only** M84 is **green** (1781 passed, 1 skipped, 0 failed), so the capture is
-> environmental. M84 is a survivor, and the corrected pass-1 numbers are the
-> ones in brackets throughout this document. The recorded artifact was **not**
-> doctored — the correction lives here, with its evidence.
+> environmental. The recorded artifact was **not** doctored — the correction
+> lives here, with its reproduction.
 >
-> This is the third instance of the same runner hazard (campaign 1:
+> This is the fourth instance of the same hazard in this repository (campaign 1:
 > `simulateCourt` wall-clock; campaign 2: `r33ByzantineRelay` on its first
-> attempt; now `r30MultiProcessCeremony`). The mitigation is procedural and
-> recorded so the next campaign inherits it: **a capture that rests only on a
-> multi-process harness must be re-run with that mutation applied alone before it
-> is counted.** No other capture this round rests on one — M95/M96/M97 also fail
-> deterministic assertions.
+> attempt; round 47 pass 1: `r30MultiProcessCeremony`; round 47 pass 2:
+> `r33ByzantineRelay` again — §5.2). The mitigation is procedural and recorded so
+> the next campaign inherits it: **a capture that rests only on a multi-process
+> harness must be re-run with that mutation applied alone before it is counted.**
 
 ### 3.3 M91 + M92 (`wire-field-coercion`) → C14, C15
 
@@ -262,48 +289,55 @@ into a well-formed request bound to a case that does not exist. M92 turns
 `[2]` all pass the integer check as 2.
 
 **Pins.** C14/C15 assert the shape check, not a coercion: numeric / boolean /
-object / `null` / missing `caseId` is a typed refusal, and `"2"`, `"1"`, `" 2 "`,
+object / `null` / missing `caseId` is a typed refusal, and `"2"`, `" 2 "`,
 `true`, `[2]`, `1.5`, `NaN`, `Infinity` are refused as rounds — with the legal
 values still parsing (over-strictness controls in both).
 
-None of the five is equivalent to the code that shipped: each changes an
-observable (a returned id, a digest, an accepted wire form). Nothing is filed
-under "equivalent by construction" this round.
+### 3.4 M82 on the shipping base → equivalence, not coverage
+
+On **v0.15.x** M82 survives every detector, and that is the correct verdict:
+after r9-1 no accepted id contains whitespace, so `return value.trim()` cannot
+change the returned value. It is filed as **equivalent** (the M66 pattern from
+campaign 2): the mutant is kept because ids are permanent, its `note` in the
+catalogue records the equivalence and the base it depends on, and C11 pins the
+behaviour that makes it equivalent. Nothing else this round is claimed as
+equivalent.
 
 ---
 
 ## 4. Detector analysis — what the numbers actually say
 
-### 4.1 Detector C went 0 % → 100 %, and that is a statement about the probes
+### 4.1 Detector C went 0 % → 92 %, and that is a statement about the probes
 
 On the pre-round repository **Detector C scored 0/23 — by construction, not by
 weakness.** `scripts/mutation/spot-check.mjs` at `bc28ff3` does not import
 `courtEscalationRequest.ts` at all (`grep -c courtEscalationRequest` on the
 pre-round file: **0**). The overflow probes S01–S32 restate the ceremony, the
-batch, the ladder and the decay; none of them restates a single claim of the
-transport. So the honest pre-round reading is not "C is weak" but "**C did not
+batch, the ladder and the decay; none restates a single claim of the transport.
+The honest pre-round reading is therefore not "C is weak" but "**C did not
 look**".
 
-S33–S48 now restate the transport's own claims, each as an independent black-box
-property — including a full recomputation of the digest
+S33–S48 now restate the transport's own claims as independent black-box
+properties — including a full recomputation of the digest
 (`sha256(domain ‖ 0x00 ‖ preimage)`, S37), an injectivity corpus over accepted ids
 (S34), and both input paths for the wire contract (S38). They import nothing from
-`__tests__/`.
+`__tests__/`. On the shipping base C catches 22 of the 24 (91.7 %); the two it
+misses are M82 (equivalent) and M97 (the round binding, which is a *state*
+property — the probe's job, and Detector A catches it).
 
 **The caveat that must travel with this number:** probes written in the same
 round as the mutants are not independent evidence of what the repository pinned.
-Their 100 % says *the claims are expressible as black-box properties*, and that a
-future sweep will notice a regression in them without running the suite. It does
+Their 92 % says *the claims are expressible as black-box properties*, and that a
+future sweep will notice a regression without running the whole suite. It does
 **not** say the repository was already defending them — pass 1's 0 % says the
 opposite, and pass 1 is the honest baseline.
 
 ### 4.2 Detector A earned its 78 % on the review round's own pins
 
-18 of 23 (corrected). The captures are exactly where round 8 wrote tests:
-`reviewRound8.test.ts` appears in **16 of the 19** recorded captures,
-`escalationRequestWire.test.ts` in **7**. The five survivors sit in the seams: a
-value that is *normalised* rather than refused, a coercion at a boundary, and a
-re-validation that is only ever called with valid arguments.
+18 of 23 (corrected). `reviewRound8.test.ts` appears in **16 of the 19** recorded
+captures, `escalationRequestWire.test.ts` in **7**. The five survivors sit in the
+seams: a value that is *folded* rather than refused, coercions at the parse
+boundary, and a re-validation that is only ever called with valid arguments.
 
 ### 4.3 Detector B: 0 % of 0
 
@@ -315,68 +349,114 @@ model**, which is what one wants from a codec that only feeds the reducer.
 
 ---
 
-## 5. Pass 2 — after closure
+## 5. Pass 2 — after closure, on the shipping head
 
-Artifact: `scripts/mutation/pass2-v014-postclosure.json` — the same 23 mutants,
-the same base, with C11–C15 in the battery and S33–S48 in the probe set. Run
-**twice**: the first pass-2 sweep predates a type-only import correction in the
-pin file (the error class now comes from `courtConfirmationMachine`, where it is
-exported, instead of from the module under test); the committed artifact is the
-re-run against the exact shipping tree.
+Artifact: `scripts/mutation/pass2-v014-postclosure.json` — 24 mutants (**M102
+added**), base **v0.15.1 `e489fe5`**, with C11–C15 in the battery and S33–S48 in
+the probe set. Tree certified pristine. Baseline 1925/1926 green.
 
-| Metric | Pass 1 (as found) | Pass 2 (after closure) |
+| Metric | Pass 1 (v0.14.1, as found) | Pass 2 (v0.15.1, after closure) |
 |---|---|---|
-| Mutation score | 82.6 % / **78.3 %** corrected | **100 %** |
-| Detector A | 19/23 (18/23) | **23/23** |
-| Detector C | **0/23** (S01–S32) | **23/23** (S01–S48) |
+| Mutants | 23 | 24 |
+| Mutation score | 82.6 % / **78.3 %** corrected | 100 % / **95.8 %** corrected (§5.2) |
+| Detector A | 19/23 (18/23) | 24/24 (23/24) |
+| Detector C | **0/23** (S01–S32) | **22/24 = 91.7 %** (S01–S48) |
 | Detector B | 0/0 | 0/0 |
-| Survivors | 5 (corrected) | **0** |
+| Survivors | 5 (corrected) | **1 — M82, equivalent** (§3.4) |
 | Clean tree | pristine | pristine |
-| Baseline | 1781/1782 | 1796/1797 |
 
-The 15 closure assertions add 15 to the suite's green count (1782 → 1797) and,
-with the corrected pass-1 reading, convert **5 survivors into 5 captures**.
+Per class, pass 2: **12/12 classes at 100 %** — `caseid-injectivity` 6/6,
+`wire-hash-preimage` 3/3, `wire-unknown-field-acceptance` 2/2,
+`wire-duplicate-key-acceptance` 2/2, `wire-field-coercion` 2/2,
+`wire-round-bounds` 1/1, `escalation-identity-binding` 2/2,
+`escalation-witness-ambiguity` 1/1, `escalation-round-binding` 1/1,
+`host-clock-authority` 2/2, `build-snapshot-purity` 1/1, `signed-flag-type` 1/1.
+
+### 5.1 What the rebase changed, and why the record says so
+
+The campaign was measured on v0.14.1 and rebased twice. Three things changed:
+
+1. **Two survivors were independently fixed** (r9-1 closed the fold and the
+   normalisation clause). The campaign's finding is therefore *confirmed by
+   another instrument* rather than merely closed by its own pins — and one of its
+   survivors (M82) became unreachable, i.e. an equivalence on the new base.
+2. **Eleven mutants were re-anchored** to the new source (the `normalizeCaseId`
+   rewrite, the r9 label parameter, the round-11 diagnostic expressions
+   `quoteWireValue`/`quoteWireUnknown`). Re-anchoring preserves the class, not the
+   byte string: each entry's `intent` still describes the harm.
+3. **M67–M70 were retired** — r52 replaced the code they edited (§1.1).
+
+An intermediate v0.15.0 run gave the same verdict as the final v0.15.1 run (23/24,
+M82 equivalent), so the extra rebase changed no conclusion — the recorded
+artifact is nevertheless the one produced on the base that ships these tests.
+
+The branch was then rebased once more, onto **v0.15.2** (round 12, whose only
+transport change is the diagnostic quoting: `quoteCounter` / `quoteWireUnknown`
+in the refusal messages). The artifact is **left as measured on v0.15.1**: every
+one of the 24 mutants still applies unchanged (the mutations do not touch the
+message text), all 48 probes pass, and the five transport suites are green on
+v0.15.2. Re-anchoring the whole catalogue to v0.15.2 also repaired **seven
+pre-existing drifts** from earlier campaigns (`M08, M18, M39, M41, M54, M55,
+M59`), which the same round-12 quoting change had broken: `check-catalogue` now
+exits 0 for all 98 mutants, where it had been exiting 1 on `main`.
+
+### 5.2 One more false capture, of exactly the predicted kind
+
+The pass-2 artifact records **24/24**, with M82 "captured by tests" on a single
+failure in `__tests__/r33ByzantineRelay.test.ts` (the split-view/silence matrix,
+`expected [3 objects] to deeply equal []`). M82 cannot affect that harness: with
+M82 applied, all five transport-relevant suites pass
+(`reviewRound8`, `escalationRequestWire`, `reviewRound9`, `reviewRound10`,
+`mutationClosuresV014` — **113/113**), and the same file also failed on the
+**pristine** tree in a plain full-suite run during this session under load ~35.
+M82 is a survivor (equivalent); the corrected pass-2 score is **95.8 % (23/24)**.
+
+The artifact is committed **undoctored** and the correction is here, with its
+reproduction, for the same reason as §3.2: a mutation score that quietly absorbs
+its own noise is not evidence.
 
 ---
 
 ## 6. Honest conclusion
 
 **The escalation transport is now well pinned. Before this round it was
-adequately pinned only where the round-8 review happened to write a test —
-78 %, and blind to five bug classes.**
+adequately pinned only where round 8 happened to write a test — 78 %, and blind
+to five bug classes; two of those classes were independently found and fixed by
+round 9 while this campaign was in flight.**
 
 Four qualifications, in order of how much they should worry a reader:
 
 1. **The pre-round 78 % is a statement about the tests, not the protocol.** The
    mutants are hand-written: they encode the bug classes *this reviewer* thought
-   of. Three of the five survivors are the same shape (a value that is
-   normalised or coerced instead of refused), which suggests the seam is
-   systematic: r8-1 and r8-3 were fixed **at the field the review named**, and
-   the neighbouring fields kept the permissive idiom. That is a review-process
-   lesson, not a codec defect.
-2. **The post-closure 100 % is not the interesting number.** Detector C went
-   from 0 % to 100 % because 16 probes were added in this round, written with the
-   mutants in view. Read pass 1 for what the repository defended; read pass 2
-   for what it defends *now*. A campaign that only published pass 2 would be
-   reporting its own instrument as if it were the code's property.
-3. **One capture in the committed pass-1 artifact is a false capture** (M84) and
-   the correction is in this document, with its reproduction: the mutation alone,
-   the detector-A scope, green. The runner cannot tell a load flake from a
-   regression, and on a shared box the multi-process harnesses (`r30`, `r33`)
-   will keep producing them. The remedy is procedural and now written down.
-4. **Detector B's 0 % is a coverage boundary, not a gap.** A codec has no
-   transition relation; the explorer will never see it. If a future round wants a
-   *model* of this surface (rather than probes), the shape to build is not a
-   phase machine but a property-based equivalence between the codec and an
-   independently written reference encoder — which does not exist, and which
-   S37 only approximates for one instance.
+   of. Four of the five survivors share one shape — a value that is *normalised,
+   folded or coerced* instead of *refused* — which looks systematic rather than
+   accidental: r8-1 and r8-3 were fixed at the field the review named, while the
+   neighbouring fields kept the permissive idiom. That pattern is what round 9
+   then attacked.
+2. **The post-closure 96 % is not the interesting number.** Detector C went from
+   0 % to 92 % because 16 probes were added in this round, written with the
+   mutants in view; read pass 1 for what the repository defended, pass 2 for what
+   it defends now. A campaign that published only pass 2 would be reporting its
+   own instrument as if it were the code's property.
+3. **Two recorded captures in this document's evidence are false**, one in each
+   pass (M84 in pass 1, M82 in pass 2), both from multi-process harnesses on a
+   shared box. The runner cannot tell a load flake from a regression. The remedy
+   is procedural and now written down in two places (§3.2, §5.2). This is the
+   single weakest part of the numbers here, and it is a property of the box, not
+   of the transport.
+4. **Detector B's 0 % is a coverage boundary.** A codec has no transition
+   relation; the explorer will never see it. If a future round wants a model of
+   this surface, the shape is not a phase machine but a property-based
+   equivalence between the codec and an independently written reference
+   encoder — which now partly exists on the host side (`bao.markets`' Python
+   differential, r49) and not in this package.
 
-What the transport's pinning actually **is**, after this round: one
-known-answer digest shared with the host, an injectivity property over accepted
-ids (trim once, normalise never), a fail-closed decoder that refuses rather than
-coerces on both input paths, a mapper that refuses every wire claim the host did
-not verify, and a host-clock rule with no fail-open. The remaining soft spot is
-**the preimage's own byte-level construction**: only M86 (the separator byte) is
-pinned, and it is pinned by a known-answer constant, not by a property — a future
-edit that keeps the digest stable for the KAT while changing the encoding for
-other inputs would survive every detector here.
+What the transport's pinning actually **is**, after this round: one known-answer
+digest shared with the host, an injectivity property over accepted ids (validate
+exactly, normalise never), a fail-closed decoder that refuses rather than coerces
+on both input paths, a mapper that refuses every wire claim the host did not
+verify, and a host-clock rule with no fail-open. The remaining soft spot is **the
+preimage's own byte-level construction**: only M86 (the separator byte) is pinned,
+by a known-answer constant rather than by a property — an edit that kept the
+digest stable for the KAT while changing the encoding for other inputs would
+survive every detector here.
