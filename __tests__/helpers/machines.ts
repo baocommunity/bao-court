@@ -154,6 +154,8 @@ export interface ConfirmationMachineOpts {
   readonly confirmDeadline?: number;
   readonly challengeDeadline?: number;
   readonly maxLadderRounds?: number;
+  readonly hostEscalation?: boolean;
+  readonly requireRoundBond?: boolean;
 }
 
 export const CONFIRM_DEFAULTS = {
@@ -180,6 +182,8 @@ export function confirmationMachine(opts: ConfirmationMachineOpts = {}): CourtCo
     confirmDeadline: opts.confirmDeadline ?? CONFIRM_DEFAULTS.confirmDeadline,
     challengeDeadline: opts.challengeDeadline ?? CONFIRM_DEFAULTS.challengeDeadline,
     ...(opts.maxLadderRounds !== undefined ? { maxLadderRounds: opts.maxLadderRounds } : {}),
+    ...(opts.hostEscalation !== undefined ? { hostEscalation: opts.hostEscalation } : {}),
+    ...(opts.requireRoundBond !== undefined ? { requireRoundBond: opts.requireRoundBond } : {}),
   });
 }
 
@@ -330,6 +334,7 @@ export function escalateEvent(
     challengerPubkey: string | null;
     requestHash: string | null;
     bondProofHash: string | null;
+    roundBondProofHash: string | null;
     roundIndex: number;
   }> = {},
 ) {

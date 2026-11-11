@@ -599,6 +599,26 @@ export {
 } from './quorumEconomics';
 
 export {
+  ladderSignBoundary,
+  deriveMaxLadderRounds,
+  deriveLadderFlipRound,
+  escalationOptionEv,
+  ladderCapWithinBound,
+  escalationBondMultiple,
+  cumulativeLadderBondMultiple,
+  type LadderParameters,
+} from './ladderEconomics';
+
+export {
+  PENALTY_AGING_LAMBDA,
+  PENALTY_AGING_HALF_LIFE_EPOCHS,
+  DEFAULT_MIN_WEIGHT_FACTOR,
+  agePenalties,
+  pairedJurorWeight,
+  type PenaltyRecord,
+} from './penaltyAging';
+
+export {
   BAO_COURT_BATCH_ATTESTATION_KIND,
   buildBatchMerkleTree,
   buildBatchMerkleProof,

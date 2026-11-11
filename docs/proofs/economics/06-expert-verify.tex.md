@@ -226,6 +226,20 @@ Two honest qualifiers, both of which cut against over-claiming:
 - `assertValidEscalationLog` gains the matching monotonicity check (rounds
   strictly increasing per bond, no bond reused across rounds).
 
+> **Landed in v0.13.0 (R31).** Shipped as `escalate.roundBondProofHash` +
+> `CourtEscalationRecord.roundBondProofHash` + the frozen `requireRoundBond`
+> policy instead of a challenge-side `round`: the hash is bound to its round by
+> the existing `roundIndex === ladderRound + 1` guard and by the append-only
+> log, which keeps the change additive for v0.12 consumers
+> (`requireRoundBond` defaults to `false`). The reducer refuses a missing
+> per-round witness on a strict case, a relabelled membership bond, and a
+> consumed hash; `assertValidEscalationLog` re-derives the same three rules.
+> Matrix: `docs/PER_ROUND_BOND.md`. The boxed cap rule below is exported as
+> `deriveMaxLadderRounds` (safe cap, clamped to the machine ceiling) with its
+> companion `deriveLadderFlipRound` (the first profitable round — this section's
+> 7/5/4/3/2 column), and the schedule as `escalationBondMultiple` /
+> `cumulativeLadderBondMultiple`.
+
 **Registered, host (small, and the helper already exists).** The per-round
 amount must be `calculateBondAmount(volume, round)` = $\max(0.05V_m,
 10{,}000)\cdot 2^{r-1}$ (`escrow.ts:117–129`) — note that the **code doubles**
@@ -606,6 +620,16 @@ $K$ epochs, or a penalty-factor decay of its own). The current design has no
 penalty expiry other than the decay the anchor removes — so the two changes ship
 together or not at all. State it that way in the host PR; the anchor alone is a
 regression in fairness.
+
+> **Landed in v0.13.0 (R31), package side.** `penaltyAging.ts` ships the pair:
+> `pairedJurorWeight` implements the anchor above, and
+> `agePenalties(penalties, epochs)` ages every retained penalty at the SAME
+> $\lambda = \ln 2/3$ **on the participating clock**, so recovery is bought
+> with participation and idling never hands weight back. Pinned against §4.2:
+> the paired cycle average is the floor at every split (0.5000 at 6/6, versus
+> the shipped ramp's 0.6298) and is never worse than the ramp at any split. The
+> host still owns the wiring (retained record → `PenaltyRecord[]`, and
+> `jurorReputationWeight`'s anchor line).
 
 ---
 

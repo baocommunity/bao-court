@@ -204,6 +204,16 @@ export function createCourtConfirmationMachine(params: {
    * policy is frozen with the case.
    */
   readonly hostEscalation?: boolean;
+  /**
+   * Must every CHALLENGER escalation carry a fresh per-round bond witness
+   * (R31, r30-1)? Default `false` — the v0.12 compatibility default in which
+   * one accepted challenge bond funds every round. Set `true` on NEW
+   * deployments: the machine then refuses an escalation whose
+   * `roundBondProofHash` is missing, equal to the membership bond, or already
+   * consumed by an earlier round, so escalation stops being a free option.
+   * Compatibility matrix: `docs/PER_ROUND_BOND.md`.
+   */
+  readonly requireRoundBond?: boolean;
 }): CourtConfirmationMachineState {
   assertHex32(params.sessionHash, 'sessionHash must be 32-byte lowercase hex');
   assertHex32(params.proposalHash, 'proposalHash must be 32-byte lowercase hex');
@@ -305,6 +315,7 @@ export function createCourtConfirmationMachine(params: {
     ladderRound: 0,
     maxLadderRounds,
     hostEscalation: params.hostEscalation === true,
+    requireRoundBond: params.requireRoundBond === true,
     escalationLog: [],
     outcomeHistory: [],
     clawbackFlags: [],
@@ -321,6 +332,11 @@ export function createCourtConfirmationMachine(params: {
  * the challenger's. Fails closed when the case has no accepted challenge bond
  * or is not parked at `round_resolved`.
  *
+ * `witness.roundBondProofHash` is the PER-ROUND bond witness (R31): the host
+ * passes the hash of the bond it verified for THIS round. Omitting it keeps the
+ * v0.12 membership semantics; a case created with `requireRoundBond: true`
+ * refuses the resulting event, which is the intended fail-closed behaviour.
+ *
  * Hosts use this to construct the event they relay; tests use it to construct
  * the legal move. It performs no verification itself — the reducer does.
  */
@@ -331,6 +347,7 @@ export function challengerEscalationEvent(
     readonly challengerPubkey: string;
     readonly requestHash: string;
     readonly challengerIdx?: number;
+    readonly roundBondProofHash?: string | null;
   },
 ): Extract<CourtConfirmationMachineEvent, { type: 'escalate' }> {
   const bond = witness.challengerIdx === undefined
@@ -348,6 +365,7 @@ export function challengerEscalationEvent(
     challengerPubkey: witness.challengerPubkey,
     requestHash: witness.requestHash,
     bondProofHash: bond.bondProofHash,
+    ...(witness.roundBondProofHash == null ? {} : { roundBondProofHash: witness.roundBondProofHash }),
     roundIndex: state.ladderRound + 1,
     now,
   };

@@ -1115,6 +1115,7 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
     // Escalation witness log (INV-ESC-6): append-only, consecutive, bounded,
     // and every challenger entry names a roster participant + accepted bond.
     let expectedEscalationRound = 2;
+    const seenRoundBonds = new Set<string>();
     for (const record of s.escalationLog) {
       check(
         record.round === expectedEscalationRound,
@@ -1133,6 +1134,21 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
           s.challenges.some((c) => c.idx === record.challengerIdx && c.bondProofHash === record.bondProofHash),
           'P2: escalation bond bound to THAT challenger\'s accepted challenge (r29-1)',
         );
+        // Per-round bond consumption (R31 / r30-1): when a record carries one it
+        // must be well-formed, distinct from the membership bond, and spent at
+        // most once — the append-only log IS the consumption ledger.
+        const roundBond = (record as { readonly roundBondProofHash?: string | null }).roundBondProofHash ?? null;
+        if (roundBond !== null) {
+          check(HEX_32.test(roundBond), 'P2: per-round bond witness well-formed');
+          check(roundBond !== record.bondProofHash, 'P2: per-round bond distinct from the membership bond');
+          check(!seenRoundBonds.has(roundBond), 'P2: per-round bond is never consumed twice');
+          seenRoundBonds.add(roundBond);
+        } else {
+          check(
+            !(s.requireRoundBond === true && s.hostEscalation !== true),
+            'P2: a strict case never logs a challenger escalation without its per-round bond',
+          );
+        }
       } else {
         check(
           record.challengerIdx === null && record.requestHash === null && record.bondProofHash === null,

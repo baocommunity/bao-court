@@ -301,7 +301,9 @@ export function assertValidOutcomeHistory(state: CourtConfirmationMachineState):
  *    first opens round 2) and never name a round the case did not open;
  *  - timestamps are finite and non-decreasing (the reducer's clock ledger);
  *  - a `challenger` record names a roster participant whose OWN accepted
- *    challenge bond is the recorded hash (r29-1);
+ *    challenge bond is the recorded hash (r29-1), and carries a per-round bond
+ *    witness that is neither that membership bond nor one an earlier round
+ *    already consumed — mandatory when the case sets `requireRoundBond` (R31);
  *  - a `host` record requires the frozen `hostEscalation` policy and carries
  *    no challenger witness.
  *
@@ -321,6 +323,7 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
     );
   }
   let previousAt = Number.NEGATIVE_INFINITY;
+  const seenRoundBonds = new Set<string>();
   for (let offset = 0; offset < log.length; offset += 1) {
     const record: unknown = log[offset];
     if (typeof record !== 'object' || record === null) {
@@ -328,6 +331,10 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
     }
     const { round, authority, challengerIdx, challengerPubkey, requestHash, bondProofHash, at } =
       record as CourtEscalationRecord;
+    // Legacy records (v0.12) predate the per-round witness; an ABSENT field is
+    // read as `null` (membership semantics), exactly as the reducer does.
+    const roundBondProofHash: string | null =
+      (record as { readonly roundBondProofHash?: string | null }).roundBondProofHash ?? null;
     if (!Number.isSafeInteger(round) || round !== offset + 2) {
       throw new CourtConfirmationTransitionError(
         'escalation log rounds must be a consecutive 2..k sequence',
@@ -362,13 +369,45 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
           'escalation log record is not bound to that challenger\'s accepted bond',
         );
       }
+      // Per-round bond consumption (R31, r30-1): the whole point of the
+      // witness is that a round costs a FRESH bond. A record that reuses the
+      // membership bond, or a hash an earlier round already consumed, would
+      // restore the free option on a restored snapshot even though the live
+      // reducer refuses it — so the barrier re-derives the same property.
+      if (roundBondProofHash !== null) {
+        assertHex32(
+          roundBondProofHash,
+          'escalation log round bond proof hash must be 32-byte lowercase hex',
+        );
+        if (roundBondProofHash === bondProofHash) {
+          throw new CourtConfirmationTransitionError(
+            'escalation log round bond must be distinct from the membership (challenge) bond',
+          );
+        }
+        if (seenRoundBonds.has(roundBondProofHash)) {
+          throw new CourtConfirmationTransitionError(
+            'escalation log reuses a per-round bond witness across rounds',
+          );
+        }
+        seenRoundBonds.add(roundBondProofHash);
+      } else if (state.requireRoundBond === true && state.hostEscalation !== true) {
+        throw new CourtConfirmationTransitionError(
+          'escalation log records a challenger escalation without the per-round bond this case requires',
+        );
+      }
     } else if (authority === 'host') {
       if (state.hostEscalation !== true) {
         throw new CourtConfirmationTransitionError(
           'escalation log records a host escalation the frozen policy does not permit',
         );
       }
-      if (challengerIdx !== null || challengerPubkey !== null || requestHash !== null || bondProofHash !== null) {
+      if (
+        challengerIdx !== null
+        || challengerPubkey !== null
+        || requestHash !== null
+        || bondProofHash !== null
+        || roundBondProofHash !== null
+      ) {
         throw new CourtConfirmationTransitionError(
           'host escalation log record must not carry a challenger witness',
         );

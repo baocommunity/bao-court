@@ -260,6 +260,7 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | INV-ESC-5 | invariant | test | test:__tests__/escalationWitness.test.ts#the bond witness must match a bond the machine already accepted; test:__tests__/escalationWitness.test.ts#host authority is break-glass: refused by default, legal only under the frozen policy |
 | INV-ESC-6 | invariant | test | test:__tests__/escalationWitness.test.ts#a valid challenger witness is recorded append-only and opens the next round; test:__tests__/escalationWitness.test.ts#pre-0.12 snapshots without an escalation log normalise to an empty ledger |
 | INV-ESC-7 | invariant | test | test:__tests__/escalationWitness.test.ts#ladder_pending is reachable ONLY through a witnessed escalation |
+| INV-ESC-9 | invariant | test | test:__tests__/perRoundBond.test.ts#one bond cannot fund every round: each rung needs its own witness; test:__tests__/perRoundBond.test.ts#finalize refuses a restored record that reuses a per-round bond |
 | INV-CONF-30 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#records fees idempotently and rejects malformed ids; test:__tests__/adversarialMachines.test.ts#accepts exactly MAX_FEES fee entries |
 | INV-CONF-31 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#accepts explicit clawback flags only during fee_settlement, deduped per (idx, reason) |
 | INV-CONF-32 | invariant | test | test:__tests__/multiRoundLadder.test.ts#finality = LAST resolved round: verdict outcome + supporting ids from that round only |

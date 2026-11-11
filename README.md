@@ -480,6 +480,9 @@ winning_secret_commitment`.
 | `appealCoordinator.ts` | event-driven JIT appeal pipeline (dispute → candidacy → selection → DKG → vote → signing → attestation); relay transport host-injected |
 | `appealWatcher.ts` | kind-39007 attestation watcher: validate under the group key, route override outcomes; pool host-injected |
 | `validator.ts` | consumer-side attestation validation |
+| `quorumEconomics.ts` | capture arithmetic of a confirm quorum: exact binomial tail + the sub-supermajority correction κ (06 §3) |
+| `ladderEconomics.ts` | escalation ladder: the boxed cap rule `deriveMaxLadderRounds` (+ `deriveLadderFlipRound`), `escalationOptionEv`, `ladderCapWithinBound`, and the per-round bond schedule `ΔC_R = 3^R b₀` |
+| `penaltyAging.ts` | decay pairing (r30-4): `agePenalties` at the commitment's λ on the participating clock + `pairedJurorWeight`'s floor anchor |
 
 ## 11. Testing and gates
 
