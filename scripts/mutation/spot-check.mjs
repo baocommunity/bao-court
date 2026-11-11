@@ -35,6 +35,7 @@ const validator = await import(`${root}validator.ts`);
 const ladder = await import(`${root}ladderEconomics.ts`);
 const aging = await import(`${root}penaltyAging.ts`);
 const quorum = await import(`${root}quorumEconomics.ts`);
+const escalation = await import(`${root}courtEscalationRequest.ts`);
 
 const hex = (ch) => ch.repeat(64);
 const probes = [];
@@ -626,6 +627,306 @@ probe('S32', 'κ = 1 at ⌈2N/3⌉, > 1 for a weaker quorum, < 1 for a stronger 
   assert(
     Math.abs(quorum.quorumCapCorrection({ panelSize: 5, quorum: 3, adversaryWeight: share }) - 51 / 11) < 1e-12,
     'κ at 3-of-5 at ρ = ⅓ is not the published 51/11',
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// v0.14.0 escalation-transport probes (S33–S48). Round 47's campaign asks
+// whether the TRANSPORT — `courtEscalationRequest.ts`, the wire codec the
+// round-7 finding H-6 created and round 8 hardened — is pinned by the
+// repository, or only by the review round that wrote it. Each probe restates
+// one claim the module PUBLISHES (its header doc + `docs/PER_ROUND_BOND.md` +
+// `docs/REVIEW_ROUND_8.md`), and imports nothing from `__tests__/`.
+// ══════════════════════════════════════════════════════════════════════════
+
+const TRANSPORT_CASE = 'court:market-r47-probe:1';
+const TRANSPORT_PUBKEY = HEX('7');
+const TRANSPORT_BINDING = { caseId: TRANSPORT_CASE, authenticatedPubkey: TRANSPORT_PUBKEY };
+
+/** The challenger's half of a request against `challengedCase()`'s juror-2 bond. */
+function transportRequest(overrides = {}) {
+  return escalation.buildCourtEscalationRequest({
+    caseId: TRANSPORT_CASE,
+    round: 1,
+    challengerPubkey: TRANSPORT_PUBKEY,
+    bondTxid: PAD('d2'),
+    bondProofHash: PAD('e2'),
+    roundBondProofHash: roundBondWitness(2),
+    eventId: HEX('8'),
+    signedAtSec: 1_790_000_000,
+    ...overrides,
+  });
+}
+
+const wireOfTransport = (req) => JSON.parse(escalation.serializeCourtEscalationRequest(req));
+
+// ── S33 an accepted caseId is returned UNCHANGED (trim only) ───────────────
+probe('S33', 'the codec trims a caseId and normalises nothing else (r8-1: no silent rewrite)', () => {
+  const accepted = ['court:1', ' court:1 ', 'a"b\\c{}[],:', '-', 'caf\u00e9', 'cafe\u0301', '\u{1F600}'];
+  for (const id of accepted) {
+    const built = escalation.buildCourtEscalationRequest({ ...transportRequest(), caseId: id });
+    assert(
+      built.caseId === id.trim(),
+      `accepted id ${JSON.stringify(id)} came back as ${JSON.stringify(built.caseId)} — the codec rewrote a value it validated`,
+    );
+  }
+  // …and an unpaired surrogate is REFUSED rather than collapsed to U+FFFD.
+  expectThrow(
+    () => escalation.buildCourtEscalationRequest({ ...transportRequest(), caseId: 'court:1\ud800' }),
+    'an unpaired surrogate was accepted into the hash preimage (r8-1)',
+  );
+});
+
+// ── S34 distinct wire requests never share a digest ────────────────────────
+probe('S34', 'distinct case ids produce distinct request digests (injectivity, H-6)', () => {
+  const ids = ['court:1', 'court:2', 'court:1\uFFFD', 'caf\u00e9', 'cafe\u0301', 'court:1\ud800x'];
+  const digests = new Map();
+  for (const id of ids) {
+    let built;
+    try {
+      built = escalation.buildCourtEscalationRequest({ ...transportRequest(), caseId: id });
+    } catch {
+      continue; // refused ids are a different guard's subject (S33)
+    }
+    const digest = escalation.hashCourtEscalationRequest(built);
+    const previous = digests.get(digest);
+    assert(previous === undefined, `case ids ${JSON.stringify(previous)} and ${JSON.stringify(id)} share one digest`);
+    digests.set(digest, id);
+  }
+  assert(digests.size >= 4, `only ${digests.size} ids were accepted — the corpus stopped testing injectivity`);
+});
+
+// ── S35 NUL-free and byte-bounded ──────────────────────────────────────────
+probe('S35', 'a NUL cannot enter the preimage and the id is byte-bounded at 256', () => {
+  expectThrow(
+    () => escalation.buildCourtEscalationRequest({ ...transportRequest(), caseId: 'a\u0000b' }),
+    'a U+0000 in caseId was accepted (it separates preimage fields)',
+  );
+  expectThrow(
+    () => escalation.buildCourtEscalationRequest({
+      ...transportRequest(), caseId: 'a'.repeat(escalation.MAX_ESCALATION_CASE_ID_BYTES + 1),
+    }),
+    'a 257-byte caseId was accepted',
+  );
+  assert(
+    escalation.buildCourtEscalationRequest({
+      ...transportRequest(), caseId: 'a'.repeat(escalation.MAX_ESCALATION_CASE_ID_BYTES),
+    }).caseId.length === escalation.MAX_ESCALATION_CASE_ID_BYTES,
+    'a 256-byte caseId (the legal maximum) was refused',
+  );
+});
+
+// ── S36 absent ≠ present in the witness slot ───────────────────────────────
+probe('S36', 'a request without a per-round bond hashes differently from one with it (the "-" slot)', () => {
+  const withWitness = escalation.hashCourtEscalationRequest(transportRequest());
+  const without = escalation.hashCourtEscalationRequest(transportRequest({ roundBondProofHash: null }));
+  assert(withWitness !== without, 'the absent witness slot collides with a present one');
+  const preimage = escalation.courtEscalationRequestPreimage(transportRequest({ roundBondProofHash: null }));
+  assert(
+    preimage.split('\u0000').includes('-'),
+    `the absent slot is not the "-" sentinel: ${JSON.stringify(preimage)}`,
+  );
+  expectThrow(
+    () => escalation.buildCourtEscalationRequest({ ...transportRequest(), roundBondProofHash: '-' }),
+    'a literal "-" was accepted as a witness (it is the absent sentinel)',
+  );
+});
+
+// ── S37 the digest is the DOCUMENTED construction, recomputed ──────────────
+probe('S37', 'the request hash is sha256(domain ‖ 0x00 ‖ the documented preimage)', () => {
+  const req = transportRequest();
+  const enc = new TextEncoder();
+  const preimage = [
+    req.caseId,
+    String(req.round),
+    req.challengerPubkey,
+    req.bondTxid,
+    req.bondProofHash,
+    req.roundBondProofHash,
+    req.eventId,
+    String(req.signedAtSec),
+    req.concession ? '1' : '0',
+  ].join('\u0000');
+  const domain = enc.encode(escalation.COURT_ESCALATION_REQUEST_DOMAIN);
+  const body = enc.encode(preimage);
+  const input = new Uint8Array(domain.length + 1 + body.length);
+  input.set(domain, 0);
+  input[domain.length] = 0x00;
+  input.set(body, domain.length + 1);
+  const expected = bytesToHex(sha256(input));
+  assert(
+    escalation.hashCourtEscalationRequest(req) === expected,
+    `digest ${escalation.hashCourtEscalationRequest(req)} != sha256(domain‖0x00‖preimage) ${expected}`,
+  );
+  assert(escalation.COURT_ESCALATION_REQUEST_DOMAIN === 'BAO-Court/Escalation/Request/v2', 'the hash domain is not v2');
+});
+
+// ── S38 unknown fields are refused, on BOTH input paths ────────────────────
+probe('S38', 'an unknown wire field is refused whether the body arrives as JSON text or as an object', () => {
+  const wire = { ...wireOfTransport(transportRequest()), round_bond_proof_hash: roundBondWitness(2) };
+  expectThrow(() => escalation.parseCourtEscalationRequest(JSON.stringify(wire)), 'unknown field accepted (JSON text)');
+  expectThrow(() => escalation.parseCourtEscalationRequest(wire), 'unknown field accepted (parsed object)');
+});
+
+// ── S39 a repeated field is refused, escapes included ──────────────────────
+probe('S39', 'a repeated field is refused, including one spelled with a JSON escape (r8-4)', () => {
+  const body = escalation.serializeCourtEscalationRequest(transportRequest());
+  const plainDup = body.replace('"roundBondProofHash":', '"roundBondProofHash":null,"roundBondProofHash":');
+  expectThrow(() => escalation.parseCourtEscalationRequest(plainDup), 'a repeated roundBondProofHash was resolved last-wins');
+  const escapeDup = body.replace('"caseId":', '"c\\u0061seId":"court:other:1","caseId":');
+  expectThrow(() => escalation.parseCourtEscalationRequest(escapeDup), 'an escaped duplicate key was not seen as a duplicate');
+});
+
+// ── S40 a wire field is never coerced ──────────────────────────────────────
+probe('S40', 'parse shape-checks its fields instead of coercing them (no stringly round, no numeric id)', () => {
+  const wire = wireOfTransport(transportRequest());
+  for (const round of ['2', true, [2], null]) {
+    expectThrow(
+      () => escalation.parseCourtEscalationRequest({ ...wire, round }),
+      `round ${JSON.stringify(round)} was coerced to an integer`,
+    );
+  }
+  expectThrow(() => escalation.parseCourtEscalationRequest({ ...wire, caseId: 42 }), 'a numeric caseId was coerced');
+  expectThrow(() => escalation.parseCourtEscalationRequest({ ...wire, caseId: undefined }), 'a missing caseId was accepted');
+});
+
+// ── S41 the round is an integer inside the ladder ceiling ──────────────────
+probe('S41', 'a request round must be an integer in 1..5', () => {
+  for (const round of [0, 6, 1.5, -1, Number.NaN]) {
+    expectThrow(
+      () => escalation.buildCourtEscalationRequest({ ...transportRequest(), round }),
+      `round ${round} was accepted`,
+    );
+  }
+  for (const round of [1, 2, 5]) {
+    assert(
+      escalation.buildCourtEscalationRequest({ ...transportRequest(), round }).round === round,
+      `legal round ${round} was refused`,
+    );
+  }
+});
+
+// ── S42 the mapping binds identity, index and case ────────────────────────
+probe('S42', 'an escalation cannot name a pubkey, an index or a case the host did not verify (r8-2)', () => {
+  const state = challengedCase();
+  // (a) the wire pubkey is not the authenticated one — the r29-2 attribution harm.
+  expectThrow(
+    () => escalation.escalationRequestToMachineEvent(state, transportRequest({ challengerPubkey: HEX('9') }), 3200, TRANSPORT_BINDING),
+    'an unverified challengerPubkey minted an escalation',
+  );
+  // (b) the roster index is the BOND OWNER's (juror 2), not the roster head.
+  const event = escalation.escalationRequestToMachineEvent(state, transportRequest(), 3200, TRANSPORT_BINDING);
+  assert(event.challengerIdx === 2, `challengerIdx ${event.challengerIdx} is not the bond owner (2)`);
+  // (c) a request cannot cross cases.
+  expectThrow(
+    () => escalation.escalationRequestToMachineEvent(
+      state, transportRequest({ caseId: 'court:someone-else:9' }), 3200, TRANSPORT_BINDING,
+    ),
+    'a request crossed cases',
+  );
+  // (d) an unbound call is a refusal, not a silent mint.
+  expectThrow(
+    () => escalation.escalationRequestToMachineEvent(state, transportRequest(), 3200),
+    'an unbound mapping minted an escalation',
+  );
+});
+
+// ── S43 one bond, one owner: ambiguity is refused ─────────────────────────
+probe('S43', 'a ledger that binds one bond hash to two owners is refused, not resolved (r38-1)', () => {
+  const state = challengedCase();
+  const ambiguous = {
+    ...state,
+    challenges: [...state.challenges, { ...state.challenges[0], idx: 3, eventId: PAD('aa') }],
+  };
+  expectThrow(
+    () => escalation.escalationRequestToMachineEvent(ambiguous, transportRequest(), 3200, TRANSPORT_BINDING),
+    'an ambiguous bond ledger was resolved to the first owner',
+  );
+});
+
+// ── S44 the signed round is the case's round ─────────────────────────────
+probe('S44', 'a request signed for round 1 cannot open a rung on a case resolving round 3', () => {
+  const state = challengedCase();
+  const later = { ...state, ladderRound: 3 };
+  expectThrow(
+    () => escalation.escalationRequestToMachineEvent(later, transportRequest({ round: 1 }), 3200, TRANSPORT_BINDING),
+    'a stale request opened a later rung',
+  );
+  // …while the same request on the round it names is accepted (over-strictness control).
+  assert(
+    escalation.escalationRequestToMachineEvent(state, transportRequest({ round: 1 }), 3200, TRANSPORT_BINDING).roundIndex === 2,
+    'the honest request did not map',
+  );
+});
+
+// ── S45 the host clock is the host's ──────────────────────────────────────
+probe('S45', '`now` is the caller\'s clock, never the request\'s, and a bad clock is refused (no fail-open)', () => {
+  const state = challengedCase();
+  const farFuture = transportRequest({ signedAtSec: 9_999_999_999 });
+  assert(
+    escalation.escalationRequestToMachineEvent(state, farFuture, 3200, TRANSPORT_BINDING).now === 3200,
+    'the request steered `now`',
+  );
+  for (const now of [Number.NaN, -1, 1.5]) {
+    expectThrow(
+      () => escalation.escalationRequestToMachineEvent(state, transportRequest(), now, TRANSPORT_BINDING),
+      `a bad host clock (${now}) was accepted or replaced by the wire clock`,
+    );
+  }
+});
+
+// ── S46 build reads every field ONCE (r8-5) ───────────────────────────────
+probe('S46', 'a field read by build is validated and RETURNED from the same read (no getter double-fetch)', () => {
+  let reads = 0;
+  const shifty = {
+    get caseId() {
+      reads += 1;
+      return 'court:shifted:1';
+    },
+    round: 1,
+    challengerPubkey: TRANSPORT_PUBKEY,
+    bondTxid: PAD('d2'),
+    bondProofHash: PAD('e2'),
+    roundBondProofHash: null,
+    eventId: HEX('8'),
+    signedAtSec: 1,
+  };
+  const built = escalation.buildCourtEscalationRequest(shifty);
+  assert(reads === 1, `caseId was read ${reads} times — a getter can return a different value per read`);
+  assert(built.caseId === 'court:shifted:1', `build returned ${JSON.stringify(built.caseId)}`);
+});
+
+// ── S47 a signed flag is a boolean, not truthiness (r8-3) ─────────────────
+probe('S47', 'a non-boolean `concession` is refused instead of coerced to false (r8-3)', () => {
+  const wire = wireOfTransport(transportRequest());
+  for (const value of ['true', 1, 0, 'yes', {}, [], null]) {
+    expectThrow(
+      () => escalation.parseCourtEscalationRequest({ ...wire, concession: value }),
+      `concession ${JSON.stringify(value)} was coerced`,
+    );
+  }
+  assert(
+    escalation.parseCourtEscalationRequest({ ...wire, concession: true }).concession === true,
+    'a legal `true` concession was lost',
+  );
+});
+
+// ── S48 the digest covers the RE-VALIDATED request ───────────────────────
+probe('S48', 'hashCourtEscalationRequest re-validates its argument (a hand-built request cannot skip the codec)', () => {
+  const req = transportRequest();
+  expectThrow(
+    () => escalation.hashCourtEscalationRequest({ ...req, caseId: 'a\u0000b' }),
+    'a hand-built request with a NUL caseId was hashed without re-validation',
+  );
+  expectThrow(
+    () => escalation.hashCourtEscalationRequest({ ...req, bondProofHash: 'deadbeef' }),
+    'a hand-built request with malformed hex was hashed without re-validation',
+  );
+  // …and the digest of an untrimmed hand-built id is the digest of the trimmed one.
+  assert(
+    escalation.hashCourtEscalationRequest({ ...req, caseId: ` ${TRANSPORT_CASE} ` })
+      === escalation.hashCourtEscalationRequest(req),
+    'the digest depends on whitespace the codec trims away',
   );
 });
 

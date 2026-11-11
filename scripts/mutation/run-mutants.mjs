@@ -102,20 +102,47 @@ const checkpointPath = `${outPath}.partial.jsonl`;
 const children = new Set();
 let sandboxRoot = null;
 let interruptedBy = null;
-let cleanupDone = false;
+let cleanupPromise = null;
 
-async function cleanup() {
-  if (cleanupDone) return;
-  cleanupDone = true;
-  for (const child of children) {
-    try {
-      child.kill('SIGKILL');
-    } catch {
-      /* already gone */
-    }
+/**
+ * Idempotent AND awaitable. The single-flight promise matters on a signal: the
+ * handler starts the removal, and the interrupted `main()` immediately reaches
+ * its own `cleanup()` — if the second call returned early (as a boolean guard
+ * did) `process.exit` would abort the in-flight `rm` and leak the sandbox. Round
+ * 47 found exactly that: `/tmp/bao-court-mutation-<pid>/` survived a SIGTERM.
+ */
+function cleanup() {
+  if (!cleanupPromise) {
+    cleanupPromise = (async () => {
+      for (const child of children) {
+        killTree(child);
+      }
+      // A vitest run is a process TREE: killing the `vitest.mjs` parent leaves
+      // its pool workers alive for a few hundred milliseconds, and a worker that
+      // writes after the `rm` below re-creates the sandbox directory it was
+      // writing into. Kill the whole group, then let the group die before
+      // removing the tree.
+      await new Promise((done) => setTimeout(done, 250));
+      if (sandboxRoot) {
+        await rm(sandboxRoot, { recursive: true, force: true }).catch(() => {});
+      }
+    })();
   }
-  if (sandboxRoot) {
-    await rm(sandboxRoot, { recursive: true, force: true }).catch(() => {});
+  return cleanupPromise;
+}
+
+/** Kill a spawned child AND its process group (see `detached: true` in `run`). */
+function killTree(child) {
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+    return;
+  } catch {
+    /* no group (already reaped, or never detached) — fall back to the child */
+  }
+  try {
+    child.kill('SIGKILL');
+  } catch {
+    /* already gone */
   }
 }
 
@@ -135,11 +162,7 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
 
 process.on('exit', () => {
   for (const child of children) {
-    try {
-      child.kill('SIGKILL');
-    } catch {
-      /* ignore */
-    }
+    killTree(child);
   }
 });
 
@@ -156,6 +179,10 @@ function run(cmd, args, { cwd, timeoutMs, logFile }) {
         NO_COLOR: '1',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Its OWN process group, so a timeout or a signal can kill the whole
+      // vitest tree (parent + pool workers) instead of orphaning writers that
+      // keep the sandbox alive after `rm`.
+      detached: true,
     });
     children.add(child);
     let out = '';
@@ -169,11 +196,7 @@ function run(cmd, args, { cwd, timeoutMs, logFile }) {
       if (err.length > 4_000_000) err = err.slice(-2_000_000);
     });
     const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL');
-      } catch {
-        /* ignore */
-      }
+      killTree(child);
     }, timeoutMs);
     child.on('error', (error) => {
       clearTimeout(timer);
@@ -378,7 +401,16 @@ async function main() {
         ],
         { cwd: baseDir, timeoutMs: TEST_TIMEOUT_MS, logFile: join(baseDir, `baseline-tests-${attempt}.log`) },
       );
-      const parsed = await parseVitestJson(reportPath);
+      let parsed;
+      try {
+        parsed = await parseVitestJson(reportPath);
+      } catch (readError) {
+        // The report is gone because cleanup removed the sandbox under us — the
+        // signal arrived mid-baseline. Report the interruption, not a phantom
+        // "baseline is not green".
+        if (interruptedBy) throw new Error(`interrupted by ${interruptedBy}`);
+        throw readError;
+      }
       parsed.wallMs = result.wallMs;
       console.log(
         `[mutants] baseline: ${parsed.passedTests}/${parsed.totalTests} passed, `
