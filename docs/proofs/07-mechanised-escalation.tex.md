@@ -200,7 +200,8 @@ tampered with.
 ## 5. Code ↔ model correspondence
 
 Each mechanised conjunct, the function that implements it, and the theorem that
-pins it. Line numbers are for `origin/main` @ `v0.14.1`.
+pins it. Line numbers are for `origin/main` @ `v0.14.2` (post review rounds
+9–10, which added the `bondTxid` binding to the mapper — row `r9-2` below).
 
 | Conjunct (mechanised form) | Implementation | Mechanised by |
 |---|---|---|
@@ -210,20 +211,21 @@ pins it. Line numbers are for `origin/main` @ `v0.14.1`.
 | `derivedCap = floor(boundary)`, `0` = no safe depth | `ladderEconomics.ts:131` `deriveMaxLadderRounds` | `derivedCap`, `derivedCapZero_no_safe_depth` |
 | monotone non-decreasing in `a_f`, in `β` | `ladderEconomics.ts:113–130` (docstring contract) | `flipRound_mono_accuracy`, `flipRound_mono_bond`, `derivedCap_mono_*` |
 | `a_f = 1` ⇒ unbounded boundary | `ladderEconomics.ts:97` (`if (a_f === 1) return +∞`) | `perfect_jury_all_depths_safe` |
-| one bond witness ⇒ one challenger | `handlers.ts:165` `onAcceptChallenge` (`bondOwner` refusal, `:206–210`); `core.ts:565,582–589` (`challengeBondOwners`) | `one_hash_one_index`, `one_index_one_hash` |
-| round bond fresh, ≠ membership, ≠ any accepted bond | `handlers.ts:640–655` (`roundBondProofHash === bondProofHash`; `membershipBond` lookup) | `round_bond_not_membership`, `round_bond_not_accepted` |
-| round bond never consumed twice | `handlers.ts:657–662` (`consumed` refusal); `core.ts:354,433–438` (`seenRoundBonds`) | `round_bond_consumed_once`, `consumed_not_reused` |
-| strict cases require the witness | `handlers.ts:630–637`; `core.ts:440–443` | `strict_case_has_round_bond` |
-| membership witness = THIS challenger's accepted bond | `handlers.ts:604–613`; `core.ts:406` | `WellFormed.bound` (in `reachable_wellFormed`) |
-| rounds consecutive `2..k` | `core.ts:366–370` (`round !== offset + 2`) | `rounds_consecutive`, `escalation_opens_next_round` |
-| log length ≤ 5 | `handlers.ts:544–549`; `core.ts:333–337` | `log_length_bounded` |
-| `roundIndex === ladderRound + 1` | `handlers.ts:578–583` (`expectedRound`) | `Step.escalate.nextRound`, `escalation_opens_next_round` |
-| completeness + consumption re-derived before a rung is spent | `handlers.ts:562,571` (barrier at `onEscalate`) and `:268–269` (barrier at `onOpenLadderRound`) | `reachable_wellFormed` |
-| wire `caseId` = the case the host routed on | `courtEscalationRequest.ts:536–542` | `invBinding` (Quint) |
-| wire `challengerPubkey` = the authenticated pubkey | `courtEscalationRequest.ts:544–549` | `invBinding` (Quint) |
-| wire `round` = the round being resolved | `courtEscalationRequest.ts:550–554` | `invBinding` (Quint) |
-| ambiguous bond owner refused (`bonds.length > 1`) | `courtEscalationRequest.ts:560–567` | `bondUnique` + `invRungMembership` (Quint) |
-| `roundIndex` derived from the CASE, never the wire | `courtEscalationRequest.ts:585–600` | `invRoundBound` (Quint) |
+| one bond witness ⇒ one challenger | `handlers.ts:166` `onAcceptChallenge` (`bondOwner` refusal at `:206–211`); `core.ts:564,633` (`challengeBondOwners`) | `one_hash_one_index`, `one_index_one_hash` |
+| round bond fresh, ≠ membership, ≠ any accepted bond | `handlers.ts:668–681` (`roundBondProofHash === bondProofHash`, `membershipBond` lookup) | `round_bond_not_membership`, `round_bond_not_accepted` |
+| round bond never consumed twice | `handlers.ts:686–690` (`consumed` refusal); `core.ts:438` (`seenRoundBonds`) | `round_bond_consumed_once`, `consumed_not_reused` |
+| strict cases require the witness | `handlers.ts:660–665`; `core.ts:445–448` | `strict_case_has_round_bond` |
+| membership witness = THIS challenger's accepted bond | `handlers.ts:632–641`; `core.ts:411` | `WellFormed.bound` (in `reachable_wellFormed`) |
+| rounds consecutive `2..k` | `core.ts:371` (`round !== offset + 2`) | `rounds_consecutive`, `escalation_opens_next_round` |
+| log length ≤ 5 | `handlers.ts:578–583`; `core.ts:333–337` | `log_length_bounded` |
+| `roundIndex === ladderRound + 1` | `handlers.ts:606–610` (`expectedRound`) | `Step.escalate.nextRound`, `escalation_opens_next_round` |
+| completeness + consumption re-derived before a rung is spent | `handlers.ts:590,599` (barrier at `onEscalate`) and `:275–276` (barrier at `onOpenLadderRound`) | `reachable_wellFormed` |
+| wire `caseId` = the case the host routed on | `courtEscalationRequest.ts:811–824` | `invBinding` (Quint) |
+| wire `challengerPubkey` = the authenticated pubkey | `courtEscalationRequest.ts:826–831` | `invBinding` (Quint) |
+| wire `round` = the round being resolved | `courtEscalationRequest.ts:847–852` | `invBinding` (Quint) |
+| ambiguous bond owner refused (`bonds.length > 1`) | `courtEscalationRequest.ts:889–894` | `bondUnique` + `invRungMembership` (Quint) |
+| wire `bondTxid` = the accepted challenge's txid (**r9-2**, round 9) | `courtEscalationRequest.ts:905–911` | TS suite (+ `__tests__/mechanisedArtifacts.test.ts`); see item 8 |
+| `roundIndex` derived from the CASE, never the wire | `courtEscalationRequest.ts:914–935` | `invRoundBound` (Quint) |
 
 ---
 
@@ -238,8 +240,10 @@ the same spirit as `court.qnt`.
 `doOpenRound(round)`, `doResolveRound`, `doConcede`.
 **Predicates (one per TS layer):** `canParse` (`buildCourtEscalationRequest`'s
 shape check), `canMap` (`escalationRequestToMachineEvent`'s r8-2 binding check —
-three refusals), `canReduce` (`onEscalate`'s witness checks, including
-`bondUnique` for the r8-2 ambiguity refusal).
+three refusals: case id, authenticated pubkey, resolved round; the fourth,
+`bondTxid`, landed in round 9 and is outside the Quint abstraction, see §8
+item 8), `canReduce` (`onEscalate`'s witness checks, including `bondUnique` for
+the r8-2 ambiguity refusal).
 
 **Invariants** (checked on every state of every simulated trace, and by
 Apalache where a JVM is present): `invPhase`, `invLadderRange`,
@@ -334,7 +338,16 @@ reachable ledger states) or over all states up to a depth bound (Apalache) /
 7. **Liveness.** Nothing here says a case ever resolves; the theorems are
    safety statements (like Theorem 4). `concede` is modelled as always enabled
    but no theorem requires the challenger to use it.
-8. **The unmodelled half of r30-1.** The per-round bond AMOUNT schedule
+8. **The `bondTxid` binding (r9-2, round 9).** Round 9 taught the mapper to
+   compare the request's `bondTxid` with the accepted challenge's
+   (`courtEscalationRequest.ts:905–911`) — the request hash commits to a txid the
+   case must actually have bound. The Quint `Wire` type abstracts the txid away
+   (hashes and ids are `int` literals there), so `invBinding` does not cover it;
+   it is pinned by `__tests__/mechanisedArtifacts.test.ts` (the refusal is
+   asserted) and by the round-9 TS suite. Widening the Quint wire to carry a
+   txid is the obvious next step, and would be a mechanical change to
+   `canMap` + one invariant conjunct.
+9. **The unmodelled half of r30-1.** The per-round bond AMOUNT schedule
    (`escalationBondMultiple = 3^r`) is Theorem 2 of `02-ladder.tex.md`; the
    machine only enforces CONSUMPTION (one fresh witness per rung), which is what
    `EscalationLedger.lean` proves. A host that prices a rung below the schedule
