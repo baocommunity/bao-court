@@ -212,6 +212,18 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.14.0] — 2026-11-11
+
+### Added
+- **Escalation request transport (`courtEscalationRequest.ts`, `@bao/court/escalation-request`):** `build`/`serialize`/`parse` (strict unknown-field refusal) carrying the per-round bond witness on the wire, a v2 hash binding `roundBondProofHash` (`'-'` sentinel when absent), and `escalationRequestToMachineEvent` filling the reducer's `escalate` event field-for-field (the wire supplies the challenger claims; the case supplies `challengerIdx`/`roundIndex`/`now`). This is the prerequisite the strict round-bond mode needed: transport ships, then enforcement. 12 tests incl. a pinned known-answer digest.
+
+### Fixed (review-round-7, PR #112)
+- **`concede` → `finalize` forged a verdict (exploitable, most severe of the campaign):** `concede` reached `finalize`, which read the vote ledger without the mass-vote barrier — measured on v0.13.2: `FINAL outcome=MAYBE supported=3` on a case both panels voted NO, with `upheld` caller-supplied and absent from the hash. The barrier now runs, the verdict is derived from the round's `outcomeHistory` with vote-ledger agreement, and `upheld` is derived. 4 closures were red before the fix; 40/40 legal flows unchanged.
+- The `a_f` direction in the bound docstring was backwards (non-decreasing in `a_f`); fixed and pinned.
+
+### Changed
+- Suite **1,770 passed** (81 files).
+
 ## [0.13.2] — 2026-11-11
 
 ### Fixed (review rounds 4–6 + mutation campaigns)
