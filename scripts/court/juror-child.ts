@@ -125,8 +125,15 @@ interface Envelope {
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * `as=<idx>` is how the relay knows WHICH juror is polling. That is not a
+ * concession to the simulation: a real relay sees a distinct connection per
+ * subscriber and can serve each one a different view (eclipse / split-view).
+ * Declaring it makes the per-juror view explicit and reproducible instead of
+ * hidden in connection bookkeeping.
+ */
 async function publish(envelope: Envelope): Promise<number> {
-  const response = await fetch(`${relayUrl}/events`, {
+  const response = await fetch(`${relayUrl}/events?as=${myIdx}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(envelope),
@@ -139,7 +146,7 @@ async function publish(envelope: Envelope): Promise<number> {
 }
 
 async function poll(cursor: number): Promise<{ messages: (Envelope & { seq: number })[]; next: number }> {
-  const response = await fetch(`${relayUrl}/events?since=${cursor}`, {
+  const response = await fetch(`${relayUrl}/events?since=${cursor}&as=${myIdx}`, {
     signal: AbortSignal.timeout(5000),
   });
   if (!response.ok) throw new Error(`relay poll failed: ${response.status}`);
@@ -197,6 +204,16 @@ async function runRound(
   const sawShare = new Set<number>();
   const rejected = new Set<number>();
   const myMessages: Envelope[] = [];
+  // Relay-side replay evidence: an event id this process has already ingested
+  // in THIS round. Idempotent re-delivery must be a no-op — never a second
+  // accepted commitment and never a second partial signature.
+  const seenEventIds = new Set<string>();
+  let duplicateDeliveries = 0;
+  const noteDelivery = (eventId: string | undefined): void => {
+    if (!eventId) return;
+    if (seenEventIds.has(eventId)) duplicateDeliveries += 1;
+    else seenEventIds.add(eventId);
+  };
 
   const send = async (envelope: Envelope): Promise<void> => {
     myMessages.push(envelope);
@@ -275,6 +292,7 @@ async function runRound(
     for (const message of messages) {
       if (message.round !== round) continue;
       if (message.from === myIdx) continue;
+      noteDelivery(message.event?.id);
       if (message.phase === 'dkg-commit' || message.phase === 'dkg-share') {
         if (await ingestDkg(message)) fresh += 1;
       }
@@ -292,7 +310,7 @@ async function runRound(
           ok: false,
           classification: 'DKG_DISQUALIFIED',
           blamedIdx: [...rejected][0],
-          disclosure: { error: (error as Error).message.slice(0, 200) },
+          disclosure: { error: (error as Error).message.slice(0, 200), duplicatesSeen: duplicateDeliveries },
         };
       }
     }
@@ -316,6 +334,7 @@ async function runRound(
           sawCommitment: [...sawCommitment].sort((a, b) => a - b),
           sawShare: [...sawShare].sort((a, b) => a - b),
           replayedMessages: replayedCount,
+          duplicatesSeen: duplicateDeliveries,
         },
       };
     }
@@ -328,6 +347,7 @@ async function runRound(
         missingIdx: missing.sort((a, b) => a - b),
         sawCommitment: [...sawCommitment].sort((a, b) => a - b),
         sawShare: [...sawShare].sort((a, b) => a - b),
+        duplicatesSeen: duplicateDeliveries,
       },
     };
   }
@@ -361,6 +381,7 @@ async function runRound(
     let fresh = 0;
     for (const message of messages) {
       if (message.round !== round || message.from === myIdx || !message.event) continue;
+      noteDelivery(message.event.id);
       if (message.phase === 'frost-commit') {
         const parsed = parseFrostCommitEvent(message.event);
         if (!parsed) continue;
@@ -425,6 +446,7 @@ async function runRound(
         revealed: [...revealed].sort((a, b) => a - b),
         missingCommits: missingCommits.sort((a, b) => a - b),
         missingReveals: missingReveals.sort((a, b) => a - b),
+        duplicatesSeen: duplicateDeliveries,
       },
     };
   }
@@ -444,7 +466,11 @@ async function runRound(
     signature: attestation.signature,
     message: attestation.message,
     signatureVerifies: verifies,
-    disclosure: { committed: [...committed].sort((a, b) => a - b), replayedMessages: replayedCount },
+    disclosure: {
+      committed: [...committed].sort((a, b) => a - b),
+      replayedMessages: replayedCount,
+      duplicatesSeen: duplicateDeliveries,
+    },
   };
 }
 

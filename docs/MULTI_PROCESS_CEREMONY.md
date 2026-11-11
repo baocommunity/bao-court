@@ -1,4 +1,4 @@
-# Multi-process ceremony simulation (round 30)
+# Multi-process ceremony simulation (rounds 30 + 33)
 
 The reviewer's standing objection to the assurance case is: *"nothing ran
 distributed."* This harness is the closest we can get without a second box.
@@ -6,14 +6,25 @@ It is **not** a distributed deployment, and this page exists to keep us from
 claiming it is.
 
 ```
-tsx scripts/court/multi-process-ceremony.mjs --jurors=3
+tsx scripts/court/multi-process-ceremony.mjs --jurors=3               # happy path
 tsx scripts/court/multi-process-ceremony.mjs --jurors=7
 tsx scripts/court/multi-process-ceremony.mjs --jurors=5 --chaos=kill --kill-phase=sign
 tsx scripts/court/multi-process-ceremony.mjs --jurors=3 --chaos=replay
+
+# round 33 — a relay that lies
+tsx scripts/court/multi-process-ceremony.mjs --jurors=3 --mode=reorder
+tsx scripts/court/multi-process-ceremony.mjs --jurors=5 --mode=drop --drop-p=0.2
+tsx scripts/court/multi-process-ceremony.mjs --jurors=5 --mode=fork               # split-view, from DKG
+tsx scripts/court/multi-process-ceremony.mjs --jurors=5 --mode=fork --fork-variant=sign
+tsx scripts/court/multi-process-ceremony.mjs --jurors=3 --mode=replay
+tsx scripts/court/multi-process-ceremony.mjs --jurors=3 --mode=silence
+tsx scripts/court/multi-process-ceremony.mjs --jurors=3 --mode=reorder --reorder-style=invert
+tsx scripts/court/multi-process-ceremony.mjs --matrix                 # all modes, N=3 and N=5 (~40 s)
 ```
 
-Part of the CI suite: `__tests__/r30MultiProcessCeremony.test.ts` runs the
-happy path, both kill points, and the replay scenario (≈15 s).
+Part of the CI suite: `__tests__/r30MultiProcessCeremony.test.ts` (happy path,
+both kill points, cross-round replay) and `__tests__/r33ByzantineRelay.test.ts`
+(the Byzantine-relay matrix, ≈20 s).
 
 ## What actually happens
 
@@ -25,16 +36,18 @@ spawned by the coordinator (`scripts/court/multi-process-ceremony.mjs`) with
   ceremony seed so the roster needs no trust handshake);
 - its own state directory (`juror-<idx>/published.jsonl`, `outcomes.json`) —
   no shared memory, no shared objects, no in-process calls between jurors;
-- its own poll cursor into the relay.
+- its own poll cursor into the relay, and (round 33) its own **view**.
 
 The **relay** is a `node:http` server on loopback TCP. Jurors exchange JSON
 envelopes over real sockets and never hand each other objects. The relay — not
-the jurors — assigns the total message order (monotonic `seq`), and the
-coordinator refuses to start without it. Payloads on the wire are **signed
-Nostr events** re-parsed in the receiving process by the production parsers
-(`parseDkgCommitmentEvent`, `parseEncryptedShareEvent`, `parseFrostCommitEvent`,
-`parseFrostRevealEvent`) and gated by `IndependentDkgSession` /
-`IndependentSigningSession`.
+the jurors — assigns the total message order (monotonic `seq`). Since round 33
+the relay keeps a **per-juror view**: a juror polls with `?as=<idx>` (a real
+relay knows which subscriber a connection is) and receives the subset, in the
+order, that the current mode dictates. The coordinator refuses to start without
+it. Payloads on the wire are **signed Nostr events** re-parsed in the receiving
+process by the production parsers (`parseDkgCommitmentEvent`,
+`parseEncryptedShareEvent`, `parseFrostCommitEvent`, `parseFrostRevealEvent`)
+and gated by `IndependentDkgSession` / `IndependentSigningSession`.
 
 The ceremony is the real one: Pedersen DKG (verify shares, complaint gates,
 full-roster key computation) → FROST commit/reveal/aggregate →
@@ -43,21 +56,31 @@ wire only: it re-parses every published DKG commitment, sums the constant
 commitments to recompute the group key, and checks the aggregate signature
 against it with its own verifier.
 
-## Latency model
+## The lying relay (round 33)
 
-Deliberately simple and documented rather than measured: we exercise
-*ordering*, not timing.
+One relay, six behaviours, all **deterministic** and **seeded**. Every routing
+decision is a pure function of `(seed, mode, seq, juror)` — a hash, not a
+sequential PRNG — so the same seed reproduces the same dishonest relay record
+for record, no matter how the processes interleave.
 
-| Parameter | Value |
-|---|---|
-| Transport | HTTP/1.1 over loopback TCP, JSON envelope, relay-assigned `seq` |
-| Pre-publish jitter | `(idx*13 + round*29 + phaseIndex*7) % 41` ms (deterministic) |
-| Commitment → shares gap | 150 ms (so a mid-round kill lands between them reproducibly) |
-| Poll interval | 20 ms (a message is visible to a peer within one tick) |
-| Phase deadline | 10 s default (`--deadline-ms`); the harness cannot hang |
-| Whole-harness budget | 300 s default (`--budget-ms`) |
+| `--mode=` | mechanism | what it is | what it tests |
+|---|---|---|---|
+| `honest` | every record to every juror, in receive order | baseline | R30's claim still holds with the view machinery in place |
+| `reorder` | per-receiver sender **ranking**: each sender's records are held for `rank × window/N` (`--reorder-window-ms`, 90 ms default). Per-sender FIFO is preserved; the interleaving is adversarial. `--reorder-style=invert` instead holds **one** juror's FROST commitments 800 ms so its *reveal* overtakes its own *commit*. | a relay that delivers a different total order to each subscriber | is the protocol order-independent? and what does the reveal gate do when a commit/reveal pair is inverted? |
+| `drop` | each (record, juror) pair is discarded with probability `--drop-p` (0.2 default) | message loss between relay and one subscriber | does loss ever produce a divergent or unverifiable outcome, or only a typed abort? |
+| `fork` | jurors split into two seeded cohorts (ceil(N/2) / rest); a sender's records are delivered **only inside the sender's cohort**. `--fork-variant=dkg` (default) splits from the start; `--fork-variant=sign` keeps DKG whole so both cohorts hold the SAME group key and splits only the signing phase. | **the split-view / equivocation attack** | can the relay make two jurors sign different things, or two group keys exist? |
+| `replay` | a seeded 70 % of records are duplicated and re-delivered late, byte-identical and correctly signed | duplicate + old-message redelivery | is the receive path idempotent, and can a repeat ever yield a second signature? |
+| `silence` | every record **from** one juror is withheld from all others (`--victim-idx=` to pin the target, else seeded) | targeted censorship | does it fail closed, and does it name the participant? |
+
+The relay **never forges a signature**. Every lie is a delivery policy over
+genuinely signed events: a relay can choose *which* signed objects each juror
+sees, in *which order*, and *how often* — nothing else. Content equivocation
+(two different commitments from one juror) needs a Byzantine **sender**, which
+is `--chaos=replay` (R30) and the transport suites.
 
 ## Scenarios and asserted outcomes
+
+### Round 30 — process and sender faults (honest relay)
 
 | `--chaos` | Assertion |
 |---|---|
@@ -66,36 +89,180 @@ Deliberately simple and documented rather than measured: we exercise
 | `kill --kill-phase=sign` | Victim SIGKILLed after its FROST commitment. DKG still completes (survivors agree on the group key), then every survivor fails closed with `SIGN_MISSING_REVEAL`, blames the victim, and emits **no** signature. |
 | `replay` | Juror 2 republishes its round-1 signed commitment and shares verbatim into round 2 (the outer envelope is unauthenticated, so re-labelling is allowed). Honest processes detect the equivocation, disqualify juror 2, and fail closed with `DKG_DISQUALIFIED`; the replayer — which never sees its own traffic — diverges locally and still cannot collect reveals. **No signature anywhere.** |
 
+### Round 33 — relay faults (both sizes, seeded)
+
+| `--mode=` | Assertion (N = 3 and N = 5) |
+|---|---|
+| `honest` | All jurors complete; one message, one key, one signature; the relay delivered every record to every juror; completion shape `ALL_COMPLETED_IDENTICALLY`. |
+| `reorder` | Jurors observe **different** delivery orders (asserted from the per-juror trace), and the outcome is unchanged: everyone completes with the identical tuple. Order-independence holds for *interleaving*. |
+| `reorder --reorder-style=invert` | A commit/reveal inversion is delivered. At most **one** signature exists; peers that lost a reveal fail closed with `SIGN_MISSING_REVEAL` and blame the sender; completion shape is `PARTIAL` (finding F1). |
+| `drop` (p = 0.2) | The relay really dropped records; every juror either completes or fails closed with a classification from `{DKG_MISSING_PARTICIPANT, DKG_DISQUALIFIED, SIGN_MISSING_PARTICIPANT, SIGN_MISSING_REVEAL}`; no juror holds a signature without completing; any completers agree on one key and one signature; never `ALL_COMPLETED_DIVERGENT`. |
+| `fork` (dkg) | The relay really served different subsets; **no juror saw a record from the other cohort**; no group key, no signature; everybody fails closed with `DKG_MISSING_PARTICIPANT` and names a missing participant; completion shape `ALL_FAILED_CLOSED`. |
+| `fork --fork-variant=sign` | DKG completed before the split (one group key across all jurors), then **no signature anywhere**: `createMyReveal()` refuses while any roster participant's nonce commitment is missing, so a split view starves the reveal gate on *both* sides. Shape `ALL_FAILED_CLOSED`. |
+| `replay` | The relay really duplicated (and late-redelivered) records; every juror observed the repeats (`disclosure.duplicatesSeen > 0`) and stayed idempotent; the ceremony completes everywhere with **exactly one** signature. |
+| `silence` | No signature anywhere; every other juror fails closed with `DKG_MISSING_PARTICIPANT` and **names the silenced juror**; the silenced juror also fails closed (it never sees its own echo, so it reaches signing with no peer commitments). Shape `ALL_FAILED_CLOSED`. |
+
+### Recorded results (seeds derived as `sha256("r33-matrix|N|<args>")`, deadlines 2.5 s)
+
+| cell | juror 1 | juror 2 | juror 3 | juror 4 | juror 5 | shape |
+|---|---|---|---|---|---|---|
+| N=3 honest | OK | OK | OK | — | — | all identical |
+| N=3 reorder | OK (14 msgs) | OK (14) | OK (15) | — | — | all identical |
+| N=3 drop 0.2 | `DKG_MISSING_PARTICIPANT` (blames 3) | `SIGN_MISSING_PARTICIPANT` (blames 1, key held) | `DKG_MISSING_PARTICIPANT` (blames 2) | — | — | all failed closed |
+| N=3 fork:dkg | `DKG_MISSING_PARTICIPANT` (blames 3) | `DKG_MISSING_PARTICIPANT` (blames 3) | `DKG_MISSING_PARTICIPANT` (blames 1) | — | — | all failed closed |
+| N=3 fork:sign | `SIGN_MISSING_PARTICIPANT` | `SIGN_MISSING_PARTICIPANT` | `SIGN_MISSING_PARTICIPANT` | — | — | all failed closed (one key) |
+| N=3 replay | OK, 6 dupes | OK, 8 dupes | OK, 8 dupes | — | — | all identical |
+| N=3 silence(j1) | `SIGN_MISSING_PARTICIPANT` (key held) | `DKG_MISSING_PARTICIPANT` (blames 1) | `DKG_MISSING_PARTICIPANT` (blames 1) | — | — | all failed closed |
+| N=3 invert(j2's commit) | `SIGN_MISSING_REVEAL` (blames 2) | **OK** (signs) | `SIGN_MISSING_REVEAL` (blames 2) | — | — | `PARTIAL`, one signature |
+| N=5 fork:dkg | cohort sizes 3/2 (seeded) | | | | | all failed closed |
+| N=5 fork:sign | all `SIGN_MISSING_PARTICIPANT` | | | | | all failed closed (one key) |
+| N=5 drop 0.2 | all `DKG_MISSING_PARTICIPANT` | | | | | all failed closed |
+| N=5 silence(j5) | 1–4 `DKG_MISSING_PARTICIPANT` (blame 5) | | | | j5 `SIGN_MISSING_PARTICIPANT` | all failed closed |
+| N=5 replay / honest / reorder | all OK, one signature (21–24 dupes under replay) | | | | | all identical |
+
+Every cell asserts `NO_EQUIVOCATION`: at most one distinct message, at most one
+distinct group key among outputs, and every emitted signature verified by the
+coordinator's own verifier against the key it recomputed from the receive log.
+`--matrix` runs all 15 cells in ≈40 s and exits non-zero if any cell's
+assertions fail.
+
+## The equivocation report — what a split view actually produces
+
+`<run-dir>/relay-views.json` (and `report.json` → `equivocation`) record, per
+juror: how many records it received, from which senders, in which `seq` order,
+how many were duplicates, plus every outcome (classification, blame, key,
+signature, message) and a machine verdict. Under `fork:dkg` at N=3 the trace is
+unambiguous:
+
+```
+juror 1: saw 6 msgs from [2]      -> DKG_MISSING_PARTICIPANT (blames 3)
+juror 2: saw 6 msgs from [1]      -> DKG_MISSING_PARTICIPANT (blames 3)
+juror 3: saw 3 msgs from []       -> DKG_MISSING_PARTICIPANT (blames 1)
+verdict: NO_EQUIVOCATION (messages 0, keys 0, signatures 0)
+```
+
+Juror 3 never received a single peer record; jurors 1 and 2 never saw juror 3.
+The relay really did mount a split-view. **No two signatures, no two keys, and
+no signature at all** — and this is structural, not luck:
+
+1. **The relay cannot mint content.** Every wire object is a signed Nostr event
+   whose payload is re-parsed and re-verified in the receiving process. A relay
+   can withhold, reorder and repeat; it cannot alter.
+2. **Each object is bound to (roster, index, attempt, dispute).**
+   `addCommitment` requires `event.pubkey === jurors[idx].nostrPubkey`, the same
+   threshold, a PoK over `vssCommits[0]` in a roster-scoped domain, and — for a
+   *second* commitment from the same index — either byte-identical content
+   (idempotent) or a **disqualification**. `addEncryptedShare` binds
+   `fromIdx → roster pubkey` and `phaseNonce → the commitment already seen`.
+3. **The key is a pure function of the full roster's commitments.**
+   `canComputeKey()` needs every roster member's commitment *and* decrypted
+   share; `computeKey()` throws on any missing member or disqualification. Each
+   commitment is uniquely determined by (sender key, attempt), so any two jurors
+   that complete DKG hold the identical commitment vector and therefore the
+   **same group key**. A split cannot create two keys; it can only stop jurors
+   from finishing. That is why `fork:dkg` yields `DKG_MISSING_PARTICIPANT`
+   everywhere and *no* key, rather than two keys.
+4. **The signed message is derived locally.** `buildAttestationMessage(marketId,
+   outcome, round, disputeEventId, verdictHash)` — no relay-supplied field
+   participates. Every juror recomputes it; there is no channel through which a
+   relay could ask for message B.
+5. **The reveal gate is roster-wide and all-or-nothing.**
+   `createMyReveal()` throws unless `hasEnoughCommitments()` (every roster
+   participant's nonce commitment present), and `canAggregate()` requires the
+   reveal set to **equal** the commitment set with `|reveals| ≥ threshold`. A
+   split therefore suppresses reveals on both sides: it cannot produce a
+   signature from each half. (`fork:sign` is exactly this: one agreed key, no
+   signature, `SIGN_MISSING_PARTICIPANT` everywhere.)
+6. **Repeats are inert.** An identical re-delivery of a commitment or share is
+   accepted as a no-op; a *conflicting* reveal is rejected (first reveal wins);
+   the default nonce guard refuses a second partial signature for one nonce.
+   `replay` produces 6–24 duplicate deliveries per juror and still exactly one
+   signature.
+
+**Verdict: NO_EQUIVOCATION — the split-view attack cannot yield two signatures
+over different messages, and cannot yield one either.** The defense is not a
+relay trust assumption; it is the (dispute, attempt, roster-index) binding plus
+the full-roster DKG and reveal gates. The single security-relevant residual is
+therefore *not* relay equivocation but **Byzantine senders** — a juror that
+signs two different commitments under the same `(disputeId, phaseNonce)`. That
+is detected and disqualified by the same gates (R30 `--chaos=replay`,
+`__tests__/courtRelayAdversary.test.ts`, `courtInbox`/`courtOutbox` suite).
+
+### Findings (registered, with severity)
+
+- **F1 — the reveal gate is arrival-order sensitive (availability, not
+  safety).** `addReveal` drops a reveal whose commitment is not yet stored, and
+  the protocol never retries. A relay that holds one sender's FROST commitment
+  past its own reveal (`--reorder-style=invert`) makes that sender's partial
+  signature unusable at its peers: peers abort with `SIGN_MISSING_REVEAL` while
+  the sender itself — which holds its own nonce locally — aggregates and signs.
+  One message, one key, one signature: **no equivocation**, but the ceremony's
+  completion is now view-dependent. Candidate fixes (not implemented here):
+  buffer unmatched reveals and re-apply them when the commitment lands, or make
+  the reveal self-contained (carry the commitment it belongs to).
+- **F2 — blame is "whom I did not hear from", not "who misbehaved".** Under
+  `silence`, peers correctly name the silenced juror; under `invert` and `drop`
+  they name an **honest** sender whose message the relay discarded. Fine for
+  fail-closed decisions, unusable on its own as slashing evidence — slashing
+  needs the signed evidence paths (`DkgVerificationFailure`, `falseComplaints`),
+  not this classification.
+- **F3 — all-or-nothing liveness.** `fork`, `silence` and `drop` never degrade
+  to a threshold-sized ceremony: the attempt dies and needs a new one. That is
+  the protocol as shipped (DKG and the reveal gate both require the full
+  certified roster); no Byzantine *liveness* is provided.
+- **F4 — `PARTIAL` completion is legal and benign.** Message loss can leave one
+  juror able to aggregate while others cannot (N=3 `drop`, `invert`). Because
+  the message and key are identical, this is an availability asymmetry, not a
+  divergence; the harness asserts it can never become
+  `ALL_COMPLETED_DIVERGENT`.
+
 ## What this proves
 
 - The ceremony **completes** across independent processes that share nothing
-  but a relay, an ordering, and signed events.
-- The protocol **fails closed** on process death at two different points, with
-  the **correct classification** and the **correct blame**, and never emits a
-  partial signature or a subset-derived group key.
-- Replayed wire bytes are rejected, and the rejection is attributable.
-- Verification is independent: the coordinator re-derives the group key from
-  the transcript, so a coordinating bug cannot certify itself.
+  but a relay, an ordering, and signed events — including when the relay
+  reorders arbitrarily or duplicates/late-redelivers a large fraction of the
+  traffic.
+- The protocol **fails closed** on process death, targeted censorship, message
+  loss, and split-view, with the **correct classification** and a named
+  participant, and never emits a partial signature or a subset-derived group
+  key.
+- **The split-view attack does not equivocate.** Under a real per-juror view
+  split (asserted from the per-juror trace), the ceremony either completes with
+  one identical session/message/key/signature or fails closed everywhere; there
+  is no third outcome where two jurors hold different valid signatures.
+- Replayed wire bytes and duplicate deliveries are rejected or absorbed
+  idempotently, and the rejection is attributable.
+- Verification is independent: the coordinator re-derives the group key from the
+  transcript, so a coordinating bug cannot certify itself.
 
 ## What this does not prove
 
 - **It is still localhost.** One kernel, one clock, one machine. No packet
-  loss, no partitions, no clock skew, no congestion, no scheduler failure, no
-  disk failure.
-- **The relay is honest and always available.** Censorship, equivocation and
-  eclipse are covered by the transport suites (`courtInbox`/`courtOutbox`
-  provenance, dedupe, capacity) and by peer-side verification — not here.
-- **No Byzantine liveness.** One dead juror stalls the round until the phase
-  deadline and aborts the attempt. That is the *current* protocol's behaviour
-  (DKG requires the full certified roster; the roster never shrinks), not a
-  property this harness adds.
+  loss at the socket layer, no partitions, no clock skew, no congestion, no
+  scheduler failure, no disk failure. The loss/reorder/duplication above are
+  *simulated at the relay's delivery policy*, not at the kernel.
+- **The "Byzantine relay" is a code path in the coordinator's own process.**
+  It is a second *view*, not a second *operator*: no TLS, no DNS, no hostile
+  relay binary, no rate limits, no adversarial subscription auth. A real relay
+  can also lie about *arrival time* and *subscription state*, which this model
+  does not exercise.
+- **No real network asynchrony.** Deadlines are 2.5–10 s on loopback; a WAN
+  deployment has reordering windows and tail latencies this harness cannot
+  produce, and those are exactly the conditions F1 depends on.
+- **No Byzantine liveness.** One dead, silenced or eclipsed juror aborts the
+  attempt (F3). Reaching a threshold signature while a minority is offline would
+  require relaxing the full-roster DKG/reveal gates — a protocol change, not a
+  harness change.
 - **Custody is not simulated.** Shares live in process memory for the run;
   nothing here exercises HSMs, disk encryption, or backup/restore.
-- **Concurrency is not adversarial by default.** Ordering is relay-assigned
-  and total; byzantine reordering is a transport-suite concern.
+- **Sender equivocation is out of scope here** (covered by R30 `--chaos=replay`
+  and the transport suites); the relay itself cannot forge, so this harness
+  cannot test a relay that also steals a share.
 
-The remaining gap to a real deployment is therefore *operational*: network
-asynchrony, real relay failure modes, key custody, and machine-independent
-timing. The **coordination structure** — separate processes, separate
-identities, signed messages, third-party ordering, independent verification,
-crash and replay — is real.
+The remaining gap to a real deployment is therefore *operational plus
+liveness*: real network asynchrony, independent relay operators, key custody,
+machine-independent timing, and a protocol that can finish with a Byzantine
+minority. The **coordination structure** — separate processes, separate
+identities, signed messages, third-party ordering and per-subscriber views,
+independent verification, crash, replay, split-view, censorship and loss — is
+real.

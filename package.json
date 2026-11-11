@@ -157,6 +157,7 @@
     "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "simulate:court": "tsx scripts/simulateCourt.ts",
+    "simulate:byzantine": "tsx scripts/court/multi-process-ceremony.mjs --matrix",
     "bench": "tsx bench/court.bench.mjs",
     "campaign": "tsx scripts/campaign/run-campaign.mjs --fast",
     "campaign:full": "tsx scripts/campaign/run-campaign.mjs --full",

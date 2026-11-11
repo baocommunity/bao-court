@@ -1925,7 +1925,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-16 | Attributable signing (session journal, RFC 9162 log, batch-signing duty) | `docs/ATTRIBUTABLE_SIGNING.md` |
 | S-17 | Review round 3 — attacking the fixes that round 2 shipped (r29-1…r29-10, grading rule, residuals) | `docs/REVIEW_ROUND_3.md` |
 | S-18 | Per-round escalation bonds (v0.13.0 consumption test, compatibility matrix, derived cap and flip round) | `docs/PER_ROUND_BOND.md` |
-| S-19 | Multi-process ceremony (N real OS processes, chaos kill/replay, and the honest scope of what it proves) | `docs/MULTI_PROCESS_CEREMONY.md` |
+| S-19 | Multi-process ceremony (N real OS processes, chaos kill/replay, Byzantine-relay modes incl. split-view, and the honest scope of what it proves) | `docs/MULTI_PROCESS_CEREMONY.md` |
 | S-20 | Statistical corpora (nine campaigns) + the witness-aware model-check tables | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json` |
 | S-21 | Economic expert re-verify of the post-fix layer (r30-1…r30-5: bond consumption, churn cap, κ slack, decay pairing) | `docs/proofs/economics/06-expert-verify.tex.md`; numbers reproduced by `scripts/review-quant/economics.mjs` §6 |
 | S-22 | Three-day fault-injected soak (30,000 settlements, 32/32 assertions, SOAK-F7/F8/F11) | host repository `bao.markets`: `docs/benchmarks/SOAK_3DAY.md`, `docs/benchmarks/soak-3day.json` |
@@ -1945,7 +1945,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | — | Economics layer proofs | `docs/proofs/economics/` |
 | — | Exhaustive model-check fixture (15 instances, 3,869,232 states, 60,020,684 illegal-witness probes, 0 accepted) and its generator | `__fixtures__/model-check-summary.json`; `scripts/model-check.mjs` |
 | — | Witness-aware model-check tables and the nine-campaign statistical corpora | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json`; `scripts/campaign/run-campaign.mjs` |
-| — | Multi-process ceremony (N = 3…7 OS processes, kill/replay chaos) | `scripts/court/multi-process-ceremony.mjs`, `scripts/court/juror-child.ts`; gated by `__tests__/r30MultiProcessCeremony.test.ts` |
+| — | Multi-process ceremony (N = 3…7 OS processes, kill/replay chaos, Byzantine-relay split-view/loss/reorder/replay/silence matrix) | `scripts/court/multi-process-ceremony.mjs`, `scripts/court/juror-child.ts`; gated by `__tests__/r30MultiProcessCeremony.test.ts`, `__tests__/r33ByzantineRelay.test.ts` |
 | — | Escalation-witness and per-round-bond pins | `__tests__/reviewRound3.test.ts`, `__tests__/escalationWitness.test.ts`, `__tests__/perRoundBond.test.ts`, `__tests__/ladderEconomics.test.ts`, `__tests__/penaltyAging.test.ts` |
 | — | Transport/seal/MLS suite | `__tests__/r30SealGames.test.ts`, `__tests__/r30MarmotTransport.test.ts`, `__tests__/r30InboxOutboxLoad.test.ts` |
 | — | Differential-parity suite and its restatements | `__tests__/differentialParity.test.ts`; `__tests__/reference/` |
