@@ -846,12 +846,31 @@ ladder — and is left named rather than implied.
   deduplicated per `(idx, reason)`, cap 10 000 (lines 1095-1126).
   Test: `courtConfirmationMachine.test.ts` › 'accepts explicit clawback flags
   only during fee_settlement, deduped per (idx, reason)'.
-- **INV-CONF-32 (finality = last resolved round).** `finalize` mints the verdict
-  from the LAST resolved round: outcome = that round's winner; supporting ids =
-  that round's winning vote ids, or the confirmation ledger when the case was
-  never challenged and the proposal was upheld (lines 1145-1155).
+- **INV-CONF-32 (finality = last resolved round, re-derived — r41-1).** `finalize`
+  mints the verdict from the LAST resolved round's **append-only record**, not
+  from the pending field and not from the vote ledger alone: outcome = the record's
+  outcome, supporting ids = the record's `winnerEventIds` (lowercased, sorted), or
+  the confirmation ledger when the case was never challenged. The record is
+  `resolve_round`'s own commitment — written in the same transition as the tally —
+  so `finalize` also requires the vote ledger to AGREE with it (round number,
+  majority outcome, and the exact winning event-id multiset) before anything is
+  minted. `upheld` is derived (`record.outcome === proposedOutcome`), never
+  trusted: it is not in the verdict hash, so a restored snapshot that flipped it
+  used to change the meaning of a verdict whose hash still verified.
   Test: `multiRoundLadder.test.ts` › 'finality = LAST resolved round: verdict
-  outcome + supporting ids from that round only'.
+  outcome + supporting ids from that round only'; `reviewRound7.test.ts` ›
+  '(r41-1) the pending `upheld` flag is re-derived, not trusted…'.
+- **INV-CONF-32b (verdict evidence barrier at finalize — r41-1).** For a
+  CHALLENGED case `finalize` runs `assertValidMassVoteLedger` before it derives
+  anything, so duplicate ballots, off-roster voters, outcomes outside the frozen
+  ballot and malformed event ids are refused here with this machine's typed error
+  (a malformed id used to escape as the VOTE machine's error). The premise:
+  `finalize` READS `state.ladder.votes`, and a restore skips transitions — the
+  round-6 entry matrix classified `finalize` as a pool reader and missed that for
+  a challenged case its evidence is the *vote* ledger. Reachable through
+  `concede`, a stated non-reader.
+  Test: `reviewRound7.test.ts` › '(r41-1) the vote ledger is now re-derived at
+  finalize…', '(r41-1) `finalize` did NOT run that barrier…'.
 - **INV-CONF-33 (non-empty final support — r3-1).** `finalize` refuses a verdict
   with zero supporting event ids, throwing the machine's OWN typed error
   (lines 1156-1169).
@@ -1463,6 +1482,8 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-CONF-15 | quorum gate (economic) | courtConfirmationMachine.ts:795-801 | courtConfirmationMachine.test.ts › fails closed when the confirm quorum never formed |
 | INV-CONF-16 | one confirmation per idx | courtConfirmationMachine.ts:768-776,511-520 | courtConfirmationMachine.test.ts › treats identical redelivery… |
 | INV-CONF-17 | challenge bond binding + one bond witness, one owner (r38-1), re-derived at every pool-reading entry (r40-1) | courtConfirmationMachine.ts:823-843; confirmationMachineHandlers.ts:onAcceptChallenge/onEscalate/onOpenLadderRound; confirmationMachineCore.ts (assertValidConfirmationLedger) | courtConfirmationMachine.test.ts › rejects challenges after the deadline…; reviewRound5.test.ts › one bond witness cannot buy TWO challengers' standing; reviewRound6.test.ts › the barrier runs at EVERY entry that READS the challenge pool |
+| INV-CONF-32 | finality re-derived from the round record + `upheld` derived (r41-1) | confirmationMachineHandlers.ts:onFinalize/deriveFinalVerdict | multiRoundLadder.test.ts › finality = LAST resolved round…; reviewRound7.test.ts › the pending `upheld` flag is re-derived… |
+| INV-CONF-32b | mass-vote evidence barrier at finalize for a challenged case (r41-1) | confirmationMachineHandlers.ts:onFinalize | reviewRound7.test.ts › the vote ledger is now re-derived at finalize… |
 | INV-CONF-18 | no-challenge routing | courtConfirmationMachine.ts:864-874 | courtConfirmationMachine.test.ts › routes to fee_settlement… |
 | INV-CONF-19 | consecutive rounds + cap | courtConfirmationMachine.ts:882-897 | multiRoundLadder.test.ts › hand-restored snapshots…; courtConfirmationMachine.test.ts › enforces consecutive rounds… |
 | INV-CONF-20 | round deadline validity | courtConfirmationMachine.ts:898-899 | courtConfirmationMachine.test.ts › enforces consecutive rounds… |
@@ -1486,7 +1507,6 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-ESC-9 | per-round bond: well-formed, never a membership bond (own OR another juror's), never consumed twice, mandatory under `requireRoundBond` (R31 + R33) | confirmationMachineHandlers.ts:566-620; confirmationMachineCore.ts:377-430 | perRoundBond.test.ts › one bond cannot fund every round; reviewRound4.test.ts › foreign membership bond refused (reducer + finalize) |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |
-| INV-CONF-32 | finality = last round | courtConfirmationMachine.ts:1145-1155 | multiRoundLadder.test.ts › finality = LAST resolved round… |
 | INV-CONF-33 | non-empty final support (r3-1) | courtConfirmationMachine.ts:1156-1169 | propertiesConfirmation.test.ts › P6 r3-1 |
 | INV-CONF-34 | flags ∉ verdict inputs | courtConfirmationMachine.ts:1132-1174 | adversarialCrossModule.test.ts › re-finalizing…IDENTICAL verdictHash |
 | INV-CONF-35 | verdict domain reuse | courtConfirmationMachine.ts:1170-1174 | invariantAssertions.test.ts › domain-binding test |

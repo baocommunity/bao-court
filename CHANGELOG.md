@@ -23,6 +23,45 @@ frozen.
   from `README.md`, paper §11.6 and `CROSS_CHECK.md`. Docs only — no code, no
   fixture, no test touched.
 
+### Fixed (review-round-7 — v0.13.2 and the R41 host fixes attacked)
+- **`finalize` minted a verdict from a vote ledger it never re-derived (r41-1,
+  exploitable).** For a challenged case the verdict's evidence is the last
+  round's VOTE ledger (`state.ladder.votes` → `supportingEventIds` → the hash
+  preimage). `resolve_round` re-derives that ledger, but a restore skips
+  transitions, and `finalize` validated the confirmation ledger, the outcome
+  history and the escalation log — not the votes. Round 6's entry matrix even
+  recorded `concede` as a non-reader "followed by a pool-reading barrier": true
+  of the challenge pool, false of the pool `finalize` reads. Repro: park a
+  restored snapshot at `fee_settlement` (through `concede`), replace the
+  deciding round's ballots with one forged vote plus a matching pending verdict,
+  and `finalize` returned `final` with that outcome and a canonical
+  `verdictHash` — the market pays the losing side of a case both panels voted
+  against. Duplicate ballots inflated the support set, and a malformed event id
+  escaped as the *vote* machine's `CourtVoteTransitionError` instead of this
+  machine's typed refusal. `finalize` now runs `assertValidMassVoteLedger` and
+  derives the verdict from the round's append-only `outcomeHistory` record,
+  requiring the vote ledger to agree with it (round, majority, and the exact
+  winning event-id set). **Consumer impact:** none for legal states — a 40-flow
+  walk (both policies × both authorities × depths 1–5 × never-challenged)
+  finalizes identically and mints identical hashes; a host that restored a
+  tampered snapshot now gets a typed refusal where it used to get a settled
+  verdict.
+- **`verdict.upheld` was copied from the snapshot, not derived (r41-1,
+  same root).** The flag is not in the verdict-hash preimage, so a restored
+  snapshot could flip it and change the meaning of a verdict whose hash still
+  verified. `finalize` now derives it (`record.outcome === proposedOutcome`) and
+  refuses a pending verdict that disagrees.
+- `deriveMaxLadderRounds`' docstring said "monotone non-increasing in `a_f`" —
+  the direction is the opposite (measured: caps 0…5 as accuracy runs 0.30…0.95;
+  a less accurate jury gets a SHALLOWER ladder). Corrected, with the grid pinned
+  (r41-T1-doc). `docs/PER_ROUND_BOND.md` gains the entry-matrix correction
+  (which pool `finalize` reads) and an upgrade checklist for the strict
+  round-bond policy; `docs/FORMAL_INVARIANTS.md` INV-CONF-32/32b keep up.
+- `__tests__/reviewRound7.test.ts` (19) — the four r41-1 closures (all red on
+  the previous head), the non-reader probes, the over-strictness walk, the
+  sign-rule edge probes and two doc pins. Suite **1,758 passed / 1 skipped
+  (79 files + 1 skipped)**.
+
 ### Fixed (review-round-6, the round-5 and round-37 fixes attacked)
 - **A restored challenge ledger bought a FREE rung at `escalate` (r40-1,
   exploitable).** Round 5 bound one `bondProofHash` to one roster index and
