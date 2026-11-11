@@ -581,6 +581,12 @@ function runWitnessUnit(reporter: CampaignReporter, unitSeed: number, stats: Wit
   reporter.equals(label, record.challengerPubkey, witness.challengerPubkey ?? null, 'W3: record.challengerPubkey = the witnessed pubkey');
   reporter.equals(label, record.requestHash, witness.requestHash ?? null, 'W3: record.requestHash = the witnessed request');
   reporter.equals(label, record.bondProofHash, witness.bondProofHash ?? null, 'W3: record.bondProofHash = the witnessed bond');
+  reporter.equals(
+    label,
+    (record as { readonly roundBondProofHash?: string | null }).roundBondProofHash ?? null,
+    (witness as { readonly roundBondProofHash?: string | null }).roundBondProofHash ?? null,
+    'W3: record.roundBondProofHash = the witnessed per-round bond (R31)',
+  );
   reporter.equals(label, record.at, witness.now, 'W3: record.at = event.now');
   reporter.ok(label, Object.isFrozen(record) && Object.isFrozen(accepted.escalationLog), 'W3: the witness log and its records are frozen');
   // ── W4: structural bound + append-only. ──

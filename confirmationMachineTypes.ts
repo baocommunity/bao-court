@@ -119,6 +119,17 @@ export interface CourtEscalationRecord {
   readonly requestHash: string | null;
   /** 32-byte hex bond-proof hash, bound to an accepted challenge bond; `null` for `host`. */
   readonly bondProofHash: string | null;
+  /**
+   * 32-byte hex proof hash of the bond posted FOR THIS ROUND (R31, r30-1) —
+   * `null` on a legacy witness (the v0.12 membership-bond semantics) and for
+   * `host`. `bondProofHash` proves the challenger is a member (it posted the
+   * case's challenge bond once); THIS hash proves the challenger PAID for the
+   * round being opened, and the reducer refuses to reuse one: it must differ
+   * from the membership bond and never appear in an earlier record. It is the
+   * machine-level half of "ΔC_{r+1} = 3^{r+1} b₀" — the amounts are the host's,
+   * the consumption (one fresh witness per round) is the machine's.
+   */
+  readonly roundBondProofHash: string | null;
   /** Caller-supplied clock at the escalation. */
   readonly at: number;
 }
@@ -212,6 +223,17 @@ export interface CourtConfirmationMachineState {
    */
   readonly hostEscalation: boolean;
   /**
+   * Frozen policy: must a CHALLENGER escalation carry a fresh per-round bond
+   * witness (`roundBondProofHash`)? Default `false` — the v0.12 compatibility
+   * default, where one accepted challenge bond funds every round (the
+   * membership test r30-1 priced). Set `true` on NEW deployments: the ladder
+   * then becomes a consumption test — each round consumes one distinct bond
+   * witness, so the marginal cost of round r is the host's per-round bond
+   * rather than zero. Read fail-closed: an absent value on a hand-restored
+   * snapshot is `false` (legacy semantics), never `true`.
+   */
+  readonly requireRoundBond: boolean;
+  /**
    * Append-only witness log of every escalation (INV-ESC-6): one entry per
    * `escalate`, recording who asserted the right and the request/bond hashes
    * the reducer validated. Never rewritten, never truncated.
@@ -287,6 +309,14 @@ export type CourtConfirmationMachineEvent =
        * x-only pubkey, a request hash and the bond hash of an accepted
        * challenge; `host` needs the frozen `hostEscalation` policy and carries
        * no challenger request. `roundIndex` must open exactly the next round.
+       *
+       *   `roundBondProofHash` (optional, R31) is the per-round bond witness: a
+       *   32-byte hash of the bond posted FOR the round being opened. When the
+       *   case was created with `requireRoundBond: true` it is mandatory and
+       *   must never have been used before; when it is supplied at all it is
+       *   validated and consumed, so a host can tighten a legacy case one
+       *   deployment at a time. Omitting it keeps the v0.12 membership
+       *   semantics (one accepted challenge bond per case).
        */
       readonly type: 'escalate';
       readonly authority: CourtEscalationAuthority;
@@ -294,6 +324,7 @@ export type CourtConfirmationMachineEvent =
       readonly challengerPubkey: string | null;
       readonly requestHash: string | null;
       readonly bondProofHash: string | null;
+      readonly roundBondProofHash?: string | null;
       readonly roundIndex: number;
       readonly now: number;
     }

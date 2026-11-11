@@ -238,17 +238,22 @@ describe('T1 the escalate witness — attacked, not re-read', () => {
       .toThrow(/escalation log exceeds/);
   });
 
-  it('one accepted bond can fund every round of the same case (registered residual)', () => {
-    // Documented, not fixed: escalation has no per-round cost, so a challenger
-    // who posted ONE bond can force up to maxLadderRounds-1 additional panels
-    // (3x seats each). Bounded structurally at 5 rounds; the economic answer
-    // (a fresh bond per round) is a design decision, see REVIEW_ROUND_3 §1.4.
+  it('one accepted bond can still fund every round of a LEGACY case, and only there (R31)', () => {
+    // Round-3 residual (reviewRound3 §1.4): escalation has no per-round cost and
+    // `requireRoundBond` defaults to FALSE, so a v0.12 case still lets ONE bond
+    // fund up to maxLadderRounds-1 additional panels (3x seats each). That is
+    // the documented compatibility default, not an oversight: the economic fix
+    // (a fresh bond witness per round) is opt-in per case and pinned in
+    // `__tests__/perRoundBond.test.ts`, where the same two escalations are
+    // refused unless each round carries its own bond hash.
     let s = resolvedRoundOne({ maxLadderRounds: 4 });
+    expect(s.requireRoundBond).toBe(false);
     s = reduceCourtConfirmationMachine(s, escalate(s, 3200));
     s = openRound(s, 2, 4000, 3300, 'YES');
     s = closeAndResolve(s, 4000, 4100);
     s = reduceCourtConfirmationMachine(s, escalate(s, 4200));
     expect(s.escalationLog.map((r) => r.bondProofHash)).toEqual([BOND_PROOF, BOND_PROOF]);
+    expect(s.escalationLog.map((r) => r.roundBondProofHash)).toEqual([null, null]);
   });
 
   it('a pre-0.12 snapshot (no escalationLog) still finalizes — legacy restore is not broken', () => {

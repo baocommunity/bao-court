@@ -183,6 +183,7 @@ describe('escalation authority witness: the machine refuses what the host used t
       challengerPubkey: CHALLENGER_PUBKEY,
       requestHash: REQUEST_HASH,
       bondProofHash: BOND_PROOF,
+      roundBondProofHash: null, // v0.12 membership witness: no per-round bond
       at: 3200,
     });
     // The record is a witness an observer can re-verify, and it is frozen.

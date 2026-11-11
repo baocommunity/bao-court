@@ -9,6 +9,46 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.13.0] — 2026-11-11
+
+### Fixed — the escalation bond is a consumption test, not a membership test (R31, r30-1)
+`docs/proofs/economics/06-expert-verify.tex.md` §1 showed that one accepted
+challenge bond authorised every ladder round (`ΔC_{r+1} = 0`): escalation was a
+free option worth `Σ 3^r b₀` (363 b₀ at the protocol cap), eroding the
+unmerited challenger's burn from −2.40 % to −1.86 % of V at the shipped cap and
+to −0.543 % (a 77 % loss of deterrence) at the protocol cap.
+
+- **Wire:** `CourtEscalationRecord.roundBondProofHash` + `escalate.roundBondProofHash`
+  + the frozen policy `CourtConfirmationMachineState.requireRoundBond`. The
+  reducer refuses a missing per-round witness on a strict case, a relabelled
+  membership bond, and a hash an earlier round already consumed;
+  `assertValidEscalationLog` re-derives all three rules at `finalize`, so a
+  restored snapshot cannot re-open the option. **Consumer impact:** the new
+  record field is additive and `requireRoundBond` defaults to `false` — existing
+  cases, snapshots and hosts keep the v0.12 semantics. Full compatibility
+  matrix: `docs/PER_ROUND_BOND.md`.
+- **Economics module:** `ladderEconomics.ts` —
+  `deriveMaxLadderRounds({a_f, rho, beta})` (the boxed cap rule of 06 §1.5,
+  `floor(ln(ρ/(ρ+β))/ln a_f)`, clamped to the machine ceiling),
+  `deriveLadderFlipRound` (the first *profitable* round: 7/5/3 at
+  `a_f = 0.9/0.85/0.75`), `escalationOptionEv`, `ladderCapWithinBound`, and the
+  per-round bond schedule (`ΔC_R = 3^R b₀`, cumulative 4/13/40/121/364×).
+- **Decay pairing (r30-4):** `penaltyAging.ts` — `agePenalties(penalties, epochs)`
+  ages a penalty at the SAME `λ = ln2/3` as the commitment, on the participating
+  clock, and `pairedJurorWeight` anchors the decay at the floor. Idleness never
+  hands weight back; recovery is bought with participation. Pinned against 06
+  §4.2: the paired curve never exceeds the cliff it replaced (0.5000 flat at
+  6/6) and is never worse than the shipped ramp (0.6298 at 6/6).
+
+### Tests
+- `__tests__/perRoundBond.test.ts` (12) — the compatibility matrix from the
+  reducer boundary + three tampered-snapshot finalize refusals.
+- `__tests__/ladderEconomics.test.ts` (12) — the published cap/flip/EV numbers
+  and monotonicity, asserted by sign rather than by formula.
+- `__tests__/penaltyAging.test.ts` (13) — the pairing, the cliff/ramp curves.
+- Model checker P2 gains the consumption invariant; the witness fuzz corpus (W3)
+  pins the recorded per-round bond.
+
 ## [0.12.1] — 2026-11-11
 
 ### Fixed (review-round-3, PR #95)

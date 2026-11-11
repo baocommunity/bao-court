@@ -763,6 +763,22 @@ escalate {
   › 'a forged escalation record on a restored snapshot is refused at finalize';
   › 'a host-authority record cannot appear on a case that never allowed it';
   › 'a pre-0.12 snapshot (no escalationLog) still finalizes'.
+- **INV-ESC-9 (per-round bond consumption — R31, r30-1).** The witness may carry
+  a per-round bond (`roundBondProofHash`): a bond posted for the round being
+  opened, bound to it by the `roundIndex === ladderRound + 1` guard and by the
+  append-only log. When present it must be well-formed 32-byte lowercase hex, be
+  **distinct from the membership bond** (`bondProofHash` — relabelling the one
+  payment is not a payment) and **never consumed by an earlier record**. When
+  the frozen policy sets `requireRoundBond`, a `challenger` record without one is
+  refused (break-glass `hostEscalation` cases excepted: the host may already
+  escalate with no bond at all, so charging the challenger prices nothing). A
+  `host` record must never carry one. `assertValidEscalationLog` re-derives all
+  three rules at `finalize`, so a restored snapshot cannot re-open the option,
+  and the log's `MAX_LADDER_ROUNDS` bound bounds the consumption set. Guards:
+  `confirmationMachineHandlers.ts:522-590` (`onEscalate`),
+  `confirmationMachineCore.ts:347-396` (`assertValidEscalationLog`). Tests:
+  `perRoundBond.test.ts` (the whole compatibility matrix, `docs/PER_ROUND_BOND.md`);
+  `modelCheckingCore.ts` P2 (consumption invariant on every reachable state).
 
 **Open (round 3):** `concede` carries no witness yet (SPEC §9.2 ESC-RIGHT-3
 asks for the challenger's own signed concession). A host may therefore still
@@ -1416,6 +1432,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-ESC-6 | escalation witness log append-only (+ pre-0.12 normalisation) | confirmationMachineHandlers.ts:584-588; courtConfirmationMachine.ts:407-412 | escalationWitness.test.ts › witness recorded append-only; legacy snapshot normalises |
 | INV-ESC-7 | `ladder_pending` unreachable without a witness | confirmationMachineHandlers.ts:487-588 | escalationWitness.test.ts › ladder_pending is reachable ONLY through a witnessed escalation |
 | INV-ESC-8 | witness log tamper barrier at finalize (+ legacy short-log acceptance) | confirmationMachineCore.ts:313-413; confirmationMachineHandlers.ts:692 | reviewRound3.test.ts › forged escalation record refused at finalize |
+| INV-ESC-9 | per-round bond: distinct from the membership bond, consumed at most once, mandatory under `requireRoundBond` (R31) | confirmationMachineHandlers.ts:522-590; confirmationMachineCore.ts:347-396 | perRoundBond.test.ts › one bond cannot fund every round; › finalize refuses a restored record that reuses a per-round bond |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |
 | INV-CONF-32 | finality = last round | courtConfirmationMachine.ts:1145-1155 | multiRoundLadder.test.ts › finality = LAST resolved round… |
