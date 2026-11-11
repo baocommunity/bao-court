@@ -117,12 +117,12 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 - The audit produced 12 findings (F-1…F-12); the substantive F-12 (machines lacked a monotonic clock ledger → stale-timestamped replays were admissible) shipped in v0.9.2.
 - *Artifact:* FORMAL_INVARIANTS.md; CROSS_CHECK.md §1 (counts are printed by the cross-check script).
 
-### Slide 8 — "3.1M states, zero untyped throws"
-- Exhaustive finite-state exploration of the three ceremony machines: **3,149,142 concrete states · 134.8M event applications · 118.4M typed throws · 0 raw `TypeError`/`RangeError`** (13 instances).
-- Properties asserted on **every edge**: phase legality (P1), data invariants incl. real SHA-256 re-derivation and real secp256k1 nonce points (P2), no dead ends (P3), acyclic progress graph (P4), determinism — 2,600 replayed paths, all byte-identical (P5).
-- Honest scope: explored rosters are n ≤ 4 because state spaces grow combinatorially — but the properties are checked on the machines' **own reducer code paths**, not a model of them.
-- The checking cost was itself optimized: signing-machine reduce **3,340 µs → 110 µs (30×)** made the equivocation-variant instances tractable.
-- *Artifact:* `__fixtures__/model-check-summary.json` (regenerable: `npx tsx scripts/model-check.mjs`); EVALUATION §2.1; paper §11.2.
+### Slide 8 — "3.9M states, zero untyped throws, zero illegal witnesses accepted"
+- Exhaustive finite-state exploration of the three ceremony machines: **3,869,232 concrete states · 213.5M event applications · 195.0M typed throws · 0 raw `TypeError`/`RangeError`** (15 instances), plus **60,020,684 illegal escalation-witness probes with 0 accepted** at every reachable state.
+- Properties asserted on **every edge**: phase legality (P1), data invariants incl. real SHA-256 re-derivation and real secp256k1 nonce points (P2), no dead ends (P3), acyclic progress graph (P4), determinism — 3,000 replayed paths, all byte-identical (P5), illegal-witness immunity (P6), witness-log bound (P7).
+- Honest scope: explored rosters are n ≤ 4 because state spaces grow combinatorially — but the properties are checked on the machines' **own reducer code paths**, not a model of them. Two of the checker's own fixture defects (MC-F7, MC-F8) are published: a sweep is only as good as the fixtures it dispatches, and one property here *mirrored* the bug it was meant to catch (r29-1).
+- The checking cost was itself optimized: signing-machine reduce **3,340 µs → 110 µs (30×)** made the equivocation-variant instances tractable; witness probing (not exploration) is now the sweep's dominant cost (2,525 s full mode).
+- *Artifact:* `__fixtures__/model-check-summary.json` (regenerable: `npx tsx scripts/model-check.mjs`); `docs/benchmarks/SCALE_CAMPAIGN.md` §2.1; EVALUATION §2.1; paper §11.2.
 
 ### Slide 9 — "Differential parity: zero disagreements"
 - Every critical pure function is **reimplemented independently** — different algorithm, different library, same contract — and asserted to agree: CanonicalWriter (byte-identity/prefix-freeness/injectivity), batch Merkle (exhaustive n=1..128, 8,256 proofs), all 64 v2 hash-field subsets (`node:crypto` vs `@noble`), the selection lottery (exact + statistical chi-square over 100k draws), plurality tie-break (exhaustive 3^n).
@@ -166,7 +166,7 @@ Slide budget: **14 slides + 1 live demo slide** ≈ 2 min/slide average.
 - *Artifact:* docs/benchmarks/BASELINE.md; EVALUATION §4; FIGURES.md F4.
 
 ### Slide 14 — "Claim coverage: 95.1%, machine-checked"
-- 283 claims indexed across the four sources (invariants, paper, crypto audit, model-check/bench/suite meta-claims); **512 evidence refs resolve**, and the **14 open obligations** (of an 18-entry gap register, 4 closed) are registered with a planned proof — the open list *is* the roadmap. Both counts are printed by `node scripts/cross-check.mjs`.
+- 285 claims indexed across the four sources (invariants, paper, crypto audit, model-check/bench/suite meta-claims); **516 evidence refs resolve**, and the **14 open obligations** (of an 18-entry gap register, 4 closed) are registered with a planned proof — the open list *is* the roadmap. Both counts are printed by `node scripts/cross-check.mjs`.
 - The coverage number is itself machine-checked: `node scripts/cross-check.mjs` verifies every evidence pointer (tests exist, fixtures hold, instances match) and **exits non-zero on a dangling pointer** — the claims cannot drift silently.
 - **The audit program as methodology** (paper §11.5): each round picks an attack surface, records what it finds, lands the disposition — rounds 1–3 adversarial, formal audit, model checking, literature audit, differential parity, performance, host-side mechanism audit. Not "the authors assert" but "the round that owns this claim pinned it, and the pin regenerates from one command."
 - One-command reproducibility: `bash scripts/reproduce.sh` regenerates every artifact from a clean clone — committed run: **REPRODUCED, every artifact PASS** (999.9s).

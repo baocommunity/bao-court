@@ -279,7 +279,12 @@ The exhaustive model checker (`__tests__/modelCheckingCore.ts`,
 13 instances, **3 145 632 states**, **128 522 740 event applications**,
 **0 raw (untyped) throws**, properties P1–P5 + typed-error discipline at every
 reachable state (documented abstraction limits L1–L3 in the core header:
-bounded symbolic clock, real-but-small crypto, bounded rosters).
+bounded symbolic clock, real-but-small crypto, bounded rosters). The current
+witness-aware sweep is 15 instances / **3 869 232 states** /
+**213 521 172 applications** / **60 020 684 illegal-witness probes, 0
+accepted** (`__fixtures__/model-check-summary.json`); the theorem below is
+independent of which sweep is current, since it ranges over all event
+sequences.
 
 The two methods are complementary and neither subsumes the other:
 

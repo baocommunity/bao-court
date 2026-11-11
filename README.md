@@ -40,7 +40,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`FROST_COURT_ORACLE_PAPER.md`](docs/FROST_COURT_ORACLE_PAPER.md) | the protocol paper — architecture, math, security analysis, related work, evaluation, scope of verification, production gates, artifact provenance (App. A) |
 | [`FAQ.md`](docs/FAQ.md) | short answers to common questions |
 | [`GLOSSARY.md`](docs/GLOSSARY.md) | normative domain vocabulary |
-| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 156 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
+| [`FORMAL_INVARIANTS.md`](docs/FORMAL_INVARIANTS.md) | all 158 `INV-*` invariants extracted from the actual guards, each with its pinning test (§15: error-taxonomy registry) |
 | [`proofs/`](docs/proofs/) | the mathematical proofs: encoding injectivity, Merkle soundness, tally well-definedness, machine safety (all-n induction over the model checking), attestation soundness, **attribution** (Theorem 6) — premises registry + reviewer's checking guide |
 | [`THREAT_MODEL.md`](docs/THREAT_MODEL.md) | threat model and security argument |
 | [`CRYPTO_AUDIT.md`](docs/CRYPTO_AUDIT.md) | cryptography literature audit — design choices vs the FROST literature, dispositions |
@@ -50,7 +50,9 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`REVIEW_ROUND_2.md`](docs/REVIEW_ROUND_2.md) | round-2 audit: does each shipped fix answer the reviewer's objection? verdicts, new issues, and what round 3 still owes |
 | [`REVIEW_ROUND_3.md`](docs/REVIEW_ROUND_3.md) | round-3 audit: attacks the surface the round-2 fixes created (escalate witness, economic cap, deterministic budget, witness×finality) — findings, shipped fixes, registered residuals |
 | [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
-| [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: 1.17M seeded cases / 3.5M assertions across the six production surfaces, the committed artifact, and what the sizes buy statistically |
+| [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: **1,187,000** seeded cases / **3,745,566** assertions across nine campaigns (incl. the witness-aware model-check tables) and what the sizes buy statistically |
+| [`PER_ROUND_BOND.md`](docs/PER_ROUND_BOND.md) | the v0.13 escalation bond: a **consumption** test per rung (`ΔC_R = 3^R b₀`), the compatibility matrix, the derived ladder cap and flip round |
+| [`MULTI_PROCESS_CEREMONY.md`](docs/MULTI_PROCESS_CEREMONY.md) | the ceremony across N real OS processes (kill/replay chaos) — and, in the same words, what localhost does **not** prove |
 | [`MUTATION_TESTING.md`](docs/MUTATION_TESTING.md) | the spec's blindness audit: 53 mutants × 18 bug classes, 3 detectors, the 7 survivors found and the pins that close them |
 | [`REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) | one-command reproduction contract (`scripts/reproduce.sh`), variance bounds, committed repro record |
 | [`ESCROW-SLASHING.md`](docs/ESCROW-SLASHING.md) | escrow lifecycle and slashing math |
@@ -488,7 +490,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (1,561 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (1,656 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit

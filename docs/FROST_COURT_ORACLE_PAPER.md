@@ -52,9 +52,19 @@ threshold signing, attestation validation, slashing, and both settlement rails
 the design: line-checked proofs of six core properties, exhaustive
 *reachability* model checking of three of the four ceremony machines on bounded
 instances (rosters $n \le 4$, reduced clock universes; the DKG machine is
-invariant-pinned only), in-house differential
+invariant-pinned only) with **witness-aware** probing — 15 instances,
+3,869,232 states, 60,020,684 illegal escalation witnesses dispatched, none
+accepted — in-house differential
 parity over every critical pure function, a regenerable performance baseline,
-and a round-by-round cryptographic literature audit (§11, §13).
+statistical corpora of 1,187,000 seeded cases / 3,745,566 assertions, a
+three-day fault-injected soak of the host pipeline at 30,000 settlements, and a
+ceremony run across real OS processes (honestly scoped to one host), plus a
+round-by-round cryptographic literature audit. The program also turns on
+itself: every round attacks the fixes the round before shipped, and that
+re-attack — not an outside reviewer — found three of its own shipped defects
+(a bond-free escalation, a durable inbox a 65-relay delivery could brick, and a
+ladder bond that priced *membership* rather than *consumption*). §11.6 states
+that methodology and §13 labels what it does and does not establish.
 
 **Keywords:** threshold signatures, FROST, distributed key generation,
 prediction markets, dispute resolution, Nostr, Bitcoin, Liquid, Lightning.
@@ -125,6 +135,18 @@ Schnorr constructions.
 6. **Epoch cohorts and batch attestations** — one DKG and one threshold
    signature per epoch cohort, certifying a whole verdict cohort through an
    RFC-6962 Merkle batch with in-band finality binding (§7).
+7. **A self-attacking assurance case** — the verification program treats its own
+   fixes as attack surface. Each round re-derives the threat model against the
+   code the previous round shipped, grades a finding `EXPLOITABLE` only when a
+   test demonstrates the harm, and re-runs the whole battery on the next head.
+   It has found its own exploits (r29-1: the escalation bond was bound to the
+   case rather than the challenger), its own operational brick (T-1: a 65-relay
+   delivery made a durable inbox unrestorable), and its own economic hole
+   (r30-1: the ladder bond was a membership test, so escalation was a free
+   option) — and its own **stale evidence** (SOAK-F8: the soak had been silently
+   red on `main` for two protocol rounds). §11.6 names the method and its
+   limits; §13 keeps it in the evidence taxonomy rather than treating it as a
+   verdict.
 
 ### 1.5 Related work
 
@@ -633,15 +655,23 @@ grant.** The confirmation spec makes `escalate` a **bonded
 challenger's right** (ESC-RIGHT-1…5): while the challenger's window is open
 the host may neither escalate nor concede, and operator discretion is
 break-glass only (`BAO_COURT_HOST_ESCALATION`, default off). **The protocol
-machine now verifies that authorisation itself** (INV-ESC-1…8,
+machine now verifies that authorisation itself** (INV-ESC-1…9,
 `docs/FORMAL_INVARIANTS.md` §5.9): `escalate` carries an authority witness
 (`authority`, `challengerIdx`, `challengerPubkey`, `requestHash`,
-`bondProofHash`, `roundIndex`), and the reducer — not the host API — refuses an
-unwitnessed escalation, a witness for any round other than
-`ladderRound + 1`, a challenger outside the case roster, a bond hash the case
-never accepted, or a host escalation outside the frozen break-glass policy;
-the accepted witness is appended to `escalationLog`. A host that bypasses its
-own endpoint therefore no longer holds the appeal power. What remains open is
+`bondProofHash`, `roundIndex`, and — since v0.13 — `roundBondProofHash`), and
+the reducer — not the host API — refuses an unwitnessed escalation, a witness
+for any round other than `ladderRound + 1`, a challenger outside the case
+roster, a bond hash the case never accepted, a bond hash accepted from a
+*different* challenger, a host escalation outside the frozen break-glass
+policy, and (on a case created with `requireRoundBond`, default **off** for
+compatibility) a rung that arrives without its own consumed bond. The accepted
+witness is appended to `escalationLog`, which `finalize` re-verifies
+(INV-ESC-8). A host that bypasses its own endpoint therefore no longer holds the
+appeal power. Two properties of the ladder are *economic*, not structural, and
+are specified separately: the challenge bond is a **consumption** test per
+round, not a membership test (v0.13.0, §8.4), and the ladder depth a deployment
+may price is derived from its measured accuracy rather than chosen
+(`deriveMaxLadderRounds`, §8.4). What remains open is
 the symmetric witness on `concede` (the challenger's own signed concession,
 ESC-RIGHT-3), which v1 still leaves to the host API.
 
@@ -856,6 +886,58 @@ provided (i) the slash exceeds the bribe a juror can capture, and (ii)
 selection is unpredictable (§4). The 50%/100% split distinguishes *wrong*
 from *absent or equivocating*: incoherence may be honest error; non-reveal
 and double-voting are protocol violations and are priced accordingly.
+
+**The escalation bond is a consumption test, not a membership test.** A witness
+is a structural guard; it says nothing about what the ladder *costs*. The
+economic re-verify of the post-fix layer found that v0.12's witness admitted any
+bond the challenger had ever posted, so one payment authorised every rung
+($\Delta C_{r+1} = 0$ for every $r$) — escalation was a **free option** worth
+$\sum_{r} 3^r b_0 = 363\,b_0$ at the protocol cap. Measured: the unmerited
+challenger's burn fell from −2.40 % to −1.86 % of $V$ at the shipped cap
+($R = 2$) and to −0.543 % at the protocol cap ($R = 5$, i.e. 77.4 % of the
+deterrence gone), and the venue-cost ÷ griefer-loss ratio rose from 0.86× at
+$R = 2$ to 54.1× at $R = 5$ ($c_s = 500$). v0.13.0 makes the bond a **consumption**
+test: the witness carries `roundBondProofHash`, the reducer refuses a missing
+per-round bond on a strict case (`requireRoundBond`, default off so existing
+cases keep v0.12 semantics), a relabelled membership bond, and a hash an earlier
+round already consumed, and `assertValidEscalationLog` re-derives all three
+rules at `finalize` so a restored snapshot cannot re-open the option
+(INV-ESC-9; App. A, S-18). The price curve is the specification's
+$\Delta C_R = 3^R b_0$ on top of the challenge bond — cumulative
+4 / 13 / 40 / 121 / 364× at $R = 1..5$ — and *the amounts stay host policy*,
+which the machine cannot see.
+
+**The ladder cap is derived, with a flip-round subtlety.** A deployment's
+admissible depth is a function of its measured accuracy, not a preference:
+`deriveMaxLadderRounds({a_f, ρ, β})` computes
+$\lfloor \ln(\rho/(\rho+\beta)) / \ln a_f \rfloor$ and clamps it to the machine
+ceiling (5) — 6 / 4 / 2 at $a_f = 0.90 / 0.85 / 0.75$, hence 5 / 4 / 2 once
+clamped. `deriveLadderFlipRound` returns the first round that is *profitable* to
+challenge (7 / 5 / 3 at the same accuracies), which is exactly **one above** the
+safe bound: alerting on the flip round is one round late, so the cap must be
+derived from the safe bound and the flip round used only as an alert. Both
+functions are pure, published, and pinned to the numbers of the economics
+re-verify (App. A, S-21 §1.5).
+
+**Two corrections the re-verify forced, in opposite directions.** (i) The brief
+that prompted it assumed a weaker-than-supermajority confirm quorum *loosens*
+the economic cap. It does not: the cap of the gap-fills note is the $\pi = ½$
+slice of a family $V_{\max}(\pi)$, and a weaker quorum **tightens** it by
+$\kappa_q = 2.75$–$4.64$ — so the correction is slack, not exposure (r30-3,
+**SAFE**, premise corrected). (ii) A frozen ladder configuration is a *ceiling*,
+not a guarantee: the panel a cohort can actually seat is
+$\min(N_{\text{cfg}}, \text{drawable})$, and a 135-seat configuration churned to
+45 seats is **2.47× short** of its own invariant, its honest cap falling to
+101,250 sats (r30-2). The host closes it by re-deriving the cap at the
+effective $N$ and refusing deposits/escalations that breach it while never
+blocking a concession (`min(cap at creation, cap effective now)`; the
+quorum-aware table tightens a 45-seat cap to 21,838 sats at a 3-of-5 quorum —
+host PRs #2413, #2417). Decay pairing (r30-4) is the same shape of correction:
+idle decay replaced a reset cliff with a ramp that dominates the cliff's average
+at every cycle (+26.0 % at 6-of-6), so idleness is *cheaper*, not free —
+`penaltyAging.ts` anchors the decay at the floor and prices recovery with
+participation. None of these is a protocol-safety finding; all are the
+incentive layer doing its job under measurement rather than assertion.
 
 ---
 
@@ -1106,6 +1188,26 @@ preimage matches the published witness) plus the host's cancel-before-release
 ordering. Registered as PO-16; the script-enforced panel (B) does not have this
 exposure.
 
+**P. Bond-free escalation, and the free option.** Two defects in the escalation
+path were found by attacking the fix that created it, not by reading it. (i) The
+v0.12 witness bound the bond hash to the *case*: a juror holding no bond could
+escalate by quoting a bonded juror's accepted hash, and — because the
+append-only log is the artifact hosts use to attribute misconduct and price fees
+— the log named the wrong challenger against the wrong bond (r29-1,
+**EXPLOITABLE**, fixed in the reducer by requiring the challenge's index *and*
+hash to be the challenger's own). Its residual is that the witness binds a bond
+to an *index*, while `challengerPubkey` stays caller-supplied and unverified
+against any registry (r29-5, which needs an idx→pubkey pin in the case state —
+registered for the next API change). (ii) The same
+witness admitted any bond the challenger had ever posted, so one payment bought
+every rung and escalation was a free option worth 363 $b_0$ at the protocol cap
+(r30-1, fixed in v0.13.0 by the per-round consumption test, §8.4). The bounded
+residual is that amounts are host policy and a case may still be created with
+the legacy membership semantics (`requireRoundBond: false`, the compatibility
+default). *Both defects are structural-or-economic, both are now pinned by
+tests, and neither was visible to the model checker before the witness event
+existed — see §11.6 for why that matters.*
+
 ### 10.3 Fail-closed invariants (implementation-level)
 
 - **Unanimous-roster DKG** — any disqualification aborts; subset keys are
@@ -1152,7 +1254,9 @@ adapters. The module map is in App. A.2.
 ### 11.1 Suite, simulation, and review record
 
 - **Suite:** the full test suite is green and the typecheck is clean (source,
-  scripts, and tests are all typechecked). Coverage includes:
+  scripts, and tests are all typechecked) — **1,656 passing, 1
+  environment-gated live test skipped, over 74 files**, re-measured on this head
+  (App. A.4; per-round record in App. A.1, S-12 §1). Coverage includes:
   BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
   complaints rejected, genuine grievances disqualify, false complaints
@@ -1160,7 +1264,10 @@ adapters. The module map is in App. A.2.
   unwrap, escrow redistribution branches and integrity, LN ledger decisions,
   Liquid script/witness/skeleton correctness, adversarial parser fuzzing,
   the universal-confirmation pipeline and multi-round ladder, batch
-  attestation trees/proofs/validators, v2 finality binding, and the
+  attestation trees/proofs/validators, v2 finality binding, the escalation
+  witness and its per-round bond consumption, the derived ladder economics and
+  penalty ageing, the NIP-59 seal-layer and MLS-transport games, inbox/outbox
+  provenance bounds under a 10k-event flood, and the
   adversarial machine/relay/validator suites (§10.2). What the suite does and
   does not establish is §13's business, not this list's.
 - **Whole-court simulation:** deterministic, hermetic execution of the
@@ -1169,12 +1276,17 @@ adapters. The module map is in App. A.2.
   (kind 39007 with full context), escrow slashing plan with integrity check, LN
   hold settle/cancel via the `LnRail` contract, Liquid escrow address + release
   skeleton + broadcast via the `LiquidRail` fake. Same seed ⇒ same group key,
-  same Liquid address, same decisions. This is the executable backing for every
+  same Liquid address, same decisions. The wall-clock gate is a
+  **deterministic budget** (`SIM_BUDGET_MS`, default 30 s) preceded by
+  behavioural assertions, and the helper itself is pinned — a mutant returning
+  an infinite ceiling had survived all 23 budgeted tests, which is how the gap
+  was found (r29-10, §11.6). This is the executable backing for every
   claim above: each section maps to running, tested behaviour.
 - **Review record:** the repository's findings documents, the normative
-  invariant reference, the complaint-protocol note, and the
-  cryptographic-literature audit — consolidated, with their file locations, in
-  App. A.3 and A.5.
+  invariant reference, the complaint-protocol note, the three review-round
+  audits (`docs/REVIEW_ROUND_2.md`, `docs/REVIEW_ROUND_3.md`), the per-round
+  bond note, the multi-process ceremony note, and the cryptographic-literature
+  audit — consolidated, with their file locations, in App. A.1 and A.5.
 
 ### 11.2 Exhaustive model checking
 
@@ -1201,26 +1313,58 @@ at every step:
   creation, twice, byte-identical states;
 - **typed-error discipline** — every illegal event application throws the
   machine's *own* error class; any raw `TypeError`/`RangeError` fails the
-  instance.
+  instance;
+- **P6 illegal-witness immunity** — since v0.12 the confirmation machines have a
+  witness-gated `escalate`, so the explorer dispatches an **illegal escalation
+  witness matrix at every reachable state** (wrong authority, foreign
+  challenger, non-roster challenger, malformed hash, bond the case never
+  accepted, another challenger's bond, wrong round, replay of a consumed
+  per-round bond, host authority without the frozen policy, oversized values).
+  Any acceptance fails the instance outright;
+- **P7 witness-log bound** — `escalationLog` never exceeds
+  `min(maxLadderRounds, MAX_LADDER_ROUNDS)` at any state, and every terminal
+  phase refuses a *perfect* witness (the terminal-absorption case).
 
 The committed sweep fixture — regenerable from one command (App. A.4) —
-covers 13 instances:
+covers **15 instances**:
 
 | Metric | Value |
 |---|---|
-| Concrete states explored | **3,149,142** |
-| Event applications | **134,838,724** |
-| Illegal-event checks (typed rejection exercised) | 74,349,832 |
-| Typed throws | 118,387,556 |
+| Concrete states explored | **3,869,232** |
+| Event applications | **213,521,172** |
+| Illegal-event checks (typed rejection exercised) | 145,907,861 |
+| Typed throws | 195,033,132 |
+| **Illegal escalation witnesses dispatched** | **60,020,684** |
+| **Illegal witnesses accepted** | **0** |
+| Max observed `escalationLog` depth | 2 |
 | **Raw throws (`TypeError`/`RangeError`)** | **0** |
-| Progress edges / idempotent self-loops | 11,718,124 / 4,733,044 |
-| Determinism paths replayed | 2,600 (all byte-identical) |
+| Progress edges / idempotent self-loops | 12,796,460 / 5,691,580 |
+| Determinism paths replayed | 3,000 (all byte-identical) |
+
+The two instances the witness surface added are
+`confirm n=3 q=1 r=2 escalate-witness challengers=1,2` (537,825 states,
+18,271,978 witness probes) and `confirm n=3 q=1 r=3 host-escalation` (182,265
+states, 6,188,788 probes); all six confirmation instances together account for
+60,020,684 probes, and probing — not exploration — is now the sweep's dominant
+cost (2,525 s full-mode versus 1,196 s for the pre-witness sweep).
 
 Abstraction limits are stated honestly: explored rosters are small
 (n ≤ 3–4, reduced clocks), because the state space grows combinatorially —
 but the explored transitions are the machines' *own* reducer code paths, so
 the properties are checked on the production guards, not on a model of
-them. **Scope note:** the DKG machine (`courtDkgMachine.ts`, INV-DKG-1…12) is
+them. Two findings about the *checker* belong here rather than in a changelog,
+because they are what a bounded explorer can and cannot claim:
+**MC-F7** — a variant instance whose state space equals its base's is not
+exercising what it claims (the partial-equivocation instance was repaired from a
+vacuous 19,822 to 116,906 states), and **MC-F8** — the same class one level down:
+the witness fixtures were all-digit hex, so the "uppercase hex" probe was a
+no-op until the illegal-witness assertion caught it. Both are recorded in App.
+A.3, and both say the same thing: *a sweep is only as good as the fixtures it
+dispatches.* The complementary lesson is §11.6's: an independent property that
+mirrors the implementation cannot catch the mirror — this explorer's own
+escalation-bond property had codified the same weak predicate that r29-1
+exploited, and it agreed with the bug until the attack rewrote the property.
+**Scope note:** the DKG machine (`courtDkgMachine.ts`, INV-DKG-1…12) is
 *not* in the exhaustive sweep, by design: its peer events carry cryptographic
 payloads (encrypted shares, PoKs) whose validity is decided outside the
 reducer, so state-space exploration would mostly exercise typed rejection of
@@ -1266,7 +1410,10 @@ name is deliberate: the second implementation is a readable restatement of the
 *specification*, so this suite pins the spec — not the code — and a future
 rewrite that changes observable behaviour fails here first. What it cannot pin
 is a specification both sides misread; only the third-party FROST
-cross-implementation differential of §12.5 (still open) can do that.
+cross-implementation differential of §12.5 (still open) can do that. The same
+limitation applies with more force to the model checker (§11.2): a property that
+restates the guard it checks inherits that guard's misreading — r29-1 is the
+case where it did, and §11.6 is the method that caught it.
 
 ### 11.4 Performance baseline
 
@@ -1365,6 +1512,21 @@ caught overclaims, unstated assumptions, missing related work, and imprecise
 statements — which is what a careful reader of a text can do — and they are
 not a security audit of the system the text describes.
 
+**4. Fix-and-re-attack rounds (rounds 29–31, 2026-11-11).** The program then
+turned on itself: each round took the *fixes* the previous round shipped and
+attacked them as an adversary holding the reducer, the HTTP route, or the env
+var. This tier found: a **bond-free escalation** (r29-1, `EXPLOITABLE` — a juror
+with no bond quoting a bonded juror's hash, with the audit log naming the wrong
+challenger), a **durable inbox that a 65-relay delivery could brick** (T-1), a
+**ladder bond that priced membership instead of consumption** (r30-1 — escalation
+as a free option worth 363 $b_0$), a **vacuous test ceiling** that had survived
+all 23 budgeted tests (r29-10), and — against its own instrumentation — a soak
+that had been **red on `main` for two protocol rounds** without anyone noticing
+(SOAK-F8). §11.6 states the method, what it is worth, and what it is not; it is
+the strongest contributory evidence in this paper in the specific sense that it
+is the only tier whose findings were *unknown to the authors until the tier
+looked*.
+
 **What none of this is.** No independent human cryptographer has reviewed this
 design. No third-party security audit, side-channel analysis, or supply-chain
 audit has been performed. Nothing here has been peer-reviewed, and this
@@ -1376,6 +1538,135 @@ The methodology a reviewer should apply is therefore: not "the authors
 assert", but "this claim is anchored to a proof, a machine-checked bound, a
 measurement, or a named open obligation — and here is the artifact that says
 which".
+
+### 11.6 The review verifies itself
+
+The fourth tier above is not a review of the paper. It is a review of the
+**fixes**, and it is the part of the program that produced this paper's most
+uncomfortable results — so its method and its limits are stated here rather than
+implied.
+
+**Method.** Round $n+1$ takes the artifacts round $n$ shipped as its attack
+surface. The attacker is not a reader but a caller: it holds the reducer, the
+HTTP route, or the environment variable, and it is bound by one grading rule —
+a finding is **`EXPLOITABLE` only when a test in the repository (or a cited host
+code path) demonstrates the harm**; otherwise it is **`PARTIAL`** (the guard
+exists but is incomplete) or **`BLOCKED`**, with the guard cited by file and
+line. Two instruments make the grade auditable rather than rhetorical: the new
+tests must *fail before* the fix and pass after (round 29: 15 targeted tests, 4
+of them red on the pre-fix head), and **mutation probes** ask whether the
+existing suite notices when a guard is removed (a mutant returning an infinite
+simulation ceiling survived all 23 budgeted tests — the ceiling was decorative).
+
+**Why it is stronger than it sounds.** It is the only tier whose findings were
+*unknown to the authors until the tier looked*, and it caught three classes that
+a reading review does not reach: a **binding asserted in prose but not in the
+reducer** (r29-1: the bond was bound to the case, not to the challenger, so a
+non-bonded juror could escalate and the audit log named the wrong person); an
+**operational brick reachable without a key** (T-1: an inbox that a 65-relay
+delivery made unrestorable, i.e. every message lost on the next restart); and an
+**economic hole inside a structural guard** (r30-1: the witness proved *a bond
+exists*, not that *this rung was paid for*, so one bond bought the whole ladder).
+The two findings are also the reason this paper does not treat its own model
+checker as an independent witness: the explorer's escalation-bond property
+**mirrored the weak predicate** and agreed with the bug (r29-1). A mirror cannot
+catch a mirror; the attack — re-deriving the binding from the threat model,
+per-actor — is a genuinely different method, and that is the taxonomy claim
+being made here.
+
+| Self-found defect | How it survived | Fix and pin |
+|---|---|---|
+| **r29-1** — bond bound to the case, not the challenger (`EXPLOITABLE`) | the witness proved *some* accepted bond existed; the factory helper checked the challenger, but the hostile-host threat model speaks the reducer directly; the model-check property restated the same weak check | reducer requires `challenge.idx === challengerIdx` ∧ hash match; INV-ESC-5 restated, model-check property corrected, 2 failing tests now green; residual r29-5 (idx→pubkey pin) |
+| **T-1** — 65-relay provenance overflow bricks the durable inbox | `ingest` appended one URL per relay without a cap; `fromSnapshot` rejects > 64 relays as `corrupt_snapshot`, so *one* wrap delivered by 65+ relays made the whole inbox unrestorable — no key required | cap provenance at the first 64 distinct sources (delivery order), keep advancing `lastSeen`, keep restore strict; regression in the load suite |
+| **r30-1** — the ladder bond was a membership test | the witness admitted any bond the challenger had ever posted, so $\Delta C_{r+1} = 0$; the structural invariant held while the price was zero | v0.13.0 per-round consumption (INV-ESC-9) + `assertValidEscalationLog` re-derivation at `finalize`; compatibility matrix and 12 tests |
+| **r29-10** — a vacuous test ceiling | the budget helper was unpinned, so a mutant returning `Infinity` passed every budgeted assertion | the helper's default, junk fallback, override and ordering are asserted (3 tests) |
+| **SOAK-F8** — the soak was red on `main` | nothing re-ran the soak on protocol changes; vendored v0.12.0 required an authority witness while the reference handler played an unwitnessed `escalate` | soak drives the real §9.2 path; unmodified `main` re-measured at 11/17 assertions, 289 stuck cases, 48,089 retries |
+
+**What it is not.** It is still self-review: the same authors choose the targets,
+hold both the attack and the defence, and work from the same threat model — so a
+specification-level misreading shared by both sides survives it exactly as it
+survives the differential parity of §11.3. It has no incentive asymmetry (an
+outside reviewer is rewarded for finding something; the author is rewarded for
+the release being green). And a fix that nobody attacks is not evidence of
+anything. That is why this tier is *added to* the taxonomy of §13, not
+substituted for the independent audit that section still lists as absent.
+
+### 11.7 Evidence at scale, across processes, and over time
+
+Three artifacts extend the evidence beyond single-process, single-instance
+checks. Each is stated with the scope it actually has, because all three are
+easy to over-read.
+
+**Statistical corpora.** Nine seeded campaigns — confirmation sequences, tallies,
+Merkle batches, signed attestation events, jury draws, encodings, escalation
+witnesses, epoch rotations and whole finality chains — run **1,187,000 units and
+3,745,566 assertions with zero failures in 10.1 minutes** of corpus time on the
+reference host; the three round-29 campaigns are the v0.12 surface (10,000
+witness events over a 27-row matrix through the real reducer: 740 accepted,
+9,260 typed refusals, 0 raw errors; 1,000 kind-39018 batches across 39 cohort
+rotations; 5,000 verdict chains with witnessed escalations and terminal-witness
+refusals). CI runs a bounded fast subset of every campaign, so the corpus is
+enforced continuously rather than quoted. **Scope:** these are *statistical*
+sweeps over generated inputs — the exhaustive counterpart is §11.2, and neither
+subsumes the other (App. A, S-20).
+
+**A three-day fault-injected soak of the host pipeline.** 30,000 settlements
+(10,000/day over 3 virtual days plus a 38 h drain = 110 virtual hours) in 5.7
+minutes of wall clock, **32/32 assertions green**: the 19 pre-existing
+invariants now measured *across* epoch boundaries, plus 13 for rotation,
+retention, faults and the bonded-witness path. Zero lost deadlines, zero
+double-publishes, zero re-applications, sat-exact ledger parity per day and
+cumulatively (150,180,128 sats), zero unattributed spurious redeliveries, zero
+unaccounted acks, one machine feed per accepted escalation request. The faults
+are seeded and deterministic: relay partitions that hold writes and deliver them
+late or out of order, 10 % mid-day juror churn, coordinator restarts with all
+volatile state dropped, 100 witness-storm events per day (replays, wrong round,
+forged bond, case mismatch), and a PITR-style ack-cursor rollback of −2 h. The
+§9.2 witness path ran at volume through the real escalation service (1,627
+requests, 1,393 machine feeds, 0 duplicate feeds, ≤ 2 escalations per case).
+**It found three real defects, one of them about itself:** SOAK-F8 — the older
+soak had been **red on `main` for two protocol rounds** (the reference handler
+emitted an unwitnessed `escalate`, which vendored v0.12.0 refuses), measured on
+unmodified `main` at 11/17 assertions, 289 stuck cases, 48,089 handler retries;
+SOAK-F7 — the reconcile replay overlap is a re-*serve* window, not a
+delivery-delay bound, so a partition longer than the overlap walked the cursor
+past unserved acks (8 of 184,620 silently lost), fixed by lagging the watermark
+one overlap behind `now`; and SOAK-F11 — a ladder rung that re-draws an
+already-served juror inserts nothing against the `(case, juror, kind)` unique
+key, so that juror's ack bound to no row and no error was raised. **Scope:** the
+soak runs unmodified services against an in-memory Postgres and a virtual clock,
+so it validates logic, ordering and event volume — not real-Postgres
+serialization, fsync latency or relay RTTs. It is a host-repository artifact
+(App. A, S-22).
+
+**Transport: one operational brick, and the ceremony across real processes.**
+The round-30 transport campaign attacked the durable inbox and the NIP-59 seal
+layer, and found T-1 (§11.6): a single wrap delivered by 65 or more relays
+produced a snapshot the restore path must reject, so **the entire inbox —
+every message, not just that one — was unrestorable on the next restart**, and a
+hostile relay set could trigger it for a legitimate recipient without any key.
+The fix caps a record's provenance at the first 64 distinct sources (delivery
+order, so it is deterministic), keeps advancing `lastSeen`, and leaves the
+restore check strict so a tampered store is still rejected; the seal-layer
+suites pin the attacks each layer catches, including the honest boundary that a
+*consistent* forgery is stopped by the roster gate rather than the wrap. The
+same round ran the ceremony as **N = 3…7 real OS processes** — separate PIDs,
+heaps, identities, state directories and poll cursors, exchanging signed Nostr
+events through a loopback relay that assigns the total message order, with the
+production parsers and the real Pedersen DKG and FROST rounds, and a coordinator
+that re-derives the group key from the published commitments and verifies the
+aggregate itself. `SIGKILL` mid-DKG makes every survivor fail closed with
+`DKG_MISSING_PARTICIPANT` and accept **no** group key (the attempt is never
+shrunk to a threshold subset); `SIGKILL` mid-signing still completes the DKG and
+then fails closed with `SIGN_MISSING_REVEAL` and no signature; a cross-round wire
+replay is detected as equivocation, the replayer is disqualified, and no
+signature is produced. **Scope, stated because it is the standing objection
+this harness answers:** it is still *localhost* — one kernel, one clock, no
+packet loss, partitions, clock skew or congestion; the relay is honest and
+always available; custody (HSMs, disk encryption, backup/restore) is not
+simulated; and Byzantine liveness is unchanged (one dead juror stalls the
+attempt). The *coordination* structure is real; the *distribution* gap remains
+PO-14 (App. A, S-19).
 
 ---
 
@@ -1398,7 +1689,12 @@ Remains **host-side or pre-production** (engineering, not design):
    cancel, slash, and broadcast (private per the secrecy boundary).
 2. Cross-client ceremonies — DKG/signing across independent juror devices
    over encrypted channels (the package ships the machinery; production
-   consumers must run it distributed).
+   consumers must run it distributed). The *coordination* half is now exercised
+   across N = 3…7 real OS processes with independent identities, crash and
+   replay fault injection, third-party message ordering and independent
+   verification (§11.7, App. A, S-19) — on one host. Network asynchrony, real
+   relay failure modes, key custody and machine-independent timing remain
+   PO-14, and the harness note says so in the same words.
 3. Contract-enforced phase deadlines on-chain (currently coordinator-level).
 4. ChillDKG suite upgrade (planned; `pedpop-v1-experimental` is the active
    suite and must never be *labelled* ChillDKG; ChillDKG shares must never
@@ -1426,6 +1722,21 @@ Remains **host-side or pre-production** (engineering, not design):
    attributable race, not a cryptographic forfeiture. Either a settlement
    construction with a secret witness or migration of the economic layer to
    the script-enforced panel closes it.
+8. **The economic layer is host policy, and part of it lives outside this
+   package.** The package enforces the *shape* — the per-round bond must be
+   distinct, consumed once, present when the case demands it (INV-ESC-9) — but
+   not the *amounts*, the cap, or the bond registry: `deriveCourtEconomicCap()`
+   is a host function (r29-9), the per-round price `ΔC_R = 3^R b_0` is host
+   policy, and one on-chain bond accepted as the challenge bond of two cases is
+   a host-registry dedupe duty with a chain verifier, not a reducer predicate
+   (r29-4; the escalation route currently checks the hex shape only). The
+   residuals are registered with their closure paths in the round documents
+   (App. A, S-17, S-18, S-21); the two that were reachable in the host
+   deployment — the cap measured on a client-declared number (r29-7) and the
+   ladder read live from the environment after the cap froze (r29-8) — are
+   closed there (server-side exposure basis, per-market ladder freeze, effective
+   cohort size, `min(cap)`), which is precisely why they are listed here as a
+   gate rather than as shipped evidence.
 
 ---
 
@@ -1442,22 +1753,39 @@ method named); and **open obligation** (a named gap, PO-* in the obligation
 register, with its closure path). A claim that carries more than one label is
 listed with the weakest link named.
 
+The four labels say *what kind* of evidence stands behind a claim. They do not
+say how the evidence stays honest as the code moves under it, and that is a
+distinct question with a distinct answer, so the taxonomy has a fifth axis: the
+**review that verifies itself** (§11.6). A status is a snapshot; the property
+this paper actually relies on is that each round re-attacks the previous round's
+fixes with the reducer, the route or the env in hand, requires a failing-before
+test to call something `EXPLOITABLE`, and re-runs the whole battery on the new
+head. Three of this paper's own defects were found that way and not by a
+reviewer: a bond-free escalation (r29-1), an inbox a 65-relay delivery could
+brick (T-1), and a ladder bond that priced membership rather than consumption
+(r30-1) — plus a soak that was red on `main` without anyone noticing (SOAK-F8).
+The axis is listed here because it *earns* the labels above over time; it is
+also the weakest defence in the table by authorship, since the attacker and the
+author are the same people — which is exactly why the independent audit remains
+the one absent tier (§11.5) and nothing below is labelled *independently
+verified*.
+
 **Table 2. What is guaranteed, under which assumptions, by what evidence.**
 
 | Claim class | The claim, precisely | Assumptions | Evidence | Status |
 |---|---|---|---|---|
 | **Cryptographic security** — attestation unforgeability | No attestation validates under the pinned group key unless $\ge M$ distinct certified shares signed that exact message triple (session, outcome, round, signer set). | Schnorr EUF-CMA; FROST binding-factor soundness (KG20/RFC 9591, adaptive form under LDVR [19]); honest-key generation; the pinned library implements those semantics (probe- and differential-pinned, not verified from source — GAP-5a). | Theorem T5 (App. A.2), proved; the verification direction is conditional on the crypto premises; the pipeline direction (valid attestation ⇒ distinct partials) is unconditional. Who signed a given attestation is Theorem T6: the bare aggregate names no one, and the session journal is what attributes it (conditional on the certified-share pin P1 and authenticated entries P2). | **Proven** (conditional) + **open obligation** PO-13 (assumption watch), GAP-5a (dependency fidelity) and PO-18 (attribution is detective; the journal is host-side in v0.11) |
 | **Cryptographic security** — secrecy of the group key | Fewer than $M$ corrupted jurors learn nothing about $f(0)$, and the public ceremony transcript yields at most $m$ interpolation points to a coalition of size $m$ under possession-bound complaints. | Shamir perfect privacy [2]; honest majority $m+1 \le t$ for the complaint bound; the DKG never has a dealer. | Shamir privacy (§2.3) and the transcript-counting argument (§2.4), both with premises stated; the complaint-binding suite pins the mechanism the argument relies on. The transcript bound is *not* a line-checked theorem. | **Proven** (reduction to Shamir privacy + counting argument) + **empirically evaluated** (forged- and unattributable-complaint rejection) |
-| **Protocol safety** — state machines | Every reachable state of the vote, confirmation, signing and DKG machines satisfies the INV-* bundle; no illegal transition is accepted; no raw `TypeError`/`RangeError` escapes. | ECMAScript semantics (premise J1), canonical UTF-8/hex inputs, monotone host clock. | Theorem T4 (structural induction over event sequences, all roster sizes) plus exhaustive model checking of three machines (13 instances, 3.15M states, 0 raw throws) within n ≤ 3–4 and reduced clocks. | **Proven** (T4) + **machine-checked** (three machines; DKG machine is invariant-pinned only, RS-1) |
+| **Protocol safety** — state machines | Every reachable state of the vote, confirmation, signing and DKG machines satisfies the INV-* bundle; no illegal transition is accepted; no illegal escalation witness opens a round; no raw `TypeError`/`RangeError` escapes. | ECMAScript semantics (premise J1), canonical UTF-8/hex inputs, monotone host clock. | Theorem T4 (structural induction over event sequences, all roster sizes) plus exhaustive model checking of three machines (15 instances, 3.87M states, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws) within n ≤ 3–4 and reduced clocks; 158 stated invariants, each with an enforcement pointer. | **Proven** (T4) + **machine-checked** (three machines; DKG machine is invariant-pinned only, RS-1) |
 | **Protocol safety** — tally and encoding | The verdict is a function of the reveal multiset; the tie-break is a strict total order; canonical encodings are injective and prefix-free per schema. | J1; SHA-256 collision resistance for the hash bindings. | Theorems T1 and T3 (proved); exhaustive differential over small domains; the UTF-8-vs-UTF-16 divergence pinned. | **Proven** + **empirically evaluated** (in-house differential, §11.3) |
 | **Protocol safety** — batch inclusion | Accepting an inclusion proof implies the recomputed leaf is in the committed set; domain separation blocks leaf/node confusion. | SHA-256 collision resistance; Schnorr EUF-CMA for the manifest signature. | Theorem T2 (proved; soundness conditional, completeness unconditional); exhaustive proof verification for n ≤ 128 plus the cap. | **Proven** (conditional) |
 | **Protocol safety** — finality | A stale artifact cannot satisfy current policy: v2 binds epoch, tier, threshold, signer-set root and batch root in-band, and v1-shaped events fail v2-only policy. | Consumers pin the expected group key — *caller pins, not the event* (an unpinned consumer accepts any group's signature). | §7.3 design + adversarial validator reproduction suite; T5 covers the signature, not the pinning duty. | **Machine-checked** (within the suite) + **open obligation**: the pinning duty is a trust assumption, not a mechanism (PO-10 for the unbounded v1 path) |
 | **Protocol safety** — selection | The draw is publicly recomputable from the published seed and block hash, samples without replacement with probability ∝ $\sqrt{w}$ on the stake path, and fails closed on invalid weights. | Uniform 32-bit draws from SHA-256; the seed is unbiased at the required depth (A5). | Exponential-race proposition (§4.2, proof sketch); statistical differential (chi-square, moments, winner law over 100k draws); property tests for fail-closed behaviour. | **Empirically evaluated** + **open obligations** PO-2 (seed anchoring / grinding) and PO-17 (cross-engine ordering) |
-| **Operational resilience** | Up to $N-M$ jurors may be absent without preventing a signature; an unresponsive or censoring oracle cannot block the refund path; no wedged state exists in the three model-checked machines. | A2 (≥ M honest jurors participate); relay delivery liveness L1; absolute deadlines enforced (contract-level enforcement still open). | Model-checked no-dead-ends and termination (P3/P4) for three machines; refund path by construction; the end-to-end simulation. | **Machine-checked** (bounded) + **open obligations** PO-3 (partition/eclipse liveness — no availability proof) and the on-chain deadline gate (§12.3) |
-| **Operational resilience** — prototype gap | A single-process ceremony reveals all shares to whoever compromises the process. | — | Stated as a production gate (§12.2). | **Open obligation** PO-14 (cross-client deployment) |
-| **Economic robustness** | Coherent jurors strictly prefer revealing; non-reveal and double-voting are dominated by honest play *given* coherent-majority focal behaviour, slashing exceeds any capturable bribe, and selection is unpredictable. | The Schelling-point focal strategy (Kleros model [9, 18]); a bribe market that prices below the slash; unpredictable selection (§4). | Integer-exact redistribution with a conservation check; the 50/100% split; clawback idempotence. | **Empirically evaluated** (arithmetic and invariants) + **open obligation** PO-1: the bribe equilibrium for a $\lceil 2N/3\rceil$-of-$N$ jury is *not* modelled; the composite-SLA residual (attendance vs coherence) is named in §7.4 |
+| **Operational resilience** | Up to $N-M$ jurors may be absent without preventing a signature; an unresponsive or censoring oracle cannot block the refund path; no wedged state exists in the three model-checked machines. | A2 (≥ M honest jurors participate); relay delivery liveness L1; absolute deadlines enforced (contract-level enforcement still open). | Model-checked no-dead-ends and termination (P3/P4) for three machines; refund path by construction; the end-to-end simulation; a three-day fault-injected soak at 30,000 settlements (32/32 assertions, faults: partitions, churn, restarts, witness storms, cursor rollback) on the host side; the ceremony across N = 3…7 real OS processes with crash/replay injection (§11.7). | **Machine-checked** (bounded) + **empirically evaluated** (soak, ceremony — single host, virtual clock) + **open obligations** PO-3 (partition/eclipse liveness — no availability proof) and the on-chain deadline gate (§12.3) |
+| **Operational resilience** — prototype gap | A single-process ceremony reveals all shares to whoever compromises the process. | — | Stated as a production gate (§12.2); the *coordination* half (separate processes, identities, ordering, independent verification) is exercised on one host (§11.7). | **Open obligation** PO-14 (cross-client deployment) |
+| **Economic robustness** | Coherent jurors strictly prefer revealing; non-reveal and double-voting are dominated by honest play *given* coherent-majority focal behaviour, slashing exceeds any capturable bribe, escalation is priced per rung (a consumption test, not a membership test), and selection is unpredictable. | The Schelling-point focal strategy (Kleros model [9, 18]); a bribe market that prices below the slash; unpredictable selection (§4); per-round bond amounts posted by the host at `ΔC_R = 3^R b_0`. | Integer-exact redistribution with a conservation check; the 50/100% split; clawback idempotence; the per-round consumption invariant (INV-ESC-9) and its restored-snapshot re-derivation; the measured ladder arithmetic (free-option cost 363 $b_0$, deterrence −2.40 %→−1.86 % of $V$, venue/griefer 0.86×→54.1×, derived cap and flip round, churn 2.47× short, κ slack) — App. A, S-21. | **Empirically evaluated** (arithmetic, invariants, and a re-verified incentive model) + **open obligation** PO-1: the bribe equilibrium for a $\lceil 2N/3\rceil$-of-$N$ jury is *not* modelled; the composite-SLA residual (attendance vs coherence) is named in §7.4; the ladder *amounts* and the bond registry stay host duties (§12.8) |
 | **Economic robustness** — Lightning panel | Panel A orders settlement after the verdict, but does not enforce forfeiture. | Honest host behaviour + attributable release. | §9.1 analysis. | **Open obligation** PO-16 |
-| **Real-world validity** | The design's assumptions hold on live infrastructure: honest juror mass, encrypted channels between independent devices, relay liveness, Bitcoin seed freshness, and a release path that enforces the attestation. | A2, A3, A5, A6. | The protocol package is unit- and simulation-tested; *no* live multi-operator ceremony has been run at the scale the design targets, and the release path is host-mediated in v1. | **Open obligations** PO-14, PO-15, plus the §12 engineering gates (rail execution, cross-client, third-party audit) |
+| **Real-world validity** | The design's assumptions hold on live infrastructure: honest juror mass, encrypted channels between independent devices, relay liveness, Bitcoin seed freshness, and a release path that enforces the attestation. | A2, A3, A5, A6. | The protocol package is unit- and simulation-tested; the ceremony runs across real OS processes but on **one host** with an honest relay; the host pipeline has been soaked at 30,000 settlements with injected faults; *no* live multi-operator ceremony has been run at the scale the design targets, and the release path is host-mediated in v1. | **Open obligations** PO-14, PO-15, plus the §12 engineering gates (rail execution, cross-client, third-party audit) |
 
 Two readings of Table 2 matter. First, the rows marked **proven** are proofs
 *of the specified protocol* under stated premises — not proofs that the
@@ -1466,6 +1794,18 @@ model-checking evidence, which is in-house. Second, every row carries at least
 one open obligation, and those obligations are the paper's honest perimeter:
 they are the difference between "designed and checked" and "deployed and
 independently audited".
+
+A third reading follows from §11.6 and matters for the rows that moved in
+rounds 29–31: three of the entries above are weaker than they were two rounds
+ago *and say so*. The escalation authority row gained a consumption invariant
+because the previous row was a membership test (r30-1); the operational row
+gained a soak and a ceremony because neither existed; and the economic row went
+from "arithmetic and invariants" to a re-derived incentive model with two
+premises corrected — one of which (r30-3) says the paper's own prompt was wrong
+in our favour, which is the kind of correction a self-review is *least* likely
+to make and therefore the one worth publishing. None of that upgrades a status
+label. A fix that survived an attack is still a fix that only its authors have
+attacked.
 
 ---
 
@@ -1484,18 +1824,27 @@ slashing, flip-flop clawbacks) and the dual-rail settlement specification
 (Lightning hold invoices, Liquid script escrow) are deterministic and
 publicly recomputable; custody, execution, retention, and SLA policy stay
 with hosts. The design is backed by an evaluation methodology rather than an
-assertion: six line-checked theorems, exhaustive reachability model checking of
-three of the four ceremony machines on bounded instances (the DKG machine is
-invariant-pinned only), in-house
-differential parity, a regenerable performance
-baseline, and a literature-anchored audit record (§11), with §13 stating which
-claim rests on which kind of evidence. What remains is not only deployment
+assertion: six line-checked theorems, 158 stated invariants, exhaustive
+reachability model checking of three of the four ceremony machines on bounded
+instances (the DKG machine is invariant-pinned only) with 60,020,684 illegal
+escalation witnesses dispatched and none accepted, in-house
+differential parity, a regenerable performance baseline, statistical corpora of
+1,187,000 cases and 3,745,566 assertions, a three-day fault-injected soak at
+30,000 settlements, a ceremony across real OS processes on one host, and a
+literature-anchored audit record (§11), with §13 stating which claim rests on
+which kind of evidence — and §11.6 stating why the program's habit of attacking
+its own last release is the reason those numbers are worth citing at all. What
+remains is not only deployment
 engineering: the distributed ceremony (PO-14), the concession half of the
 escalation authority (§6.2), and the settlement-binding constructions
 (§9.2, PO-15/PO-16) are protocol work, alongside the independent auditing and
 external replication this paper cannot supply. Three obligations are newly
 registered here (PO-16, PO-17, PO-18 — attribution is detective), and the
-settlement binding that v1 leaves to the host is PO-15.
+settlement binding that v1 leaves to the host is PO-15. Rounds 29–31 registered
+no new obligation codes: they re-attacked, they shipped three fixes (a
+challenger-bound bond, a bounded inbox provenance, a per-round bond), and they
+left their residuals where residuals belong — named, graded, and owned, in the
+round documents (App. A, S-17, S-18, S-21).
 
 ---
 
@@ -1574,6 +1923,12 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-14 | Module map | `README.md` §10 |
 | S-15 | Economics gap-fills (capture probability, per-rail cost of corruption, P+ε, seed-grinding bound, √k stake splitting — the external reviews' quantitative asks, each with derivation and residual) | `docs/proofs/economics/05-review-gapfills.tex.md`; numbers reproducible from `scripts/review-quant/economics.mjs` |
 | S-16 | Attributable signing (session journal, RFC 9162 log, batch-signing duty) | `docs/ATTRIBUTABLE_SIGNING.md` |
+| S-17 | Review round 3 — attacking the fixes that round 2 shipped (r29-1…r29-10, grading rule, residuals) | `docs/REVIEW_ROUND_3.md` |
+| S-18 | Per-round escalation bonds (v0.13.0 consumption test, compatibility matrix, derived cap and flip round) | `docs/PER_ROUND_BOND.md` |
+| S-19 | Multi-process ceremony (N real OS processes, chaos kill/replay, and the honest scope of what it proves) | `docs/MULTI_PROCESS_CEREMONY.md` |
+| S-20 | Statistical corpora (nine campaigns) + the witness-aware model-check tables | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json` |
+| S-21 | Economic expert re-verify of the post-fix layer (r30-1…r30-5: bond consumption, churn cap, κ slack, decay pairing) | `docs/proofs/economics/06-expert-verify.tex.md`; numbers reproduced by `scripts/review-quant/economics.mjs` §6 |
+| S-22 | Three-day fault-injected soak (30,000 settlements, 32/32 assertions, SOAK-F7/F8/F11) | host repository `bao.markets`: `docs/benchmarks/SOAK_3DAY.md`, `docs/benchmarks/soak-3day.json` |
 
 ### A.2 Proofs and machine-checked artifacts
 
@@ -1588,7 +1943,11 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | — | Premise registry (J1, E1–E2, H-JS1/2, S1–S5), lemma gaps (GAP-5a: dependency fidelity, probe-pinned not source-verified) | `docs/proofs/README.md` |
 | — | Protocol-level games: DEF-1…DEF-4 (`ATTFORGE`, `VERDICTCONS`, `CHAINFORGE`, `CONFLIVE`), THE-1…THE-4, residuals and GAP-20a/b | `docs/proofs/security/` |
 | — | Economics layer proofs | `docs/proofs/economics/` |
-| — | Exhaustive model-check fixture (13 instances) and its generator | `__fixtures__/model-check-summary.json`; `scripts/model-check.mjs` |
+| — | Exhaustive model-check fixture (15 instances, 3,869,232 states, 60,020,684 illegal-witness probes, 0 accepted) and its generator | `__fixtures__/model-check-summary.json`; `scripts/model-check.mjs` |
+| — | Witness-aware model-check tables and the nine-campaign statistical corpora | `docs/benchmarks/SCALE_CAMPAIGN.md`; `docs/benchmarks/campaign-2026-11-11.json`; `scripts/campaign/run-campaign.mjs` |
+| — | Multi-process ceremony (N = 3…7 OS processes, kill/replay chaos) | `scripts/court/multi-process-ceremony.mjs`, `scripts/court/juror-child.ts`; gated by `__tests__/r30MultiProcessCeremony.test.ts` |
+| — | Escalation-witness and per-round-bond pins | `__tests__/reviewRound3.test.ts`, `__tests__/escalationWitness.test.ts`, `__tests__/perRoundBond.test.ts`, `__tests__/ladderEconomics.test.ts`, `__tests__/penaltyAging.test.ts` |
+| — | Transport/seal/MLS suite | `__tests__/r30SealGames.test.ts`, `__tests__/r30MarmotTransport.test.ts`, `__tests__/r30InboxOutboxLoad.test.ts` |
 | — | Differential-parity suite and its restatements | `__tests__/differentialParity.test.ts`; `__tests__/reference/` |
 | — | Whole-court simulation | `__tests__/simulateCourt.test.ts` (`npm run simulate:court`) |
 
@@ -1607,6 +1966,28 @@ cluttering the argument.
 | A-1 | Signer-set freeze vs distinct commitment set in the signing machine | Invariant in the model-checked bundle (§11.2) |
 | C-2 | Composite-SLA consumption obligations (threshold above the 0.5 floor; participation definition) | Stated as host duties (§7.4) |
 | A-3 | "Formalized adversaries" family was described as exhaustive | Wording corrected in `docs/EVALUATION.md` |
+| r29-1 | The escalation bond was bound to the **case**, not the **challenger**: a juror holding no bond could escalate on a bonded juror's accepted hash, and the audit log named the wrong person (§10.2 P) | Challenger binding in the reducer (`challenge.idx === challengerIdx` ∧ hash); INV-ESC-5 restated; the model-check property corrected — it had mirrored the weak check (S-17) |
+| r29-2 | The escalation witness log had no tamper barrier: a restored snapshot could append a fabricated record and finalize on it | `assertValidEscalationLog` re-derived at `finalize`; INV-ESC-8 (S-17) |
+| r29-3 | One accepted challenge bond funded **every** round of the same case | Re-graded MAJOR economically by r30-1 and closed by per-round consumption in v0.13.0; the legacy membership semantics remain the compatibility default (S-18, S-21 §1) |
+| r29-10 | A vacuous test ceiling: a mutant returning `Number.POSITIVE_INFINITY` passed all 23 budgeted tests | The budget helper is pinned — default, junk fallback, override, and ordering (§11.1) |
+| r29-7 / r29-8 | The economic cap measured a client-declared creation liquidity and was never re-assessed; the ladder depth was read live from env after the cap froze | Closed host-side: server-side exposure basis and per-market ladder freeze; what the fix leaves is r30-2 (S-17, S-21 §2) |
+| r30-1 | The ladder bond was a **membership** test, not a consumption test: $\Delta C_{r+1} = 0$, so escalation was a free option worth 363 $b_0$ | Per-round bond witness + consumption rules, v0.13.0; INV-ESC-9; restored-snapshot re-derivation (S-18, S-21 §1) |
+| r30-2 | A frozen ladder configuration is a *ceiling*: the panel a cohort can actually seat is $\min(N_{\text{cfg}}, \text{drawable})$, so 135→45 seats is 2.47× short of its own invariant | Host: cap re-derived at the effective $N$, `min(cap at creation, cap now)`, `cap_degraded` flag; a concession is never blocked (S-21 §2) |
+| r30-3 | The prompt's premise was wrong: a weaker-than-supermajority quorum **tightens** the cap ($\kappa_q = 2.75$–$4.64$), so the correction is slack, not exposure | Premise corrected in the paper; no code change; **SAFE** (S-21 §3) |
+| T-1 | Provenance overflow: a wrap delivered by 65+ relays produced a snapshot the restore path must reject, so the **whole** durable inbox was unrestorable — triggerable by a hostile relay set without any key | Provenance capped at the first 64 distinct sources by delivery order; `lastSeen` still advances; restore stays strict (§11.7) |
+| MC-F7 | A variant instance whose state space equals its base's is not exercising what it claims | Instance repaired (19,822 → 116,906 states) (§11.2) |
+| MC-F8 | All-digit witness fixtures made the "uppercase hex" probe a no-op | Fixtures carry hex letters; the illegal-witness assertion catches the class (§11.2) |
+| SOAK-F7 | The reconcile replay overlap is a re-*serve* window, not a delivery-delay bound: 8 of 184,620 acks were silently lost across a long partition | Lagged cursor watermark (one overlap behind `now`) (S-22) |
+| SOAK-F8 | The one-day soak had been **red on `main` for two protocol rounds** (an unwitnessed `escalate` against the v0.12 vendor); nothing re-ran it on protocol changes | Soak drives the real §9.2 witness path; unmodified `main` re-measured at 11/17 assertions, 289 stuck cases (S-22) |
+| SOAK-F11 | A ladder rung that re-draws an already-served juror inserts nothing against the `(case, juror, kind)` unique key — no error, no alert | Fresh-draw tracking + the `ack_no_silent_loss` assertion (S-22) |
+
+**Finding codes are namespaced per artifact**, deliberately: `F-2`, `F-3`,
+`F-12`, `F-13` and `A-1`/`A-3` are the formal-invariant and editorial rounds;
+`MC-F7`/`MC-F8` are the model checker's own fixture defects; `SOAK-F7`/`F8`/`F11`
+are the soak's; `r29-*`/`r30-*` are review-round findings; `T-1` is the transport
+campaign. The paper names each with its namespace so that two unrelated `F7`s
+never read as one finding — a provenance defect the round-23 paper check did
+find in an earlier draft.
 
 Statement corrections applied to this text in the 2026-11-10 editorial round,
 recorded here rather than in the body: "structurally invalid" → "publicly
@@ -1626,11 +2007,13 @@ history itself is `CHANGELOG.md`.
 
 ### A.4 Artifact inventory and regeneration
 
-| Artifact | Command / location | Count (2026-11-11, at `cbf00da`) |
+| Artifact | Command / location | Count (2026-11-11, at `c456fb4`) |
 |---|---|---|
-| Test suite | `npm test` | 1,498 passing, 1 environment-gated live test skipped, 61 files (measured on this branch; the per-round pinned count is `docs/CROSS_CHECK.md` §1) |
+| Test suite | `npm test` | 1,656 passing, 1 environment-gated live test skipped, 74 files (measured on this head; the per-round pinned count is App. A.1, S-12 §1) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`, source + scripts + tests) | clean |
-| Model-check sweep | `npx tsx scripts/model-check.mjs` | 13 instances, 3,149,142 states, 0 raw throws |
+| Model-check sweep | `npx tsx scripts/model-check.mjs` | 15 instances, 3,869,232 states, 60,020,684 illegal-witness probes (0 accepted), 0 raw throws |
+| Statistical corpora | `npm run campaign:full` | 9 campaigns, 1,187,000 units, 3,745,566 assertions, 0 failures (CI runs a fast subset) |
+| Multi-process ceremony | `npm run simulate:multiprocess` | N = 3…7 OS processes; happy path + 2 kill points + replay (gated in CI) |
 | Differential parity | `npx vitest run __tests__/differentialParity.test.ts` | 5 areas, seeded |
 | Whole-court simulation | `npm run simulate:court` | deterministic, same-seed reproducible |
 | Benchmarks | `npm run bench` / `-- --json` | 29 timed rows; two-run reproducibility pair |
@@ -1645,6 +2028,7 @@ Counts are point-in-time and are re-recorded per round in `docs/CROSS_CHECK.md`
 | Tier | Who | Scope | Record |
 |---|---|---|---|
 | In-house audit and symposium rounds | AI agents working in this repository, directed by the project | The implementation and its documents; findings landed as fixes, specs, or registered obligations | `docs/FIXES-2026-08-15.md`, `docs/FIXES-2026-08-18.md`, `docs/FIXES-2026-08-21.md`, `docs/REVIEW_SIMULATION.md`, `docs/CROSS_CHECK.md`, `docs/DRESS_REHEARSAL.md`, `docs/proofs/` |
+| **Fix-and-re-attack rounds (29–31, 2026-11-11)** | AI agents working in this repository, attacking the *previous* round's shipped fixes with the reducer/route/env in hand | Escalation witness and its bond binding, per-round consumption, budget vacuity, transport provenance, inbox/seal/MLS games, the economic layer, and the soak's own staleness | `docs/REVIEW_ROUND_3.md` (S-17), `docs/PER_ROUND_BOND.md` (S-18), `docs/MULTI_PROCESS_CEREMONY.md` (S-19), `docs/proofs/economics/06-expert-verify.tex.md` (S-21), §11.6 |
 | Multi-agent editorial audit, three rounds (2026-11-10) | Parallel review agents, each assigned a section | Assurance framing, related work, provenance hygiene, statement corrections, disclosure, scope | This document (§11.5) and App. A.3 |
 | External AI reviews (2026-11-10) | GPT, Claude, Gemini | **Paper text only** — no code access, no execution, no cryptographic analysis, no formal verification | Verdicts applied in this revision |
 | Independent human / third-party audit | — | Not performed | §12.5 remains open |
@@ -1659,3 +2043,15 @@ Counts are point-in-time and are re-recorded per round in `docs/CROSS_CHECK.md`
 Both rows are registered in the obligation register (App. A.1, S-6) and
 restated here with their closure paths, so that the paper never cites an
 obligation it has not registered.
+
+**Rounds 29–31 registered no new obligation codes**, and that is a deliberate
+choice rather than an omission: what those rounds produced are *engineering*
+residuals with named owners and closure points, not paper-level proof
+obligations. They are graded and recorded in the round documents — r29-3…r29-8
+and r29-10 in S-17, r30-1…r30-5 in S-21, T-1 in §11.7, SOAK-F7/F8/F11 in S-22 —
+because an obligation code that never closes is worse than a residual with a
+date on it. Two of them were reachable in the host deployment and are already
+closed there (r29-7/r29-8 → server-side exposure basis and per-market ladder
+freeze; r30-2/r30-5 → effective cohort size, `min(cap)`, quorum-aware κ), which
+is also why §12.8 lists the economic layer as a *gate* on the host rather than
+as evidence shipped here.

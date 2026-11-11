@@ -6,7 +6,7 @@
 This is the single artifact a reviewer uses to verify any claim about the
 system. Every meaningful claim from the three claim sources —
 
-1. `docs/FORMAL_INVARIANTS.md` — all 156 `INV-*` invariants;
+1. `docs/FORMAL_INVARIANTS.md` — all 158 `INV-*` invariants;
 2. `docs/FROST_COURT_ORACLE_PAPER.md` — every technical claim (the §6–§7
    universal-confirmation / cohort / batch sections **and** the classic
    ceremony, escrow, and settlement-rail sections);
@@ -44,14 +44,16 @@ Conventions for evidence refs:
 
 ---
 
-## 1. Verification runs recorded for this round (2026-11-10, worktree at v0.10.2 `main`)
+## 1. Verification runs recorded for this round (2026-11-11, worktree at v0.13.0 `main`, `c456fb4`)
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,561 passed / 1 skipped (66 files)** — re-verified 2026-11-11 (review round 3: escalate-witness attacks); 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
-| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified round 17) |
-| Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (re-verified round 17; output in the PR body) |
-| Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (20 min): **13 instances, 3,149,142 states, 134,838,724 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
+| Full suite | `npm test` | **1,656 passed / 1 skipped (74 files)** — re-verified 2026-11-11 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `c456fb4`) |
+| Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `c456fb4`) |
+| Model check (full) | `npx tsx scripts/model-check.mjs` | witness-aware regeneration (2,525 s): **15 instances, 3,869,232 states, 213,521,172 event applications, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws, 3,000 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
+| Statistical corpora | `npx tsx scripts/campaign/run-campaign.mjs --full` | 9 campaigns — **1,187,000 units / 3,745,566 assertions / 0 failures** in 608.8 s (artifact `docs/benchmarks/campaign-2026-11-11.json`) |
+| Multi-process ceremony | `npm run simulate:multiprocess` | 4 scenarios green (N = 3…7 OS processes; kill mid-DKG, kill mid-signing, cross-round replay) |
 
 ---
 
@@ -63,7 +65,7 @@ breakdown).
 
 | Claim source | Claims | With executable proof | Coverage | Open gaps |
 |---|---|---|---|---|
-| `FORMAL_INVARIANTS.md` (156 INV-*) | 156 | 154 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
+| `FORMAL_INVARIANTS.md` (158 INV-*) | 158 | 156 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
 | `FROST_COURT_ORACLE_PAPER.md` | 71 | 68 | 95.8% | 3 (host-side / spec'd protocol work) |
 | `CRYPTO_AUDIT.md` §7 + §8 | 21 | 17 | 81.0% | 4 (spec'd S-1…S-4) |
 | Model-check meta-claims | 7 | 7 | 100% | 0 |
@@ -260,6 +262,7 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | INV-ESC-5 | invariant | test | test:__tests__/escalationWitness.test.ts#the bond witness must match a bond the machine already accepted; test:__tests__/escalationWitness.test.ts#host authority is break-glass: refused by default, legal only under the frozen policy |
 | INV-ESC-6 | invariant | test | test:__tests__/escalationWitness.test.ts#a valid challenger witness is recorded append-only and opens the next round; test:__tests__/escalationWitness.test.ts#pre-0.12 snapshots without an escalation log normalise to an empty ledger |
 | INV-ESC-7 | invariant | test | test:__tests__/escalationWitness.test.ts#ladder_pending is reachable ONLY through a witnessed escalation |
+| INV-ESC-8 | invariant | test | test:__tests__/reviewRound3.test.ts#a forged escalation record on a restored snapshot is refused at finalize; test:__tests__/reviewRound3.test.ts#a host-authority record cannot appear on a case that never allowed it |
 | INV-ESC-9 | invariant | test | test:__tests__/perRoundBond.test.ts#one bond cannot fund every round: each rung needs its own witness; test:__tests__/perRoundBond.test.ts#finalize refuses a restored record that reuses a per-round bond |
 | INV-CONF-30 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#records fees idempotently and rejects malformed ids; test:__tests__/adversarialMachines.test.ts#accepts exactly MAX_FEES fee entries |
 | INV-CONF-31 | invariant | test | test:__tests__/courtConfirmationMachine.test.ts#accepts explicit clawback flags only during fee_settlement, deduped per (idx, reason) |

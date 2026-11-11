@@ -1639,11 +1639,12 @@ lack an enforcing test. Ordered by audit significance.
 - Full suite: `npm test` (vitest) — all green including
   `__tests__/invariantAssertions.test.ts` (27 always-on global assertions).
 - Typecheck: `npm run typecheck && npm run typecheck:tests`.
-- The invariant count: 8 core + 23 vote + 36 confirmation + **7 escalation
-  (INV-ESC-1…8)** + 15 signing +
+- The invariant count: 8 core + 23 vote + 36 confirmation + **9 escalation
+  (INV-ESC-1…9)** + 15 signing +
   12 DKG + 9 selection + 16 batch + 16 validator + 10 cross-machine +
-  3 attribution + INV-SETTLE-1 = **157 stated invariants**, each with an
-  enforcement pointer; 148 pinned by a named test, and the cross-machine/global
+  3 attribution + INV-SETTLE-1 = **158 stated invariants**, each with an
+  enforcement pointer; 149 of them pinned by a named test, and the
+  cross-machine/global
   set pinned by the 27 executable assertions of
   `__tests__/invariantAssertions.test.ts` (INV-ATTRIB-3 is spec-level —
   see §16). Twelve findings
