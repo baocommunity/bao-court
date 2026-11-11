@@ -52,7 +52,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
 | [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: **1,187,000** seeded cases / **3,745,566** assertions across nine campaigns (incl. the witness-aware model-check tables) and what the sizes buy statistically |
 | [`PER_ROUND_BOND.md`](docs/PER_ROUND_BOND.md) | the v0.13 escalation bond: a **consumption** test per rung (`ΔC_R = 3^R b₀`), the compatibility matrix, the derived ladder cap and flip round |
-| [`MULTI_PROCESS_CEREMONY.md`](docs/MULTI_PROCESS_CEREMONY.md) | the ceremony across N real OS processes (kill/replay chaos) — and, in the same words, what localhost does **not** prove |
+| [`MULTI_PROCESS_CEREMONY.md`](docs/MULTI_PROCESS_CEREMONY.md) | the ceremony across N real OS processes (kill/replay chaos, plus a **Byzantine relay**: reorder, drop, split-view, replay, silence) — and, in the same words, what localhost does **not** prove |
 | [`MUTATION_TESTING.md`](docs/MUTATION_TESTING.md) | the spec's blindness audit: 53 mutants × 18 bug classes, 3 detectors, the 7 survivors found and the pins that close them |
 | [`REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) | one-command reproduction contract (`scripts/reproduce.sh`), variance bounds, committed repro record |
 | [`ESCROW-SLASHING.md`](docs/ESCROW-SLASHING.md) | escrow lifecycle and slashing math |

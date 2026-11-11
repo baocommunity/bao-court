@@ -9,6 +9,39 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [Unreleased]
+
+### Added — Byzantine-relay multi-process ceremony (R33)
+R30 proved the ceremony survives process death and cross-round replay over an
+**honest** relay. R33 removes that assumption: the loopback relay now keeps a
+**per-juror view** (jurors poll with `?as=<idx>`) and can lie deterministically
+under a seed — `reorder`, `drop`, `fork` (split-view, from DKG or from the
+signing phase), `replay` (duplicate + late redelivery) and `silence` (targeted
+censorship). Every routing decision is a hash of `(seed, mode, seq, juror)`, so
+the same seed reproduces the same dishonest relay record for record.
+
+- `scripts/court/multi-process-ceremony.mjs`: `--mode=`, `--drop-p=`,
+  `--reorder-window-ms=`, `--reorder-style=block|invert`, `--fork-variant=dkg|sign`,
+  `--victim-idx=` (silence/invert target) and `--matrix` (15 cells: every mode at N=3 and N=5, ≈40 s).
+  Each run writes `relay-views.json` (what each juror actually saw) and a
+  machine verdict in `report.json#equivocation`.
+- The equivocation assertion, applied to **every** mode: at most one distinct
+  signed message, at most one distinct group key across outputs, every emitted
+  signature verified by the coordinator against the key it recomputed from the
+  receive log, and a completion shape that is either `ALL_COMPLETED_IDENTICALLY`
+  or `ALL_FAILED_CLOSED` (a `PARTIAL` shape is allowed only where loss makes it
+  unavoidable, and must stay non-equivocating).
+- Result: **NO_EQUIVOCATION** in all 15 cells. A split view cannot produce two
+  signatures over different messages — and cannot produce one either: the
+  full-roster DKG key computation plus the roster-wide reveal gate
+  (`createMyReveal` needs every participant's commitment; `canAggregate` needs
+  reveals == commitments) starve both halves. Findings F1–F4 (arrival-order
+  sensitivity of the reveal gate, blame = "whom I did not hear from",
+  all-or-nothing liveness, legal `PARTIAL` completion) are registered in
+  `docs/MULTI_PROCESS_CEREMONY.md`.
+- `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
+  properties; `npm run simulate:byzantine`.
+
 ## [0.13.0] — 2026-11-11
 
 ### Fixed — the escalation bond is a consumption test, not a membership test (R31, r30-1)
