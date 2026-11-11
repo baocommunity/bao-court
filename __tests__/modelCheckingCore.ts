@@ -991,8 +991,8 @@ export function confirmAdapter(spec: ConfirmInstanceSpec): MachineAdapter<CourtC
           'P2: escalation witness hashes well-formed',
         );
         check(
-          s.challenges.some((c) => c.bondProofHash === record.bondProofHash),
-          'P2: escalation bond bound to an accepted challenge',
+          s.challenges.some((c) => c.idx === record.challengerIdx && c.bondProofHash === record.bondProofHash),
+          'P2: escalation bond bound to THAT challenger\'s accepted challenge (r29-1)',
         );
       } else {
         check(

@@ -633,7 +633,7 @@ grant.** The confirmation spec makes `escalate` a **bonded
 challenger's right** (ESC-RIGHT-1…5): while the challenger's window is open
 the host may neither escalate nor concede, and operator discretion is
 break-glass only (`BAO_COURT_HOST_ESCALATION`, default off). **The protocol
-machine now verifies that authorisation itself** (INV-ESC-1…7,
+machine now verifies that authorisation itself** (INV-ESC-1…8,
 `docs/FORMAL_INVARIANTS.md` §5.9): `escalate` carries an authority witness
 (`authority`, `challengerIdx`, `challengerPubkey`, `requestHash`,
 `bondProofHash`, `roundIndex`), and the reducer — not the host API — refuses an

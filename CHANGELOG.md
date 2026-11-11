@@ -9,11 +9,45 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [Unreleased]
+
+### Fixed — review-round-3 hardening (`docs/REVIEW_ROUND_3.md`)
+- **The escalation bond is now bound to the CHALLENGER, not just to the case**
+  (r29-1, EXPLOITABLE): `onEscalate` accepted any `bondProofHash` present in
+  `state.challenges`, so a juror who posted no bond could escalate by quoting a
+  bonded juror's hash — and the append-only audit log named the wrong
+  challenger against the wrong bond. The reducer now requires
+  `challenge.idx === challengerIdx && challenge.bondProofHash === bondProofHash`
+  (`confirmationMachineHandlers.ts`), and the model checker's independent
+  property states the same binding (it agreed with the bug). INV-ESC-5.
+- **`finalize` re-verifies the escalation witness log** (r29-2, INV-ESC-8): a
+  restored `fee_settlement` snapshot could append a fabricated record (a juror
+  who never escalated, a round never opened, a bond never posted) and finalize
+  on top of it, because the verdict hash deliberately does not cover the log.
+  `assertValidEscalationLog` (`confirmationMachineCore.ts`) now enforces
+  consecutive `2..k` rounds, the ladder bound, monotone timestamps, the
+  challenger-own-bond rule and the frozen `hostEscalation` policy. A short log is
+  accepted so pre-0.12 snapshots stay finalizable.
+- **The deterministic-budget helper is pinned** (r29-10): a mutant returning
+  `Number.POSITIVE_INFINITY` survived all 23 budgeted tests, i.e. a vacuous
+  ceiling was invisible to the suite. `__tests__/reviewRound3.test.ts` pins the
+  30 s default, the junk fallback and the override.
+- Docs: `CHANGELOG` v0.12.0's economic-cap bullet now names `bao.markets` and its
+  path — `deriveCourtEconomicCap()` was listed as if it shipped here (r29-9);
+  invariants 156 → **157**; suite 1,546 → **1,561** (66 files).
+
 ## [0.12.0] — 2026-11-11
 
 ### Changed — review-round-2 hardening (API-visible)
 - **`escalate` carries a witness** (`authority`, `challengerIdx`, `challengerPubkey`, `requestHash`, `bondProofHash`, `roundIndex`): the reducer enforces phase, `roundIndex == ladderRound+1`, case-roster challenger, 32-byte-hex hashes, a bond hash the machine already accepted, and host authority only under the frozen `hostEscalation` policy (default false). Accepted witnesses append to a frozen `escalationLog`; `ladder_pending` has exactly two entry transitions — the host-bypass path is closed at the machine, not the API (INV-ESC). `concede` remains host-API-enforced (named residual, SPEC §9.2).
-- **Economic security cap derived, γ single-sourced at 0.45**: `deriveCourtEconomicCap()` — `V_max(N) = γ·s₀·N` below the ⌈1/(γσ)⌉ threshold (112 seats at 0.45), unbounded above; shadow mode `off|shadow|enforce` with `would_reject` metrics, boot guard and ECON_RATIO_RUNBOOK (measured rejection: testnet 0.5%, demo 4.8%).
+- **Economic security cap derived, γ single-sourced at 0.45** — *host-side, not in
+  this package*: `deriveCourtEconomicCap()` lives in `bao.markets`
+  (`packages/markets/services/bao-markets/courtEconomicRatio.ts`) and is wired at
+  market creation there — `V_max(N) = γ·s₀·N` below the ⌈1/(γσ)⌉ threshold (112
+  seats at 0.45), unbounded above; shadow mode `off|shadow|enforce` with
+  `would_reject` metrics, boot guard and ECON_RATIO_RUNBOOK (measured rejection:
+  testnet 0.5%, demo 4.8%). This package ships no part of it (round-3 finding
+  r29-9).
 - **Deterministic simulation budget** replaces the 5 s wall-clock gate (`SIM_BUDGET_MS`, default 30 s) — load-insensitive, still catches real regressions.
 - **Provenance reconciled**: cross-check parses the PO register (PO-1…18, 283 claims / 512 refs / 95.1 %, 14 open); invariants 149 → **156**; suite **1,546**.
 
