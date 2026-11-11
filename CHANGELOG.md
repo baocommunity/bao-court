@@ -15,7 +15,7 @@ frozen.
 
 - **`docs/FROST_COURT_ORACLE_PAPER.md` reads as a paper again.** Version
   numbers, test counts, finding codes and file paths are out of the body;
-  provenance is consolidated in **Appendix A** (normative documents S-1…S-14,
+  provenance is consolidated in **Appendix A** (normative documents S-1…S-15,
   proofs/machine-checked artifacts T1–T5, the finding-code mapping,
   artifact inventory + regeneration commands, review record, and the newly
   registered obligations). The assurance claim is now explicit instead of
@@ -62,6 +62,11 @@ frozen.
 - **`docs/THREAT_MODEL.md`:** two new obligation rows — **PO-16** (Lightning
   preimage publicly computable: forfeiture is host policy, not cryptography)
   and **PO-17** (cross-engine selection ordering).
+- **Follow-up to the same pass:** the five quantitative gap-fills that landed
+  in parallel (`docs/proofs/economics/05-review-gapfills.tex.md`) are folded
+  into the paper's provenance map as **S-15**, so the body's remaining
+  references to it are short names rather than paths, and §11.5's review
+  record names that round.
 
 ### Fixed (settlement binding — what the FROST judge key actually signs)
 
