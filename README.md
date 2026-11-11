@@ -47,6 +47,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`CROSS_CHECK.md`](docs/CROSS_CHECK.md) | the claim→proof index: every documented claim mapped to the test/bench/model-check/fixture that proves it (`scripts/cross-check.mjs` machine-verifies it) |
 | [`EVALUATION.md`](docs/EVALUATION.md) | the paper's evaluation chapter as a standalone artifact (parity, model checking, benchmarks, audit program) |
 | [`REVIEW_SIMULATION.md`](docs/REVIEW_SIMULATION.md) | external-review simulation: reviewer findings and dispositions |
+| [`REVIEW_ROUND_2.md`](docs/REVIEW_ROUND_2.md) | round-2 audit: does each shipped fix answer the reviewer's objection? verdicts, new issues, and what round 3 still owes |
 | [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
 | [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: 1.17M seeded cases / 3.5M assertions across the six production surfaces, the committed artifact, and what the sizes buy statistically |
 | [`MUTATION_TESTING.md`](docs/MUTATION_TESTING.md) | the spec's blindness audit: 53 mutants × 18 bug classes, 3 detectors, the 7 survivors found and the pins that close them |
