@@ -587,10 +587,10 @@ confirm_open → confirm_closed → challenge_window
   30-of-45, 90-of-135) — not 1. A host may configure a smaller quorum (the
   shipped 3-of-5 rollout is such a policy), and the machine then records
   `quorumBelowSupermajority: true` in its state so a policy layer can gate on
-  it. Quantified in `docs/proofs/economics/05-review-gapfills.tex.md` §1.3:
-  the 1-of-5 default captured at 0.8683 (ρ=⅓) / 0.9655 (ρ=0.49), and the
-  shipped 3-of-5 captures at 0.2099 / 0.4813 against 0.0453 / 0.1752 at
-  4-of-5.
+  it. The capture cost of both choices is tabulated in App. A, S-15, §1.3: the
+  one-confirmation default captured most of the time at every plausible
+  adversary weight share, and the shipped 3-of-5 captures several times more
+  often than the $\lceil 2N/3\rceil$ standard the threat model names.
 - **The challenge window is bond-witnessed.** A challenge must carry a
   verified bond witness: the host verifies the bond *before* dispatching the
   event, and the reducer binds the witness hash so any observer can
