@@ -11,6 +11,39 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (round-49 differential — the escalation wire reimplemented independently)
+- **The escalation mapper threw raw `TypeError`s on a restored snapshot
+  (r49-d1).** `escalationRequestToMachineEvent` read `state.ladderRound` and
+  `state.challenges.filter(...)` before any shape check, so `state = null`
+  escaped as `Cannot read properties of null (reading 'ladderRound')`, a
+  non-array ledger as `state.challenges.filter is not a function` (measured: 344
+  of 100 000 differential cases) and a `null` ledger row as `Cannot read
+  properties of null (reading 'bondProofHash')` (95 cases). `@bao/court`
+  documents a typed-only boundary (`errors.ts`, r3-1/r41-1) and already owns the
+  guard (`assertStateArrays`), which exists for exactly this; the mapper now
+  requires a record state, an array ledger and object rows, all typed refusals.
+  **Consumer impact:** a host that passed a malformed snapshot now gets
+  `CourtConfirmationTransitionError` instead of a `TypeError` — no accepted
+  escalation changes.
+- **`buildCourtEscalationRequest(null)` escaped as a raw `TypeError` (r49-d2).**
+  The r8-5 hardening covered reading the fields once; a non-object descriptor
+  still crashed (`Cannot read properties of null (reading 'caseId')`) at every
+  entry point that reaches it (`build`, `hash`, `serialize`,
+  `escalationRequestToMachineEvent`). A non-object descriptor is now the typed
+  `not_object` refusal the wire already uses for a non-object body.
+- **New: an independent implementation and a 100 000-case differential for the
+  wire (round 49).** `scripts/differential/wire_ref.py` is a Python 3
+  (stdlib-only) reimplementation written from the prose, and
+  `scripts/differential/run.mjs` drives both over a seeded corpus comparing
+  accept/refuse, the refusal CLASS, the preimage bytes, the digest, the
+  canonical wire string and the mapped `escalate` event. Result: 4 distinct
+  disagreements on v0.14.2 (the two above, plus two class-only), 0 after the
+  fixes; 51 252 accepted requests agree byte-for-byte. The three
+  under-specified corners it forced a decision on — the exact whitespace set,
+  the BOM-stripping canonicality round-trip, and numeric literal portability —
+  are written down in `docs/DIFFERENTIAL_WIRE.md` §5 and pinned on both sides.
+  `__tests__/differentialWire.test.ts` runs the harness in its 2 s fast mode.
+
 ### Fixed (review-round-9 — the round-8 fixes attacked)
 - **`caseId` was still FOLDED, so two ids shared one digest (r9-1,
   exploitable).** r8-1 rejected surrogates, NUL and >256 bytes and then returned

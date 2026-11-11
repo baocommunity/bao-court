@@ -1,0 +1,108 @@
+{
+  "campaign": "r49-differential-wire",
+  "package": "@bao/court",
+  "shippedImplementation": "courtEscalationRequest.ts",
+  "referenceImplementation": "scripts/differential/wire_ref.py (python3, stdlib only)",
+  "seed": 20261111,
+  "cases": 100000,
+  "sweepCases": 423,
+  "durationMs": 10357,
+  "ops": {
+    "build": 35203,
+    "parse_text": 24925,
+    "parse_object": 9893,
+    "to_event": 29979
+  },
+  "outcomes": {
+    "accept": 51252,
+    "refuse": 48748
+  },
+  "refusalClasses": {
+    "json": 739,
+    "not_object": 964,
+    "duplicate_key": 5001,
+    "unknown_field": 4053,
+    "case_id_type_or_empty": 3264,
+    "case_id_not_canonical": 611,
+    "case_id_nul": 568,
+    "case_id_whitespace": 1854,
+    "case_id_too_long": 353,
+    "round": 4165,
+    "hex32_round_bond_proof_hash": 785,
+    "hex32_challenger_pubkey": 2114,
+    "hex32_bond_txid": 2114,
+    "hex32_bond_proof_hash": 2074,
+    "hex32_event_id": 1604,
+    "signed_at": 3202,
+    "concession_type": 6324,
+    "binding_missing": 931,
+    "binding_pubkey_format": 904,
+    "binding_case_mismatch": 766,
+    "binding_pubkey_mismatch": 191,
+    "binding_round": 918,
+    "ladder_missing": 756,
+    "ladder_counters": 171,
+    "bond_none": 469,
+    "bond_ambiguous": 72,
+    "bond_txid": 97,
+    "now": 1900,
+    "concession_not_escalation": 1440,
+    "state_shape": 344,
+    "panic": 0
+  },
+  "distinctDisagreements": 0,
+  "disagreements": [],
+  "findingRegister": [
+    {
+      "id": "d1",
+      "verdict": "ts-bug",
+      "summary": "escalationRequestToMachineEvent threw a RAW TypeError on a restored snapshot: `state.ladderRound` was read before any shape check (state null -> \"Cannot read properties of null (reading 'ladderRound')\"), `state.challenges.filter` on a non-array ledger (\"... is not a function\", 344 cases) and a null ledger row (\"Cannot read properties of null (reading 'bondProofHash')\", 95 cases). Every other guard in the package fails closed with a typed error (assertStateArrays, r3-1/r41-1); this path did not.",
+      "resolution": "Fixed in courtEscalationRequest.ts: the mapper now requires a record state, an array challenge ledger, and matches only rows that are objects — all typed refusals. Pinned in __tests__/differentialWire.test.ts.",
+      "repro": {
+        "op": "to_event",
+        "note": "state null; challenges {} / null / [null]"
+      }
+    },
+    {
+      "id": "d2",
+      "verdict": "ts-bug",
+      "summary": "A NON-OBJECT descriptor escaped the codec as a raw TypeError: build(null) -> \"Cannot read properties of null (reading 'caseId')\". The r8-5 hardening (\"a raw TypeError must not escape instead of this module's typed refusal\") covered re-read fields but not the argument itself, and hash/build/escalationRequestToMachineEvent all reach it.",
+      "resolution": "Fixed: buildCourtEscalationRequest refuses a non-object descriptor with the typed refusal the wire uses for a non-object body (class not_object). Pinned in __tests__/differentialWire.test.ts (build(null), build([]), hash(null)).",
+      "repro": {
+        "op": "build",
+        "note": "payload null / [] / \"text\""
+      }
+    },
+    {
+      "id": "d3",
+      "verdict": "spec-gap",
+      "summary": "\"must not have leading or trailing whitespace\" never said WHICH characters. The ECMAScript trim set (the shipped reading) REFUSES U+FEFF at an edge but ACCEPTS U+0085 and U+001C..U+001F, which Unicode White_Space (and Python str.isspace) treat as whitespace: a second implementer picking the Unicode set disagrees in both directions, on invisible characters, at the one place two ids must not become one.",
+      "resolution": "Decision: the ECMAScript WhiteSpace+LineTerminator set IS the contract (the codec is the JS library and trim is its definition). Pinned in the reference (JS_WHITESPACE) and in the differential test over the union of both sets (35 characters, both edges, alone, interior). docs/DIFFERENTIAL_WIRE.md §5 D1.",
+      "repro": {
+        "op": "build",
+        "note": "caseId prefixed/suffixed with U+0085 (accepted) or U+FEFF (refused)"
+      }
+    },
+    {
+      "id": "d4",
+      "verdict": "spec-gap",
+      "summary": "The \"canonical UTF-8 (no unpaired surrogates)\" refusal is not the test its message names: it is a TextEncoder/TextDecoder round-trip, and a WHATWG decoder STRIPS one leading U+FEFF, so any id beginning with a BOM is refused as \"surrogates\" instead of as edge whitespace. Measured on the first run: leading-BOM id -> case_id_not_canonical while the same BOM at the end -> case_id_whitespace, and a BOM-only id -> \"non-empty string\". Two readings of the sentence report different reasons for the same refusal.",
+      "resolution": "Decision: the ROUND-TRIP is the contract (it is the injectivity test that matters, and both readings refuse the string), so the reference models the BOM strip explicitly. Registered as a diagnostic wart: the message names a surrogate that is not there, which sends an operator hunting the wrong character. Fixing the wording (or ignoreBOM) changes ballot-outcome validation in courtVoteMachine, a different module — out of scope, registered for the owner. Pinned in docs/DIFFERENTIAL_WIRE.md §5 D4 and in the test (leading vs trailing BOM classes).",
+      "repro": {
+        "op": "build",
+        "note": "caseId \"\\ufeffcourt:x\" (class: not canonical) vs \"court:x\\ufeff\" (class: whitespace)"
+      }
+    },
+    {
+      "id": "d5",
+      "verdict": "spec-gap",
+      "summary": "A JSON numeric literal is not a value. `9007199254740991.4` is read by a double parser as the integer 9007199254740991 (a safe integer, so the request is ACCEPTED and digested as that) and by an exact/decimal parser as a non-integer (REFUSED); `9007199254740993` is refused by both but for different reasons (double: 2^53 is outside the safe range; exact: ...993 is). The wire had no sentence about numeric portability, so two implementations can differ on accept/refuse for the fractional class. Modelled from the start in the reference, so the campaign never recorded it as a disagreement — a corner closed by decision, not a bug found.",
+      "resolution": "Decision: a number field is the IEEE-754 double its literal denotes (JSON.parse semantics). Encoders must emit decimal integers in +/-(2^53-1); a fractional literal that rounds to a safe integer is accepted with the rounded value, and the canonical re-serialization carries the double. Pinned in the reference (parse_int=float) and in the test. docs/DIFFERENTIAL_WIRE.md §5 D3.",
+      "repro": {
+        "op": "parse_text",
+        "note": "{\"signedAtSec\":9007199254740991.4} accepted as ...991; {\"signedAtSec\":9007199254740993} refused"
+      }
+    }
+  ],
+  "command": "npx tsx scripts/differential/run.mjs --count 100000 --seed 20261111"
+}
