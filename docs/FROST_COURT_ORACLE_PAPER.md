@@ -50,7 +50,13 @@ never locked for the lifetime of a market. The reference implementation is
 this repository: platform-neutral TypeScript with a deterministic end-to-end
 simulation harness that runs the entire pipeline — selection, DKG, voting,
 threshold signing, attestation validation, slashing, and both settlement rails
-— in one process with no network. The evaluation methodology is itself part of
+— in one process with no network. Rail evidence is ranked by the environment
+that produced it: a result from the **public** testnet4 or signet-public chain
+outranks one from the **private signet** that BAO's hosts run. The private
+signet is used only where the public chains do not carry the rail today
+(Lightning, Cashu), and every result from it is labelled *private signet* so
+that a reviewer can weigh it (§11.8). The evaluation methodology is itself part
+of
 the design: line-checked proofs of six core properties, exhaustive
 *reachability* model checking of three of the four ceremony machines on bounded
 instances (rosters $n \le 4$, reduced clock universes; the DKG machine is
@@ -133,7 +139,9 @@ Schnorr constructions.
 4. A **reference implementation and whole-court simulation harness** with a
    documented audit record (App. A.5) and an evaluation methodology:
    line-checked proofs, exhaustive model checking, in-house differential
-   parity, and a regenerable performance baseline (§11).
+   parity, and a regenerable performance baseline (§11) — with its rail
+   evidence ranked by the environment that produced it, public testnet4 and
+   signet-public above the private signet (§11.8).
 5. **Universal confirmation and the escalation ladder** — every outcome
    (disputed or not) confirmed by a juror panel; bond-witnessed challenges;
    a ×3-per-round mass-vote ladder with flip-flop clawback flags and an
@@ -1085,6 +1093,19 @@ derivation, state machines, adapter contracts, and test fakes — and must
 never contain keys, node URLs, credentials, or business policy. Hosts
 implement the `LnRail` / `LiquidRail` contracts privately.
 
+**The rail plan, in order, and its status.** Liquid on **testnet** is the
+primary bond and ceremony rail and is being proven first: the escrow and
+covenant path ships here and is test-covered, while the *Liquid bond
+verification* that would let a host arm `enforce` is in flight — the shipped
+`BondVerifier` is format-only, and the campaign report (App. A, S-25) §6
+records that residual with its trigger. On-chain **testnet4 / signet-public**
+is next.
+**Lightning** and **Cashu** — the latter host-implemented and not specified
+here — run only on the *private signet* until the public testnet carries them.
+None of the three is claimed as proven in this text: §9.1–9.2 specify the
+constructions, and §11.8 states which environment would have to produce the
+evidence before a rail claim can be weighed.
+
 ### 9.1 Panel A — Lightning hold invoices
 
 Lightning cannot script-enforce a penalty, so Panel A implements *social
@@ -1258,8 +1279,9 @@ splitting to the $1\%$-of-volume floor the achievable weight is linear in
 stake, so the exponent is a transaction cost on splitting, not a plutocracy
 bound (the economics gap-fills note, App. A, S-15, §5).
 
-**G. Single-process ceremony (prototype).** Demo coordinators run the DKG and
-signing in one process; compromising it observes all shares in memory.
+**G. Single-process ceremony (prototype).** The coordinators deployed on the
+private signet (§11.8) run the DKG and signing in one process; compromising it
+observes all shares in memory.
 *Documented; closed only by cross-client deployment (A2–A3), which is a
 production gate, not a protocol change.*
 
@@ -1406,7 +1428,9 @@ established.
 This repository *is* the reference implementation: platform-neutral
 TypeScript (browser and Node), no UI, no networking of its own, no
 persistence — hosts inject clocks, storage, signers, relay pools, and rail
-adapters. The module map is in App. A.2.
+adapters. The module map is in App. A.2. Which environment establishes which
+result — and what a result from the private signet is worth beside one from the
+public testnet — is §11.8's business; read it before weighing any rail claim.
 
 ### 11.1 Suite, simulation, and review record
 
@@ -1878,6 +1902,57 @@ simulated; and Byzantine liveness is unchanged (one dead juror stalls the
 attempt). The *coordination* structure is real; the *distribution* gap remains
 PO-14 (App. A, S-19).
 
+### 11.8 Which environment establishes what — the evidence hierarchy
+
+**Terminology: this text names the network, not the product mode.** The chain
+BAO's hosts run today is a **private signet**: a custom signet — Bitcoin Core
+with an operator-supplied challenge, so the consensus rules are Bitcoin's, but
+the only miner is BAO. *Demo* is a **product mode** (the play-money `demo`
+route in the app), not a second chain, and it runs on the private signet.
+Code and configuration keep the identifier `demo` — environment variables,
+`/demo/*` routes, package and module names, and the `demo` member of the
+session-parameter enum `COURT_ENVIRONMENTS` (which carries `demo`, `signet`,
+`mainnet`) — so a reader grepping the implementation finds `demo` wherever this
+paper says *private signet*; the two names are one environment, not two.
+
+**The hierarchy.** Rail evidence is ranked by who else could have produced it.
+
+1. **Public testnet4 / public signet (`signet-public`) — strongest.** A public
+   chain: external miners, an independent validator set, no BAO control of
+   block production, and a fee market and mempool we do not own. Evidence from
+   here is the evidence a reviewer should weigh first, and it is the only
+   evidence that speaks to liveness under parties who are not us. *No rail
+   result in this paper comes from either chain yet* — the rail plan in §9 says
+   which comes first and what it would establish.
+2. **Private signet — used only where the public testnet does not carry the
+   rail** (today: **Lightning** hold invoices and **Cashu** ecash). Every
+   result from it is labelled *private signet*, and a reviewer should read that
+   label as "executes and settles under real consensus rules, with no external
+   counterparty".
+3. **No chain at all.** Everything in §11.1–§11.7 that involves no network —
+   the suite, the model checker, the differential, the corpora, the
+   performance baseline, the soak, the multi-process ceremony — is property
+   evidence about *this package's* code, labelled by what it is rather than by
+   where it ran, and it is not upgraded or downgraded by the list above.
+
+**What the private signet buys, and what it does not.** It buys full control of
+block production and of the funded wallets; **real Bitcoin consensus rules** —
+the same script, sighash and standardness semantics as mainnet, unlike a
+`regtest` chain that will accept what mainnet refuses, which is why a Taproot or
+covenant construction can be exercised against a real interpreter here at all;
+and **deterministic funding** — a faucet we operate, so a test is re-run rather
+than waited for, which is what makes a bond, a premium or a slash reproducible
+at all. It does **not** buy the three things that make a rail result externally
+credible: **no external parties** (every counterparty in the flow is ours, so
+nothing is tested against an independent signer, payer or relay), **no public
+validator set** (one operator mines, so reorg, censorship and depth assumptions
+are untested), and **no adversarial liveness** (no competing mempool, no fee
+market we do not set, no third party who can decline to propagate). A
+private-signet result therefore establishes that a construction *executes and
+settles*; it does not establish that it *survives an adversary who is not us*.
+That is the sentence to apply to every `private signet` label in this text and
+in the repository's rail notes, and it is why the public chains outrank it.
+
 ---
 
 ## 12. Production gates (honest status)
@@ -1896,7 +1971,10 @@ private transport; host-key lifecycle, outbox, inbox, recovery.
 Remains **host-side or pre-production** (engineering, not design):
 
 1. Rail *execution* — real LN/Liquid node adapters that lock, settle,
-   cancel, slash, and broadcast (private per the secrecy boundary).
+   cancel, slash, and broadcast (private per the secrecy boundary). The rail
+   order and the environment that can prove each rung are §9's; the ranking of
+   those environments' evidence is §11.8's, and no rung is claimed as proven
+   until its evidence comes from a public chain.
 2. Cross-client ceremonies — DKG/signing across independent juror devices
    over encrypted channels (the package ships the machinery; production
    consumers must run it distributed). The *coordination* half is now exercised
@@ -2162,6 +2240,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-22 | Three-day fault-injected soak (30,000 settlements, 32/32 assertions, SOAK-F7/F8/F11) | host repository `bao.markets`: `docs/benchmarks/SOAK_3DAY.md`, `docs/benchmarks/soak-3day.json` |
 | S-23 | Review round 7 — attacking v0.13.2 and the R41 host fixes (r41-1, r41-2, r41-T1-doc, H-1…H-7; the sign-rule grid, the legacy clamp's readers, the strict-policy upgrade order) | `docs/REVIEW_ROUND_7.md` |
 | S-24 | Review round 8 — attacking the v0.14.0 escalation transport and the r41-1 barrier (r8-1…r8-6; the wire-refusal matrix, the required host binding, the four paths to `final`, the consistent-forgery boundary) | `docs/REVIEW_ROUND_8.md` |
+| S-25 | Campaign report (what was run, found and shipped; the residuals with their owners and triggers) | `docs/CAMPAIGN_REPORT.md` |
 
 ### A.2 Proofs and machine-checked artifacts
 

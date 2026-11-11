@@ -110,6 +110,21 @@ Each layer checks the one beneath it.
 | **Contract** | `scripts/reproduce.sh` | 13 stages; `REPRODUCED` verdict; digit-exact model-check fixture |
 | **Cross-check** | `scripts/cross-check.mjs` | 285 claims / 516 refs / 95.1 %; dangling codes fail the build |
 
+**Environment ranking applies to every rail claim in this repository.** The
+network BAO's hosts run is a **private signet** (Bitcoin consensus rules, one
+operator, a faucet we control); code and configuration keep the identifier
+`demo` for it, so `demo` in an artifact name is this network, not a second
+chain. Evidence from a **public** chain (testnet4, `signet-public`) is stronger
+— external counterparties, an independent validator set, an adversary who is
+not us — so the private signet is used only where the public testnet does not
+carry the rail (today: Lightning, Cashu), and every result from it is labelled
+`private signet`. Rail order follows the same ranking: **Liquid on testnet**
+first — the bond/ceremony rail, with **Liquid bond verification in flight**
+(`BondVerifier` is format-only until it is armed) — then on-chain **testnet4 /
+signet-public**, and Lightning/Cashu only on the private signet until the public
+testnet runs them. Nothing in this report claims any of the three as proven. The
+paper's full statement is §11.8.
+
 ---
 
 ## 5. The methodology (the reusable part)

@@ -45,7 +45,9 @@ never assumed, including the optimizations that were *refused* with numbers
 (§4). The threat-model chapter closes the loop: 285 indexed claims, **95.1%**
 backed by executable evidence (§5). What the numbers do **not** prove is stated
 in §6 — reviewers should read it, especially items 7–8, which are the new
-limits this refresh introduced rather than removed.
+limits this refresh introduced rather than removed, and item 10, which ranks
+rail evidence by the environment that produced it (public testnet4 /
+signet-public above the private signet; paper §11.8).
 
 **Recorded verification state at v0.10.2 `main` (2026-11-10, PR #64):** full
 suite **1,491 passed / 1 skipped (61 files)**; `npm run typecheck` +
@@ -611,6 +613,24 @@ results:
    makes stale numbers *visible*; `docs/REPRODUCIBILITY.md` specifies how a
    reviewer regenerates every number on this page from one command — and
    SOAK-F8 is what happens when a harness is allowed to age unobserved.
+10. **Rail evidence is environment-ranked, and the deployed chain is a private
+   signet.** The network BAO's hosts run is a **private signet** — Bitcoin
+   consensus rules, one operator, a faucet we control — and code keeps the
+   identifier `demo` for it (`/demo/*` routes, `COURT_ENVIRONMENTS`), so the
+   word appears in the implementation but is not a second chain (paper §11.8).
+   Evidence on a **public** chain (testnet4, `signet-public`) is *stronger* than
+   evidence on the private signet: it has external counterparties, an
+   independent validator set and a liveness adversary that is not us. The
+   private signet is therefore used **only** where the public testnet does not
+   carry the rail (today: Lightning, Cashu), and every result from it must be
+   labelled `private signet` so a reviewer can weigh it. What the private
+   signet buys is real: full control, real consensus rules, deterministic
+   funding — so a construction *executes and settles*; what it cannot buy is an
+   adversary who is not us. The rail plan follows the same ranking: **Liquid on
+   testnet** first (the bond/ceremony rail; Liquid bond verification is in
+   flight — `BondVerifier` is format-only until it is armed), then on-chain
+   **testnet4 / signet-public**, with Lightning and Cashu staying on the private
+   signet until the public testnet runs them.
 
 ---
 
@@ -629,7 +649,7 @@ results:
 | §4.2 soak (one day) | `scripts/soak/court-soak.mts` + README (host repo) | bao.markets #2293, #2295 |
 | §4.3 soak (three days, faults) | `scripts/soak/court-soak.mts --days 3 --faults`, `docs/benchmarks/soak-3day.json` + `SOAK_3DAY.md` (host repo) | bao.markets #2414 |
 | §5 threat model + coverage | `docs/THREAT_MODEL.md`, `docs/CROSS_CHECK.md`, `scripts/cross-check.mjs` | #62, #63, #64 |
-| §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats, `docs/MULTI_PROCESS_CEREMONY.md` | #53, #50, #98 |
+| §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats, `docs/MULTI_PROCESS_CEREMONY.md`; §6 item 10 (rail evidence ranking) is stated in paper **§11.8** and `docs/CAMPAIGN_REPORT.md` §4 | #53, #50, #98 |
 
 Every pointer above resolves on `main`; the doc-level check is
 `node scripts/cross-check.mjs` (exit 0) plus the one-command regeneration
