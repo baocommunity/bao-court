@@ -350,6 +350,18 @@ frozen.
   default 5 s test timeout flaked the property sweep (deterministic
   assertions; no behaviour change).
 
+## [0.11.0] — 2026-11-11
+
+### Added — external-review response + verification campaign
+- Lean 4 mechanisation of single finality (`oracle_single_finality` checked, no sorry; `final_stable`; `machine_alone_insufficient`), toolchain pinned.
+- FROST signing attribution (Theorem 6; session journal; `attribution.ts`), RFC 9162 journal spec + D-BATCH signer duty.
+- Court judge leaf (`buildCourtJudgeLeaf`) + settlement-binding analysis (A6, INV-SETTLE-1, F-13; honest v1 host-mediated).
+- Parameter hardening: `confirmQuorum` default ⌈2N/3⌉; `quorumBelowSupermajority` recorded.
+- Proofs: 5 theorems + 4 economic (gap-fills incl. capture table, per-rail V_max, P+ε, seed grinding, splitting) + 4 security definitions + attribution.
+- Campaigns: mutation (53 mutants, 8 spec holes closed, 100% re-sweep); scale (1,171,000 units / 3,592,861 checks / 0 failures).
+- Paper: related work, assurance-case language, 11 corrections, scope-of-verification, provenance, reviewer disclosure.
+- Invariants 145 → 149. Suite 1,534 passed.
+
 ## [0.10.2] — 2026-11-10
 
 ### Documentation (API-surface documentation round — comments only, zero behavior change)
