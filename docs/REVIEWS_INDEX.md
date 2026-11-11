@@ -3,7 +3,20 @@
 **The single map of the self-verification campaign.** Every review, simulation,
 audit and campaign round this repository has run — in order, with what it
 attacked, what it found (by severity), where the fix landed, and how the
-residual was dispositioned. **Tracks `@bao/court` v0.14.1 · 2026-11-11.**
+residual was dispositioned. **Tracks `@bao/court` v0.15.2 · 2026-11-11.**
+
+**Current totals at `v0.15.2`** (each with its artifact): suite **1,953 tests /
+90 files** (clean-runner CI battery); mutant catalogue **101** across three
+campaigns (`docs/MUTATION_TESTING*.md`); scale campaign **1,587,000 units /
+8,286,823 assertions / 0 failures** (`docs/benchmarks/SCALE_CAMPAIGN_V2.md`);
+model checking **3,869,232 states / 213,521,172 applications / 60,020,684
+illegal-witness probes, 0 accepted**; mechanised proofs **42 Lean 4
+declarations** (`proofs/lean4/`, no `sorry`) + Apalache exhaustive
+(`proofs/mechanized/`); independent wire differential **100,000 cases, 0
+disagreements** (`docs/DIFFERENTIAL_WIRE.md`); three-day soak **32/32
+assertions** (`docs/benchmarks/SOAK_3DAY.md`); cross-check **285 claims / 516
+refs / 95.1 %**. Rounds 1–12 and the v0.11.0 → v0.15.2 release ladder are mapped
+in the tables below; the narrative summary is `docs/CAMPAIGN_REPORT.md`.
 
 **How to use it.** This file is the index, not the record. A round's authoritative
 statement is its own document (column *Record* below); this page exists so a

@@ -1,7 +1,16 @@
 # BAO Court — Evaluation
 
-**Version:** tracks `@bao/court` v0.14.1 · **Date:** 2026-11-11 · **Round:** 45
-(paper refresh with the review-round 7–8 artifacts)
+**Version:** tracks `@bao/court` v0.15.2 · **Date:** 2026-11-11 · **Round:** 56
+(final totals refresh after review rounds 9–12)
+
+> **Final totals at `v0.15.2`.** Suite 1,953 tests / 90 files (clean-runner CI);
+> 101 mutants across three campaigns; 1,587,000 campaign units / 8,286,823
+> assertions / 0 failures; 3,869,232 states / 60,020,684 illegal-witness probes
+> with 0 accepted; 42 Lean 4 declarations with no `sorry` (axioms `propext`,
+> `Quot.sound`); 100,000-case independent wire differential with 0
+> disagreements; three-day soak 32/32; cross-check 285 claims / 516 refs /
+> 95.1 %. Tables below are the per-round measurements, each dated to the release
+> it was taken on.
 
 This is the paper's evaluation section as a standalone artifact. Every number
 below comes from **existing committed evidence** — a merged PR, a committed
