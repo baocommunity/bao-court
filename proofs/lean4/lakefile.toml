@@ -1,6 +1,12 @@
 name = "baoCourtProofs"
 version = "0.1.0"
-defaultTargets = ["SingleFinality"]
+defaultTargets = ["SingleFinality", "LadderBound", "EscalationLedger"]
 
 [[lean_lib]]
 name = "SingleFinality"
+
+[[lean_lib]]
+name = "LadderBound"
+
+[[lean_lib]]
+name = "EscalationLedger"
