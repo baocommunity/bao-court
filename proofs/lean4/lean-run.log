@@ -1,0 +1,29 @@
+# Lean 4 mechanisation run — proofs/lean4/SingleFinality.lean
+# tool: Lean (version 4.14.0, x86_64-unknown-linux-gnu, commit 410fab728470, Release)
+# date: 2026-11-11T00:16:00Z
+
+═══ 1/2 lake build (kernel-checks every proof) ═══
+✔ [2/3] Built SingleFinality
+Build completed successfully.
+[ok] build clean, no 'sorry'
+
+═══ 2/2 axiom audit (no sorryAx / ofReduceBool / custom axioms) ═══
+'BAOCourt.terminal_untouched' depends on axioms: [propext, Quot.sound]
+'BAOCourt.final_stable' depends on axioms: [propext, Quot.sound]
+'BAOCourt.finalized_outcome_unique' does not depend on any axioms
+'BAOCourt.oracle_single_finality' depends on axioms: [Quot.sound]
+'BAOCourt.epochMessage_finalized' depends on axioms: [propext, Quot.sound]
+'BAOCourt.finalized_eq_epochMessage' depends on axioms: [propext, Quot.sound]
+'BAOCourt.machine_alone_insufficient' does not depend on any axioms
+'BAOCourt.no_equivocation' does not depend on any axioms
+'BAOCourt.machine_final_certified_unique' does not depend on any axioms
+oracle_single_finality : ∀ (s : SystemState) (e : Epoch) (m1 m2 : Message),
+  State.Finalized s e m1 ∧ State.Finalized s e m2 → m1 = m2
+@finalize_barrier : ∀ {s s' : SystemState} {e : Epoch} {c : CaseId},
+  step s (Event.finalize e c) = some s' →
+    ∃ se,
+      look (e, c) s.sessions = some se ∧
+        se.phase = Phase.feeSettlement ∧
+          se.verdict.isSome = true ∧ s' = { sessions := updateAt (e, c) (Effect.advance Phase.final) s.sessions }
+
+═══ ALL CHECKS COMPLETED ═══
