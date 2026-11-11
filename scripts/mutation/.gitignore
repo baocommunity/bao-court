@@ -1,0 +1,6 @@
+# Default output of run-mutants.mjs (rewritten on every sweep). The committed
+# evidence artifacts are the dated/phase-named ones: pass1-preclosure.json,
+# pass2-postclosure.json, postclosure-full.json.
+last-run.json
+last-run.json.partial.jsonl
+*.partial.jsonl

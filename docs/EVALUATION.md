@@ -42,6 +42,9 @@ evidence pointers, exit 0. *(Rehearsal refresh, round 17, 2026-11-10: full
 suite now **1,492 passed / 1 skipped (61 files)** — one test added by the
 round-16 review fixes; all contract stages PASS — see
 `docs/DRESS_REHEARSAL.md`.)*
+*(Round 21, 2026-11-11: full suite now **1,534 passed / 1 skipped (64 files)** —
+14 mutation-closure tests added by the mutation campaign; see
+`docs/MUTATION_TESTING.md`.)*
 
 ---
 

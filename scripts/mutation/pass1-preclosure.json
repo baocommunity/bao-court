@@ -1,0 +1,3834 @@
+{
+  "tool": "scripts/mutation/run-mutants.mjs",
+  "generatedAt": "2026-11-11T00:17:41.080Z",
+  "repoRoot": "/home/bob/Documents/bao-court--test-mutation",
+  "precision": "single semantic mutation per source file, applied to a sandbox copy",
+  "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+  "cleanTree": {
+    "pristineBefore": "M __fixtures__/model-check-summary.json\n?? scripts/mutation/",
+    "pristineAfter": "?? scripts/mutation/",
+    "unchanged": false
+  },
+  "parallelism": 4,
+  "baseline": {
+    "totalTests": 1474,
+    "passedTests": 1473,
+    "failedTests": 0,
+    "failedSuites": 0,
+    "failing": [],
+    "success": true,
+    "wallMs": 94539
+  },
+  "summary": {
+    "total": 53,
+    "captured": 46,
+    "survived": 7,
+    "score": 0.8679245283018868,
+    "byClass": {
+      "deadline-off-by-one": {
+        "description": "deadline boundary (exactly-at vs deadline-1)",
+        "total": 4,
+        "captured": 4,
+        "score": 1,
+        "survivors": []
+      },
+      "tie-break-reversal": {
+        "description": "deterministic tie-break order (UTF-8 bytes vs UTF-16 units)",
+        "total": 3,
+        "captured": 2,
+        "score": 0.6666666666666666,
+        "survivors": [
+          "M07"
+        ]
+      },
+      "quorum-dropped": {
+        "description": "confirmation quorum check dropped",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "threshold-weakened": {
+        "description": "threshold/finality minimum weakened (>= → >)",
+        "total": 4,
+        "captured": 4,
+        "score": 1,
+        "survivors": []
+      },
+      "ledger-barrier-removed": {
+        "description": "ledger barrier (assertValid*) skipped",
+        "total": 4,
+        "captured": 3,
+        "score": 0.75,
+        "survivors": [
+          "M15"
+        ]
+      },
+      "duplicate-idx": {
+        "description": "duplicate index / duplicate record accepted",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      },
+      "monotonic-clock-removed": {
+        "description": "monotonic-clock ledger check removed",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      },
+      "clamp-boundary": {
+        "description": "clamp / boundary comparison flipped (>= vs >)",
+        "total": 4,
+        "captured": 3,
+        "score": 0.75,
+        "survivors": [
+          "M24"
+        ]
+      },
+      "merkle-domain-separation": {
+        "description": "Merkle leaf/node domain tag swapped",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "signer-set-check-dropped": {
+        "description": "signer-set length / freeze check dropped",
+        "total": 2,
+        "captured": 0,
+        "score": 0,
+        "survivors": [
+          "M30",
+          "M31"
+        ]
+      },
+      "cap-off-by-one": {
+        "description": "cap boundary off-by-one (attempt/round/batch cap)",
+        "total": 4,
+        "captured": 3,
+        "score": 0.75,
+        "survivors": [
+          "M35"
+        ]
+      },
+      "clawback-dedup-removed": {
+        "description": "clawback flag dedup removed",
+        "total": 3,
+        "captured": 2,
+        "score": 0.6666666666666666,
+        "survivors": [
+          "M37"
+        ]
+      },
+      "phase-guard-loosened": {
+        "description": "terminal-phase guard loosened (post-terminal event accepted)",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      },
+      "abort-precedence": {
+        "description": "abort precedence inverted (abort no longer pre-terminal)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "encoding-length-prefix": {
+        "description": "CanonicalWriter length prefix / endianness broken",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "hex-case": {
+        "description": "uppercase hex accepted where canonical lowercase is required",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "empty-pin-acceptance": {
+        "description": "empty-string pin accepted (F-2 regression)",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      },
+      "proof-bounds": {
+        "description": "batch proof/duplicate bounds loosened",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      }
+    },
+    "byDetector": {
+      "tests": {
+        "total": 53,
+        "captured": 44,
+        "score": 0.8301886792452831
+      },
+      "spot": {
+        "total": 53,
+        "captured": 23,
+        "score": 0.4339622641509434
+      },
+      "model": {
+        "total": 53,
+        "captured": 10,
+        "score": 0.18867924528301888,
+        "applicable": 32,
+        "scoreApplicable": 0.3125
+      }
+    },
+    "survivors": [
+      {
+        "id": "M07",
+        "cls": "tie-break-reversal",
+        "file": "selection.ts",
+        "intent": "exact-priority ties rank pubkeys descending — the draw stops being reproducible across implementations"
+      },
+      {
+        "id": "M15",
+        "cls": "ledger-barrier-removed",
+        "file": "confirmationMachineHandlers.ts",
+        "intent": "resolve_round takes clawback indices from an unverified confirmation ledger"
+      },
+      {
+        "id": "M24",
+        "cls": "clamp-boundary",
+        "file": "selection.ts",
+        "intent": "r = 1 escapes the clamp → priority 0 → that juror deterministically wins every draw"
+      },
+      {
+        "id": "M30",
+        "cls": "signer-set-check-dropped",
+        "file": "validator.ts",
+        "intent": "a signer set of any size paired with any declared threshold validates (signerSet root still matches its own set)"
+      },
+      {
+        "id": "M31",
+        "cls": "signer-set-check-dropped",
+        "file": "courtSigningMachine.ts",
+        "intent": "a restored signing state's frozen signer set is no longer re-verified against the stored commitments (A-1)"
+      },
+      {
+        "id": "M35",
+        "cls": "cap-off-by-one",
+        "file": "batchAttestation.ts",
+        "intent": "batch cap off-by-one: exactly MAX_BATCH_VERDICTS is refused"
+      },
+      {
+        "id": "M37",
+        "cls": "clawback-dedup-removed",
+        "file": "confirmationMachineHandlers.ts",
+        "intent": "round_flip flags duplicate per voter (idempotence of the flip-flop rule broken)"
+      }
+    ],
+    "baselineTests": 1474
+  },
+  "mutants": [
+    {
+      "id": "M01",
+      "cls": "deadline-off-by-one",
+      "file": "courtCeremonyCore.ts",
+      "intent": "accepts an event arriving EXACTLY at the deadline (should be strictly-before) — every machine shares this guard",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 9,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: legality matrix — every event at every phase, typed failures only dkg: finalize_transcript at deadline-1 legal, at deadline throws; certified is tick-exempt",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "accept_confirmation rejects confirmations at or after the deadline and during wrong phases",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window rejects opening during the wrong phase or past the deadline",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window rejects challenges after the deadline, off-roster, or malformed",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round rejects votes outside the allowlist, off-roster, duplicate, and after deadline",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtCores.test.ts",
+            "name": "courtCeremonyCore assertBeforeDeadline rejects messages at/after the deadline",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtVoteMachine.test.ts",
+            "name": "Court vote state machine rejects reveals without a prior commit and commits after the deadline",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtVoteMachine.test.ts",
+            "name": "Court vote state machine rejects opening vote reveals at or after the reveal deadline",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-5: universal deadline precedence + universal monotonic ledger clock (F-12 closed) F-12 (CLOSED in v0.9.2): signing/DKG keep the monotonic ledger clock too",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          }
+        ],
+        "wallMs": 122493
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S01",
+            "error": "Error: event at exactly the deadline was accepted"
+          }
+        ],
+        "wallMs": 1289
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 122511
+    },
+    {
+      "id": "M02",
+      "cls": "deadline-off-by-one",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a tick at exactly the deadline no longer expires the phase (expiry slips one tick)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: legality matrix — every event at every phase, typed failures only confirmation: no-challenge path settles immediately; quorum shortfall fails closed",
+            "message": "AssertionError: expected 'confirm_open' to be 'expired' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline expires awaiting-input phases at their deadlines and exempts near-final phases",
+            "message": "AssertionError: expected 'confirm_open' to be 'expired' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline expires confirm_closed and challenge_window at the challenge deadline",
+            "message": "AssertionError: expected 'confirm_closed' to be 'expired' // Object.is equality"
+          }
+        ],
+        "wallMs": 122363
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S02",
+            "error": "Error: expected expired, got confirm_open"
+          }
+        ],
+        "wallMs": 1239
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 69278,
+            "error": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: STUCK STATE (no non-aborted terminal reachable, not a documented parking state): ladder_vote_open|10|3.33333333|1.11111111|L1.10..R|1|||0|-|-"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: STUCK STATE (no non-aborted terminal reachable, not a documented parking state): ladder_vote_open|10|3.33333333|1.11111111|L1.10..R|1|||0|-|-",
+        "wallMs": 70126
+      },
+      "wallMs": 192516
+    },
+    {
+      "id": "M03",
+      "cls": "deadline-off-by-one",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "the legal at-deadline close is refused (boundary moved one tick the other way)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 55,
+        "failedSuites": 1,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/adversarialMachines.test.ts",
+            "name": "<suite failed to run>",
+            "message": "cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/confirmationPipeline.test.ts",
+            "name": "universal-confirmation end-to-end pipeline uncontested case: cohort → confirmations → verdict → batch → real-signature verification",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/confirmationPipeline.test.ts",
+            "name": "universal-confirmation end-to-end pipeline challenged case: overturn → clawback flags → verdict still batch-verifiable",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/confirmationPipeline.test.ts",
+            "name": "universal-confirmation end-to-end pipeline v2 attestation binding signs the full finality tuple with a real key",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "no-challenge happy path confirms, closes, skips the ladder, and finalizes the proposal",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "no-challenge happy path fails closed when the confirm quorum never formed",
+            "message": "AssertionError: expected [Function] to throw error matching /quorum not met/ but got 'cannot close confirmations before the…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "accept_confirmation rejects confirmations at or after the deadline and during wrong phases",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window rejects opening during the wrong phase or past the deadline",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window routes to fee_settlement with no challenges and ladder_pending with one",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window rejects challenges after the deadline, off-roster, or malformed",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round enforces consecutive rounds and non-past deadlines",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round accepts mass votes, closes, and resolves a majority",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round flags every confirming juror for clawback on overturn",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round leaves clawback flags empty when the proposal is upheld",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round breaks tallies deterministically on ties",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round rejects votes outside the allowlist, off-roster, duplicate, and after deadline",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round fails closed when closing a round with zero votes",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "fee ledger and clawback flags records fees idempotently and rejects malformed ids",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "fee ledger and clawback flags accepts explicit clawback flags only during fee_settlement, deduped per (idx, reason)",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "finalize builds the verdict from winning mass votes on overturn",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "finalize rejects finalize outside fee_settlement and re-processing after final",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline expires awaiting-input phases at their deadlines and exempts near-final phases",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline expires confirm_closed and challenge_window at the challenge deadline",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline freezes state so ledgers cannot be mutated between transitions",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a well-formed restored history resolves cleanly (round_flip intact)",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a forged round sequence (gap / forged round number) is rejected at resolve_round",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a forged history cannot direct round_flip clawbacks at arbitrary indices",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) an outcome outside the frozen allowlist and malformed winner records are rejected",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) finalize re-verifies the restored history before reaching final",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-3: every terminal state is absorbing (tick no-ops, other events throw typed) confirmation machine: final, expired, and aborted each absorb",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-4: freeze discipline holds on every exported state shape every create/reduce result is deeply frozen on all four machines",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-10/INV-VOTE-9: verdict domain sharing and the commit version bit the confirmation machine mints its verdict hash with the vote machine’s Verdict/v1 function",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion grows 15 → 45 → 135 panels across three escalated rounds (round count tracked, panels host-side)",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion accepts an expanded round roster: a round-2 joiner outside the case roster may vote",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion does NOT require the round roster to be a superset of the previous round (shrinking panel is legal)",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion rejects malformed round rosters: non-sequential, < 3 seats, and votes outside the ROUND panel",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: escalate/concede decision matrix escalate re-opens the ladder for the next consecutive round; the machine never auto-escalates",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: escalate/concede decision matrix concede settles with the current round outcome as final",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: escalate/concede decision matrix rejects escalate/concede outside round_resolved and double decisions",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: escalate/concede decision matrix a round_resolved case is tick-exempt while awaiting the host decision (the appeal window is host policy)",
+            "message": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          }
+        ],
+        "wallMs": 116939
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S07",
+            "error": "CourtConfirmationTransitionError: cannot close confirmations before the confirm deadline"
+          }
+        ],
+        "wallMs": 1476
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108097,
+            "wallMs": 69829
+          }
+        ],
+        "wallMs": 70711
+      },
+      "wallMs": 187667
+    },
+    {
+      "id": "M04",
+      "cls": "deadline-off-by-one",
+      "file": "courtVoteMachine.ts",
+      "intent": "the vote ceremony does not expire at exactly the reveal deadline",
+      "machine": "vote",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: legality matrix — every event at every phase, typed failures only vote: tick at deadline-1 is a no-op, at the deadline expires; tick on a terminal phase is a frozen no-op",
+            "message": "AssertionError: expected 'reveal_open' to be 'expired' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtVoteMachine.test.ts",
+            "name": "Court vote state machine expires after the reveal deadline and rejects late finalization",
+            "message": "AssertionError: expected 'commit_open' to be 'expired' // Object.is equality"
+          }
+        ],
+        "wallMs": 123392
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1074
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": true,
+            "states": 2663,
+            "wallMs": 1603
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": true,
+            "states": 5507,
+            "wallMs": 3305
+          }
+        ],
+        "wallMs": 5611
+      },
+      "wallMs": 129026
+    },
+    {
+      "id": "M05",
+      "cls": "tie-break-reversal",
+      "file": "courtVoteMachine.ts",
+      "intent": "UTF-16 code-unit order replaces UTF-8 byte (code point) order: astral vs BMP outcomes sort differently",
+      "machine": "vote",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 10,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: determinism reveal orders that should not matter produce the same verdict (tie-break is a total order)",
+            "message": "AssertionError: expected '💩' to be '' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/attestationValidator.adversarial.test.ts",
+            "name": "adversarial: unicode & canonicalization documents where JS UTF-16 order and UTF-8 byte order DIVERGE",
+            "message": "AssertionError: expected -1 to be greater than 0"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/attestationValidator.adversarial.test.ts",
+            "name": "adversarial: unicode & canonicalization compareOutcomeUtf8 agrees with bytewise Buffer.compare across a nasty corpus",
+            "message": "AssertionError: expected 1 to be -1 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/attestationValidator.adversarial.test.ts",
+            "name": "adversarial: unicode & canonicalization vote-machine tie-break picks the UTF-8-byte-smaller outcome regardless of insertion order",
+            "message": "AssertionError: expected '𐀀' to be '\\uffff' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtVoteMachine.test.ts",
+            "name": "Court vote state machine breaks ties by canonical UTF-8 byte order, not UTF-16 code units",
+            "message": "AssertionError: expected '💩' to be '' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: plurality tally + tie-break UTF-8 tie-break divergence pin: U+FFFD beats U+1F600 bytewise although UTF-16 order is opposite",
+            "message": "AssertionError: expected '😀' to be '\\ufffd' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: plurality tally + tie-break compareOutcomeUtf8 === Buffer.compare order over randomized unicode pairs",
+            "message": "AssertionError: pair (𐀀, ﬀ): expected -1 to be 1 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-9: compareOutcomeUtf8 is unsigned UTF-8 byte order (not UTF-16 code units) agrees with the Buffer.compare UTF-8 oracle on all pairs (incl. supplementary plane)",
+            "message": "AssertionError: expected -1 to be 1 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-9: compareOutcomeUtf8 is unsigned UTF-8 byte order (not UTF-16 code units) is a total order: antisymmetric and transitive on the sample space",
+            "message": "AssertionError: expected [ 'A', 'NO', 'YES', 'a', 'a𐀀', …(5) ] to deeply equal [ 'A', 'NO', 'YES', 'a', …(6) ]"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-9: compareOutcomeUtf8 is unsigned UTF-8 byte order (not UTF-16 code units) diverges from UTF-16 code-unit order exactly where the spec says (supplementary plane)",
+            "message": "AssertionError: expected 1 to be less than 0"
+          }
+        ],
+        "wallMs": 88547
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S07",
+            "error": "Error: tie-break picked \"a😀\" — UTF-8 order requires a+U+E000"
+          },
+          {
+            "id": "S08",
+            "error": "Error: UTF-8 order violated"
+          }
+        ],
+        "wallMs": 952
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": true,
+            "states": 2650,
+            "wallMs": 1911
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": true,
+            "states": 5482,
+            "wallMs": 3779
+          }
+        ],
+        "wallMs": 6850
+      },
+      "wallMs": 95411
+    },
+    {
+      "id": "M06",
+      "cls": "tie-break-reversal",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "ladder-round ties resolve to the larger outcome instead of the canonical smaller one",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "spot"
+      ],
+      "detectors": {
+        "tests": false,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 90151
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S07",
+            "error": "Error: tie-break picked \"a😀\" — UTF-8 order requires a+U+E000"
+          }
+        ],
+        "wallMs": 1602
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 82435
+          }
+        ],
+        "wallMs": 83434
+      },
+      "wallMs": 173602
+    },
+    {
+      "id": "M07",
+      "cls": "tie-break-reversal",
+      "file": "selection.ts",
+      "intent": "exact-priority ties rank pubkeys descending — the draw stops being reproducible across implementations",
+      "machine": null,
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 101343
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1574
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 101364
+    },
+    {
+      "id": "M08",
+      "cls": "quorum-dropped",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "close_confirmations proceeds with fewer confirmations than the quorum (silent under-quorum case)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: legality matrix — every event at every phase, typed failures only confirmation: no-challenge path settles immediately; quorum shortfall fails closed",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/courtConfirmationMachine.test.ts",
+            "name": "no-challenge happy path fails closed when the confirm quorum never formed",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-2: every exported machine error class extends Error with the right name rejections on every machine surface the machine’s OWN typed class (fail-closed law)",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          }
+        ],
+        "wallMs": 101400
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S03",
+            "error": "Error: closed below quorum"
+          }
+        ],
+        "wallMs": 1182
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 115332,
+            "wallMs": 75233
+          },
+          {
+            "name": "confirm n=3 q=3 r=1 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 963492,
+            "wallMs": 526581
+          }
+        ],
+        "wallMs": 603052
+      },
+      "wallMs": 704484
+    },
+    {
+      "id": "M09",
+      "cls": "quorum-dropped",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "quorum becomes quorum+1 (a satisfied quorum is refused) — quorum boundary off-by-one",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 75,
+        "failedSuites": 1,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 1: epoch rotation mid-ceremony builds the case in epoch 1, rotates the cohort, and batches the epoch-1 verdict under an epoch-2 manifest — the batch validator accepts it (re-batching is possible; each epoch binds its own manifest)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 1: epoch rotation mid-ceremony the manifest epoch binding is real: relabeling epoch 1 → 2 on a properly re-serialized event breaks the cohort signature",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 1: epoch rotation mid-ceremony an epoch-1 batch presented to an epoch-2 pinning consumer is rejected (Epoch mismatch)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 1: epoch rotation mid-ceremony cross-epoch replay chain: an epoch-2 attestation over the epoch-1 ROOT validates standalone, but a consumer that chains the batch event with matching epoch pins rejects the epoch-1 batch",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 2: batch membership games the same verdictHash verifies in TWO different epoch batches — both valid BY DESIGN; reputation derivation MUST deduplicate by verdictHash (documented in buildBatchMerkleTree)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 2: batch membership games right hash, wrong inputs: a different outcome is rejected by the leaf recomputation",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 2: batch membership games right hash, wrong inputs: different supportingEventIds are rejected",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 2: batch membership games a DIFFERENT session with the same outcome and ids cannot ride the proof (sessionHash is a verdict-hash input)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 3: confirmation → batch → v2 tier elevation via foreign key the honest chain verifies end to end (batch + v2 attestation tier=0)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 3: confirmation → batch → v2 tier elevation via foreign key DOCUMENTED FOOTGUN: a consumer WITHOUT pins accepts the SAME attestation tags re-signed at tier=3 by an attacker-run key",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 3: confirmation → batch → v2 tier elevation via foreign key with expectedGroupPubkey pinned, the forged-tier re-signature is rejected",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 3: confirmation → batch → v2 tier elevation via foreign key expectedBatchMerkleRoot pin is fail-closed: missing batch tag or wrong root rejected",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 3: confirmation → batch → v2 tier elevation via foreign key the dispatcher refuses a v1-shaped event under the new v2 policy pin (downgrade)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 4: machine-state replay across instances double-finalize on the SAME instance is blocked by the terminal phase",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 4: machine-state replay across instances re-finalizing from the same fee_settlement snapshot with a DIFFERENT flag_clawback history yields the IDENTICAL verdictHash (clawbacks are not a verdict input)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 4: machine-state replay across instances RESTORE-PATH BARRIER: a hand-tampered confirmation ledger cannot finalize a forged verdict",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 4: machine-state replay across instances RESTORE-PATH BARRIER: a tampered challenge ledger is caught at finalize",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 5: mass-vote ledger cross-round leakage the ledger barrier catches a hand-merged state mixing votes from two rounds with the same idx (close and resolve paths)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 5: mass-vote ledger cross-round leakage no legal transition carries votes across rounds: escalation requires the explicit round_resolved decision (a conceded ladder cannot be reopened)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 6: verdict-domain interaction (confirmation vs vote machine) BY DESIGN: a confirmation verdict and a vote-machine verdict with identical (sessionHash, outcome, supportingEventIds) hash identically — one Verdict/v1 evidence domain",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 6: verdict-domain interaction (confirmation vs vote machine) substitution attack: vote-machine REVEAL ids cannot stand in for CONFIRMATION ids — different event universes → different verdict hash → the batched case proof rejects them",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialMachines.test.ts",
+            "name": "<suite failed to run>",
+            "message": "confirm quorum not met: 1/1"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/confirmationPipeline.test.ts",
+            "name": "universal-confirmation end-to-end pipeline uncontested case: cohort → confirmations → verdict → batch → real-signature verification",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/confirmationPipeline.test.ts",
+            "name": "universal-confirmation end-to-end pipeline challenged case: overturn → clawback flags → verdict still batch-verifiable",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/confirmationPipeline.test.ts",
+            "name": "universal-confirmation end-to-end pipeline v2 attestation binding signs the full finality tuple with a real key",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "no-challenge happy path confirms, closes, skips the ladder, and finalizes the proposal",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "accept_confirmation rejects confirmations at or after the deadline and during wrong phases",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window rejects opening during the wrong phase or past the deadline",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window routes to fee_settlement with no challenges and ladder_pending with one",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "challenge window rejects challenges after the deadline, off-roster, or malformed",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round enforces consecutive rounds and non-past deadlines",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round accepts mass votes, closes, and resolves a majority",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round flags every confirming juror for clawback on overturn",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round leaves clawback flags empty when the proposal is upheld",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round breaks tallies deterministically on ties",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round rejects votes outside the allowlist, off-roster, duplicate, and after deadline",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round fails closed when closing a round with zero votes",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "fee ledger and clawback flags records fees idempotently and rejects malformed ids",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "fee ledger and clawback flags accepts explicit clawback flags only during fee_settlement, deduped per (idx, reason)",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "finalize builds the verdict from winning mass votes on overturn",
+            "message": "CourtConfirmationTransitionError: confirm quorum not met: 3/3"
+          }
+        ],
+        "wallMs": 93640
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S07",
+            "error": "CourtConfirmationTransitionError: confirm quorum not met: 1/1"
+          }
+        ],
+        "wallMs": 1327
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 86596,
+            "wallMs": 55282
+          },
+          {
+            "name": "confirm n=3 q=3 r=1 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 352,
+            "wallMs": 409
+          }
+        ],
+        "wallMs": 56983
+      },
+      "wallMs": 150632
+    },
+    {
+      "id": "M10",
+      "cls": "threshold-weakened",
+      "file": "courtSigningMachine.ts",
+      "intent": "the commitment set freezes with t-1 signers — the distinct-signer threshold is no longer reached",
+      "machine": "signing",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtSigningMachine.test.ts",
+            "name": "Court signing state machine cannot finalize a commitment set below threshold",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 86978
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S16",
+            "error": "Error: commitment set froze below threshold"
+          }
+        ],
+        "wallMs": 1529
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "signing n=2 t=1 [inline clock 4/8]",
+            "ok": true,
+            "states": 904,
+            "wallMs": 1125
+          },
+          {
+            "name": "signing n=3 t=2 [inline clock 4/8]",
+            "ok": true,
+            "states": 7024,
+            "wallMs": 7209
+          }
+        ],
+        "wallMs": 9170
+      },
+      "wallMs": 96167
+    },
+    {
+      "id": "M11",
+      "cls": "threshold-weakened",
+      "file": "courtSigningMachine.ts",
+      "intent": "aggregation accepts t-1 partial signatures (t-1-of-n \"threshold\" aggregate)",
+      "machine": "signing",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: state-object tampering (signing machine) accepts exactly-threshold partials and rejects threshold-1",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 85482
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1334
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "signing n=2 t=1 [inline clock 4/8]",
+            "ok": false,
+            "wallMs": 213,
+            "error": "Error: MODEL CHECK FAILED: P2: published attempt aggregated ≥ threshold partials"
+          },
+          {
+            "name": "signing n=3 t=2 [inline clock 4/8]",
+            "ok": false,
+            "wallMs": 159,
+            "error": "Error: MODEL CHECK FAILED: P2: published attempt aggregated ≥ threshold partials"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: P2: published attempt aggregated ≥ threshold partials",
+        "wallMs": 1306
+      },
+      "wallMs": 86807
+    },
+    {
+      "id": "M12",
+      "cls": "threshold-weakened",
+      "file": "validator.ts",
+      "intent": "finality policy admits an attestation whose threshold is one below the pinned minimum",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/attestationV2Validator.test.ts",
+            "name": "validateAttestationEventV2 enforces finality policy pins",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          }
+        ],
+        "wallMs": 79219
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1233
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 79234
+    },
+    {
+      "id": "M13",
+      "cls": "threshold-weakened",
+      "file": "validator.ts",
+      "intent": "finality policy admits a tier one below the pinned minimum",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/attestationV2Validator.test.ts",
+            "name": "validateAttestationEventV2 enforces finality policy pins",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          }
+        ],
+        "wallMs": 76106
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1029
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 76114
+    },
+    {
+      "id": "M14",
+      "cls": "ledger-barrier-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "resolve_round trusts a hand-restored mass-vote ledger (ballot closure, roster, uniqueness unchecked)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 5: mass-vote ledger cross-round leakage the ledger barrier catches a hand-merged state mixing votes from two rounds with the same idx (close and resolve paths)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 74833
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1141
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 47637
+          }
+        ],
+        "wallMs": 48120
+      },
+      "wallMs": 122960
+    },
+    {
+      "id": "M15",
+      "cls": "ledger-barrier-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "resolve_round takes clawback indices from an unverified confirmation ledger",
+      "machine": "confirmation",
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 60189
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 715
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 51797
+          }
+        ],
+        "wallMs": 52288
+      },
+      "wallMs": 112488
+    },
+    {
+      "id": "M16",
+      "cls": "ledger-barrier-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "finalize mints a verdict on top of an unverified (forged) outcome history",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) finalize re-verifies the restored history before reaching final",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 59574
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 674
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 54547
+          }
+        ],
+        "wallMs": 55105
+      },
+      "wallMs": 114689
+    },
+    {
+      "id": "M17",
+      "cls": "ledger-barrier-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "close_ladder_round accepts a tampered vote ledger",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 5: mass-vote ledger cross-round leakage the ledger barrier catches a hand-merged state mixing votes from two rounds with the same idx (close and resolve paths)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: state-object tampering (confirmation machine) an ABORTED machine spread-revived into ladder phases hits the ledger barrier",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion rejects malformed round rosters: non-sequential, < 3 seats, and votes outside the ROUND panel",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 66517
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 604
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 57918
+          }
+        ],
+        "wallMs": 58653
+      },
+      "wallMs": 125184
+    },
+    {
+      "id": "M18",
+      "cls": "duplicate-idx",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a juror can publish two different confirmations (one seat, two endorsements)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "accept_confirmation treats identical redelivery as idempotent and conflicting redelivery as fatal",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 71773
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S04",
+            "error": "Error: conflicting confirmation accepted"
+          }
+        ],
+        "wallMs": 911
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 52973
+          }
+        ],
+        "wallMs": 53598
+      },
+      "wallMs": 125385
+    },
+    {
+      "id": "M19",
+      "cls": "duplicate-idx",
+      "file": "courtVoteMachine.ts",
+      "intent": "one voter reveals twice — the reveal ledger can inflate a tally",
+      "machine": "vote",
+      "captured": true,
+      "capturedBy": [
+        "model"
+      ],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 70882
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1065
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": false,
+            "wallMs": 72,
+            "error": "Error: MODEL CHECK FAILED: P2: no duplicate vote reveal idx"
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": false,
+            "wallMs": 59,
+            "error": "Error: MODEL CHECK FAILED: P2: no duplicate vote reveal idx"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: P2: no duplicate vote reveal idx",
+        "wallMs": 678
+      },
+      "wallMs": 71577
+    },
+    {
+      "id": "M20",
+      "cls": "duplicate-idx",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "one round-panel seat mass-votes repeatedly — repeated votes count in the tally",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtConfirmationMachine.test.ts",
+            "name": "ladder round rejects votes outside the allowlist, off-roster, duplicate, and after deadline",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen",
+            "message": "Error: P1 violated: legal close_ladder_round threw CourtConfirmationTransitionError: participant 9 has duplicate mass votes in round 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run",
+            "message": "Error: P1 violated: legal close_ladder_round threw CourtConfirmationTransitionError: participant 9 has duplicate mass votes in round 2"
+          }
+        ],
+        "wallMs": 61494
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 867
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 73,
+            "error": "Error: MODEL CHECK FAILED: P2: no duplicate mass vote idx per round"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: P2: no duplicate mass vote idx per round",
+        "wallMs": 522
+      },
+      "wallMs": 62024
+    },
+    {
+      "id": "M21",
+      "cls": "monotonic-clock-removed",
+      "file": "courtConfirmationMachine.ts",
+      "intent": "clock rollback accepted — a restored snapshot can re-admit events a later timestamp already excluded",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline rejects clock rollback",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-5: universal deadline precedence + universal monotonic ledger clock (F-12 closed) a rolled-back clock is rejected on the machines that keep a monotonic ledger clock",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen",
+            "message": "AssertionError: probe clock-regression did not throw; sequence:"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run",
+            "message": "AssertionError: probe clock-regression did not throw; sequence:"
+          }
+        ],
+        "wallMs": 60645
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S06",
+            "error": "Error: clock rollback accepted"
+          }
+        ],
+        "wallMs": 695
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 10,
+            "error": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: clock must be monotonic along every edge"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: clock must be monotonic along every edge",
+        "wallMs": 452
+      },
+      "wallMs": 61104
+    },
+    {
+      "id": "M22",
+      "cls": "monotonic-clock-removed",
+      "file": "courtVoteMachine.ts",
+      "intent": "clock rollback accepted in the vote machine",
+      "machine": "vote",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtVoteMachine.test.ts",
+            "name": "Court vote state machine rejects timestamp rollback on any time-bearing event",
+            "message": "AssertionError: expected [Function] to throw error matching /must not precede/ but got 'cannot close vote commits before the …'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-5: universal deadline precedence + universal monotonic ledger clock (F-12 closed) a rolled-back clock is rejected on the machines that keep a monotonic ledger clock",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 66656
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 733
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": false,
+            "wallMs": 5,
+            "error": "Error: MODEL CHECK FAILED: vote n=2 k=2 [probe]: clock must be monotonic along every edge"
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": false,
+            "wallMs": 3,
+            "error": "Error: MODEL CHECK FAILED: vote n=2 k=3 [probe]: clock must be monotonic along every edge"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: vote n=2 k=2 [probe]: clock must be monotonic along every edge",
+        "wallMs": 479
+      },
+      "wallMs": 67150
+    },
+    {
+      "id": "M23",
+      "cls": "monotonic-clock-removed",
+      "file": "courtSigningMachine.ts",
+      "intent": "clock rollback accepted in the signing machine",
+      "machine": "signing",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtSigningMachine.test.ts",
+            "name": "monotonic clock ledger (finding F-12) rejects timestamp rollback on any time-bearing event",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtSigningMachine.test.ts",
+            "name": "monotonic clock ledger (finding F-12) a v0.9.1 snapshot without latestTimestamp restores with the ledger at 0",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-5: universal deadline precedence + universal monotonic ledger clock (F-12 closed) F-12 (CLOSED in v0.9.2): signing/DKG keep the monotonic ledger clock too",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 68432
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 664
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "signing n=2 t=1 [inline clock 4/8]",
+            "ok": false,
+            "wallMs": 67,
+            "error": "Error: MODEL CHECK FAILED: signing n=2 t=1 [inline clock 4/8]: clock must be monotonic along every edge"
+          },
+          {
+            "name": "signing n=3 t=2 [inline clock 4/8]",
+            "ok": false,
+            "wallMs": 20,
+            "error": "Error: MODEL CHECK FAILED: signing n=3 t=2 [inline clock 4/8]: clock must be monotonic along every edge"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: signing n=2 t=1 [inline clock 4/8]: clock must be monotonic along every edge",
+        "wallMs": 707
+      },
+      "wallMs": 69157
+    },
+    {
+      "id": "M24",
+      "cls": "clamp-boundary",
+      "file": "selection.ts",
+      "intent": "r = 1 escapes the clamp → priority 0 → that juror deterministically wins every draw",
+      "machine": null,
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 68332
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 653
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 68342
+    },
+    {
+      "id": "M25",
+      "cls": "clamp-boundary",
+      "file": "selection.ts",
+      "intent": "same clamp flip in weighted mode — weight is ignored for the r = 1 boundary juror",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: selection lottery EXACT: boundary clamps are part of the spec (r=0 → MIN_VALUE clock, r=1 → EPSILON clock)",
+            "message": "AssertionError: expected -0 to be 2.2204460492503136e-16 // Object.is equality"
+          }
+        ],
+        "wallMs": 69254
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 609
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 69268
+    },
+    {
+      "id": "M26",
+      "cls": "clamp-boundary",
+      "file": "selection.ts",
+      "intent": "eligibility clamp boundary: a juror exactly at the minimum stake is excluded",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/selectionWeights.test.ts",
+            "name": "zeroStakeAllowed — phase-0 zero-stake pools zero-stake juror is eligible with the flag, gate waived only in that mode",
+            "message": "AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]"
+          }
+        ],
+        "wallMs": 70048
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 797
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 70058
+    },
+    {
+      "id": "M27",
+      "cls": "merkle-domain-separation",
+      "file": "batchAttestation.ts",
+      "intent": "leaf preimage reuses the interior-node tag (0x01) — the domain-separation prefix no longer distinguishes levels",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: reference root and leaves identical to production",
+            "message": "AssertionError: n=1 root: expected '19779294fe1f5670c7d1daf24268c98eaa218…' to be 'ccdbcfe61be6f7cf69877e37c188a45c129fc…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) n=1 degenerate: root equals the leaf hash, empty authentication path",
+            "message": "AssertionError: expected 'ccdbcfe61be6f7cf69877e37c188a45c129fc…' to be '19779294fe1f5670c7d1daf24268c98eaa218…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesBatch.test.ts",
+            "name": "properties: batchAttestation PB1/PB4: across 48 random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones",
+            "message": "AssertionError: expected [ …(239) ] to deeply equal [ …(239) ]"
+          }
+        ],
+        "wallMs": 61705
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S09",
+            "error": "Error: single-leaf root is not BatchLeaf(verdictHash)"
+          },
+          {
+            "id": "S10",
+            "error": "Error: n=5: root ec9caae826451bbfbc3c93aa81363c9c54d26cbc8bcc70e757c06d5aa409579a != RFC-6962 f7963e7aaa09a68ffe0e5b392a0a20b2e05abf256fdce2f2c59d8d3c5363a395"
+          },
+          {
+            "id": "S17",
+            "error": "Error: unexpected reason: Proof leaf does not match the case verdict inputs"
+          }
+        ],
+        "wallMs": 846
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 61719
+    },
+    {
+      "id": "M28",
+      "cls": "merkle-domain-separation",
+      "file": "batchAttestation.ts",
+      "intent": "interior-node preimage reuses the leaf tag (0x00)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 8,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree covers n=1..8 and every index proof verifies against the root",
+            "message": "AssertionError: expected 'f2d3010589aca5a774d31d14d1c8a6ddd332c…' to be '196693167f87ae2ffebf30c13566324d74e1f…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree covers n=63/64/65 roots with every index proof verifying",
+            "message": "AssertionError: expected '29e329baadbfeab5165d20766d9d09354d9a3…' to be '6a3b1eb74c424ae6a0c389e7479be2be9128d…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree keeps unbalanced shapes deterministic and paths correctly shaped",
+            "message": "AssertionError: expected 'b88c5e848a375612a355315b17653a9fc5241…' to be 'b842342752ca2f40ed4dfbd7beb3f41106476…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: reference root and leaves identical to production",
+            "message": "AssertionError: n=2 root: expected 'c16b1d7565aed7a4a453cb6899dd7dc6d6041…' to be '097704ebe97e1f4c6a222d3f4de7e3df2ff9b…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: every production proof verifies under the reference verifier",
+            "message": "AssertionError: n=2 index=0 proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: production roots equal an independent full-tree rebuild",
+            "message": "AssertionError: expected 'c16b1d7565aed7a4a453cb6899dd7dc6d6041…' to be '097704ebe97e1f4c6a222d3f4de7e3df2ff9b…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)",
+            "message": "AssertionError: n=2 index=0 batch proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/propertiesBatch.test.ts",
+            "name": "properties: batchAttestation PB1/PB4: across 48 random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones",
+            "message": "AssertionError: expected '910703ce4eec5e177281086031fc175d62abe…' to be '8dcdfaf9cc4c92bc60dcd5c5264348a203c58…' // Object.is equality"
+          }
+        ],
+        "wallMs": 53358
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S09",
+            "error": "Error: two-leaf root is not BatchNode(leaf0, leaf1)"
+          },
+          {
+            "id": "S10",
+            "error": "Error: n=5: root df2102c5247a80888af5ad8039642f20adb263edac13d776170777bf735c4875 != RFC-6962 f7963e7aaa09a68ffe0e5b392a0a20b2e05abf256fdce2f2c59d8d3c5363a395"
+          }
+        ],
+        "wallMs": 787
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 53370
+    },
+    {
+      "id": "M29",
+      "cls": "clamp-boundary",
+      "file": "batchAttestation.ts",
+      "intent": "RFC-6962 split boundary off-by-one (n = 2^m + 1 and friends) — roots diverge from every other implementation",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 9,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree covers n=1..8 and every index proof verifies against the root",
+            "message": "TypeError: hex string expected, got undefined"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree covers n=63/64/65 roots with every index proof verifying",
+            "message": "TypeError: hex string expected, got undefined"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree keeps unbalanced shapes deterministic and paths correctly shaped",
+            "message": "AssertionError: expected 3 to be 1 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: reference root and leaves identical to production",
+            "message": "AssertionError: n=3 root: expected '2971b9e4e7312f5302c12bcc636a97c0e06a4…' to be 'e92699e111ae1f76518b74dae7f9b1dc48181…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: every production proof verifies under the reference verifier",
+            "message": "AssertionError: n=3 index=0 proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: production roots equal an independent full-tree rebuild",
+            "message": "AssertionError: expected '2971b9e4e7312f5302c12bcc636a97c0e06a4…' to be 'e92699e111ae1f76518b74dae7f9b1dc48181…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)",
+            "message": "AssertionError: n=3 index=0 batch proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/invariantAssertions.test.ts",
+            "name": "INV-BATCH-5: the RFC-6962 split point 2^floor(log2(n-1)) governs proof shapes every index of n = 2..32 plus 63/64/65/100/127/128 has the oracle path length",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesBatch.test.ts",
+            "name": "properties: batchAttestation PB1/PB4: across 48 random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones",
+            "message": "AssertionError: expected '69078acdce4ee4619a07751302c383e145073…' to be '8dcdfaf9cc4c92bc60dcd5c5264348a203c58…' // Object.is equality"
+          }
+        ],
+        "wallMs": 50788
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S10",
+            "error": "Error: n=5: root 438e4232269d3fa9f7799fa09c754cfefa8282debe2290c365adaaf1d9416f84 != RFC-6962 f7963e7aaa09a68ffe0e5b392a0a20b2e05abf256fdce2f2c59d8d3c5363a395"
+          }
+        ],
+        "wallMs": 881
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 50797
+    },
+    {
+      "id": "M30",
+      "cls": "signer-set-check-dropped",
+      "file": "validator.ts",
+      "intent": "a signer set of any size paired with any declared threshold validates (signerSet root still matches its own set)",
+      "machine": null,
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 69569
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 914
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 69584
+    },
+    {
+      "id": "M31",
+      "cls": "signer-set-check-dropped",
+      "file": "courtSigningMachine.ts",
+      "intent": "a restored signing state's frozen signer set is no longer re-verified against the stored commitments (A-1)",
+      "machine": "signing",
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 81732
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 688
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "signing n=2 t=1 [inline clock 4/8]",
+            "ok": true,
+            "states": 877,
+            "wallMs": 1084
+          },
+          {
+            "name": "signing n=3 t=2 [inline clock 4/8]",
+            "ok": true,
+            "states": 6862,
+            "wallMs": 6408
+          }
+        ],
+        "wallMs": 8412
+      },
+      "wallMs": 90217
+    },
+    {
+      "id": "M32",
+      "cls": "cap-off-by-one",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "the last permitted ladder round is refused (cap off-by-one)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 21,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a well-formed restored history resolves cleanly (round_flip intact)",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a forged round sequence (gap / forged round number) is rejected at resolve_round",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a forged history cannot direct round_flip clawbacks at arbitrary indices",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) an outcome outside the frozen allowlist and malformed winner records are rejected",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion grows 15 → 45 → 135 panels across three escalated rounds (round count tracked, panels host-side)",
+            "message": "CourtConfirmationTransitionError: ladder round 3 exceeds maxLadderRounds 3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion accepts an expanded round roster: a round-2 joiner outside the case roster may vote",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion does NOT require the round roster to be a superset of the previous round (shrinking panel is legal)",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: escalate/concede decision matrix escalate re-opens the ladder for the next consecutive round; the machine never auto-escalates",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: flip-flop clawback accounting flags the previous round's majority with 'round_flip' when the winner changes; append-only and idempotent",
+            "message": "CourtConfirmationTransitionError: ladder round 3 exceeds maxLadderRounds 3"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: flip-flop clawback accounting does not duplicate overturned_confirmation flags when a later round also rejects the proposal",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: flip-flop clawback accounting keeps the ledger empty across upheld rounds with no flips",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: outcomeHistory integrity and finality records append-only frozen {round, outcome, winnerEventIds, winnerIndices} per resolved round",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: outcomeHistory integrity and finality finality = LAST resolved round: verdict outcome + supporting ids from that round only",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: maxLadderRounds enforcement defaults to 2: round 1 parks in round_resolved, round 2 settles directly",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: maxLadderRounds enforcement rounds beyond the last settle without a concede; escalate is impossible once settled",
+            "message": "CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: maxLadderRounds enforcement hand-restored snapshots cannot bypass the cap (ladder_pending above the cap, escalate at the cap)",
+            "message": "CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: v0.8.5 backward compatibility maxLadderRounds=1 reproduces the v0.8.5 single-round flow exactly (no concede needed)",
+            "message": "CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: v0.8.5 backward compatibility default-cap flow with an explicit concede is verdict-identical to the v0.8.5 single-round result",
+            "message": "CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: F-4 — machine-written clawback reasons are protocol reasons only every clawback flag the REDUCER writes across overturn + flip scenarios carries only overturned_confirmation / round_flip reasons",
+            "message": "CourtConfirmationTransitionError: ladder round 2 exceeds maxLadderRounds 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen",
+            "message": "Error: P1 violated: legal open_ladder_round threw CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run",
+            "message": "Error: P1 violated: legal open_ladder_round threw CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          }
+        ],
+        "wallMs": 79661
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S07",
+            "error": "CourtConfirmationTransitionError: ladder round 1 exceeds maxLadderRounds 1"
+          }
+        ],
+        "wallMs": 897
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 32113,
+            "error": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: STUCK STATE (no non-aborted terminal reachable, not a documented parking state): ladder_pending|9|3.33333333|1.11111111|L1.9.3N3333.R|1|1N|3.o.1|0|V:NO.pending.o|-"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: STUCK STATE (no non-aborted terminal reachable, not a documented parking state): ladder_pending|9|3.33333333|1.11111111|L1.9.3N3333.R|1|1N|3.o.1|0|V:NO.pending.o|-",
+        "wallMs": 32781
+      },
+      "wallMs": 112460
+    },
+    {
+      "id": "M33",
+      "cls": "cap-off-by-one",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "escalate re-opens a round past the cap — the ladder becomes unbounded",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: maxLadderRounds enforcement hand-restored snapshots cannot bypass the cap (ladder_pending above the cap, escalate at the cap)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 83534
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 875
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 53212
+          }
+        ],
+        "wallMs": 53755
+      },
+      "wallMs": 137303
+    },
+    {
+      "id": "M34",
+      "cls": "cap-off-by-one",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a resolved final round parks in round_resolved instead of settling (host must escalate past the cap)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 12,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtConfirmationMachine.test.ts",
+            "name": "outcome-history restore barrier (finding F-3) a well-formed restored history resolves cleanly (round_flip intact)",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion grows 15 → 45 → 135 panels across three escalated rounds (round count tracked, panels host-side)",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion accepts an expanded round roster: a round-2 joiner outside the case roster may vote",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: round growth and roster expansion does NOT require the round roster to be a superset of the previous round (shrinking panel is legal)",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: outcomeHistory integrity and finality finality = LAST resolved round: verdict outcome + supporting ids from that round only",
+            "message": "CourtConfirmationTransitionError: cannot finalize during round_resolved"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: maxLadderRounds enforcement defaults to 2: round 1 parks in round_resolved, round 2 settles directly",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: maxLadderRounds enforcement rounds beyond the last settle without a concede; escalate is impossible once settled",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: v0.8.5 backward compatibility maxLadderRounds=1 reproduces the v0.8.5 single-round flow exactly (no concede needed)",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: v0.8.5 backward compatibility default-cap flow with an explicit concede is verdict-identical to the v0.8.5 single-round result",
+            "message": "CourtConfirmationTransitionError: cannot finalize during round_resolved"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: F-4 — machine-written clawback reasons are protocol reasons only every clawback flag the REDUCER writes across overturn + flip scenarios carries only overturned_confirmation / round_flip reasons",
+            "message": "AssertionError: expected 'round_resolved' to be 'fee_settlement' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen",
+            "message": "Error: P1 violated: legal escalate threw CourtConfirmationTransitionError: maxLadderRounds 2 already reached at round 2"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run",
+            "message": "Error: P1 violated: legal escalate threw CourtConfirmationTransitionError: maxLadderRounds 2 already reached at round 2"
+          }
+        ],
+        "wallMs": 77162
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 933
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 110497,
+            "wallMs": 58291
+          }
+        ],
+        "wallMs": 58788
+      },
+      "wallMs": 135958
+    },
+    {
+      "id": "M35",
+      "cls": "cap-off-by-one",
+      "file": "batchAttestation.ts",
+      "intent": "batch cap off-by-one: exactly MAX_BATCH_VERDICTS is refused",
+      "machine": null,
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 65742
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 986
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 65763
+    },
+    {
+      "id": "M36",
+      "cls": "clawback-dedup-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "overturned_confirmation flags duplicate per juror across rounds (fee clawback queued twice)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/multiRoundLadder.test.ts",
+            "name": "multi-round ladder: flip-flop clawback accounting does not duplicate overturned_confirmation flags when a later round also rejects the proposal",
+            "message": "AssertionError: expected [ { idx: 1, …(2) }, …(5) ] to deeply equal [ { idx: 1, …(2) }, …(2) ]"
+          }
+        ],
+        "wallMs": 91329
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 595
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 65761
+          }
+        ],
+        "wallMs": 66644
+      },
+      "wallMs": 157992
+    },
+    {
+      "id": "M37",
+      "cls": "clawback-dedup-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "round_flip flags duplicate per voter (idempotence of the flip-flop rule broken)",
+      "machine": "confirmation",
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 93956
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1239
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 75120
+          }
+        ],
+        "wallMs": 76044
+      },
+      "wallMs": 170016
+    },
+    {
+      "id": "M38",
+      "cls": "clawback-dedup-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "operator flag_clawback is no longer idempotent — repeated flags accumulate",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/courtConfirmationMachine.test.ts",
+            "name": "fee ledger and clawback flags accepts explicit clawback flags only during fee_settlement, deduped per (idx, reason)",
+            "message": "AssertionError: expected [ { idx: 1, …(2) }, { idx: 1, …(2) } ] to have a length of 1 but got 2"
+          }
+        ],
+        "wallMs": 95234
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1157
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 69,
+            "error": "Error: MODEL CHECK FAILED: P2: no duplicate clawback flag per (idx, reason, round)"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: P2: no duplicate clawback flag per (idx, reason, round)",
+        "wallMs": 862
+      },
+      "wallMs": 96114
+    },
+    {
+      "id": "M39",
+      "cls": "phase-guard-loosened",
+      "file": "courtConfirmationMachine.ts",
+      "intent": "the reducer-wide terminal guard is gone: unguarded handlers (record_fee) mutate a settled case",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtConfirmationMachine.test.ts",
+            "name": "finalize rejects finalize outside fee_settlement and re-processing after final",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 92485
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S05",
+            "error": "Error: record_fee mutated a terminal case"
+          }
+        ],
+        "wallMs": 941
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 87552
+          }
+        ],
+        "wallMs": 88502
+      },
+      "wallMs": 181035
+    },
+    {
+      "id": "M40",
+      "cls": "phase-guard-loosened",
+      "file": "courtVoteMachine.ts",
+      "intent": "same guard removal in the vote machine",
+      "machine": "vote",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 8853 to be less than 5000"
+          }
+        ],
+        "wallMs": 118409
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1196
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": true,
+            "states": 2650,
+            "wallMs": 3514
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": true,
+            "states": 5482,
+            "wallMs": 7508
+          }
+        ],
+        "wallMs": 13659
+      },
+      "wallMs": 132091
+    },
+    {
+      "id": "M41",
+      "cls": "phase-guard-loosened",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "abort from a terminal phase overwrites a settled verdict with an aborted failure",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: legality matrix — every event at every phase, typed failures only tick/abort interleave: tick on aborted is a frozen no-op, tick(no-op) then abort legal, double abort throws",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline expires awaiting-input phases at their deadlines and exempts near-final phases",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen",
+            "message": "AssertionError: probe abort-from-terminal did not throw; sequence:"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run",
+            "message": "AssertionError: probe abort-from-terminal did not throw; sequence:"
+          }
+        ],
+        "wallMs": 136628
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1331
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 235,
+            "error": "Error: MODEL CHECK FAILED: P2: minted verdict ⟺ final phase"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: P2: minted verdict ⟺ final phase",
+        "wallMs": 1786
+      },
+      "wallMs": 138432
+    },
+    {
+      "id": "M42",
+      "cls": "abort-precedence",
+      "file": "courtConfirmationMachine.ts",
+      "intent": "abort is no longer dispatched before the terminal guard: its precedence over the terminal check is inverted",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 6,
+        "failedSuites": 1,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/adversarialMachines.test.ts",
+            "name": "<suite failed to run>",
+            "message": "unknown confirmation event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline expires awaiting-input phases at their deadlines and exempts near-final phases",
+            "message": "AssertionError: expected [Function] to throw error matching /cannot abort confirmation from expired/ but got 'cannot process abort after expired'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "clock and terminal discipline aborts from any non-terminal phase with the reason preserved",
+            "message": "CourtConfirmationTransitionError: unknown confirmation event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-3: every terminal state is absorbing (tick no-ops, other events throw typed) confirmation machine: final, expired, and aborted each absorb",
+            "message": "CourtConfirmationTransitionError: unknown confirmation event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P1/P2/P4/P5: 400 random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen",
+            "message": "Error: P1 violated: legal abort threw CourtConfirmationTransitionError: unknown confirmation event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run",
+            "message": "Error: P1 violated: legal abort threw CourtConfirmationTransitionError: unknown confirmation event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 5168 to be less than 5000"
+          }
+        ],
+        "wallMs": 153803
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S05",
+            "error": "CourtConfirmationTransitionError: unknown confirmation event type: abort"
+          }
+        ],
+        "wallMs": 1156
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 72446,
+            "wallMs": 101003
+          }
+        ],
+        "wallMs": 103020
+      },
+      "wallMs": 256853
+    },
+    {
+      "id": "M43",
+      "cls": "abort-precedence",
+      "file": "courtVoteMachine.ts",
+      "intent": "same precedence inversion in the vote machine",
+      "machine": "vote",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 1,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialMachines.test.ts",
+            "name": "<suite failed to run>",
+            "message": "unknown vote event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-3: every terminal state is absorbing (tick no-ops, other events throw typed) vote machine: tally_final, expired, and aborted each absorb",
+            "message": "CourtVoteTransitionError: unknown vote event type: abort"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 5046 to be less than 5000"
+          }
+        ],
+        "wallMs": 181690
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1903
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": true,
+            "states": 1736,
+            "wallMs": 2656
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": true,
+            "states": 3584,
+            "wallMs": 4979
+          }
+        ],
+        "wallMs": 9537
+      },
+      "wallMs": 191252
+    },
+    {
+      "id": "M44",
+      "cls": "encoding-length-prefix",
+      "file": "courtSession.ts",
+      "intent": "CanonicalWriter loses its length prefix — adjacent variable-length fields become re-interpretable (delimiter ambiguity)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 24,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/courtHostKey.test.ts",
+            "name": "boundary and cross-artifact behavior pins the canonical attestation encoding and hash; binds a 1-participant roster",
+            "message": "Error: Snapshot `boundary and cross-artifact behavior > pins the canonical attestation encoding and hash; binds a 1-participant roster 1` mismatched"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/courtSession.test.ts",
+            "name": "Court session parameters has a pinned canonical encoding and session hash",
+            "message": "Error: Snapshot `Court session parameters > has a pinned canonical encoding and session hash 1` mismatched"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding byte-identical on seeded random field sequences (300 sequences)",
+            "message": "AssertionError: trial 0 ops [\"u64\",\"u8\",\"u32\",\"bytes\",\"text\",\"hex\",\"text\",\"hex\",\"text\",\"u64\",\"text\",\"u32\",\"hex\",\"hex\",\"hex\",\"hex\"]: expected '00116e1021200000ff0000000100000024b13…' to be '00116e1021200000ff00000001b13da4155ef…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding byte-identical on boundary values (0 / max integers, empty strings, 64-hex, unicode)",
+            "message": "AssertionError: expected '00ff00000000ffffffff00000000000000000…' to be '00ff00000000ffffffff00000000000000000…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding lone surrogates encode identically (both runtimes map to U+FFFD bytes)",
+            "message": "AssertionError: expected '000000126c6f6e6520efbfbd20737572726f6…' to be '6c6f6e6520efbfbd20737572726f67617465e…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding independent parser round-trips every random sequence",
+            "message": "RangeError: refParse: need 96095575 byte(s) at offset 4, buffer has 337"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding prefix-freeness: encode(A) || encode(B) parses unambiguously as A then B",
+            "message": "RangeError: refParse: need 4022320481 byte(s) at offset 5, buffer has 119"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding injectivity: distinct value tuples under one schema encode to distinct bytes",
+            "message": "AssertionError: expected '000000016106dfb8390000002069c33d344fa…' to be '6106dfb83969c33d344fa168a6a275ab8c7af…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding injectivity traps: field-boundary aliases that delimiter encoding would merge",
+            "message": "AssertionError: expected '616263' not to be '616263' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: reference root and leaves identical to production",
+            "message": "AssertionError: n=1 root: expected '19779294fe1f5670c7d1daf24268c98eaa218…' to be '48e209f4dac90b921df5dac3cb9c3d7793ff2…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: every production proof verifies under the reference verifier",
+            "message": "AssertionError: n=2 index=0 proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: production roots equal an independent full-tree rebuild",
+            "message": "AssertionError: expected 'd20cd6a2e1e24646cae1cd15b447f6fa36181…' to be '1ff3ba2d72c4417bfc62793f709ad695e8693…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)",
+            "message": "AssertionError: n=2 index=0 batch proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) n=1 degenerate: root equals the leaf hash, empty authentication path",
+            "message": "AssertionError: expected '48e209f4dac90b921df5dac3cb9c3d7793ff2…' to be '19779294fe1f5670c7d1daf24268c98eaa218…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashCourtVerdict: node-crypto reference identical across randomized + boundary inputs",
+            "message": "AssertionError: expected 'e8526638eba12819bdc0db57e5ba90aebf802…' to be 'f7eed53589aa86b080f8e5ededd956bf8d73e…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashCourtVerdict contract: supporting-id ORDER is significant (both impls agree)",
+            "message": "AssertionError: expected 'e1904a07ddcbb841f8b6e43cd5323ca6d100e…' to be '5456209ca96c45f54fdf2414fa180f3ee4a23…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashDisputeVerdict: identical, and order-independent for BOTH impls",
+            "message": "AssertionError: expected '2c520e1aadce1e8ba12a85b6446de5273f7f7…' to be 'c2364606ecd14f3711cf86c98adc25016fd00…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashBatchManifest: identical across randomized + boundary fields",
+            "message": "AssertionError: expected '8def5a6f0a4dd0fe6d491af450843499175e2…' to be '1d08bb47e23a57149f96abb19bc31a21bc29c…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes buildAttestationMessageV2: identical across ALL 64 optional-field subsets + boundaries",
+            "message": "AssertionError: expected '0c72dad8af68ac9d58697e504d960b7740c33…' to be 'c075f7accb40d57718f2cb32554319c66a432…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes buildAttestationMessageV2: round 3 (number) and \"3\" (string) are the same signed statement",
+            "message": "AssertionError: expected 'c5aea9e77b95b1794d3f1e3a25919ff55290e…' to be '60813a87a8f33a2a7644733f949a3f7f26c9a…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: plurality tally + tie-break exhaustive 3^n assignments for n=1..4: machine winner === independent reduce tally",
+            "message": "AssertionError: expected 'f7db025e6c1b15ef7bb23c914d2680528a1f0…' to be 'd4864775fc850c36e462c1dab7f1008c03ad5…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/differentialParity.test.ts",
+            "name": "differential parity: plurality tally + tie-break random big tallies (300 jurors, unicode outcomes): machine === reference tally + hash",
+            "message": "AssertionError: expected '09f83bef940481aec2015343172f2453ab80f…' to be 'e1107ffe84bdf58020e4c00895c72730be0d4…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-8: CanonicalWriter is total, typed, and prefix-free u32 is big-endian; length prefixes make field tuples injective (no delimiter ambiguity)",
+            "message": "AssertionError: expected 2 to be 3 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 7135 to be less than 5000"
+          }
+        ],
+        "wallMs": 165058
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S09",
+            "error": "Error: single-leaf root is not BatchLeaf(verdictHash)"
+          },
+          {
+            "id": "S10",
+            "error": "Error: n=5: root d89dc5e2ab16c8eadd321114487596386a77a1fc01120f2bf8a4c0025fdfcca6 != RFC-6962 f7963e7aaa09a68ffe0e5b392a0a20b2e05abf256fdce2f2c59d8d3c5363a395"
+          },
+          {
+            "id": "S11",
+            "error": "Error: expected 37 bytes, got 33"
+          },
+          {
+            "id": "S17",
+            "error": "Error: unexpected reason: Proof leaf does not match the case verdict inputs"
+          }
+        ],
+        "wallMs": 2935
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 165102
+    },
+    {
+      "id": "M45",
+      "cls": "encoding-length-prefix",
+      "file": "courtSession.ts",
+      "intent": "u32 encoding becomes little-endian — every hash domain diverges from the canonical big-endian spec",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 23,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtHostKey.test.ts",
+            "name": "boundary and cross-artifact behavior pins the canonical attestation encoding and hash; binds a 1-participant roster",
+            "message": "Error: Snapshot `boundary and cross-artifact behavior > pins the canonical attestation encoding and hash; binds a 1-participant roster 1` mismatched"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/courtSession.test.ts",
+            "name": "Court session parameters has a pinned canonical encoding and session hash",
+            "message": "Error: Snapshot `Court session parameters > has a pinned canonical encoding and session hash 1` mismatched"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding byte-identical on seeded random field sequences (300 sequences)",
+            "message": "AssertionError: trial 0 ops [\"u64\",\"u8\",\"u32\",\"bytes\",\"text\",\"hex\",\"text\",\"hex\",\"text\",\"u64\",\"text\",\"u32\",\"hex\",\"hex\",\"hex\",\"hex\"]: expected '00116e1021200000ff0000000100000024b13…' to be '00116e1021200000ff0100000024000000b13…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding byte-identical on boundary values (0 / max integers, empty strings, 64-hex, unicode)",
+            "message": "AssertionError: expected '00ff00000000ffffffff00000000000000000…' to be '00ff00000000ffffffff00000000000000000…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding lone surrogates encode identically (both runtimes map to U+FFFD bytes)",
+            "message": "AssertionError: expected '000000126c6f6e6520efbfbd20737572726f6…' to be '120000006c6f6e6520efbfbd20737572726f6…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding independent parser round-trips every random sequence",
+            "message": "RangeError: refParse: need 352321536 byte(s) at offset 4, buffer has 389"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding prefix-freeness: encode(A) || encode(B) parses unambiguously as A then B",
+            "message": "RangeError: refParse: need 50331648 byte(s) at offset 5, buffer has 139"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding injectivity: distinct value tuples under one schema encode to distinct bytes",
+            "message": "AssertionError: expected '000000016106dfb8390000002069c33d344fa…' to be '010000006139b8df062000000069c33d344fa…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: CanonicalWriter encoding injectivity traps: field-boundary aliases that delimiter encoding would merge",
+            "message": "AssertionError: expected '0000000261620000000163' to be '0200000061620100000063' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: reference root and leaves identical to production",
+            "message": "AssertionError: n=1 root: expected '19779294fe1f5670c7d1daf24268c98eaa218…' to be '095710d13362c217fbb3db62b0a6c5f7d9484…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: every production proof verifies under the reference verifier",
+            "message": "AssertionError: n=2 index=0 proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) exhaustive n=1..128: production roots equal an independent full-tree rebuild",
+            "message": "AssertionError: expected '23ff98451261f782ef7d0b52fa1a0b50dbec2…' to be '1d08d9559045a4442b4f4c6caf5d25587137e…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)",
+            "message": "AssertionError: n=2 index=0 batch proof must verify: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) n=1 degenerate: root equals the leaf hash, empty authentication path",
+            "message": "AssertionError: expected '095710d13362c217fbb3db62b0a6c5f7d9484…' to be '19779294fe1f5670c7d1daf24268c98eaa218…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashCourtVerdict: node-crypto reference identical across randomized + boundary inputs",
+            "message": "AssertionError: expected 'e8526638eba12819bdc0db57e5ba90aebf802…' to be '1d7119734d9d81894c18119d2b80882bc635e…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashCourtVerdict contract: supporting-id ORDER is significant (both impls agree)",
+            "message": "AssertionError: expected 'e1904a07ddcbb841f8b6e43cd5323ca6d100e…' to be '8f4238ab00a958afda81147dea3422e92b6d8…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashDisputeVerdict: identical, and order-independent for BOTH impls",
+            "message": "AssertionError: expected '2c520e1aadce1e8ba12a85b6446de5273f7f7…' to be '183c44e128b038b6ae4472b2c8a98dce43f0b…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes hashBatchManifest: identical across randomized + boundary fields",
+            "message": "AssertionError: expected '8def5a6f0a4dd0fe6d491af450843499175e2…' to be 'a859e671722dafb43d87a3f66ded911e999cf…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes buildAttestationMessageV2: identical across ALL 64 optional-field subsets + boundaries",
+            "message": "AssertionError: expected '0c72dad8af68ac9d58697e504d960b7740c33…' to be '334bf6a5b11f1378dca31f99592bea6606d61…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: verdict, dispute-verdict, batch-manifest, attestation-V2 hashes buildAttestationMessageV2: round 3 (number) and \"3\" (string) are the same signed statement",
+            "message": "AssertionError: expected 'c5aea9e77b95b1794d3f1e3a25919ff55290e…' to be '9bc57afc66debec7bc02c0547536935c68982…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: plurality tally + tie-break exhaustive 3^n assignments for n=1..4: machine winner === independent reduce tally",
+            "message": "AssertionError: expected 'f148b99149a3a47b8e1f9a9fda237ae940e3c…' to be 'd4864775fc850c36e462c1dab7f1008c03ad5…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/differentialParity.test.ts",
+            "name": "differential parity: plurality tally + tie-break random big tallies (300 jurors, unicode outcomes): machine === reference tally + hash",
+            "message": "AssertionError: expected 'fb0b48f85a0d834c45270d6a73adcc95ff7d2…' to be 'e1107ffe84bdf58020e4c00895c72730be0d4…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/invariantAssertions.test.ts",
+            "name": "INV-X-8: CanonicalWriter is total, typed, and prefix-free u32 is big-endian; length prefixes make field tuples injective (no delimiter ambiguity)",
+            "message": "AssertionError: expected [ 4, 3, 2, 1 ] to deeply equal [ 1, 2, 3, 4 ]"
+          }
+        ],
+        "wallMs": 149903
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S09",
+            "error": "Error: single-leaf root is not BatchLeaf(verdictHash)"
+          },
+          {
+            "id": "S10",
+            "error": "Error: n=5: root 326e8dea4553ad4f5fd6e925ed73d68372ae4ebbf56eeb9d031cd6898766d4e4 != RFC-6962 f7963e7aaa09a68ffe0e5b392a0a20b2e05abf256fdce2f2c59d8d3c5363a395"
+          },
+          {
+            "id": "S11",
+            "error": "Error: length prefix is not big-endian 32 (got 32,0,0,0)"
+          },
+          {
+            "id": "S17",
+            "error": "Error: unexpected reason: Proof leaf does not match the case verdict inputs"
+          }
+        ],
+        "wallMs": 2641
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 149974
+    },
+    {
+      "id": "M46",
+      "cls": "hex-case",
+      "file": "courtCeremonyCore.ts",
+      "intent": "uppercase hex accepted as canonical — two spellings of one value (hash/compare/equality divergence)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 7,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: malformed event fields (vote machine) rejects hostile hex field 64-char AAA…",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialMachines.test.ts",
+            "name": "adversarial: state-object tampering (signing machine) rejects hostile psig / signature / attestationEventId encodings",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree rejects malformed hex and empty input",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/courtCores.test.ts",
+            "name": "courtCeremonyCore HEX_32 is the canonical 32-byte lowercase-hex pattern",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) duplicate and malformed verdict hashes rejected by BOTH implementations",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/invariantAssertions.test.ts",
+            "name": "INV-CORE-8: HEX_32 is exactly the 64-char lowercase-hex language accepts only 64 lowercase hex chars",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 7743 to be less than 5000"
+          }
+        ],
+        "wallMs": 168066
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S12",
+            "error": "Error: uppercase sessionHash accepted by the confirmation machine"
+          }
+        ],
+        "wallMs": 1754
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 168096
+    },
+    {
+      "id": "M47",
+      "cls": "hex-case",
+      "file": "courtSession.ts",
+      "intent": "same uppercase acceptance in the session encoder",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 5243 to be less than 5000"
+          }
+        ],
+        "wallMs": 154410
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1886
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 154423
+    },
+    {
+      "id": "M48",
+      "cls": "empty-pin-acceptance",
+      "file": "validator.ts",
+      "intent": "v1 validator treats an empty pin as \"no pin\" — the group key pin is silently disabled (F-2)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 6624 to be less than 5000"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/validator.test.ts",
+            "name": "validateAttestationEvent F-2: an empty-string group-key pin is INVALID, not \"no pin\"",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          }
+        ],
+        "wallMs": 156312
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S13",
+            "error": "Error: expected the F-2 pin error, got: Invalid Nostr event signature or id"
+          }
+        ],
+        "wallMs": 2573
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 156331
+    },
+    {
+      "id": "M49",
+      "cls": "empty-pin-acceptance",
+      "file": "validator.ts",
+      "intent": "v2 finality validator silently disables the pin on an empty string (F-2)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/attestationV2Validator.test.ts",
+            "name": "validateAttestationEventV2 F-2: an empty-string group-key pin is INVALID, not \"no pin\" (v2)",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 5860 to be less than 5000"
+          }
+        ],
+        "wallMs": 166475
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 2425
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 166523
+    },
+    {
+      "id": "M50",
+      "cls": "empty-pin-acceptance",
+      "file": "batchAttestation.ts",
+      "intent": "batch attestation validation disables the cohort pin on an empty string (F-2)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/batchAttestation.test.ts",
+            "name": "Batch attestation validation F-2: an empty-string group-key pin is INVALID, not \"no pin\"",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-2/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 6181 to be less than 5000"
+          }
+        ],
+        "wallMs": 169548
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S14",
+            "error": "Error: expected the F-2 pin error, got: Missing required tags"
+          }
+        ],
+        "wallMs": 2122
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 169596
+    },
+    {
+      "id": "M51",
+      "cls": "proof-bounds",
+      "file": "batchAttestation.ts",
+      "intent": "duplicate verdict hashes are batched — two identical leaves make proof indices ambiguous",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 5,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/adversarialCrossModule.test.ts",
+            "name": "SEQUENCE 2: batch membership games the same verdictHash verifies in TWO different epoch batches — both valid BY DESIGN; reputation derivation MUST deduplicate by verdictHash (documented in buildBatchMerkleTree)",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/batchAttestation.test.ts",
+            "name": "Batch Merkle tree rejects duplicate verdict hashes",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/differentialParity.test.ts",
+            "name": "differential parity: batch Merkle tree (batchAttestation) duplicate and malformed verdict hashes rejected by BOTH implementations",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/invariantAssertions.test.ts",
+            "name": "INV-BATCH-5: the RFC-6962 split point 2^floor(log2(n-1)) governs proof shapes the tree root is order-independent and duplicate-free (INV-BATCH-2/3 spot check)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-3/__tests__/propertiesBatch.test.ts",
+            "name": "properties: batchAttestation PB6a: malformed caller input throws the TYPED BatchAttestationError (never a raw Error/TypeError/RangeError)",
+            "message": "AssertionError: duplicate leaves: expected undefined to be an instance of BatchAttestationError"
+          }
+        ],
+        "wallMs": 179519
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S15",
+            "error": "Error: duplicate verdict hash batched"
+          }
+        ],
+        "wallMs": 2636
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 179540
+    },
+    {
+      "id": "M52",
+      "cls": "proof-bounds",
+      "file": "batchAttestation.ts",
+      "intent": "proof index bound off-by-one: index === count is treated as inside the batch",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-0/__tests__/simulateCourt.test.ts",
+            "name": "full court simulation (single script, hermetic) fast: completes the full pipeline well under the default 5s budget",
+            "message": "AssertionError: expected 8254 to be less than 5000"
+          }
+        ],
+        "wallMs": 175981
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S17",
+            "error": "Error: unexpected reason: Proof does not recompute the batch root"
+          }
+        ],
+        "wallMs": 2290
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 176000
+    },
+    {
+      "id": "M53",
+      "cls": "proof-bounds",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "finalize mints a verdict backed by zero evidence (r3-1 guard removed)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B explores the same instances)",
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/propertiesConfirmation.test.ts",
+            "name": "properties: confirmation machine legal-sequence sweep P6 (FINDING r3-1, FIXED in 0.9.1): finalize over an EMPTY but well-formed confirmation ledger fails closed with the machine's OWN typed error",
+            "message": "AssertionError: expected CourtVoteTransitionError: supportingEvent… { …(2) } to be an instance of CourtConfirmationTransitionError"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-4rcQN1/work-1/__tests__/r3Findings.test.ts",
+            "name": "round-3 findings (v0.9.1) — regression locks r3-1: finalize over a restored EMPTY confirmation ledger throws the CONFIRMATION machine's typed error, not a foreign CourtVoteTransitionError",
+            "message": "AssertionError: expected CourtVoteTransitionError: supportingEvent… { …(2) } to be an instance of CourtConfirmationTransitionError"
+          }
+        ],
+        "wallMs": 179991
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 2387
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 98076
+          }
+        ],
+        "wallMs": 100654
+      },
+      "wallMs": 280680
+    }
+  ]
+}

@@ -48,7 +48,7 @@ Conventions for evidence refs:
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,492 passed / 1 skipped (61 files)** — re-verified 2026-11-10, round 17 (final polish); 1,491 at rounds 14–16 (one test added by the round-16 merge) |
+| Full suite | `npm test` | **1,534 passed / 1 skipped (64 files)** — re-verified 2026-11-11, round 21 (mutation-closure pins, `docs/MUTATION_TESTING.md`); 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified round 17) |
 | Cross-check | `node scripts/cross-check.mjs` | OK — every evidence pointer resolves (re-verified round 17; output in the PR body) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | regenerated (17 min): **13 instances, 3,145,632 states, 128,522,740 event applications, 0 raw throws, 2,600 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
