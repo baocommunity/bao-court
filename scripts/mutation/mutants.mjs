@@ -44,6 +44,18 @@ export const CLASSES = {
   'hex-case': 'uppercase hex accepted where canonical lowercase is required',
   'empty-pin-acceptance': 'empty-string pin accepted (F-2 regression)',
   'proof-bounds': 'batch proof/duplicate bounds loosened',
+
+  // ── v0.13 surface (round 37 campaign) ────────────────────────────────────
+  'round-bond-consumption': 'per-round bond witness is not consumed / not distinct (R31)',
+  'escalation-witness-binding': 'escalation witness not bound to its round or its challenger',
+  'require-round-bond': 'requireRoundBond strict policy silently reverts to the legacy free option',
+  'escalation-ledger-completeness': 'short / hand-edited escalation ledger accepted (r33-5)',
+  'ladder-bound-sign': 'safe ladder cap no longer decided by the sign of E[π] (r33-6)',
+  'penalty-aging': 'penalty aging skipped or run on a different clock (r30-4b)',
+  'weight-anchor': 'decay anchored at w0 instead of the floor (r30-4a regression)',
+  'policy-flag-recording': 'R25 quorum policy flag not recorded',
+  'ladder-bond-schedule': 'escalation bond schedule under-priced (02-ladder Thm 2)',
+  'quorum-capture-arithmetic': 'quorum capture baseline (κ) measured against the wrong quorum',
 };
 
 /** @typedef {keyof typeof CLASSES} MutantClass */
@@ -564,6 +576,258 @@ export const MUTANTS = [
     replace: '',
     intent: 'finalize mints a verdict backed by zero evidence (r3-1 guard removed)',
     machine: 'confirmation',
+  },
+
+  // ════════════════════════════════════════════════════════════════════════
+  // v0.13 surface — the per-round bond (R31), the complete escalation ledger
+  // (r33-5), the sign-based ladder bound (r33-6), the paired decay (r30-4a/b)
+  // and the quorum economics. Rounds 1–36's mutants predate all of it.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // ── round-bond consumption (R31, r33-1) ──────────────────────────────────
+  {
+    id: 'M54',
+    cls: 'round-bond-consumption',
+    file: 'confirmationMachineHandlers.ts',
+    find: '      const consumed = log.find((r) => r.roundBondProofHash === roundBondProofHash);\n      if (consumed) {\n        throw new CourtConfirmationTransitionError(\n          `escalation round bond proof hash was already consumed by round ${consumed.round}`,\n        );\n      }',
+    replace: '',
+    intent: 'one paid bond funds every rung: the round-bond consumption set is no longer consulted, so ΔC_{r+1} = 0 again (r30-1 reopened)',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M55',
+    cls: 'round-bond-consumption',
+    file: 'confirmationMachineHandlers.ts',
+    find: '      const membershipBond = state.challenges.find((c) => c.bondProofHash === roundBondProofHash);\n      if (membershipBond) {\n        throw new CourtConfirmationTransitionError(\n          `escalation round bond proof hash is participant ${membershipBond.idx}\'s accepted challenge `\n          + \'(membership) bond: a per-round bond must be a fresh bond, not a relabelled membership bond\',\n        );\n      }',
+    replace: '',
+    intent: 'a membership bond (some juror\'s accepted challenge bond) can be relabelled as the per-round payment — escalation is free again',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M56',
+    cls: 'round-bond-consumption',
+    file: 'confirmationMachineHandlers.ts',
+    find: '      const membershipBond = state.challenges.find((c) => c.bondProofHash === roundBondProofHash);',
+    replace: '      const membershipBond = state.challenges.find((c) => c.idx === (idx as number) && c.bondProofHash === roundBondProofHash);',
+    intent: 'the round-4 fix is regressed (r33-1): only the challenger\'s OWN membership bond is refused, so quoting ANOTHER juror\'s accepted bond pays this rung nothing',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M57',
+    cls: 'round-bond-consumption',
+    file: 'confirmationMachineCore.ts',
+    find: '        if (roundBondProofHash === bondProofHash) {\n          throw new CourtConfirmationTransitionError(\n            \'escalation log round bond must be distinct from the membership (challenge) bond\',\n          );\n        }',
+    replace: '',
+    intent: 'restore barrier parity broken: a hand-edited log may record the membership bond as its per-round payment even though the live reducer refuses it',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M58',
+    cls: 'round-bond-consumption',
+    file: 'confirmationMachineCore.ts',
+    find: '        if (seenRoundBonds.has(roundBondProofHash)) {\n          throw new CourtConfirmationTransitionError(\n            \'escalation log reuses a per-round bond witness across rounds\',\n          );\n        }',
+    replace: '',
+    intent: 'a restored snapshot may reuse one round-bond witness for several rungs (the ledger stops being a consumption set)',
+    machine: 'confirmation',
+  },
+
+  // ── escalation witness binding (r29-1) ───────────────────────────────────
+  {
+    id: 'M59',
+    cls: 'escalation-witness-binding',
+    file: 'confirmationMachineHandlers.ts',
+    find: '  if (event.roundIndex !== expectedRound) {\n    throw new CourtConfirmationTransitionError(\n      `escalation roundIndex ${String(event.roundIndex)} does not open the next ladder round ${expectedRound}`,\n    );\n  }',
+    replace: '',
+    intent: 'a witness minted for another round (or no round at all) opens the next rung — the roundIndex binding is gone',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M60',
+    cls: 'escalation-witness-binding',
+    file: 'confirmationMachineHandlers.ts',
+    find: '    if (!state.challenges.some(\n      (c) => c.idx === (idx as number) && c.bondProofHash === event.bondProofHash,\n    )) {',
+    replace: '    if (!state.challenges.some(\n      (c) => c.bondProofHash === event.bondProofHash,\n    )) {',
+    intent: 'a juror who posted no bond escalates by quoting a bonded juror\'s hash (r29-1 regressed): the witness names the wrong challenger',
+    machine: 'confirmation',
+  },
+
+  // ── requireRoundBond strictness (R31) ────────────────────────────────────
+  {
+    id: 'M61',
+    cls: 'require-round-bond',
+    file: 'confirmationMachineHandlers.ts',
+    find: '      if (state.requireRoundBond === true && state.hostEscalation !== true) {\n        throw new CourtConfirmationTransitionError(\n          \'escalation requires a per-round bond witness: this case sets requireRoundBond\',\n        );\n      }',
+    replace: '',
+    intent: 'a strict case accepts an escalation with NO per-round bond — the policy is recorded but never enforced (r30-1 free option restored)',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M62',
+    cls: 'require-round-bond',
+    file: 'confirmationMachineCore.ts',
+    find: '      } else if (state.requireRoundBond === true && state.hostEscalation !== true) {\n        throw new CourtConfirmationTransitionError(\n          \'escalation log records a challenger escalation without the per-round bond this case requires\',\n        );\n      }',
+    replace: '      }',
+    intent: 'a restored strict case finalizes on a log whose challenger records carry no round bond — finalize stops re-deriving the policy',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M63',
+    cls: 'require-round-bond',
+    file: 'courtConfirmationMachine.ts',
+    find: '    requireRoundBond: params.requireRoundBond === true,',
+    replace: '    requireRoundBond: false,',
+    intent: 'the frozen policy is discarded at construction: a case that opted into per-round bonds silently runs the legacy free option',
+    machine: null,
+  },
+
+  // ── escalation-ledger completeness (r33-5) ───────────────────────────────
+  {
+    id: 'M64',
+    cls: 'escalation-ledger-completeness',
+    file: 'confirmationMachineCore.ts',
+    find: '  if (log.length !== expectedRecords && (log.length > 0 || state.requireRoundBond === true)) {',
+    replace: '  if (log.length > expectedRecords) {',
+    intent: 'a SHORT log is accepted again: deleting a record also un-consumes the bond it paid with, so a restored snapshot re-opens the free rung (r33-5)',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M65',
+    cls: 'escalation-ledger-completeness',
+    file: 'confirmationMachineHandlers.ts',
+    find: '  assertValidEscalationLog(state);\n  const expectedRound = state.ladderRound + 1;',
+    replace: '  const expectedRound = state.ladderRound + 1;',
+    intent: 'the ledger barrier is only re-run at finalize: a stripped snapshot opens (and seats) one free rung before the case bricks',
+    machine: 'confirmation',
+  },
+  {
+    id: 'M66',
+    cls: 'escalation-ledger-completeness',
+    file: 'confirmationMachineCore.ts',
+    find: '    const openedRounds = state.phase === \'ladder_pending\'\n      ? state.ladderRound + 1\n      : state.ladderRound;\n    if (round > openedRounds) {\n      throw new CourtConfirmationTransitionError(\n        \'escalation log records a round the case never opened\',\n      );\n    }',
+    replace: '',
+    intent: 'a log may name a round the case never opened — the audit trail stops being bound to the ladder state',
+    note: 'EQUIVALENT on v0.13.1: the consecutive 2..k rule and the completeness offset already exclude every record the bound could reject, so removing it changes no reachable behaviour. Kept because ids are permanent, and because the round-37 campaign proved the bound was WRONG in one direction: before r37-1 it fired on a legal `ladder_pending` snapshot (see mutationClosuresV013.test.ts). The guard is defence in depth against a future change to the other two rules.',
+    machine: 'confirmation',
+  },
+
+  // ── ladder bound decided by the sign (r33-6) ─────────────────────────────
+  {
+    id: 'M67',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '  if (boundary <= 1) return 0;',
+    replace: '  if (boundary <= 1) return 1;',
+    intent: 'the pre-R33 clamp is back: "no depth is safe" reports 1, so a host reading derivedCap blesses the one profitable round',
+    machine: null,
+  },
+  {
+    id: 'M68',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '    ok: maxLadderRounds < flipRound,',
+    replace: '    ok: maxLadderRounds <= derivedCap,',
+    intent: 'the gate compares with derivedCap instead of the sign of E[π]: at an EXACT integer boundary a cap at the break-even/flip round is approved',
+    machine: null,
+  },
+  {
+    id: 'M69',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '  return Math.min(MAX_LADDER_ROUNDS, Math.floor(boundary));',
+    replace: '  return Math.min(MAX_LADDER_ROUNDS, Math.ceil(boundary));',
+    intent: 'the SAFE cap rounds up to the first unsafe round (floor → ceil) — the cap legalises the profitable rung',
+    machine: null,
+  },
+  {
+    id: 'M70',
+    cls: 'ladder-bound-sign',
+    file: 'ladderEconomics.ts',
+    find: '  return Math.max(1, Math.ceil(boundary));',
+    replace: '  return Math.max(1, Math.floor(boundary));',
+    intent: 'the flip round is floored, so the monitoring alert fires on the last SAFE round and the gate refuses a legal cap',
+    machine: null,
+  },
+
+  // ── penalty aging (r30-4b) ───────────────────────────────────────────────
+  {
+    id: 'M71',
+    cls: 'penalty-aging',
+    file: 'penaltyAging.ts',
+    find: '    multiplier *= 1 - (1 - factor) * Math.exp(-PENALTY_AGING_LAMBDA * (age + elapsed));',
+    replace: '    multiplier *= 1 - (1 - factor) * Math.exp(-PENALTY_AGING_LAMBDA * age);',
+    intent: 'participation buys nothing: the `epochs` argument is ignored, so a penalty is permanent for the life of the record (the aging half of the pair is gone)',
+    machine: null,
+  },
+  {
+    id: 'M72',
+    cls: 'penalty-aging',
+    file: 'penaltyAging.ts',
+    find: 'export const PENALTY_AGING_LAMBDA = Math.LN2 / 3;',
+    replace: 'export const PENALTY_AGING_LAMBDA = Math.LN2 / 6;',
+    intent: 'probation runs on a different clock from restitution (λ unpaired, half-life 6 instead of 3) — the pairing the document requires is broken',
+    machine: null,
+  },
+
+  // ── paired weight anchor (r30-4a) ────────────────────────────────────────
+  {
+    id: 'M73',
+    cls: 'weight-anchor',
+    file: 'penaltyAging.ts',
+    find: '  const anchor = earned >= w0 ? w0 : floor;',
+    replace: '  const anchor = w0;',
+    intent: 'the r30-4a regression: a penalised juror is anchored at w0, so idleness hands the penalty back (the cliff returns)',
+    machine: null,
+  },
+  {
+    id: 'M74',
+    cls: 'weight-anchor',
+    file: 'penaltyAging.ts',
+    find: '  return Math.max(floor, weight);',
+    replace: '  return weight;',
+    intent: 'the documented weight floor is not enforced — a heavily penalised juror decays below minWeightFactor·w0',
+    machine: null,
+  },
+
+  // ── the R25 policy flag ──────────────────────────────────────────────────
+  {
+    id: 'M75',
+    cls: 'policy-flag-recording',
+    file: 'courtConfirmationMachine.ts',
+    find: '  const quorumBelowSupermajority = confirmQuorum < confirmSupermajority(participants.length);',
+    replace: '  const quorumBelowSupermajority = false;',
+    intent: 'a sub-supermajority quorum is accepted but NOT recorded (INV-CONF-4 broken): the host policy layer can no longer gate on it',
+    machine: null,
+  },
+
+  // ── the per-round bond schedule (02-ladder Theorem 2) ────────────────────
+  {
+    id: 'M76',
+    cls: 'ladder-bond-schedule',
+    file: 'ladderEconomics.ts',
+    find: '  return 3 ** r;',
+    replace: '  return 2 ** r;',
+    intent: 'the marginal rung is under-priced at 2^R (the escrow.ts shape 06 §1.5 warns about) — the ladder costs half what the theorem charges',
+    machine: null,
+  },
+  {
+    id: 'M77',
+    cls: 'ladder-bond-schedule',
+    file: 'ladderEconomics.ts',
+    find: '  return (3 ** (r + 1) - 1) / 2;',
+    replace: '  return (3 ** r - 1) / 2;',
+    intent: 'the cumulative schedule is one rung short — depth R costs 1/3 of the published 4/13/40/121/364× row',
+    machine: null,
+  },
+
+  // ── quorum capture arithmetic (05 §1.3, R25) ─────────────────────────────
+  {
+    id: 'M78',
+    cls: 'quorum-capture-arithmetic',
+    file: 'quorumEconomics.ts',
+    find: '  const supermajority = Math.ceil((2 * panelSize) / 3);',
+    replace: '  const supermajority = Math.floor((2 * panelSize) / 3);',
+    intent: 'κ is measured against a one-seat-weaker baseline whenever N ≡ 1 (mod 3), so the correction a host prices is understated',
+    machine: null,
   },
 ];
 

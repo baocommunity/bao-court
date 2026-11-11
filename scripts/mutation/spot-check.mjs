@@ -32,6 +32,9 @@ const signingMachine = await import(`${root}courtSigningMachine.ts`);
 const batch = await import(`${root}batchAttestation.ts`);
 const session = await import(`${root}courtSession.ts`);
 const validator = await import(`${root}validator.ts`);
+const ladder = await import(`${root}ladderEconomics.ts`);
+const aging = await import(`${root}penaltyAging.ts`);
+const quorum = await import(`${root}quorumEconomics.ts`);
 
 const hex = (ch) => ch.repeat(64);
 const probes = [];
@@ -333,6 +336,296 @@ probe('S18', 'batch roots depend on leaf CONTENT and are submission-order indepe
   assert(a.root === b.root, 'root depends on submission order');
   assert(a.root !== c.root, 'root ignores leaf content');
   assert(bytesToHex(hexToBytes(a.root)) === a.root, 'root is not 32-byte hex');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// v0.13 surface probes (S19–S32). Round 37's campaign asks whether the
+// per-round bond (R31), the complete escalation ledger (r33-5), the
+// sign-based ladder bound (r33-6), the paired decay (r30-4a/b) and the
+// quorum economics are pinned by the REPOSITORY, or only by the round that
+// introduced them. Each probe below restates one published invariant —
+// `docs/FORMAL_INVARIANTS.md` INV-ESC-*, `docs/proofs/economics/02-ladder`
+// Thm 2, `05-review-gapfills` §1.3, `06-expert-verify` §1.5/§4/§3 — and
+// imports nothing from `__tests__/`.
+// ══════════════════════════════════════════════════════════════════════════
+
+const HEX = (c) => c.repeat(64);
+const PAD = (s) => s.padEnd(64, '0');
+
+/** Round `r`'s fresh per-round bond witness. */
+const roundBondWitness = (r) => PAD(`a${r}`);
+
+/** A case advanced to `round_resolved` after round 1 (juror 2 challenged). */
+function challengedCase(opts = {}) {
+  const participants = opts.participants ?? [1, 2, 3];
+  let s = confirmationMachine.createCourtConfirmationMachine({
+    sessionHash: HEX('1'),
+    proposalHash: HEX('2'),
+    proposedOutcome: 'YES',
+    allowedOutcomes: ['YES', 'NO'],
+    participantIndices: participants,
+    confirmDeadline: 1000,
+    challengeDeadline: 2000,
+    maxLadderRounds: opts.maxLadderRounds ?? 3,
+    ...(opts.requireRoundBond === undefined ? {} : { requireRoundBond: opts.requireRoundBond }),
+    ...(opts.hostEscalation === undefined ? {} : { hostEscalation: opts.hostEscalation }),
+  });
+  for (const idx of participants) {
+    s = reduce(s, {
+      type: 'accept_confirmation',
+      idx,
+      confirmHash: confirmationMachine.hashCourtConfirmation({
+        sessionHash: s.sessionHash,
+        proposalHash: s.proposalHash,
+        idx,
+      }),
+      eventId: PAD(`c${idx}`),
+      now: 100 + idx,
+    });
+  }
+  s = reduce(s, { type: 'close_confirmations', now: 1000 });
+  s = reduce(s, { type: 'open_challenge_window', now: 1100 });
+  let at = 1200;
+  for (const idx of opts.challengers ?? [2]) {
+    s = reduce(s, {
+      type: 'accept_challenge',
+      idx,
+      bondTxid: PAD(`d${idx}`),
+      bondProofHash: PAD(`e${idx}`),
+      eventId: PAD(`f${idx}`),
+      now: at,
+    });
+    at += 10;
+  }
+  s = reduce(s, { type: 'close_challenge_window', now: 2000 });
+  s = openRound(s, 1, 3000, 2100, 'NO');
+  s = reduce(s, { type: 'close_ladder_round', now: 3000 });
+  return reduce(s, { type: 'resolve_round', now: 3100 });
+}
+
+function openRound(s, round, voteDeadline, now, outcome) {
+  let next = reduce(s, { type: 'open_ladder_round', round, voteDeadline, now });
+  for (const idx of s.participantIndices) {
+    next = reduce(next, {
+      type: 'accept_mass_vote',
+      idx,
+      outcome,
+      eventId: PAD(`${round}b${idx}`),
+      now: now + 10 + idx,
+    });
+  }
+  return next;
+}
+
+function escalateEvent(s, now, witness = {}) {
+  return confirmationMachine.challengerEscalationEvent(s, now, {
+    challengerPubkey: HEX('7'),
+    requestHash: HEX('8'),
+    ...witness,
+  });
+}
+
+/** Escalate with round bond `bondR`, then drive round `round` to `round_resolved`. */
+function advance(s, round, at, bondR) {
+  let next = reduce(s, escalateEvent(s, at, bondR === undefined ? {} : { roundBondProofHash: bondR }));
+  next = openRound(next, round, at + 1000, at + 100, 'YES');
+  next = reduce(next, { type: 'close_ladder_round', now: at + 1000 });
+  return reduce(next, { type: 'resolve_round', now: at + 1100 });
+}
+
+// ── S19 a consumed round bond cannot fund another rung (R31) ──────────────
+probe('S19', 'a per-round bond already consumed by round 2 is refused for round 3', () => {
+  let s = challengedCase({ requireRoundBond: true });
+  s = advance(s, 2, 3200, roundBondWitness(2));
+  expectThrow(
+    () => reduce(s, escalateEvent(s, 4400, { roundBondProofHash: roundBondWitness(2) })),
+    'one paid bond funded a second rung (ΔC = 0 reopened)',
+  );
+});
+
+// ── S20 the membership bond cannot be relabelled as the round bond ────────
+probe('S20', 'the challenger\'s own membership bond cannot be relabelled as this round\'s payment', () => {
+  const s = challengedCase();
+  expectThrow(
+    () => reduce(s, escalateEvent(s, 3200, { roundBondProofHash: s.challenges[0].bondProofHash })),
+    'the membership bond was accepted as a per-round bond',
+  );
+});
+
+// ── S21 no accepted bond of ANY juror may be relabelled (r33-1) ───────────
+probe('S21', 'ANOTHER juror\'s accepted membership bond is refused as this round\'s payment (r33-1)', () => {
+  const s = challengedCase({ challengers: [2, 3] });
+  expectThrow(
+    () => reduce(s, escalateEvent(s, 3200, { roundBondProofHash: PAD('e3') })),
+    'juror 3\'s membership bond paid juror 2\'s escalation',
+  );
+});
+
+// ── S22 a strict case refuses an escalation with no round bond ────────────
+probe('S22', 'requireRoundBond refuses a witness that carries no per-round bond', () => {
+  const s = challengedCase({ requireRoundBond: true });
+  expectThrow(
+    () => reduce(s, escalateEvent(s, 3200)),
+    'a strict case accepted the legacy free option',
+  );
+});
+
+// ── S23 a snapshot that dropped an escalation record is refused ───────────
+probe('S23', 'a restored snapshot with every escalation record deleted cannot re-open the free rung (r33-5)', () => {
+  let s = challengedCase({ requireRoundBond: true });
+  s = advance(s, 2, 3200, roundBondWitness(2));
+  assert(s.escalationLog.length === 1, `expected 1 escalation record, got ${s.escalationLog.length}`);
+  const stripped = { ...s, escalationLog: [] };
+  expectThrow(
+    () => reduce(stripped, escalateEvent(stripped, 4400, { roundBondProofHash: roundBondWitness(2) })),
+    'a stripped ledger opened a rung paid by an already-consumed bond',
+  );
+});
+
+// ── S24 the ledger barrier binds records to rounds and to a strict policy ─
+probe('S24', 'the escalation ledger re-verifies its own records (round binding, strict-policy bond)', () => {
+  let s = challengedCase({ requireRoundBond: true });
+  s = advance(s, 2, 3200, roundBondWitness(2));
+  const forged = {
+    ...s,
+    escalationLog: s.escalationLog.map((record) => ({ ...record, round: 9 })),
+  };
+  expectThrow(
+    () => confirmation.assertValidEscalationLog(forged),
+    'a ledger naming a round the case never opened passed the barrier',
+  );
+  const bondless = {
+    ...s,
+    escalationLog: s.escalationLog.map((record) => ({ ...record, roundBondProofHash: null })),
+  };
+  expectThrow(
+    () => confirmation.assertValidEscalationLog(bondless),
+    'a strict case finalized on a record with no per-round bond',
+  );
+});
+
+// ── S25 "no safe depth" is 0, and the gate refuses every cap ──────────────
+probe('S25', 'a_f at or below ρ/(ρ+β) derives 0 safe rounds and refuses every cap (r33-6)', () => {
+  const params = { a_f: 0.45, rho: 0.03, beta: 0.03 };
+  assert(ladder.deriveMaxLadderRounds(params) === 0, 'derived cap is not 0 where no depth is safe');
+  for (const cap of [1, 2, 3, 4, 5]) {
+    assert(ladder.ladderCapWithinBound({ ...params, maxLadderRounds: cap }).ok === false, `cap ${cap} approved above the bound`);
+  }
+});
+
+// ── S26 the gate is decided by the SIGN, not by derivedCap ────────────────
+probe('S26', 'an EXACT integer boundary: the cap at the flip round is refused (sign, not derivedCap)', () => {
+  // a_f = 0.5, ρ = 1, β = 3 ⇒ ln(0.25)/ln(0.5) = 2 exactly: round 2 breaks even.
+  const params = { a_f: 0.5, rho: 1, beta: 3 };
+  assert(ladder.deriveMaxLadderRounds(params) === 2, 'derived cap for an exact boundary is not 2');
+  assert(ladder.ladderCapWithinBound({ ...params, maxLadderRounds: 1 }).ok === true, 'the safe cap 1 was refused');
+  assert(
+    ladder.ladderCapWithinBound({ ...params, maxLadderRounds: 2 }).ok === false,
+    'a cap at the zero-EV round was approved (derivedCap comparison, not the sign)',
+  );
+});
+
+// ── S27 the flip round is the first UNSAFE round ──────────────────────────
+probe('S27', 'E[π] < 0 through the safe cap and > 0 from the flip round (published rows)', () => {
+  for (const a_f of [0.9, 0.85, 0.75, 0.7]) {
+    const params = { a_f, rho: 0.03, beta: 0.03 };
+    const cap = ladder.deriveMaxLadderRounds(params);
+    const flip = ladder.deriveLadderFlipRound(params);
+    assert(flip > cap, `a_f=${a_f}: flip ${flip} is not above the safe cap ${cap}`);
+    if (cap >= 1) {
+      assert(ladder.escalationOptionEv({ ...params, rounds: cap }) < 0, `a_f=${a_f}: E[π] at the cap is not negative`);
+    }
+    assert(ladder.escalationOptionEv({ ...params, rounds: flip }) > 0, `a_f=${a_f}: E[π] at the flip round is not positive`);
+  }
+});
+
+// ── S28 penalties age on the participating clock, half-life 3 ─────────────
+probe('S28', 'a penalty ages at λ = ln2/3 on the PARTICIPATING clock (0.8 → 0.9 → 0.975)', () => {
+  const close = (a, b) => Math.abs(a - b) < 1e-12;
+  assert(close(aging.agePenalties([{ factor: 0.8 }], 0), 0.8), 'the un-aged multiplier is not the factor itself');
+  assert(close(aging.agePenalties([{ factor: 0.8 }], 3), 0.9), 'one half-life did not halve the deviation');
+  assert(close(aging.agePenalties([{ factor: 0.8 }], 9), 0.975), 'three half-lives are not 0.975');
+  assert(
+    aging.agePenalties([{ factor: 0.8, ageEpochs: 3 }], 0) === aging.agePenalties([{ factor: 0.8 }], 3),
+    'served age and new epochs are not one timeline',
+  );
+  let previous = 0;
+  for (let epochs = 0; epochs <= 12; epochs += 1) {
+    const value = aging.agePenalties([{ factor: 0.8 }], epochs);
+    assert(value >= previous, `aging is not monotone at ${epochs} epochs`);
+    previous = value;
+  }
+});
+
+// ── S29 the paired weight anchors at the floor, never at w0 (r30-4a) ──────
+probe('S29', 'a penalised juror is anchored at the floor: idleness never hands weight back', () => {
+  const w0 = 1;
+  const penalties = [{ factor: 0.8 }];
+  let previous = Infinity;
+  for (const idleEpochs of [0, 1, 3, 6, 20, 100]) {
+    const weight = aging.pairedJurorWeight({ w0, penalties, idleEpochs });
+    assert(weight <= previous + 1e-15, `weight rose from idling at ${idleEpochs}`);
+    assert(weight <= 0.8 + 1e-12, `penalised weight ${weight} rose above the earned 0.8 (anchor is w0)`);
+    assert(weight >= 0.5 - 1e-12, `penalised weight ${weight} fell below the 0.5 floor`);
+    previous = weight;
+  }
+  assert(aging.pairedJurorWeight({ w0, penalties: [] }) === 1, 'an unpenalised juror is not w0');
+  assert(
+    aging.pairedJurorWeight({ w0, penalties, idleEpochs: 0, minWeightFactor: 0.25 }) >= 0.25,
+    'the documented floor is not enforced',
+  );
+});
+
+// ── S30 the R25 policy flag records exactly the weak-quorum cases ─────────
+probe('S30', 'quorumBelowSupermajority === (confirmQuorum < ⌈2N/3⌉) (INV-CONF-4)', () => {
+  const cases = [
+    { n: 3, q: 2, weak: false },
+    { n: 5, q: 3, weak: true },
+    { n: 5, q: 4, weak: false },
+    { n: 15, q: 9, weak: true },
+    { n: 15, q: 10, weak: false },
+  ];
+  for (const { n, q, weak } of cases) {
+    const roster = Array.from({ length: n }, (_, i) => i + 1);
+    const s = confirmationMachine.createCourtConfirmationMachine({
+      sessionHash: HEX('1'),
+      proposalHash: HEX('2'),
+      proposedOutcome: 'YES',
+      allowedOutcomes: ['YES', 'NO'],
+      participantIndices: roster,
+      confirmQuorum: q,
+      confirmDeadline: 100,
+      challengeDeadline: 200,
+      maxLadderRounds: 1,
+    });
+    assert(s.confirmQuorum === q, `n=${n}: quorum ${s.confirmQuorum} != ${q}`);
+    assert(s.quorumBelowSupermajority === weak, `n=${n} q=${q}: flag ${s.quorumBelowSupermajority} != ${weak}`);
+  }
+});
+
+// ── S31 the per-round bond schedule is 3^R and 4/13/40/121/364× ───────────
+probe('S31', 'the escalation bond schedule is 3^R marginal and 4/13/40/121/364× cumulative (Thm 2)', () => {
+  for (const [r, multiple] of [[0, 1], [1, 3], [2, 9], [3, 27], [4, 81], [5, 243]]) {
+    assert(ladder.escalationBondMultiple(r) === multiple, `ΔC_${r} is not ${multiple}× b₀`);
+  }
+  for (const [r, cumulative] of [[0, 1], [1, 4], [2, 13], [3, 40], [4, 121], [5, 364]]) {
+    assert(ladder.cumulativeLadderBondMultiple(r) === cumulative, `C_${r} is not ${cumulative}× b₀`);
+  }
+});
+
+// ── S32 κ is measured against the ⌈2N/3⌉ baseline ─────────────────────────
+probe('S32', 'κ = 1 at ⌈2N/3⌉, > 1 for a weaker quorum, < 1 for a stronger one (05 §1.3)', () => {
+  const share = { numerator: 1, denominator: 3 };
+  assert(
+    Math.abs(quorum.quorumCapCorrection({ panelSize: 5, quorum: 4, adversaryWeight: share }) - 1) < 1e-12,
+    'κ at the shipped supermajority is not 1',
+  );
+  assert(quorum.quorumCapCorrection({ panelSize: 5, quorum: 3, adversaryWeight: share }) > 1, 'κ at 3-of-5 is not > 1');
+  assert(quorum.quorumCapCorrection({ panelSize: 5, quorum: 5, adversaryWeight: share }) < 1, 'κ at 5-of-5 is not < 1');
+  assert(
+    Math.abs(quorum.quorumCapCorrection({ panelSize: 5, quorum: 3, adversaryWeight: share }) - 51 / 11) < 1e-12,
+    'κ at 3-of-5 at ρ = ⅓ is not the published 51/11',
+  );
 });
 
 const failed = probes.filter((p) => !p.ok);

@@ -1,5 +1,14 @@
 # Mutation testing — what the spec is blind to
 
+> **Round 37 supersedes the numbers below for the v0.13 surface.** This
+> document is the *first* campaign (53 mutants, 18 classes); it predates the
+> per-round bond, `requireRoundBond`, the churn cap, the quorum-aware cap, the
+> decay pairing, the sign-based ladder bound and the round-4 fixes. The
+> v0.13 campaign — 25 further mutants in 10 new classes, and the 7 holes it
+> found — is `docs/MUTATION_TESTING_V013.md`. The catalogue is now **78
+> mutants in 28 classes** and this document's method section still describes
+> the runner exactly; its result tables are historical.
+
 The suite answers *"does the code do what the tests say?"*. It cannot answer
 *"do the tests say what the protocol needs?"*. Mutation testing asks the second
 question mechanically: inject one deliberate bug into the source, run every

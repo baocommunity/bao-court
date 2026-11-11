@@ -1,0 +1,1686 @@
+{
+  "tool": "scripts/mutation/run-mutants.mjs",
+  "generatedAt": "2026-11-11T12:26:59.501Z",
+  "repoRoot": "/home/bob/Documents/bao-court--test-mutation2",
+  "precision": "single semantic mutation per source file, applied to a sandbox copy",
+  "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+  "cleanTree": {
+    "pristineBefore": "",
+    "pristineAfter": "",
+    "trackedTreeUnchanged": true,
+    "sourceFilesHashed": [
+      "courtCeremonyCore.ts",
+      "confirmationMachineHandlers.ts",
+      "courtVoteMachine.ts",
+      "selection.ts",
+      "courtSigningMachine.ts",
+      "validator.ts",
+      "courtConfirmationMachine.ts",
+      "batchAttestation.ts",
+      "courtSession.ts",
+      "confirmationMachineCore.ts",
+      "ladderEconomics.ts",
+      "penaltyAging.ts",
+      "quorumEconomics.ts"
+    ],
+    "sourceFilesUnchanged": true,
+    "unchanged": true
+  },
+  "parallelism": 6,
+  "testTimeoutSec": 900,
+  "baseline": {
+    "totalTests": 1694,
+    "passedTests": 1693,
+    "failedTests": 0,
+    "failedSuites": 0,
+    "failing": [],
+    "success": true,
+    "wallMs": 57622
+  },
+  "summary": {
+    "total": 25,
+    "captured": 24,
+    "survived": 1,
+    "score": 0.96,
+    "byClass": {
+      "round-bond-consumption": {
+        "description": "per-round bond witness is not consumed / not distinct (R31)",
+        "total": 5,
+        "captured": 5,
+        "score": 1,
+        "survivors": []
+      },
+      "escalation-witness-binding": {
+        "description": "escalation witness not bound to its round or its challenger",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "require-round-bond": {
+        "description": "requireRoundBond strict policy silently reverts to the legacy free option",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      },
+      "escalation-ledger-completeness": {
+        "description": "short / hand-edited escalation ledger accepted (r33-5)",
+        "total": 3,
+        "captured": 2,
+        "score": 0.6666666666666666,
+        "survivors": [
+          "M66"
+        ]
+      },
+      "ladder-bound-sign": {
+        "description": "safe ladder cap no longer decided by the sign of E[π] (r33-6)",
+        "total": 4,
+        "captured": 4,
+        "score": 1,
+        "survivors": []
+      },
+      "penalty-aging": {
+        "description": "penalty aging skipped or run on a different clock (r30-4b)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "weight-anchor": {
+        "description": "decay anchored at w0 instead of the floor (r30-4a regression)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "policy-flag-recording": {
+        "description": "R25 quorum policy flag not recorded",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "ladder-bond-schedule": {
+        "description": "escalation bond schedule under-priced (02-ladder Thm 2)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "quorum-capture-arithmetic": {
+        "description": "quorum capture baseline (κ) measured against the wrong quorum",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      }
+    },
+    "byDetector": {
+      "tests": {
+        "total": 25,
+        "captured": 23,
+        "score": 0.92
+      },
+      "spot": {
+        "total": 25,
+        "captured": 19,
+        "score": 0.76
+      },
+      "model": {
+        "total": 25,
+        "captured": 1,
+        "score": 0.04,
+        "applicable": 12,
+        "scoreApplicable": 0.08333333333333333
+      }
+    },
+    "survivors": [
+      {
+        "id": "M66",
+        "cls": "escalation-ledger-completeness",
+        "file": "confirmationMachineCore.ts",
+        "intent": "a log may name a round the case never opened — the audit trail stops being bound to the ladder state"
+      }
+    ],
+    "baselineTests": 1694
+  },
+  "mutants": [
+    {
+      "id": "M54",
+      "cls": "round-bond-consumption",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "one paid bond funds every rung: the round-bond consumption set is no longer consulted, so ΔC_{r+1} = 0 again (r30-1 reopened)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/perRoundBond.test.ts",
+            "name": "R31 / legacy default — the v0.12 membership semantics are preserved an OPTIONAL round bond is validated and consumed even on a legacy case",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/perRoundBond.test.ts",
+            "name": "R31 / requireRoundBond — escalation becomes a consumption test one bond cannot fund every round: each rung needs its own witness",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner the consumed set for a round bond IS the union of the log and every challenge bond",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 111439
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S19",
+            "error": "Error: one paid bond funded a second rung (ΔC = 0 reopened)"
+          }
+        ],
+        "wallMs": 901
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 64773
+          }
+        ],
+        "wallMs": 65078
+      },
+      "wallMs": 176522
+    },
+    {
+      "id": "M55",
+      "cls": "round-bond-consumption",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a membership bond (some juror's accepted challenge bond) can be relabelled as the per-round payment — escalation is free again",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the per-round bond is bound to a PAYMENT, not just to a string refuses ANOTHER challenger's accepted membership bond as this round's payment (r33-1)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner a round bond may not be ANY of three accepted challenge bonds (not just its own)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner the consumed set for a round bond IS the union of the log and every challenge bond",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 112763
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S21",
+            "error": "Error: juror 3's membership bond paid juror 2's escalation"
+          }
+        ],
+        "wallMs": 1141
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 63988
+          }
+        ],
+        "wallMs": 64312
+      },
+      "wallMs": 177085
+    },
+    {
+      "id": "M56",
+      "cls": "round-bond-consumption",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "the round-4 fix is regressed (r33-1): only the challenger's OWN membership bond is refused, so quoting ANOTHER juror's accepted bond pays this rung nothing",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the per-round bond is bound to a PAYMENT, not just to a string refuses ANOTHER challenger's accepted membership bond as this round's payment (r33-1)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner a round bond may not be ANY of three accepted challenge bonds (not just its own)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner the consumed set for a round bond IS the union of the log and every challenge bond",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 114097
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S21",
+            "error": "Error: juror 3's membership bond paid juror 2's escalation"
+          }
+        ],
+        "wallMs": 847
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 67493
+          }
+        ],
+        "wallMs": 67881
+      },
+      "wallMs": 181983
+    },
+    {
+      "id": "M57",
+      "cls": "round-bond-consumption",
+      "file": "confirmationMachineCore.ts",
+      "intent": "restore barrier parity broken: a hand-edited log may record the membership bond as its per-round payment even though the live reducer refuses it",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/perRoundBond.test.ts",
+            "name": "R31 / the log is a consumption ledger, also after a restore finalize refuses a restored record that reuses a per-round bond",
+            "message": "AssertionError: expected [Function] to throw error matching /distinct from the membership/ but got 'escalation log round bond is an accep…'"
+          }
+        ],
+        "wallMs": 114457
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 927
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 66723
+          }
+        ],
+        "wallMs": 67169
+      },
+      "wallMs": 181634
+    },
+    {
+      "id": "M58",
+      "cls": "round-bond-consumption",
+      "file": "confirmationMachineCore.ts",
+      "intent": "a restored snapshot may reuse one round-bond witness for several rungs (the ledger stops being a consumption set)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/perRoundBond.test.ts",
+            "name": "R31 / the log is a consumption ledger, also after a restore finalize refuses a restored record that reuses a per-round bond",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 114442
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1022
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 65588
+          }
+        ],
+        "wallMs": 66061
+      },
+      "wallMs": 180512
+    },
+    {
+      "id": "M59",
+      "cls": "escalation-witness-binding",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a witness minted for another round (or no round at all) opens the next rung — the roundIndex binding is gone",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "model"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": true
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/escalationWitness.test.ts",
+            "name": "escalation authority witness: the machine refuses what the host used to decide the machine — not the caller — checks the round: only ladderRound + 1 opens",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound3.test.ts",
+            "name": "T1 the escalate witness — attacked, not re-read a witness minted for round r cannot be replayed on to round r+1",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: escalation witnesses (v0.12.0 escalate witness) refuses every illegal witness and accepts only the witnessed escalation",
+            "message": "AssertionError: witness campaign: 45/689 failed check(s)"
+          }
+        ],
+        "wallMs": 114099
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 1003
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": false,
+            "wallMs": 76,
+            "error": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: ILLEGAL ESCALATION WITNESS ACCEPTED in round_resolved (state round_resolved|10|3.33333333|1.11111111|L1.10.3N3333.R|1|1N|3.o.1||0|V:NO.pending.o|-) — witness {\"type\":\"escalate\",\"authority\":\"challenger\",\"challengerIdx\":1,\"challengerPubkey\":\"abababababababababababababababababababababababababababababababab\",\"requestHash\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"bondProofHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"roundIndex\":1,\"now\":10}"
+          }
+        ],
+        "note": "Error: MODEL CHECK FAILED: confirm n=3 q=1 r=2 [probe clock 4/8/10]: ILLEGAL ESCALATION WITNESS ACCEPTED in round_resolved (state round_resolved|10|3.33333333|1.11111111|L1.10.3N3333.R|1|1N|3.o.1||0|V:NO.pending.o|-) — witness {\"type\":\"escalate\",\"authority\":\"challenger\",\"challengerIdx\":1,\"challengerPubkey\":\"abababababababababababababababababababababababababababababababab\",\"requestHash\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"bondProofHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"roundIndex\":1,\"now\":10}",
+        "wallMs": 437
+      },
+      "wallMs": 114545
+    },
+    {
+      "id": "M60",
+      "cls": "escalation-witness-binding",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a juror who posted no bond escalates by quoting a bonded juror's hash (r29-1 regressed): the witness names the wrong challenger",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound3.test.ts",
+            "name": "T1 the escalate witness — attacked, not re-read a juror with NO bond cannot escalate on another juror's accepted bond hash",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound3.test.ts",
+            "name": "T4 witness × finality a refused escalation cannot abort or move the case (no griefing transition)",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          }
+        ],
+        "wallMs": 90916
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 516
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 130224
+          }
+        ],
+        "wallMs": 131043
+      },
+      "wallMs": 221982
+    },
+    {
+      "id": "M61",
+      "cls": "require-round-bond",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "a strict case accepts an escalation with NO per-round bond — the policy is recorded but never enforced (r30-1 free option restored)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/perRoundBond.test.ts",
+            "name": "R31 / requireRoundBond — escalation becomes a consumption test REFUSES a witness with no per-round bond (the r30-1 free option is closed)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/perRoundBond.test.ts",
+            "name": "R31 / requireRoundBond — escalation becomes a consumption test one bond cannot fund every round: each rung needs its own witness",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner (registered r38-2) hostEscalation:true makes requireRoundBond inert for challengers",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/reviewRound5.test.ts",
+            "name": "T2 / the escalation ledger is complete, ordered, and bound to the challenge ledger the no-challenge path never escalates, and finalize still runs the barrier",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 145824
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S22",
+            "error": "Error: a strict case accepted the legacy free option"
+          }
+        ],
+        "wallMs": 571
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 72281
+          }
+        ],
+        "wallMs": 72978
+      },
+      "wallMs": 218813
+    },
+    {
+      "id": "M62",
+      "cls": "require-round-bond",
+      "file": "confirmationMachineCore.ts",
+      "intent": "a restored strict case finalizes on a log whose challenger records carry no round bond — finalize stops re-deriving the policy",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/perRoundBond.test.ts",
+            "name": "R31 / the log is a consumption ledger, also after a restore finalize refuses a restored record that reuses a per-round bond",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 147486
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S24",
+            "error": "Error: a strict case finalized on a record with no per-round bond"
+          }
+        ],
+        "wallMs": 614
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 72909
+          }
+        ],
+        "wallMs": 73575
+      },
+      "wallMs": 221088
+    },
+    {
+      "id": "M63",
+      "cls": "require-round-bond",
+      "file": "courtConfirmationMachine.ts",
+      "intent": "the frozen policy is discarded at construction: a case that opted into per-round bonds silently runs the legacy free option",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 8,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/perRoundBond.test.ts",
+            "name": "R31 / requireRoundBond — escalation becomes a consumption test records the frozen policy on the case",
+            "message": "AssertionError: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/perRoundBond.test.ts",
+            "name": "R31 / requireRoundBond — escalation becomes a consumption test REFUSES a witness with no per-round bond (the r30-1 free option is closed)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/perRoundBond.test.ts",
+            "name": "R31 / requireRoundBond — escalation becomes a consumption test one bond cannot fund every round: each rung needs its own witness",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/perRoundBond.test.ts",
+            "name": "R31 / the log is a consumption ledger, also after a restore finalize refuses a restored record that reuses a per-round bond",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the escalation log is complete, so a dropped record cannot re-open the free option a restored snapshot with EVERY record deleted cannot reuse a consumed bond (r33-5)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/reviewRound5.test.ts",
+            "name": "T1 / the r33-1 refusal assumes a challenge bond has ONE owner (registered r38-2) hostEscalation:true makes requireRoundBond inert for challengers",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/reviewRound5.test.ts",
+            "name": "T2 / the escalation ledger is complete, ordered, and bound to the challenge ledger the no-challenge path never escalates, and finalize still runs the barrier",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/reviewRound5.test.ts",
+            "name": "T2 / the escalation ledger is complete, ordered, and bound to the challenge ledger (registered r33-5 residual) a LEGACY case can still be emptied; a strict one cannot",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 146972
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S22",
+            "error": "Error: a strict case accepted the legacy free option"
+          },
+          {
+            "id": "S23",
+            "error": "Error: a stripped ledger opened a rung paid by an already-consumed bond"
+          },
+          {
+            "id": "S24",
+            "error": "Error: a strict case finalized on a record with no per-round bond"
+          }
+        ],
+        "wallMs": 1156
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 146985
+    },
+    {
+      "id": "M64",
+      "cls": "escalation-ledger-completeness",
+      "file": "confirmationMachineCore.ts",
+      "intent": "a SHORT log is accepted again: deleting a record also un-consumes the bond it paid with, so a restored snapshot re-opens the free rung (r33-5)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the escalation log is complete, so a dropped record cannot re-open the free option a restored snapshot with EVERY record deleted cannot reuse a consumed bond (r33-5)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the escalation log is complete, so a dropped record cannot re-open the free option deleting only the LAST record is refused as well (no partial ledger)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/reviewRound5.test.ts",
+            "name": "T2 / the escalation ledger is complete, ordered, and bound to the challenge ledger (registered r33-5 residual) a LEGACY case can still be emptied; a strict one cannot",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 147194
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S23",
+            "error": "Error: a stripped ledger opened a rung paid by an already-consumed bond"
+          }
+        ],
+        "wallMs": 1289
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 72780
+          }
+        ],
+        "wallMs": 73339
+      },
+      "wallMs": 220543
+    },
+    {
+      "id": "M65",
+      "cls": "escalation-ledger-completeness",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "the ledger barrier is only re-run at finalize: a stripped snapshot opens (and seats) one free rung before the case bricks",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the escalation log is complete, so a dropped record cannot re-open the free option a restored snapshot with EVERY record deleted cannot reuse a consumed bond (r33-5)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound4.test.ts",
+            "name": "T1 / the escalation log is complete, so a dropped record cannot re-open the free option deleting only the LAST record is refused as well (no partial ledger)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound5.test.ts",
+            "name": "T2 / the escalation ledger is complete, ordered, and bound to the challenge ledger a duplicate ledger is refused at ESCALATE time, not only at finalize (r33-5 barrier)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 146892
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S23",
+            "error": "Error: a stripped ledger opened a rung paid by an already-consumed bond"
+          }
+        ],
+        "wallMs": 1168
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 72024
+          }
+        ],
+        "wallMs": 72528
+      },
+      "wallMs": 219429
+    },
+    {
+      "id": "M66",
+      "cls": "escalation-ledger-completeness",
+      "file": "confirmationMachineCore.ts",
+      "intent": "a log may name a round the case never opened — the audit trail stops being bound to the ladder state",
+      "machine": "confirmation",
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 92831
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 634
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 111667,
+            "wallMs": 131873
+          }
+        ],
+        "wallMs": 132398
+      },
+      "wallMs": 225242
+    },
+    {
+      "id": "M67",
+      "cls": "ladder-bound-sign",
+      "file": "ladderEconomics.ts",
+      "intent": "the pre-R33 clamp is back: \"no depth is safe\" reports 1, so a host reading derivedCap blesses the one profitable round",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 5,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound4.test.ts",
+            "name": "T2 / the derived ladder bound never approves a cap at or above the flip round (r33-6)",
+            "message": "AssertionError: a_f=0.3: expected 1 to be +0 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap a perfect jury is unbounded, and a very bad one has NO safe depth (0, not 1)",
+            "message": "AssertionError: expected 1 to be +0 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap derivedCap = 0 refuses EVERY legal cap — no cap can be blessed",
+            "message": "AssertionError: a_f=0.3: expected 1 to be +0 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap ok is never true for a cap whose expected profit is non-negative (whole grid)",
+            "message": "AssertionError: a_f=0.75 R=1: expected 0.24999999925 to be less than 0"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap the cap is monotone: never deeper for a worse jury, never shallower for a bigger bond",
+            "message": "AssertionError: expected 1 to be +0 // Object.is equality"
+          }
+        ],
+        "wallMs": 95411
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S25",
+            "error": "Error: derived cap is not 0 where no depth is safe"
+          }
+        ],
+        "wallMs": 533
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 95434
+    },
+    {
+      "id": "M68",
+      "cls": "ladder-bound-sign",
+      "file": "ladderEconomics.ts",
+      "intent": "the gate compares with derivedCap instead of the sign of E[π]: at an EXACT integer boundary a cap at the break-even/flip round is approved",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "spot"
+      ],
+      "detectors": {
+        "tests": false,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 144460
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S26",
+            "error": "Error: a cap at the zero-EV round was approved (derivedCap comparison, not the sign)"
+          }
+        ],
+        "wallMs": 754
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 144480
+    },
+    {
+      "id": "M69",
+      "cls": "ladder-bound-sign",
+      "file": "ladderEconomics.ts",
+      "intent": "the SAFE cap rounds up to the first unsafe round (floor → ceil) — the cap legalises the profitable rung",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 5,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/ladderEconomics.test.ts",
+            "name": "the sign boundary and the two derived rounds (06 §1.2–§1.5) derives the SAFE cap (floor), clamped to the machine ceiling: 5 / 4 / 3 / 2 / 1",
+            "message": "AssertionError: a_f=0.85: expected 5 to be 4 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/ladderEconomics.test.ts",
+            "name": "the sign boundary and the two derived rounds (06 §1.2–§1.5) the cap is the SIGN boundary, not a round number: EV < 0 at the cap, > 0 from the flip round",
+            "message": "AssertionError: a_f=0.85 R=5: expected 0.0033776812500000055 to be less than 0"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound4.test.ts",
+            "name": "T2 / the derived ladder bound keeps the published rows: 2 at a_f 0.75, 1 at 0.70, 5 (ceiling) at 0.90",
+            "message": "AssertionError: expected 3 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap derivedCap = 0 refuses EVERY legal cap — no cap can be blessed",
+            "message": "AssertionError: expected 2 to be 1 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap ok is never true for a cap whose expected profit is non-negative (whole grid)",
+            "message": "AssertionError: a_f=0.5001 R=2: expected 0.014993999400000003 to be less than 0"
+          }
+        ],
+        "wallMs": 144663
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S27",
+            "error": "Error: a_f=0.85: flip 5 is not above the safe cap 5"
+          }
+        ],
+        "wallMs": 647
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 144679
+    },
+    {
+      "id": "M70",
+      "cls": "ladder-bound-sign",
+      "file": "ladderEconomics.ts",
+      "intent": "the flip round is floored, so the monitoring alert fires on the last SAFE round and the gate refuses a legal cap",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 6,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/ladderEconomics.test.ts",
+            "name": "the sign boundary and the two derived rounds (06 §1.2–§1.5) reproduces the published flip-round column: 7 / 5 / 4 / 3 / 2",
+            "message": "AssertionError: a_f=0.9: expected 6 to be 7 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/ladderEconomics.test.ts",
+            "name": "the sign boundary and the two derived rounds (06 §1.2–§1.5) pins the escrow-bond row: flip round 10, cap clamped, boundary 9.31",
+            "message": "AssertionError: expected 9 to be 10 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/ladderEconomics.test.ts",
+            "name": "the sign boundary and the two derived rounds (06 §1.2–§1.5) the cap is the SIGN boundary, not a round number: EV < 0 at the cap, > 0 from the flip round",
+            "message": "AssertionError: a_f=0.9 flip=6: expected -0.0018864600000000047 to be greater than 0"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/ladderEconomics.test.ts",
+            "name": "the host pre-flight gate (06 §1.5 + §7 item 5) accepts a cap inside the bound and refuses one above it",
+            "message": "AssertionError: expected { ok: true, derivedCap: 5, …(1) } to deeply equal { ok: true, derivedCap: 5, …(1) }"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound4.test.ts",
+            "name": "T2 / the derived ladder bound keeps the published rows: 2 at a_f 0.75, 1 at 0.70, 5 (ceiling) at 0.90",
+            "message": "AssertionError: expected 6 to be 7 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/reviewRound5.test.ts",
+            "name": "T3 / the derived bound fails closed and 0 is never a legal cap derivedCap = 0 refuses EVERY legal cap — no cap can be blessed",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          }
+        ],
+        "wallMs": 145961
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S27",
+            "error": "Error: a_f=0.9: E[π] at the flip round is not positive"
+          }
+        ],
+        "wallMs": 801
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 146000
+    },
+    {
+      "id": "M71",
+      "cls": "penalty-aging",
+      "file": "penaltyAging.ts",
+      "intent": "participation buys nothing: the `epochs` argument is ignored, so a penalty is permanent for the life of the record (the aging half of the pair is gone)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/penaltyAging.test.ts",
+            "name": "agePenalties — one clock for restitution and probation ages at the SAME λ as the commitment (half-life 3 participating epochs)",
+            "message": "AssertionError: expected 0.8 to be close to 0.9, received difference is 0.09999999999999998, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/penaltyAging.test.ts",
+            "name": "agePenalties — one clock for restitution and probation adds the served age and the new epochs (one timeline, not two)",
+            "message": "AssertionError: expected 0.9 to be close to 0.8, received difference is 0.09999999999999998, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing the participating clock is the only way up (ageing is monotone and idling-independent)",
+            "message": "AssertionError: expected 0.8 to be close to 0.9, received difference is 0.09999999999999998, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/reviewRound5.test.ts",
+            "name": "T4 / the weight arithmetic fails closed everywhere, not only at the guard (registered r38-5) a penalty expires OUTRIGHT at ~156 participating epochs",
+            "message": "AssertionError: expected 0.8 to be 1 // Object.is equality"
+          }
+        ],
+        "wallMs": 145679
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S28",
+            "error": "Error: one half-life did not halve the deviation"
+          }
+        ],
+        "wallMs": 1077
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 145688
+    },
+    {
+      "id": "M72",
+      "cls": "penalty-aging",
+      "file": "penaltyAging.ts",
+      "intent": "probation runs on a different clock from restitution (λ unpaired, half-life 6 instead of 3) — the pairing the document requires is broken",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 9,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/penaltyAging.test.ts",
+            "name": "agePenalties — one clock for restitution and probation ages at the SAME λ as the commitment (half-life 3 participating epochs)",
+            "message": "AssertionError: expected 0.11552453009332421 to be 0.23104906018664842 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/penaltyAging.test.ts",
+            "name": "agePenalties — one clock for restitution and probation is the identity for no penalties, and multiplies independent ones",
+            "message": "AssertionError: expected 0.8585786437626906 to be close to 0.9, received difference is 0.04142135623730947, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/penaltyAging.test.ts",
+            "name": "pairedJurorWeight — the anchor, and why idleness buys nothing recovery is bought with PARTICIPATION: only the served-age clock raises the weight",
+            "message": "AssertionError: expected 0.9 to be close to 0.95, received difference is 0.04999999999999993, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/penaltyAging.test.ts",
+            "name": "pairedJurorWeight — the anchor, and why idleness buys nothing a bonus still fades toward w0 with idleness (the shipped direction is kept)",
+            "message": "AssertionError: expected 1.1414213562373094 to be close to 1.1, received difference is 0.04142135623730936, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/penaltyAging.test.ts",
+            "name": "the paired curve against the cliff it replaced (06 §4.2 Finding 4.1) the shipped ramp DOES dominate the cliff — the finding, pinned",
+            "message": "AssertionError: expected 0.5798792677327871 to be close to 0.6298, received difference is 0.04992073226721294, but expected 0.000049999999999999996"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing a bonus fades TOWARD w0 with idleness and never above the earned weight",
+            "message": "AssertionError: expected 114.14213562373095 to be close to 110, received difference is 4.142135623730951, but expected 5e-11"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing the participating clock is the only way up (ageing is monotone and idling-independent)",
+            "message": "AssertionError: expected 0.8585786437626906 to be close to 0.9, received difference is 0.04142135623730947, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/reviewRound5.test.ts",
+            "name": "T4 / the weight arithmetic fails closed everywhere, not only at the guard (registered r38-5) a penalty expires OUTRIGHT at ~156 participating epochs",
+            "message": "AssertionError: expected 0.9999999970197677 to be 1 // Object.is equality"
+          }
+        ],
+        "wallMs": 147280
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S28",
+            "error": "Error: one half-life did not halve the deviation"
+          }
+        ],
+        "wallMs": 745
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 147295
+    },
+    {
+      "id": "M73",
+      "cls": "weight-anchor",
+      "file": "penaltyAging.ts",
+      "intent": "the r30-4a regression: a penalised juror is anchored at w0, so idleness hands the penalty back (the cliff returns)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 7,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/penaltyAging.test.ts",
+            "name": "pairedJurorWeight — the anchor, and why idleness buys nothing a penalised juror is pinned at or below the floor however long it idles",
+            "message": "AssertionError: expected 0.6031497370079502 to be close to 0.5, received difference is 0.10314973700795016, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/penaltyAging.test.ts",
+            "name": "pairedJurorWeight — the anchor, and why idleness buys nothing is NON-INCREASING in idleness for every penalty strength (the ramp is gone)",
+            "message": "AssertionError: factor=0.5 idle=1: expected 0.6031497370079502 to be less than or equal to 0.500000000001"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/penaltyAging.test.ts",
+            "name": "pairedJurorWeight — the anchor, and why idleness buys nothing recovery is bought with PARTICIPATION: only the served-age clock raises the weight",
+            "message": "AssertionError: expected 0.95 to be less than 0.8"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/penaltyAging.test.ts",
+            "name": "the paired curve against the cliff it replaced (06 §4.2 Finding 4.1) the PAIRED curve never exceeds the cliff at any finite cycle",
+            "message": "AssertionError: F=1 I=1: expected 0.5515748685039751 to be less than or equal to 0.500000000001"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing is non-increasing in idleEpochs for every penalty record",
+            "message": "AssertionError: penalties=[{\"factor\":0.8}] idle=1: expected 84.125989480318 to be less than or equal to 80"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing anchors a floored juror at the FLOOR across deliberate idle gaps — never at w0",
+            "message": "AssertionError: idle=3: expected 55 to be 50 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-2/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing the participating clock is the only way up (ageing is monotone and idling-independent)",
+            "message": "AssertionError: expected 98.75 to be close to 55, received difference is 43.75, but expected 5e-11"
+          }
+        ],
+        "wallMs": 159051
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S29",
+            "error": "Error: weight rose from idling at 1"
+          }
+        ],
+        "wallMs": 806
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 159064
+    },
+    {
+      "id": "M74",
+      "cls": "weight-anchor",
+      "file": "penaltyAging.ts",
+      "intent": "the documented weight floor is not enforced — a heavily penalised juror decays below minWeightFactor·w0",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 5,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/penaltyAging.test.ts",
+            "name": "pairedJurorWeight — the anchor, and why idleness buys nothing respects a custom floor and a custom w0",
+            "message": "AssertionError: expected 0.6000000000000001 to be close to 1.2, received difference is 0.5999999999999999, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing is non-increasing in idleEpochs for every penalty record",
+            "message": "AssertionError: penalties=[{\"factor\":0.8},{\"factor\":0.5}] idle=1: expected 42.062994740159 to be less than or equal to 40"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing anchors a floored juror at the FLOOR across deliberate idle gaps — never at w0",
+            "message": "AssertionError: idle=0: expected 10 to be 50 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound4.test.ts",
+            "name": "T3 / pairedJurorWeight: idle gaps hand back nothing (registered r33-8) `minWeightFactor: 1` disables every penalty",
+            "message": "AssertionError: expected 10 to be 100 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-4/__tests__/reviewRound5.test.ts",
+            "name": "T4 / the weight arithmetic fails closed everywhere, not only at the guard no reachable path returns NaN or Infinity: underflow, zero bonus, huge idle",
+            "message": "AssertionError: expected +0 to be 50 // Object.is equality"
+          }
+        ],
+        "wallMs": 158830
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 766
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 158856
+    },
+    {
+      "id": "M75",
+      "cls": "policy-flag-recording",
+      "file": "courtConfirmationMachine.ts",
+      "intent": "a sub-supermajority quorum is accepted but NOT recorded (INV-CONF-4 broken): the host policy layer can no longer gate on it",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "R25 — confirmation quorum defaults records an explicit 3-of-5 quorum as BELOW the supermajority (still allowed)",
+            "message": "AssertionError: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/courtConfirmationMachine.test.ts",
+            "name": "R25 — confirmation quorum defaults does not flag an explicit quorum at or above ⌈2N/3⌉",
+            "message": "AssertionError: expected false to be true // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-1/__tests__/scale/scaleCampaign.test.ts",
+            "name": "scale campaign: confirmation machine sequences drives legal sequences with the invariant battery after every transition",
+            "message": "AssertionError: confirmation campaign: 1343/17146 failed check(s)"
+          }
+        ],
+        "wallMs": 157818
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S30",
+            "error": "Error: n=5 q=3: flag false != true"
+          }
+        ],
+        "wallMs": 787
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 157825
+    },
+    {
+      "id": "M76",
+      "cls": "ladder-bond-schedule",
+      "file": "ladderEconomics.ts",
+      "intent": "the marginal rung is under-priced at 2^R (the escrow.ts shape 06 §1.5 warns about) — the ladder costs half what the theorem charges",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/ladderEconomics.test.ts",
+            "name": "the per-round bond schedule (02-ladder Theorem 2, quoted in 06 §1.1) prices each round at 3^R b₀ and reaches the published 4/13/40/121/364×",
+            "message": "AssertionError: expected [ 1, 2, 4, 8, 16, 32 ] to deeply equal [ 1, 3, 9, 27, 81, 243 ]"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/ladderEconomics.test.ts",
+            "name": "the per-round bond schedule (02-ladder Theorem 2, quoted in 06 §1.1) makes depth cost 3× per rung — the marginal cost the shipped machine charged as 0",
+            "message": "AssertionError: expected 2 to be 3 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-3/__tests__/reviewRound5.test.ts",
+            "name": "T4 / the weight arithmetic fails closed everywhere, not only at the guard the per-round schedule stays exact and bounded inside the ladder",
+            "message": "AssertionError: expected 2 to be 3 // Object.is equality"
+          }
+        ],
+        "wallMs": 157916
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S31",
+            "error": "Error: ΔC_1 is not 3× b₀"
+          }
+        ],
+        "wallMs": 851
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 157921
+    },
+    {
+      "id": "M77",
+      "cls": "ladder-bond-schedule",
+      "file": "ladderEconomics.ts",
+      "intent": "the cumulative schedule is one rung short — depth R costs 1/3 of the published 4/13/40/121/364× row",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/ladderEconomics.test.ts",
+            "name": "the per-round bond schedule (02-ladder Theorem 2, quoted in 06 §1.1) prices each round at 3^R b₀ and reaches the published 4/13/40/121/364×",
+            "message": "AssertionError: expected [ 1, 4, 13, 40, 121 ] to deeply equal [ 4, 13, 40, 121, 364 ]"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/ladderEconomics.test.ts",
+            "name": "the per-round bond schedule (02-ladder Theorem 2, quoted in 06 §1.1) makes depth cost 3× per rung — the marginal cost the shipped machine charged as 0",
+            "message": "AssertionError: expected 120 to be 363 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-5/__tests__/reviewRound4.test.ts",
+            "name": "T2 / the derived ladder bound prices the ladder the depth the document charges for (unchanged schedule)",
+            "message": "AssertionError: expected [ 1, 4, 13, 40, 121 ] to deeply equal [ 4, 13, 40, 121, 364 ]"
+          }
+        ],
+        "wallMs": 154571
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S31",
+            "error": "Error: C_1 is not 4× b₀"
+          }
+        ],
+        "wallMs": 1039
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 154580
+    },
+    {
+      "id": "M78",
+      "cls": "quorum-capture-arithmetic",
+      "file": "quorumEconomics.ts",
+      "intent": "κ is measured against a one-seat-weaker baseline whenever N ≡ 1 (mod 3), so the correction a host prices is understated",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/quorumEconomics.test.ts",
+            "name": "quorumCapCorrection — kappa, the sub-supermajority factor is EXACTLY 51/11 = 4.63636… for 3-of-5 at rho = 1/3",
+            "message": "AssertionError: expected 1 to be close to 4.636363636363637, received difference is 3.6363636363636367, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/quorumEconomics.test.ts",
+            "name": "quorumCapCorrection — kappa, the sub-supermajority factor matches the 06 §3 kappa table across the weight-share range",
+            "message": "AssertionError: expected 1 to be close to 4.6364, received difference is 3.6364, but expected 0.0005"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/quorumEconomics.test.ts",
+            "name": "quorumCapCorrection — kappa, the sub-supermajority factor is exactly 1 at the shipped supermajority default and below 1 above it",
+            "message": "AssertionError: expected 0.2156862745098039 to be close to 1, received difference is 0.7843137254901961, but expected 5e-13"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-GT5Yqg/work-0/__tests__/quorumEconomics.test.ts",
+            "name": "quorumCapCorrection — kappa, the sub-supermajority factor signals the 3-of-5 exposure: kappa > 1 for every weaker quorum",
+            "message": "AssertionError: expected 1 to be greater than 1"
+          }
+        ],
+        "wallMs": 138285
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S32",
+            "error": "Error: κ at the shipped supermajority is not 1"
+          }
+        ],
+        "wallMs": 1025
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 138291
+    }
+  ]
+}
