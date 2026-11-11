@@ -344,6 +344,19 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.14.2] — 2026-11-11
+
+### Fixed (review-round-9, PR #118)
+- **`caseId` was still `trim()`-folded (exploitable):** `"court:X "`, `"court:X\t"` and `"court:X\u3000"` hashed to one digest, and `build` could return an id it was never given; the host binding folded symmetrically, so "must not cross cases" held only across the whitespace class. Ids are now validated exactly (whitespace refused), the preimage never trims, and the binding compares exactly.
+- **`bondTxid` was never compared with the challenge record** — the logged `requestHash` could commit to a bond the case never bound.
+- **A signed concession could be minted into an escalation** (the reducer accepted it and the log recorded a refused authorisation; the exit then blocked and demanded a fresh round bond).
+- **`ladder.round` vs `ladderRound` skew** — the finality rule read one field while every rung transition reads the other, so a skewed ladder appended a wrong record (and then bricked the case).
+- **A vacuous pin:** the 2,000-id injectivity check passed for a deliberately lossy encoder (one distinct digest). Replaced by a preimage-byte differential pin.
+
+### Changed
+- Paper + docs refreshed for review rounds 7-8 (PR #117): the `concede`→`finalize` finality forgery, the surrogate collision, the wire binding, and the canonicalisation failure class (three instances, one rule: canonicalise once, per field, with a differential pin).
+- Suite **1,831 passed** (82 files).
+
 ## [0.14.1] — 2026-11-11
 
 ### Fixed (review-round-8, PR #115)
