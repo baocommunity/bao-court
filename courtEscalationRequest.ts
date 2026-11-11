@@ -122,6 +122,9 @@ export const MAX_ESCALATION_REQUEST_ROUND = 5;
  */
 export const MAX_ESCALATION_CASE_ID_BYTES = 256;
 
+/** 64 bytes of lowercase hex — a BIP-340 Schnorr signature (r11-2). */
+const HEX_64 = /^[0-9a-f]{128}$/;
+
 /**
  * The challenger's escalation request, as transported.
  *
@@ -171,12 +174,31 @@ const textEncoder = new TextEncoder();
  * `Cc` = C0/C1 controls (newline, tab, NEL U+0085, …), `Cf` = format characters
  * (zero-width space/joiners, bidi marks and overrides U+200B–U+200F,
  * U+202A–U+202E, U+2066–U+2069, soft hyphen, U+180E, BOM), `Zl`/`Zp` = the line
- * and paragraph separators, `Cs` = lone surrogates.
+ * and paragraph separators, `Cs` = lone surrogates. The ANSI/OSC introducers are
+ * `Cc` (`ESC` U+001B, `BEL` U+0007, C1 `CSI` U+009B), so a terminal escape
+ * sequence is escaped by the same class and cannot reach a terminal.
+ *
+ * Deliberately NOT `/g`: the per-character test below must be stateless
+ * (`lastIndex` on a global regex would make the verdict depend on the previous
+ * character).
  */
-const UNSAFE_ECHO = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/gu;
+const UNSAFE_ECHO_CHAR = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/u;
 
-/** Longest value echoed into a refusal (chars), so one refusal cannot flood a log. */
+/**
+ * Longest value echoed into a refusal (**characters of the ESCAPED output**), so
+ * one refusal cannot flood a log. Round 10 documented this as a 64-character
+ * bound while clipping the INPUT: a 64-character format-character id escaped to
+ * 387 output characters (`docs/REVIEW_ROUND_11.md` §1). The budget is now spent
+ * on the bytes that are actually written.
+ */
 const MAX_ECHO_CHARS = 64;
+
+/** One character, escaped if a log line must not carry it verbatim. */
+function escapeEchoChar(ch: string): string {
+  return UNSAFE_ECHO_CHAR.test(ch)
+    ? `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`
+    : ch;
+}
 
 /**
  * Quote an attacker-supplied wire value for an ERROR MESSAGE (r10-1).
@@ -194,16 +216,41 @@ const MAX_ECHO_CHARS = 64;
  * Escaping the value (never re-interpreting it) is the fix that keeps the
  * diagnostic: the reason and the bytes are both still on the line, they just
  * cannot BE a line.
+ *
+ * The budget is spent on the ESCAPED output and the value is walked by CODE
+ * POINT (`[...value]`), so the clip can neither split a surrogate pair into two
+ * lone surrogates nor cut an escape sequence in half: the result is always a
+ * sequence of complete `\u{…}` escapes plus an explicit `…` marker, never a
+ * string that merely LOOKS complete.
  */
 function quoteWireValue(value: string): string {
-  const chars = [...value];
-  const clipped = chars.length <= MAX_ECHO_CHARS
-    ? value
-    : `${chars.slice(0, MAX_ECHO_CHARS).join('')}…`;
-  return clipped.replace(
-    UNSAFE_ECHO,
-    (ch) => `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`,
-  );
+  let out = '';
+  for (const ch of value) {
+    const piece = escapeEchoChar(ch);
+    if (out.length + piece.length > MAX_ECHO_CHARS) return `${out}…`;
+    out += piece;
+  }
+  return out;
+}
+
+/**
+ * Quote an UNTYPED wire value for a refusal (r11-1): the same escaping, without
+ * ever calling `String(value)` on an object.
+ *
+ * `String({toString(){throw}})` and `String(Object.create(null))` both throw
+ * (`Cannot convert object to primitive value`), so a refusal reached through a
+ * hostile value object escaped as a raw `TypeError` — the foreign-error-type
+ * boundary r3-1/r41-1/r49-d closed elsewhere. Only primitives are rendered;
+ * every object is reported as `<object>` with no user code run.
+ */
+function quoteWireUnknown(value: unknown): string {
+  if (typeof value === 'string') return quoteWireValue(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return quoteWireValue(String(value));
+  }
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  return `<${typeof value}>`;
 }
 
 function assertHex32(value: unknown, field: string): string {
@@ -330,7 +377,7 @@ export function buildCourtEscalationRequest(input: {
   ) {
     throw new CourtConfirmationTransitionError(
       `escalation request round must be an integer in 1..${MAX_ESCALATION_REQUEST_ROUND} `
-      + `(got ${quoteWireValue(String(roundRaw))})`,
+      + `(got ${quoteWireUnknown(roundRaw)})`,
     );
   }
   const roundBondProofHash = roundBondProofHashRaw == null
@@ -700,10 +747,63 @@ export function escalationRequestBindingFromSignedEvent(
       'escalation request event must be an object',
     );
   }
+  // SHAPE FIRST (r11-2). The event arrives from a relay or a restored draft, so
+  // its fields are untrusted, and `verifyEvent` is TOLERANT (it returns false,
+  // it does not validate): the rebuild below iterates `tags`, so `tags: null`
+  // escaped as `Cannot read properties of null (reading 'map')` and
+  // `tags: [null]` as `tag is not iterable` — a raw `TypeError` at the one
+  // boundary this package documents as typed-only (r3-1/r41-1/r49-d), on the
+  // entry that is supposed to refuse hostile input. This is the same rule
+  // `courtHostKey.ts`'s `reconstructEventForVerification` already applies:
+  // shape, then signature.
+  const kind: unknown = event.kind;
+  const pubkey: unknown = event.pubkey;
+  const createdAt: unknown = event.created_at;
+  const content: unknown = event.content;
+  const eventId: unknown = event.id;
+  const sig: unknown = event.sig;
+  const tags: unknown = event.tags;
+  if (typeof kind !== 'number' || !Number.isSafeInteger(kind) || kind < 0) {
+    throw new CourtConfirmationTransitionError(
+      `escalation request event kind must be a non-negative safe integer (got ${quoteWireUnknown(kind)})`,
+    );
+  }
+  if (typeof eventId !== 'string' || !HEX_32.test(eventId)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request event id must be 32-byte lowercase hex',
+    );
+  }
+  if (typeof pubkey !== 'string' || !HEX_32.test(pubkey)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request event pubkey must be 32-byte lowercase hex',
+    );
+  }
+  if (typeof sig !== 'string' || !HEX_64.test(sig)) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request event signature must be 64-byte lowercase hex',
+    );
+  }
+  if (typeof createdAt !== 'number' || !Number.isSafeInteger(createdAt) || createdAt < 0) {
+    throw new CourtConfirmationTransitionError(
+      `escalation request event created_at must be a non-negative safe integer `
+      + `(got ${quoteWireUnknown(createdAt)})`,
+    );
+  }
+  if (typeof content !== 'string') {
+    throw new CourtConfirmationTransitionError(
+      `escalation request event content must be a string (got ${quoteWireUnknown(content)})`,
+    );
+  }
+  if (!Array.isArray(tags) || tags.some((tag) => !Array.isArray(tag) || tag.some((e) => typeof e !== 'string'))) {
+    throw new CourtConfirmationTransitionError(
+      'escalation request event tags must be an array of string arrays',
+    );
+  }
   if (!Number.isSafeInteger(expectedKind) || expectedKind < 0 || event.kind !== expectedKind) {
     throw new CourtConfirmationTransitionError(
-      `escalation request event has kind ${String(event.kind)} but this route publishes kind `
-      + `${String(expectedKind)}: a request signed for another kind is another claim (r10-3)`,
+      `escalation request event has kind ${quoteWireUnknown(event.kind)} but this route publishes `
+      + `kind ${quoteWireUnknown(expectedKind)}: a request signed for another kind is another claim `
+      + '(r10-3)',
     );
   }
   if (event.id !== normalised.eventId) {
@@ -714,7 +814,7 @@ export function escalationRequestBindingFromSignedEvent(
   // Rebuilt as a plain object before verification: nostr-tools memoises the
   // verdict ON the object it is handed (see `validator.ts`), so a caller's
   // object that already carries a verdict must not be reused as the input.
-  const plain = {
+  const plain: CourtEscalationRequestEvent = {
     kind: event.kind,
     pubkey: event.pubkey,
     created_at: event.created_at,
@@ -847,7 +947,7 @@ export function escalationRequestToMachineEvent(
   if (normalised.round !== state.ladderRound) {
     throw new CourtConfirmationTransitionError(
       `escalation request was signed to escalate past round ${normalised.round} but the case is `
-      + `resolving round ${state.ladderRound} — a stale request must not open a rung its signer never `
+      + `resolving round ${quoteWireUnknown(state.ladderRound)} — a stale request must not open a rung its signer never `
       + 'authorised',
     );
   }
@@ -860,13 +960,13 @@ export function escalationRequestToMachineEvent(
   if (!isRecord(state.ladder)) {
     throw new CourtConfirmationTransitionError(
       'escalation request landed on a case with no open ladder round: there is nothing to escalate '
-      + `past (phase ${String(state.phase)})`,
+      + `past (phase ${quoteWireUnknown(state.phase)})`,
     );
   }
   if (state.ladder.round !== state.ladderRound) {
     throw new CourtConfirmationTransitionError(
-      `the round counters disagree: ladderRound is ${state.ladderRound} but the open round is `
-      + `${state.ladder.round} — an escalation must not be minted against a snapshot the machine `
+      `the round counters disagree: ladderRound is ${quoteWireUnknown(state.ladderRound)} but the `
+      + `open round is ${quoteWireUnknown(state.ladder.round)} — an escalation must not be minted against a snapshot the machine `
       + 'could not have produced (r9-4)',
     );
   }
