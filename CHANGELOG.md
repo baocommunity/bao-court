@@ -134,6 +134,18 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.13.2] — 2026-11-11
+
+### Fixed (review rounds 4–6 + mutation campaigns)
+- **Bond/one-challenger binding (r38-1):** `accept_challenge` deduped by index only, so an unbonded juror could mint an accepted challenge carrying a bonded juror's `bondProofHash` and escalate on it — one payment, unlimited standing. The reducer and the challenge-ledger barrier now bind one proof hash to one index.
+- **Escalation barriers on every entry (r40-1, r40-2):** `onEscalate` ran the log barrier but not the challenge-ledger barrier, and entering `ladder_pending` directly ran no barrier; a restored `ladder_pending` with its record deleted opened a rung and un-consumed its bond. The entry matrix now pins five readers (three non-readers are stated).
+- **Legal mid-escalation snapshots (r37-1):** the escalation-log round bound ignored `ladder_pending`, refusing legal restored states. Fixed; the legal-state hunt (490 states) is clean.
+- **Sign-based ladder bound (r33-6 / r40-4):** the host composes the sign rule, not `cap <= derivedCap` (reachable-wrong at β≠ρ).
+
+### Added
+- Mutation campaign 2 (25 mutants, 96%, probe-only capture of the sign-cap mutant; catalogue 78 mutants / 28 classes), review rounds 5–6, `MUTATION_TESTING_V013.md`, `COURT_ROUND_BOND_POLICY.md`.
+- Suite **1,739 passed** (78 files); the round-bond strict mode is the default for new deployments.
+
 ## [0.13.1] — 2026-11-11
 
 ### Fixed (review-round-4, PR #103)
