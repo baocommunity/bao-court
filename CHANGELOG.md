@@ -11,6 +11,33 @@ frozen.
 
 ## [Unreleased]
 
+### Added (review-round-7 H-6 — the escalation request wire)
+- **`courtEscalationRequest.ts` — the challenger's escalation request as a
+  versioned wire codec, carrying the per-round bond witness.** The machine has
+  accepted `roundBondProofHash` since R31 and the strict policy is the default
+  for new cases since v0.13.2, but the artefact a client could actually SUBMIT
+  had no field for it: the host's escalate body is
+  `additionalProperties: false` without a round-bond property, and the request
+  hash preimage omitted it. So a strict case's escalation was refused no matter
+  what a client sent (transport could not precede enforcement — H-6), and two
+  different round bonds would have hashed to one request hash. New surface:
+  `buildCourtEscalationRequest` (validate + normalise),
+  `serializeCourtEscalationRequest` / `parseCourtEscalationRequest` (canonical
+  JSON, strict about unknown fields — a dropped field is the defect, not a
+  default), `courtEscalationRequestPreimage` /
+  `hashCourtEscalationRequest` (**domain v2**, witness in the preimage, `'-'`
+  sentinel for its absence), and `escalationRequestToMachineEvent` (the
+  reducer's `escalate` event field-for-field: the wire supplies the
+  challenger's claims, the CASE supplies `challengerIdx`, `roundIndex` and
+  `now`). Tests: `__tests__/escalationRequestWire.test.ts` (12) — round-trip,
+  the strict wire-refusal matrix, the strict path ACCEPTING a transported round
+  bond, the hash binding the witness, a pinned known-answer digest, and the
+  doc pin.
+- **`docs/PER_ROUND_BOND.md` — the compat matrix now states the order of
+  operations explicitly**: the transport must carry the witness BEFORE the
+  policy requires it, and the host's body schema + request hash must adopt the
+  v2 shape together.
+
 ### Added (docs)
 - **`docs/REVIEWS_INDEX.md` — the map of the self-verification campaign.** Every
   review/simulation round in order (improvement 1–4, symposium 5–21, the

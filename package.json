@@ -32,6 +32,10 @@
       "types": "./courtConfirmationMachine.ts",
       "default": "./courtConfirmationMachine.ts"
     },
+    "./court-escalation-request": {
+      "types": "./courtEscalationRequest.ts",
+      "default": "./courtEscalationRequest.ts"
+    },
     "./batch-attestation": {
       "types": "./batchAttestation.ts",
       "default": "./batchAttestation.ts"

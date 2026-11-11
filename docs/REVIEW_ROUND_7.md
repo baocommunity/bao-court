@@ -481,6 +481,14 @@ false (nothing passes it). Correct the sentence, and add the relay/schema step t
 the same section so the two land together; `hashEscalationRequest` must also bind
 the round-bond witness, or two different round bonds produce one request hash.
 
+> **Status (R43).** The package half shipped: `courtEscalationRequest.ts` is the
+> versioned wire codec (build/serialize/parse/hash/toMachineEvent) with the
+> optional `roundBondProofHash`, a v2 request-hash domain that binds it, and a
+> known-answer digest both suites pin. The host must adopt it in the escalate
+> body schema + `hashEscalationRequest` **before** the policy is enforced; see
+> `docs/PER_ROUND_BOND.md` §"Upgrading a deployment to the strict policy", point
+> 1.
+
 ### 4.3 `hostEscalation` still makes the policy inert (BLOCKED, re-pinned)
 
 `requireRoundBond: true` + `hostEscalation: true` grants the exemption to

@@ -599,6 +599,19 @@ export {
 } from './quorumEconomics';
 
 export {
+  COURT_ESCALATION_REQUEST_DOMAIN,
+  COURT_ESCALATION_REQUEST_VERSION,
+  MAX_ESCALATION_REQUEST_ROUND,
+  buildCourtEscalationRequest,
+  courtEscalationRequestPreimage,
+  escalationRequestToMachineEvent,
+  hashCourtEscalationRequest,
+  parseCourtEscalationRequest,
+  serializeCourtEscalationRequest,
+  type CourtEscalationRequest,
+} from './courtEscalationRequest';
+
+export {
   ladderSignBoundary,
   deriveMaxLadderRounds,
   deriveLadderFlipRound,

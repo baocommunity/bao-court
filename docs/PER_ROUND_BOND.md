@@ -154,6 +154,16 @@ consumer keeps the v0.12 semantics until it opts in.
 | `requireRoundBond: true` | **another** juror's accepted challenge bond | **refused** (R33, r33-1 — see the reducer list) |
 | any policy, authority `host` | any non-null | **refused** (`a host escalation must not carry a challenger request witness`) |
 
+**Transport (R43, H-6).** The matrix above is the REDUCER's policy. What the
+client can actually SUBMIT is the wire: `courtEscalationRequest.ts`
+(`roundBondProofHash` optional, `null` = the legacy shape) and, on the host, the
+escalate body schema plus the request hash. Review round 7 (H-6) found the body
+schema could not carry the field at all and the hash ignored it, so the strict
+rows were unreachable from a client and two different round bonds produced one
+request hash. Both halves now ship: the package codec (domain **v2**, witness in
+the preimage) and the host's byte-identical `hashEscalationRequest` / body field.
+Ship the transport before enforcing the policy.
+
 **Never compose `requireRoundBond: true` with `hostEscalation: true`** (R38,
 r38-2). The break-glass row above exempts a *challenger* escalation from the
 round-bond requirement, not just the host's, so the strict policy prices
@@ -188,6 +198,16 @@ order of operations, and it is the one to check before arming:
    (fail closed, but dead). Verify the route's body schema and the request hash
    both carry the per-round witness (and that the hash binds it, or two
    different round bonds produce the same request hash).
+   **The package-side transport now exists (R43, H-6):**
+   `courtEscalationRequest.ts` is the versioned wire codec —
+   `buildCourtEscalationRequest` / `serializeCourtEscalationRequest` /
+   `parseCourtEscalationRequest` carry the optional `roundBondProofHash`,
+   `hashCourtEscalationRequest` binds it (domain **v2**), and
+   `escalationRequestToMachineEvent` produces the reducer's `escalate` event
+   field-for-field (the wire supplies the challenger's claims; the CASE supplies
+   `challengerIdx`, `roundIndex` and `now`). The host's escalate body schema and
+   its own request hash must adopt the same shape — a body that rejects the
+   field (`additionalProperties: false` without it) is the H-6 defect itself.
 2. **A strict case cannot be relaxed later.** The policy is frozen with the
    case: a host that flips `BAO_COURT_REQUIRE_ROUND_BOND` back to `0` changes
    only NEW cases. Existing strict cases keep refusing witness-less
