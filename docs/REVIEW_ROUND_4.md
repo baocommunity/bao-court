@@ -484,6 +484,10 @@ that treated the old clamp as a legal cap was being told the wrong thing).
 
 ## 6. Residuals registered (owner decides, host fixes)
 
+Disposition of every row in this table: `bao.markets`
+`docs/operations/REGISTERED_FINDINGS_SWEEP.md` (round 34, with an owner and the
+trigger that would force each one).
+
 | # | Residual | Where | Fix shape |
 |---|---|---|---|
 | r33-2 | the per-round witness is a uniqueness test, not a payment test | this package | `accept_round_bond` ledger (v0.14) |

@@ -166,6 +166,16 @@ interface RoundOutcome {
   readonly round: number;
   readonly ok: boolean;
   readonly classification?: string;
+  /**
+   * The lowest roster index this process **did not hear from** in the phase
+   * that failed (F2 in docs/MULTI_PROCESS_CEREMONY.md).
+   *
+   * Diagnostic only. Under `silence` this names a censoring participant; under
+   * `drop` / `reorder --reorder-style=invert` it names an **honest** sender
+   * whose message the relay discarded. It is therefore NEVER slashing evidence:
+   * slashing uses the signed evidence paths (DkgVerificationFailure,
+   * falseComplaints), not this classification.
+   */
   readonly blamedIdx?: number;
   readonly groupPubkeyXOnly?: string;
   readonly signature?: string;

@@ -1209,6 +1209,10 @@ try {
   const distinctSignatures = new Set(signedReports.map((r) => r.signature)).size;
   report.equivocation = {
     verdict: distinctMessages > 1 || distinctGroupKeys > 1 ? 'EQUIVOCATION' : 'NO_EQUIVOCATION',
+    // F2 (docs/MULTI_PROCESS_CEREMONY.md): blamedIdx names whom this process
+    // did not hear from — diagnostic, never slashing evidence.
+    blameSemantics: 'blamedIdx = lowest roster index this process did not hear from in the failed phase; '
+      + 'diagnostic evidence only, NEVER slashing evidence (the relay may have discarded an honest sender)',
     completionShape: completionShape(roundOne ?? []),
     distinctMessages,
     distinctGroupKeys,
@@ -1243,7 +1247,7 @@ try {
       console.log(
         `  juror ${p.idx}: saw ${view?.delivered ?? 0} msgs from [${view?.senders ?? []}]`
         + ` → ${p.ok ? 'OK' : p.classification}`
-        + `${p.blamedIdx ? ` (blames ${p.blamedIdx})` : ''}`
+        + `${p.blamedIdx ? ` (did not hear from ${p.blamedIdx} — diagnostic, not slashing evidence)` : ''}`
         + ` key ${p.groupPubkeyXOnly ?? '—'} sig ${p.signature ?? '—'}`
         + `${p.duplicatesSeen ? ` dupes ${p.duplicatesSeen}` : ''}`,
       );
