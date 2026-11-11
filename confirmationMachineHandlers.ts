@@ -7,6 +7,7 @@
 // clock-advanced state (the reducer's preamble guarantees monotonic time)
 // and returns the next deep-frozen state. Pure: no I/O, no wall clock.
 
+import { quoteCounter, quoteWireUnknown } from './courtEcho';
 import { compareOutcomeUtf8, hashCourtVerdict } from './courtVoteMachine';
 import { assertPositiveDeadline } from './courtCeremonyCore';
 import {
@@ -62,14 +63,14 @@ export function onTick(state: CourtConfirmationMachineState, event: Extract<Conf
   return freezeState({
     ...state,
     phase: 'expired',
-    failure: { phase: 'expired', reason: `The ${state.phase} deadline passed before resolution.` },
+    failure: { phase: 'expired', reason: `The ${quoteWireUnknown(state.phase)} deadline passed before resolution.` },
   });
 }
 
 /** Apply an `abort`: operator cancel from any non-terminal phase. */
 export function onAbort(state: CourtConfirmationMachineState, event: Extract<ConfirmEvent, { type: 'abort' }>): CourtConfirmationMachineState {
   if (TERMINAL_PHASES.has(state.phase)) {
-    throw new CourtConfirmationTransitionError(`cannot abort confirmation from ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot abort confirmation from ${quoteWireUnknown(state.phase)}`);
   }
   return freezeState({
     ...state,
@@ -85,7 +86,7 @@ export function onAcceptConfirmation(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'confirm_open') {
     throw new CourtConfirmationTransitionError(
-      `cannot accept confirmations during ${state.phase}`,
+      `cannot accept confirmations during ${quoteWireUnknown(state.phase)}`,
     );
   }
   assertBeforeDeadline(event.now, state.confirmDeadline, 'confirmation arrived at or after the confirm deadline');
@@ -99,7 +100,7 @@ export function onAcceptConfirmation(
   });
   if (expected !== event.confirmHash) {
     throw new CourtConfirmationTransitionError(
-      `confirmation from participant ${event.idx} does not match the canonical confirmation hash`,
+      `confirmation from participant ${quoteCounter(event.idx)} does not match the canonical confirmation hash`,
     );
   }
   if (state.confirmations.length >= MAX_CONFIRMATIONS) {
@@ -113,7 +114,7 @@ export function onAcceptConfirmation(
       return freezeState(state);
     }
     throw new CourtConfirmationTransitionError(
-      `participant ${event.idx} published a conflicting confirmation`,
+      `participant ${quoteCounter(event.idx)} published a conflicting confirmation`,
     );
   }
   return freezeState({
@@ -131,7 +132,7 @@ export function onCloseConfirmations(
   event: Extract<ConfirmEvent, { type: 'close_confirmations' }>,
 ): CourtConfirmationMachineState {
   if (state.phase !== 'confirm_open') {
-    throw new CourtConfirmationTransitionError(`cannot close confirmations during ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot close confirmations during ${quoteWireUnknown(state.phase)}`);
   }
   if (event.now < state.confirmDeadline) {
     throw new CourtConfirmationTransitionError(
@@ -142,7 +143,7 @@ export function onCloseConfirmations(
   // aborted by the host), never silently closed.
   if (state.confirmations.length < state.confirmQuorum) {
     throw new CourtConfirmationTransitionError(
-      `confirm quorum not met: ${state.confirmations.length}/${state.confirmQuorum}`,
+      `confirm quorum not met: ${quoteCounter(state.confirmations.length)}/${quoteCounter(state.confirmQuorum)}`,
     );
   }
   return freezeState({ ...state, phase: 'confirm_closed' });
@@ -155,7 +156,7 @@ export function onOpenChallengeWindow(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'confirm_closed') {
     throw new CourtConfirmationTransitionError(
-      `cannot open the challenge window during ${state.phase}`,
+      `cannot open the challenge window during ${quoteWireUnknown(state.phase)}`,
     );
   }
   assertBeforeDeadline(event.now, state.challengeDeadline, 'cannot open the challenge window at or after the challenge deadline');
@@ -169,7 +170,7 @@ export function onAcceptChallenge(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'challenge_window') {
     throw new CourtConfirmationTransitionError(
-      `cannot accept challenges during ${state.phase}`,
+      `cannot accept challenges during ${quoteWireUnknown(state.phase)}`,
     );
   }
   assertBeforeDeadline(event.now, state.challengeDeadline, 'challenge arrived at or after the challenge deadline');
@@ -192,7 +193,7 @@ export function onAcceptChallenge(
       return freezeState(state);
     }
     throw new CourtConfirmationTransitionError(
-      `participant ${event.idx} published a conflicting challenge`,
+      `participant ${quoteCounter(event.idx)} published a conflicting challenge`,
     );
   }
   // A bond witness buys exactly ONE challenger's standing (R38, r38-1). The
@@ -206,7 +207,7 @@ export function onAcceptChallenge(
   const bondOwner = state.challenges.find((c) => c.bondProofHash === event.bondProofHash);
   if (bondOwner) {
     throw new CourtConfirmationTransitionError(
-      `challenge bond proof hash is already bound to participant ${bondOwner.idx}'s accepted `
+      `challenge bond proof hash is already bound to participant ${quoteCounter(bondOwner.idx)}'s accepted `
       + 'challenge: one bond witness buys one challenger\'s standing',
     );
   }
@@ -226,7 +227,7 @@ export function onCloseChallengeWindow(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'challenge_window') {
     throw new CourtConfirmationTransitionError(
-      `cannot close the challenge window during ${state.phase}`,
+      `cannot close the challenge window during ${quoteWireUnknown(state.phase)}`,
     );
   }
   if (event.now < state.challengeDeadline) {
@@ -253,7 +254,7 @@ export function onOpenLadderRound(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'ladder_pending') {
     throw new CourtConfirmationTransitionError(
-      `cannot open a ladder round during ${state.phase}`,
+      `cannot open a ladder round during ${quoteWireUnknown(state.phase)}`,
     );
   }
   // One round number per case (r10-4). `event.round` is checked against
@@ -279,7 +280,7 @@ export function onOpenLadderRound(
     || event.round !== state.ladderRound + 1
   ) {
     throw new CourtConfirmationTransitionError(
-      `ladder rounds must be consecutive: expected ${state.ladderRound + 1}`,
+      `ladder rounds must be consecutive: expected ${quoteCounter(state.ladderRound + 1)}`,
     );
   }
   // Defense in depth: a hand-restored `ladder_pending` snapshot cannot
@@ -287,7 +288,7 @@ export function onOpenLadderRound(
   // `escalate` — already refuses to exceed it).
   if (event.round > state.maxLadderRounds) {
     throw new CourtConfirmationTransitionError(
-      `ladder round ${event.round} exceeds maxLadderRounds ${state.maxLadderRounds}`,
+      `ladder round ${quoteCounter(event.round)} exceeds maxLadderRounds ${quoteCounter(state.maxLadderRounds)}`,
     );
   }
   assertPositiveDeadline(event.voteDeadline, 'voteDeadline', CourtConfirmationTransitionError);
@@ -309,7 +310,7 @@ export function onAcceptMassVote(
   event: Extract<ConfirmEvent, { type: 'accept_mass_vote' }>,
 ): CourtConfirmationMachineState {
   if (state.phase !== 'ladder_vote_open' || !state.ladder) {
-    throw new CourtConfirmationTransitionError(`cannot accept mass votes during ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot accept mass votes during ${quoteWireUnknown(state.phase)}`);
   }
   assertBeforeDeadline(event.now, state.ladder.voteDeadline, 'mass vote arrived at or after the round deadline');
   assertRoundParticipant(state, event.idx);
@@ -330,7 +331,7 @@ export function onAcceptMassVote(
       return freezeState(state);
     }
     throw new CourtConfirmationTransitionError(
-      `participant ${event.idx} published a conflicting mass vote`,
+      `participant ${quoteCounter(event.idx)} published a conflicting mass vote`,
     );
   }
   return freezeState({
@@ -348,7 +349,7 @@ export function onCloseLadderRound(
   event: Extract<ConfirmEvent, { type: 'close_ladder_round' }>,
 ): CourtConfirmationMachineState {
   if (state.phase !== 'ladder_vote_open' || !state.ladder) {
-    throw new CourtConfirmationTransitionError(`cannot close the ladder round during ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot close the ladder round during ${quoteWireUnknown(state.phase)}`);
   }
   if (event.now < state.ladder.voteDeadline) {
     throw new CourtConfirmationTransitionError(
@@ -365,7 +366,7 @@ export function onResolveRound(
   _event: Extract<ConfirmEvent, { type: 'resolve_round' }>,
 ): CourtConfirmationMachineState {
   if (state.phase !== 'ladder_vote_closed' || !state.ladder) {
-    throw new CourtConfirmationTransitionError(`cannot resolve a round during ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot resolve a round during ${quoteWireUnknown(state.phase)}`);
   }
   assertValidMassVoteLedger(state);
   assertValidConfirmationLedger(state);
@@ -396,8 +397,8 @@ export function onResolveRound(
   assertRoundCountersAgree(state);
   if (state.outcomeHistory.length !== state.ladder.round - 1) {
     throw new CourtConfirmationTransitionError(
-      `cannot resolve round ${state.ladder.round}: the outcome history holds `
-      + `${state.outcomeHistory.length} record(s) but ${state.ladder.round - 1} round(s) were resolved `
+      `cannot resolve round ${quoteCounter(state.ladder.round)}: the outcome history holds `
+      + `${quoteCounter(state.outcomeHistory.length)} record(s) but ${quoteCounter(state.ladder.round - 1)} round(s) were resolved `
       + '— the two ledgers disagree, so resolving would append a non-consecutive record',
     );
   }
@@ -557,7 +558,7 @@ export function onEscalate(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'round_resolved') {
     throw new CourtConfirmationTransitionError(
-      `cannot escalate during ${state.phase}`,
+      `cannot escalate during ${quoteWireUnknown(state.phase)}`,
     );
   }
   // One round number per case (r10-4): the rung this event opens is derived from
@@ -571,7 +572,7 @@ export function onEscalate(
   // the cap already reached must not re-open the ladder.
   if (state.ladderRound >= state.maxLadderRounds) {
     throw new CourtConfirmationTransitionError(
-      `maxLadderRounds ${state.maxLadderRounds} already reached at round ${state.ladderRound}`,
+      `maxLadderRounds ${quoteCounter(state.maxLadderRounds)} already reached at round ${quoteCounter(state.ladderRound)}`,
     );
   }
   const log = state.escalationLog ?? [];
@@ -606,7 +607,7 @@ export function onEscalate(
   }
   if (event.roundIndex !== expectedRound) {
     throw new CourtConfirmationTransitionError(
-      `escalation roundIndex ${String(event.roundIndex)} does not open the next ladder round ${expectedRound}`,
+      `escalation roundIndex ${quoteWireUnknown(event.roundIndex)} does not open the next ladder round ${quoteCounter(expectedRound)}`,
     );
   }
   let record: CourtEscalationRecord;
@@ -679,14 +680,14 @@ export function onEscalate(
       const membershipBond = state.challenges.find((c) => c.bondProofHash === roundBondProofHash);
       if (membershipBond) {
         throw new CourtConfirmationTransitionError(
-          `escalation round bond proof hash is participant ${membershipBond.idx}'s accepted challenge `
+          `escalation round bond proof hash is participant ${quoteCounter(membershipBond.idx)}'s accepted challenge `
           + '(membership) bond: a per-round bond must be a fresh bond, not a relabelled membership bond',
         );
       }
       const consumed = log.find((r) => r.roundBondProofHash === roundBondProofHash);
       if (consumed) {
         throw new CourtConfirmationTransitionError(
-          `escalation round bond proof hash was already consumed by round ${consumed.round}`,
+          `escalation round bond proof hash was already consumed by round ${quoteCounter(consumed.round)}`,
         );
       }
     }
@@ -742,7 +743,7 @@ export function onConcede(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'round_resolved') {
     throw new CourtConfirmationTransitionError(
-      `cannot concede during ${state.phase}`,
+      `cannot concede during ${quoteWireUnknown(state.phase)}`,
     );
   }
   // The pending verdict (the current round's outcome) becomes final; the
@@ -775,7 +776,7 @@ export function onFlagClawback(
 ): CourtConfirmationMachineState {
   if (state.phase !== 'fee_settlement') {
     throw new CourtConfirmationTransitionError(
-      `cannot flag clawbacks during ${state.phase}`,
+      `cannot flag clawbacks during ${quoteWireUnknown(state.phase)}`,
     );
   }
   // One round number per case (r11-3). This is the only reader of the ladder
@@ -820,7 +821,7 @@ export function onFinalize(
   _event: Extract<ConfirmEvent, { type: 'finalize' }>,
 ): CourtConfirmationMachineState {
   if (state.phase !== 'fee_settlement') {
-    throw new CourtConfirmationTransitionError(`cannot finalize during ${state.phase}`);
+    throw new CourtConfirmationTransitionError(`cannot finalize during ${quoteWireUnknown(state.phase)}`);
   }
   // One round number per case (r10-4). The verdict below is derived from the
   // round `ladder.round` names, while the log completeness rule above sizes
@@ -878,15 +879,15 @@ export function onFinalize(
   const derived = deriveFinalVerdict(state, challenged);
   if (pending.outcome !== derived.outcome) {
     throw new CourtConfirmationTransitionError(
-      `cannot finalize: the pending verdict names "${pending.outcome}" but the verified `
-      + `ledgers derive "${derived.outcome}" — a verdict must be the deciding round's recorded majority`,
+      `cannot finalize: the pending verdict names "${quoteWireUnknown(pending.outcome)}" but the verified `
+      + `ledgers derive "${quoteWireUnknown(derived.outcome)}" — a verdict must be the deciding round's recorded majority`,
     );
   }
   if (pending.upheld !== derived.upheld) {
     throw new CourtConfirmationTransitionError(
-      `cannot finalize: the pending verdict sets upheld=${String(pending.upheld)} but the verified `
-      + `ledgers derive upheld=${String(derived.upheld)} (outcome "${derived.outcome}" against the `
-      + `proposed "${state.proposedOutcome}") — the flag is not covered by the verdict hash`,
+      `cannot finalize: the pending verdict sets upheld=${quoteWireUnknown(pending.upheld)} but the verified `
+      + `ledgers derive upheld=${quoteWireUnknown(derived.upheld)} (outcome "${quoteWireUnknown(derived.outcome)}" against the `
+      + `proposed "${quoteWireUnknown(state.proposedOutcome)}") — the flag is not covered by the verdict hash`,
     );
   }
   const supportingEventIds = derived.supportingEventIds;
@@ -962,15 +963,15 @@ function deriveFinalVerdict(
   }
   if (record.round !== ladder.round) {
     throw new CourtConfirmationTransitionError(
-      `cannot finalize: the last resolved round is ${record.round} but the ladder is at round `
-      + `${ladder.round} — the outcome history and the ladder disagree`,
+      `cannot finalize: the last resolved round is ${quoteCounter(record.round)} but the ladder is at round `
+      + `${quoteCounter(ladder.round)} — the outcome history and the ladder disagree`,
     );
   }
   const tallied = tallyRoundVotes(state);
   if (tallied.winner !== record.outcome) {
     throw new CourtConfirmationTransitionError(
-      `cannot finalize: the round ${record.round} vote ledger tallies "${tallied.winner}" but the `
-      + `recorded outcome is "${record.outcome}" — one of the two was not produced by resolve_round`,
+      `cannot finalize: the round ${quoteCounter(record.round)} vote ledger tallies "${quoteWireUnknown(tallied.winner)}" but the `
+      + `recorded outcome is "${quoteWireUnknown(record.outcome)}" — one of the two was not produced by resolve_round`,
     );
   }
   const talliedEventIds = ladder.votes
@@ -983,8 +984,8 @@ function deriveFinalVerdict(
     || talliedEventIds.some((id, i) => id !== recordedEventIds[i])
   ) {
     throw new CourtConfirmationTransitionError(
-      `cannot finalize: the round ${record.round} vote ledger does not match the recorded winning `
-      + `event ids (${talliedEventIds.length} ballot(s) vs ${recordedEventIds.length} recorded)`,
+      `cannot finalize: the round ${quoteCounter(record.round)} vote ledger does not match the recorded winning `
+      + `event ids (${quoteCounter(talliedEventIds.length)} ballot(s) vs ${quoteCounter(recordedEventIds.length)} recorded)`,
     );
   }
   return {

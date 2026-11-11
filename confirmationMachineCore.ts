@@ -15,6 +15,7 @@ import {
   normalizeCeremonyRoster,
 } from './courtCeremonyCore';
 import { CanonicalWriter } from './courtSession';
+import { quoteCounter, quoteWireUnknown } from './courtEcho';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import {
@@ -350,8 +351,9 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
   );
   if (log.length !== expectedRecords && (log.length > 0 || state.requireRoundBond === true)) {
     throw new CourtConfirmationTransitionError(
-      `escalation log is incomplete: ${log.length} record(s) for ${state.ladderRound} opened round(s) `
-      + `(expected ${expectedRecords}) — a restored snapshot must not drop an escalation, because a `
+      `escalation log is incomplete: ${quoteCounter(log.length)} record(s) for `
+      + `${quoteCounter(state.ladderRound)} opened round(s) `
+      + `(expected ${quoteCounter(expectedRecords)}) — a restored snapshot must not drop an escalation, because a `
       + 'dropped record also un-consumes the per-round bond it paid with',
     );
   }
@@ -504,33 +506,62 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
  * round-10 write-up had explicitly reverted, and that the barrier's own refusal
  * echoed the (snapshot-shaped) counters verbatim (r11-1: a restored
  * `ladderRound: "3\nESCALATION ACCEPTED"` forged a log line). Both corrected.
+ *
+ * Round 12 measured that the INVARIANT was still `===` (r12-1): two counters
+ * forged to the SAME non-integer agree, so the barrier passed, and
+ * `flag_clawback` persisted the forged value — `{ round: "3\nESCALATION
+ * ACCEPTED" }`, the r11-3 harm on the one shape r11's probe did not try (it
+ * forged only one side). The barrier now enforces the field's WRITE DOMAIN —
+ * a non-negative safe integer — on both counters, and requires `ladderRound` to
+ * be `0` when no ladder is open (a round counter with no ledger is the mirror
+ * image of a skew).
  */
 export function assertRoundCountersAgree(state: CourtConfirmationMachineState): void {
   const ladder = state.ladder;
-  // Before the first rung opens there is no ladder round to compare with, and
-  // `ladderRound` is 0 (`challenge_window`, `ladder_pending`'s first half).
-  if (ladder === undefined || ladder === null) return;
-  if (ladder.round !== state.ladderRound) {
+  const ladderRound: unknown = state.ladderRound;
+  // "Agree" is not enough (r12-1). Round 11 made this barrier's MESSAGE total
+  // over a hostile counter, but the INVARIANT it enforces was still `===`: a
+  // restored snapshot whose two counters were forged to the SAME non-integer
+  // (`"3\nESCALATION ACCEPTED"`, `2.5`) passed, and `flag_clawback` then
+  // persisted it — `clawbackFlags: [{ …, round: "3\nESCALATION ACCEPTED" }]`, the
+  // r11-3 harm resurrected on the one shape r11's own probe did not try (it
+  // forged only `ladderRound`, so the pair disagreed). The machine writes
+  // non-negative safe integers in the same transition, so that is the domain of
+  // the field; anything else is a snapshot it could not have produced.
+  if (!isRoundCounter(ladderRound)) {
     throw new CourtConfirmationTransitionError(
-      `the round counters disagree: ladderRound is ${quoteCounter(state.ladderRound)} but the open `
-      + `round is ${quoteCounter(ladder.round)} — the machine writes both in the same transition, and `
+      `the round counters disagree: ladderRound is ${quoteCounter(ladderRound)} but the open `
+      + `round is ${quoteCounter(ladder?.round)} — a round number is a non-negative safe integer, and `
+      + 'the machine writes both counters from one transition, so a restored snapshot with any other '
+      + 'value is not one it could have produced (r9-4/r10-4/r12-1)',
+    );
+  }
+  // Before the first rung opens there is no ladder round to compare with, and
+  // `ladderRound` is 0 (`challenge_window`, `ladder_pending`'s first half). A
+  // snapshot that has a round but NO ladder is the mirror image of a skew: the
+  // counter exists and the ledger it names does not.
+  if (ladder === undefined || ladder === null) {
+    if (ladderRound === 0) return;
+    throw new CourtConfirmationTransitionError(
+      `the round counters disagree: ladderRound is ${quoteCounter(ladderRound)} but no ladder round is `
+      + 'open — a snapshot with a round counter and no ladder ledger is not one the machine could have '
+      + 'produced (r9-4/r10-4/r12-1)',
+    );
+  }
+  const openRound: unknown = ladder.round;
+  if (!isRoundCounter(openRound) || openRound !== ladderRound) {
+    throw new CourtConfirmationTransitionError(
+      `the round counters disagree: ladderRound is ${quoteCounter(ladderRound)} but the open `
+      + `round is ${quoteCounter(openRound)} — the machine writes both in the same transition, and `
       + 'the history rule reads one while every escalation rule reads the other, so a restored snapshot '
       + 'with two round numbers is not one it could have produced (r9-4/r10-4)',
     );
   }
 }
 
-/**
- * A round counter for a refusal message (r11-1). A restored snapshot can carry
- * ANY value here — that is the state this barrier exists to refuse — so the
- * echo must be total: a non-integer is described, never stringified (a
- * `toString` on a restored object runs caller code and can throw, and a string
- * counter would put its newlines straight into the operator's log).
- */
-function quoteCounter(value: unknown): string {
-  return typeof value === 'number' && Number.isSafeInteger(value)
-    ? String(value)
-    : '<not an integer>';
+/** The write domain of a ladder round counter: a non-negative safe integer. */
+function isRoundCounter(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 /**
@@ -561,7 +592,7 @@ export function assertValidMassVoteLedger(state: CourtConfirmationMachineState):
     assertHex32(vote.eventId, 'mass vote event id must be 32-byte lowercase hex');
     if (seenIndices.has(vote.idx)) {
       throw new CourtConfirmationTransitionError(
-        `participant ${vote.idx} has duplicate mass votes in round ${ladder.round}`,
+        `participant ${quoteCounter(vote.idx)} has duplicate mass votes in round ${quoteCounter(ladder.round)}`,
       );
     }
     if (seenEventIds.has(vote.eventId)) {
@@ -609,12 +640,12 @@ export function assertValidConfirmationLedger(state: CourtConfirmationMachineSta
     });
     if (record.confirmHash !== expected) {
       throw new CourtConfirmationTransitionError(
-        `confirmation record for participant ${record.idx} does not match the canonical confirmation hash`,
+        `confirmation record for participant ${quoteCounter(record.idx)} does not match the canonical confirmation hash`,
       );
     }
     if (seenConfirmIndices.has(record.idx)) {
       throw new CourtConfirmationTransitionError(
-        `participant ${record.idx} has duplicate confirmation records`,
+        `participant ${quoteCounter(record.idx)} has duplicate confirmation records`,
       );
     }
     if (seenConfirmEventIds.has(record.eventId)) {
@@ -640,7 +671,7 @@ export function assertValidConfirmationLedger(state: CourtConfirmationMachineSta
     assertHex32(record.eventId, 'challenge event id must be 32-byte lowercase hex');
     if (seenChallengeIndices.has(record.idx)) {
       throw new CourtConfirmationTransitionError(
-        `participant ${record.idx} has duplicate challenge records`,
+        `participant ${quoteCounter(record.idx)} has duplicate challenge records`,
       );
     }
     if (seenChallengeEventIds.has(record.eventId)) {
@@ -649,7 +680,8 @@ export function assertValidConfirmationLedger(state: CourtConfirmationMachineSta
     const bondOwner = challengeBondOwners.get(record.bondProofHash);
     if (bondOwner !== undefined) {
       throw new CourtConfirmationTransitionError(
-        `challenge ledger binds one bond proof hash to participants ${bondOwner} and ${record.idx}: `
+        `challenge ledger binds one bond proof hash to participants ${quoteCounter(bondOwner)} and `
+        + `${quoteCounter(record.idx)}: `
         + 'a bond witness buys one challenger\'s standing',
       );
     }

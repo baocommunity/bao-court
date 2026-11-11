@@ -99,6 +99,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { verifyEvent } from 'nostr-tools/pure';
 
 import { HEX_32, isRecord } from './courtEventParseCore';
+import { quoteCounter, quoteWireUnknown, quoteWireValue } from './courtEcho';
 import { isCanonicalUtf8Text } from './courtCeremonyCore';
 import type {
   CourtConfirmationMachineEvent,
@@ -169,94 +170,16 @@ const WIRE_FIELDS = [
 const textEncoder = new TextEncoder();
 
 /**
- * Characters that may not travel into an error message verbatim (r10-1).
- *
- * `Cc` = C0/C1 controls (newline, tab, NEL U+0085, …), `Cf` = format characters
- * (zero-width space/joiners, bidi marks and overrides U+200B–U+200F,
- * U+202A–U+202E, U+2066–U+2069, soft hyphen, U+180E, BOM), `Zl`/`Zp` = the line
- * and paragraph separators, `Cs` = lone surrogates. The ANSI/OSC introducers are
- * `Cc` (`ESC` U+001B, `BEL` U+0007, C1 `CSI` U+009B), so a terminal escape
- * sequence is escaped by the same class and cannot reach a terminal.
- *
- * Deliberately NOT `/g`: the per-character test below must be stateless
- * (`lastIndex` on a global regex would make the verdict depend on the previous
- * character).
+ * The echo helpers moved to `courtEcho.ts` in round 12 (r12-1): the same escape
+ * is now the ONE implementation used by every file that writes a refusal, so a
+ * site cannot be "escaped" by convention alone. See that module for the class,
+ * the bound, and the two probes round 12 added.
  */
-const UNSAFE_ECHO_CHAR = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/u;
-
-/**
- * Longest value echoed into a refusal (**characters of the ESCAPED output**), so
- * one refusal cannot flood a log. Round 10 documented this as a 64-character
- * bound while clipping the INPUT: a 64-character format-character id escaped to
- * 387 output characters (`docs/REVIEW_ROUND_11.md` §1). The budget is now spent
- * on the bytes that are actually written.
- */
-const MAX_ECHO_CHARS = 64;
-
-/** One character, escaped if a log line must not carry it verbatim. */
-function escapeEchoChar(ch: string): string {
-  return UNSAFE_ECHO_CHAR.test(ch)
-    ? `\\u{${(ch.codePointAt(0) ?? 0).toString(16)}}`
-    : ch;
-}
-
-/**
- * Quote an attacker-supplied wire value for an ERROR MESSAGE (r10-1).
- *
- * Every refusal in this module is meant to be logged — the append-only
- * escalation log, an operator's stderr, a bug ticket — so a refusal that
- * interpolates the offending value VERBATIM is a log-injection channel. A case
- * id may carry any character that survives the id rules: only the ENDS are
- * whitespace-checked, so `"court:A\nESCALATION ACCEPTED for …"` is a legal id,
- * and a host that logs the refusal prints a forged, well-formed line after the
- * newline. U+202E (RIGHT-TO-LEFT OVERRIDE) does the same to a rendered line
- * without any newline at all, and a 256-byte id doubled into a two-id message
- * makes every refusal a 512-byte log entry.
- *
- * Escaping the value (never re-interpreting it) is the fix that keeps the
- * diagnostic: the reason and the bytes are both still on the line, they just
- * cannot BE a line.
- *
- * The budget is spent on the ESCAPED output and the value is walked by CODE
- * POINT (`[...value]`), so the clip can neither split a surrogate pair into two
- * lone surrogates nor cut an escape sequence in half: the result is always a
- * sequence of complete `\u{…}` escapes plus an explicit `…` marker, never a
- * string that merely LOOKS complete.
- */
-function quoteWireValue(value: string): string {
-  let out = '';
-  for (const ch of value) {
-    const piece = escapeEchoChar(ch);
-    if (out.length + piece.length > MAX_ECHO_CHARS) return `${out}…`;
-    out += piece;
-  }
-  return out;
-}
-
-/**
- * Quote an UNTYPED wire value for a refusal (r11-1): the same escaping, without
- * ever calling `String(value)` on an object.
- *
- * `String({toString(){throw}})` and `String(Object.create(null))` both throw
- * (`Cannot convert object to primitive value`), so a refusal reached through a
- * hostile value object escaped as a raw `TypeError` — the foreign-error-type
- * boundary r3-1/r41-1/r49-d closed elsewhere. Only primitives are rendered;
- * every object is reported as `<object>` with no user code run.
- */
-function quoteWireUnknown(value: unknown): string {
-  if (typeof value === 'string') return quoteWireValue(value);
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return quoteWireValue(String(value));
-  }
-  if (value === null) return 'null';
-  if (value === undefined) return 'undefined';
-  return `<${typeof value}>`;
-}
 
 function assertHex32(value: unknown, field: string): string {
   if (typeof value !== 'string' || !HEX_32.test(value)) {
     throw new CourtConfirmationTransitionError(
-      `escalation request ${field} must be 32-byte lowercase hex`,
+      `escalation request ${quoteWireValue(field)} must be 32-byte lowercase hex`,
     );
   }
   return value;
@@ -292,29 +215,29 @@ function assertHex32(value: unknown, field: string): string {
  */
 function normalizeCaseId(value: unknown, label: string): string {
   if (typeof value !== 'string') {
-    throw new CourtConfirmationTransitionError(`${label} must be a non-empty string`);
+    throw new CourtConfirmationTransitionError(`${quoteWireValue(label)} must be a non-empty string`);
   }
   // Checked on the RAW value: a fold must never mask a non-canonical string.
   if (!isCanonicalUtf8Text(value)) {
     throw new CourtConfirmationTransitionError(
-      `${label} must be canonical UTF-8 (no unpaired surrogates)`,
+      `${quoteWireValue(label)} must be canonical UTF-8 (no unpaired surrogates)`,
     );
   }
   if (value.includes('\u0000')) {
-    throw new CourtConfirmationTransitionError(`${label} must not contain U+0000`);
+    throw new CourtConfirmationTransitionError(`${quoteWireValue(label)} must not contain U+0000`);
   }
   if (value.trim() === '') {
-    throw new CourtConfirmationTransitionError(`${label} must be a non-empty string`);
+    throw new CourtConfirmationTransitionError(`${quoteWireValue(label)} must be a non-empty string`);
   }
   if (value !== value.trim()) {
     throw new CourtConfirmationTransitionError(
-      `${label} must not have leading or trailing whitespace: folding it would give two different `
+      `${quoteWireValue(label)} must not have leading or trailing whitespace: folding it would give two different `
       + 'ids one request hash (r9-1)',
     );
   }
   if (textEncoder.encode(value).length > MAX_ESCALATION_CASE_ID_BYTES) {
     throw new CourtConfirmationTransitionError(
-      `${label} exceeds ${MAX_ESCALATION_CASE_ID_BYTES} bytes`,
+      `${quoteWireValue(label)} exceeds ${MAX_ESCALATION_CASE_ID_BYTES} bytes`,
     );
   }
   return value;
@@ -946,7 +869,7 @@ export function escalationRequestToMachineEvent(
   }
   if (normalised.round !== state.ladderRound) {
     throw new CourtConfirmationTransitionError(
-      `escalation request was signed to escalate past round ${normalised.round} but the case is `
+      `escalation request was signed to escalate past round ${quoteCounter(normalised.round)} but the case is `
       + `resolving round ${quoteWireUnknown(state.ladderRound)} — a stale request must not open a rung its signer never `
       + 'authorised',
     );
@@ -1004,8 +927,8 @@ export function escalationRequestToMachineEvent(
   // (`CourtChallengeRecord.bondTxid`), so the pairing is checkable here.
   if (normalised.bondTxid !== bond.bondTxid) {
     throw new CourtConfirmationTransitionError(
-      `escalation request names bond txid ${normalised.bondTxid} but the accepted challenge carrying `
-      + `its witness is bond ${bond.bondTxid} — the request hash would commit to a bond this case `
+      `escalation request names bond txid ${quoteWireValue(normalised.bondTxid)} but the accepted challenge carrying `
+      + `its witness is bond ${quoteWireUnknown(bond.bondTxid)} — the request hash would commit to a bond this case `
       + 'never bound (r9-2)',
     );
   }
