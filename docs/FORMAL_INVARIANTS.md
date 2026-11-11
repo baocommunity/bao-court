@@ -758,7 +758,14 @@ escalate {
   round the case never opened, timestamps are finite and non-decreasing, every
   `challenger` record names a roster participant **and that participant's own
   accepted challenge bond**, and a `host` record requires the frozen
-  `hostEscalation` policy and carries no challenger witness. A SHORT log is
+  `hostEscalation` policy and carries no challenger witness. «A round the case
+  never opened» is bounded by the rounds the case may have opened, which is
+  `ladderRound` — **plus the pending rung in `ladder_pending`** (round-37 finding
+  r37-1: `escalate` appends the record for `ladderRound + 1` and
+  `open_ladder_round` advances `ladderRound`, so the half-step state legitimately
+  carries one record naming `ladderRound + 1`; the completeness rule accounted
+  for it, the round bound did not, and the barrier refused a legal restored
+  snapshot). A SHORT log is
   accepted deliberately: a pre-0.12 snapshot has no entries and must stay
   finalizable, and a deleted entry is indistinguishable from a legacy state
   (deletion stays host-attested, INV-ESC-6). Round-3 finding r29-2: before this
@@ -1451,7 +1458,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-ESC-5 | bond bound to an accepted challenge; host behind frozen policy | confirmationMachineHandlers.ts:544-547,559-573 | escalationWitness.test.ts › bond must match; host is break-glass |
 | INV-ESC-6 | escalation witness log append-only (+ pre-0.12 normalisation) | confirmationMachineHandlers.ts:584-588; courtConfirmationMachine.ts:407-412 | escalationWitness.test.ts › witness recorded append-only; legacy snapshot normalises |
 | INV-ESC-7 | `ladder_pending` unreachable without a witness | confirmationMachineHandlers.ts:487-588 | escalationWitness.test.ts › ladder_pending is reachable ONLY through a witnessed escalation |
-| INV-ESC-8 | witness log tamper barrier at finalize + escalate; completeness (one record per opened round), strict cases never emptied | confirmationMachineCore.ts:315-430; confirmationMachineHandlers.ts:521,755 | reviewRound3.test.ts › forged escalation record refused at finalize; reviewRound4.test.ts › every-record / last-record deletion refused |
+| INV-ESC-8 | witness log tamper barrier at finalize + escalate; completeness (one record per opened round), strict cases never emptied, round bound includes the `ladder_pending` rung (r37-1) | confirmationMachineCore.ts:328-470; confirmationMachineHandlers.ts:521,755 | reviewRound3.test.ts › forged escalation record refused at finalize; reviewRound4.test.ts › every-record / last-record deletion refused; mutationClosuresV013.test.ts › a legal `ladder_pending` snapshot is accepted |
 | INV-ESC-9 | per-round bond: well-formed, never a membership bond (own OR another juror's), never consumed twice, mandatory under `requireRoundBond` (R31 + R33) | confirmationMachineHandlers.ts:566-620; confirmationMachineCore.ts:377-430 | perRoundBond.test.ts › one bond cannot fund every round; reviewRound4.test.ts › foreign membership bond refused (reducer + finalize) |
 | INV-CONF-30 | fee ledger idempotency + cap | courtConfirmationMachine.ts:1082-1093 | adversarialMachines.test.ts › MAX_FEES boundaries |
 | INV-CONF-31 | explicit clawback discipline | courtConfirmationMachine.ts:1095-1126 | courtConfirmationMachine.test.ts › accepts explicit clawback flags… |

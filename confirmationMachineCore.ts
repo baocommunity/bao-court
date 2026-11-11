@@ -368,7 +368,18 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
         'escalation log rounds must be a consecutive 2..k sequence',
       );
     }
-    if (round > state.ladderRound) {
+    // `ladder_pending` is the half-step between `escalate` (which appends the
+    // record for round `ladderRound + 1`) and `open_ladder_round` (which
+    // advances `ladderRound`) — the same offset the completeness rule above
+    // already accounts for. A restored snapshot parked mid-escalation is a
+    // legal state, so the bound must include that pending rung. Without it the
+    // barrier refused the very snapshots a host restores (round-37 finding
+    // r37-1: the completeness rule was taught about `ladder_pending`, this
+    // check was not).
+    const openedRounds = state.phase === 'ladder_pending'
+      ? state.ladderRound + 1
+      : state.ladderRound;
+    if (round > openedRounds) {
       throw new CourtConfirmationTransitionError(
         'escalation log records a round the case never opened',
       );

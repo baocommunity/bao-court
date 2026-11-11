@@ -29,6 +29,49 @@ frozen.
   (r38-2): the break-glass exemption is granted to *challenger* escalations too,
   so the two flags together price nothing.
 
+### Fixed — round-37 mutation campaign on the v0.13 surface (r37-1)
+`docs/MUTATION_TESTING_V013.md`. 25 hand-written mutants in 10 new classes
+(per-round bond consumption, escalation-witness binding, `requireRoundBond`
+strictness, ledger completeness, the sign-based ladder bound, penalty aging, the
+weight anchor, the R25 policy flag, the 3^R bond schedule, κ). Pass 1 captured
+24/25 (96.0 %); the single survivor (M66, the escalation-log round bound) is
+**equivalent** — and investigating it found the defect below.
+
+- **The restore barrier refused a LEGAL `ladder_pending` snapshot (r37-1).**
+  `assertValidEscalationLog`'s completeness rule accounts for the half-step
+  between `escalate` (which appends the record for `ladderRound + 1`) and
+  `open_ladder_round` (which advances `ladderRound`), but its round-binding rule
+  compared against `ladderRound` alone: a state produced by `escalate` (phase
+  `ladder_pending`, `ladderRound` 1, one record for round 2) threw
+  «escalation log records a round the case never opened». The reducer never
+  calls the barrier in that phase, so no shipped path broke — but a HOST
+  validating a restored mid-escalation snapshot (the documented restore path,
+  INV-ESC-8) was refused by the barrier itself. The bound now includes the
+  pending rung. **Consumer impact:** none for finalize/escalate; hosts that call
+  `assertValidEscalationLog` on a pending snapshot gain the case they were told
+  was legal.
+- `__tests__/mutationClosuresV013.test.ts` (3) — the closure pins: a legal
+  pending snapshot is accepted (fails before the fix), a forged round is still
+  refused, and a log longer than the opened rounds is still refused.
+- `scripts/mutation/check-catalogue.mjs` — proves the whole catalogue applies
+  exactly once in ~1 s before a sweep.
+- Verification on the rebased tree (round 5 in): suite **1716 passed / 1 skipped
+  (78 files)**, catalogue 78/78 applicable, detector-C probes **32/32**, and the
+  pass-2 sweep re-run so the recorded verdicts describe the shipping code.
+
+### Added — the v0.13 mutant catalogue and its detectors
+- `scripts/mutation/mutants.mjs`: **M54–M78** (25 new mutants, 10 new classes;
+  catalogue is 78 in 28 classes). Ids are permanent.
+- `scripts/mutation/spot-check.mjs`: **S19–S32**, one black-box probe per v0.13
+  invariant (INV-ESC-8/9, 02-ladder Thm 2, 06 §1.5/§3/§4, INV-CONF-4). Detector
+  C fires on 19 of the 25 new mutants; detector A on 23; the model explorer on
+  1 (its honest denominator is the 6 machine-attached mutants).
+- Committed run outputs: `scripts/mutation/pass1-v013.json` (as found) and
+  `scripts/mutation/pass2-v013-postclosure.json` (after the fix), each with the
+  per-mutant verdict, which detectors fired, the failing test names and the
+  clean-tree proof.
+6c08e7c (test(mutation): round-37 campaign on the v0.13 surface — 25 mutants, 96%, and r37-1)
+
 ### Added — Byzantine-relay multi-process ceremony (R33)
 R30 proved the ceremony survives process death and cross-round replay over an
 **honest** relay. R33 removes that assumption: the loopback relay now keeps a

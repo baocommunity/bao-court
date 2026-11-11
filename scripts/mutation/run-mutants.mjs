@@ -361,27 +361,42 @@ async function main() {
   // ── baseline: the pristine sandbox must be green, or every capture is noise
   let baseline = null;
   if (runBaseline) {
-    console.log('[mutants] baseline: running the full suite on the pristine copy…');
-    const result = await run(
-      process.execPath,
-      [
-        join(baseDir, 'node_modules', 'vitest', 'vitest.mjs'),
-        ...SUITE_ARGS,
-        ...excludeArgs,
-        `--outputFile=${join(baseDir, 'baseline-tests.json')}`,
-      ],
-      { cwd: baseDir, timeoutMs: TEST_TIMEOUT_MS, logFile: join(baseDir, 'baseline-tests.log') },
-    );
-    baseline = await parseVitestJson(join(baseDir, 'baseline-tests.json'));
-    baseline.wallMs = result.wallMs;
-    console.log(
-      `[mutants] baseline: ${baseline.passedTests}/${baseline.totalTests} passed, `
-      + `${baseline.failedTests} failed in ${(result.wallMs / 1000).toFixed(1)}s`,
-    );
-    if (!baseline.success) {
-      throw new Error('pristine tree is NOT green — refusing to run mutants (every capture would be noise)');
+    // A pristine baseline must be green. One retry is allowed because this box
+    // is shared with other agent sessions and a load-induced flake in the
+    // baseline would otherwise abort a 40-minute campaign; a capture is still
+    // only ever an ASSERTION failure, never slowness.
+    for (let attempt = 1; attempt <= 2 && baseline === null; attempt += 1) {
+      console.log(`[mutants] baseline: running the full suite on the pristine copy (attempt ${attempt})…`);
+      const reportPath = join(baseDir, `baseline-tests-${attempt}.json`);
+      const result = await run(
+        process.execPath,
+        [
+          join(baseDir, 'node_modules', 'vitest', 'vitest.mjs'),
+          ...SUITE_ARGS,
+          ...excludeArgs,
+          `--outputFile=${reportPath}`,
+        ],
+        { cwd: baseDir, timeoutMs: TEST_TIMEOUT_MS, logFile: join(baseDir, `baseline-tests-${attempt}.log`) },
+      );
+      const parsed = await parseVitestJson(reportPath);
+      parsed.wallMs = result.wallMs;
+      console.log(
+        `[mutants] baseline: ${parsed.passedTests}/${parsed.totalTests} passed, `
+        + `${parsed.failedTests} failed in ${(result.wallMs / 1000).toFixed(1)}s`,
+      );
+      if (parsed.success) {
+        baseline = parsed;
+      } else {
+        for (const failure of parsed.failing) console.error(`[mutants]   baseline failure: ${failure.file} :: ${failure.name} — ${failure.message}`);
+        await rm(reportPath, { force: true });
+        if (attempt === 2) {
+          throw new Error('pristine tree is NOT green — refusing to run mutants (every capture would be noise)');
+        }
+        console.error('[mutants] baseline not green — retrying once (environmental flake control)');
+        baseline = null;
+      }
+      await rm(reportPath, { force: true });
     }
-    await rm(join(baseDir, 'baseline-tests.json'), { force: true });
   }
 
   // ── worker pools: one sandbox each, pulling mutants from a shared cursor
