@@ -127,6 +127,27 @@ frozen.
   still the host verifier's, so r40-3 is not preempted; the case state carries no
   case identity). Suite **1,831 passed / 1 skipped (82 files + 1 skipped)**.
 
+### Tests (mutation campaign 3 — the v0.14.0 escalation TRANSPORT)
+- **23 new mutants in 12 new classes** aimed only at `courtEscalationRequest.ts`
+  — the first campaign to touch the file (campaigns 1–2 predate it). The classes
+  are the codec's published claims: `caseId` injectivity (r8-1), the digest over
+  the *normalised* request with the `'-'` witness sentinel, unknown-field and
+  duplicate-key refusal (r8-4), no field coercion, the round ceiling, the
+  identity/index/case binding (r8-2), bond ambiguity (r38-1), the signed round,
+  host-clock authority, snapshot purity (r8-5) and the signed flag (r8-3).
+  Catalogue **101 mutants / 40 classes**.
+- Catalogue housekeeping: ids may now be three digits (ordered numerically) —
+  the catalogue passed M99 — and **M65's `find` was re-anchored**, because the
+  r40-1 barrier moved the statement it named and `check-catalogue` had begun
+  exiting 1 for the whole catalogue.
+- Detector C grew by **16 probes (S33–S48)**, one per transport claim, including
+  an independent recomputation of the digest and a wire-injectivity corpus.
+- Closures **C11–C15** (`__tests__/mutationClosuresV014.test.ts`): each was
+  verified RED against the corresponding mutant applied to a sandbox copy, so
+  the battery now sees what only the campaign probe saw.
+- Method, mutant table, per-detector scores and the honest reading of the
+  transport's pinning: `docs/MUTATION_TESTING_V014.md`.
+
 ### Fixed (review-round-8 — the escalation transport and the r41-1 barrier attacked)
 - **The transport bound nothing: three unchecked wire claims (r8-2,
   exploitable).** `escalationRequestToMachineEvent` filled `challengerIdx` from

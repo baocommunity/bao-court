@@ -1,0 +1,1448 @@
+{
+  "tool": "scripts/mutation/run-mutants.mjs",
+  "generatedAt": "2026-11-11T17:32:08.628Z",
+  "repoRoot": "/home/bob/Documents/bao-court--mutation3",
+  "precision": "single semantic mutation per source file, applied to a sandbox copy",
+  "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+  "cleanTree": {
+    "pristineBefore": "M CHANGELOG.md\n M scripts/mutation/mutants.mjs\n M scripts/mutation/run-mutants.mjs\n M scripts/mutation/spot-check.mjs",
+    "pristineAfter": "M CHANGELOG.md\n M scripts/mutation/mutants.mjs\n M scripts/mutation/run-mutants.mjs\n M scripts/mutation/spot-check.mjs",
+    "trackedTreeUnchanged": true,
+    "sourceFilesHashed": [
+      "courtCeremonyCore.ts",
+      "confirmationMachineHandlers.ts",
+      "courtVoteMachine.ts",
+      "selection.ts",
+      "courtSigningMachine.ts",
+      "validator.ts",
+      "courtConfirmationMachine.ts",
+      "batchAttestation.ts",
+      "courtSession.ts",
+      "confirmationMachineCore.ts",
+      "ladderEconomics.ts",
+      "penaltyAging.ts",
+      "quorumEconomics.ts",
+      "courtEscalationRequest.ts"
+    ],
+    "sourceFilesUnchanged": true,
+    "unchanged": true
+  },
+  "parallelism": 4,
+  "testTimeoutSec": 900,
+  "baseline": {
+    "totalTests": 1797,
+    "passedTests": 1796,
+    "failedTests": 0,
+    "failedSuites": 0,
+    "failing": [],
+    "success": true,
+    "wallMs": 64391
+  },
+  "summary": {
+    "total": 23,
+    "captured": 23,
+    "survived": 0,
+    "score": 1,
+    "byClass": {
+      "caseid-injectivity": {
+        "description": "caseId is encoded injectively into the hash preimage (canonical, NUL-free, bounded, trimmed)",
+        "total": 5,
+        "captured": 5,
+        "score": 1,
+        "survivors": []
+      },
+      "wire-hash-preimage": {
+        "description": "the request digest covers the NORMALISED request and separates absent from present",
+        "total": 3,
+        "captured": 3,
+        "score": 1,
+        "survivors": []
+      },
+      "wire-unknown-field-acceptance": {
+        "description": "unknown wire fields accepted (additionalProperties: false dropped)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "wire-duplicate-key-acceptance": {
+        "description": "a repeated wire field silently resolved (r8-4)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "wire-field-coercion": {
+        "description": "a wire field is coerced instead of shape-checked (validated A, used B)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "wire-round-bounds": {
+        "description": "the request round is not an integer inside the ladder ceiling",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "escalation-identity-binding": {
+        "description": "the escalation names a challenger nothing verified (r8-2 attribution)",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "escalation-witness-ambiguity": {
+        "description": "one bond hash with two owners resolved silently (r38-1)",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "escalation-round-binding": {
+        "description": "a signed round is ignored: a stale request opens a later rung",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "host-clock-authority": {
+        "description": "the request steers the host clock (`now`) instead of the case",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "build-snapshot-purity": {
+        "description": "build reads a field twice (validated A, returned B — r8-5)",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "signed-flag-type": {
+        "description": "a signed flag is a truthiness test, not a boolean (r8-3)",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      }
+    },
+    "byDetector": {
+      "tests": {
+        "total": 23,
+        "captured": 23,
+        "score": 1
+      },
+      "spot": {
+        "total": 23,
+        "captured": 23,
+        "score": 1
+      },
+      "model": {
+        "total": 23,
+        "captured": 0,
+        "score": 0,
+        "applicable": 0,
+        "scoreApplicable": 0
+      }
+    },
+    "survivors": [],
+    "baselineTests": 1797
+  },
+  "mutants": [
+    {
+      "id": "M79",
+      "cls": "caseid-injectivity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "a NUL inside `caseId` blurs a preimage field boundary again — the codec depends on the field COUNT to stay sound instead of on the bytes",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with a NUL id is refused, not hashed",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-1) — caseId encodes injectively, or not at all a NUL cannot blur a preimage field boundary, and the id is byte-bounded",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 158935
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S35",
+            "error": "Error: a U+0000 in caseId was accepted (it separates preimage fields)"
+          },
+          {
+            "id": "S48",
+            "error": "Error: a hand-built request with a NUL caseId was hashed without re-validation"
+          }
+        ],
+        "wallMs": 823
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 159088
+    },
+    {
+      "id": "M80",
+      "cls": "caseid-injectivity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the 256-byte cap on a routing key is gone: a megabyte caseId is hashed and written to the host log",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-1) — caseId encodes injectively, or not at all a NUL cannot blur a preimage field boundary, and the id is byte-bounded",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 158790
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S35",
+            "error": "Error: a 257-byte caseId was accepted"
+          }
+        ],
+        "wallMs": 862
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 158839
+    },
+    {
+      "id": "M81",
+      "cls": "caseid-injectivity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "THE r8-1 BUG AS A MUTANT: the well-formedness guard is skipped, so `TextEncoder` maps an unpaired surrogate to U+FFFD and two different case ids share one digest",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with an unpaired surrogate is refused (the r8-1 guard runs in hash too)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-1) — caseId encodes injectively, or not at all a lone surrogate no longer collides with U+FFFD in the request hash",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 157034
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S33",
+            "error": "Error: an unpaired surrogate was accepted into the hash preimage (r8-1)"
+          }
+        ],
+        "wallMs": 947
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 157076
+    },
+    {
+      "id": "M82",
+      "cls": "caseid-injectivity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the id is validated untrimmed but hashed trimmed: `\"court:1\"` and `\" court:1\"` are two wire strings with ONE digest (H-6 one field over)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "name": "C11 (M82) — the id that is hashed is the id that was validated a padded id is trimmed ONCE, in build, and every later step sees the trimmed id",
+            "message": "AssertionError: expected '  court:market-r47-closure:1\\t' to be 'court:market-r47-closure:1' // Object.is equality"
+          }
+        ],
+        "wallMs": 157501
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S33",
+            "error": "Error: accepted id \" court:1 \" came back as \" court:1 \" — the codec rewrote a value it validated"
+          }
+        ],
+        "wallMs": 872
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 157564
+    },
+    {
+      "id": "M83",
+      "cls": "caseid-injectivity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the codec NORMALISES instead of refusing: an NFD id and its NFC twin are different wire strings with one digest",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "name": "C12 (M83) — an accepted id is returned byte-for-byte (no silent normalisation) NFD is accepted unchanged, and NFC is a different id",
+            "message": "AssertionError: expected 'café:1' to be 'café:1' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "name": "C12 (M83) — an accepted id is returned byte-for-byte (no silent normalisation) the two forms do not share a digest, and the wire does not rewrite the id",
+            "message": "AssertionError: expected '6b05859adb156b0e1be969618378782e9f5de…' not to be '6b05859adb156b0e1be969618378782e9f5de…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          }
+        ],
+        "wallMs": 459992
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S33",
+            "error": "Error: accepted id \"café\" came back as \"café\" — the codec rewrote a value it validated"
+          },
+          {
+            "id": "S34",
+            "error": "Error: case ids \"café\" and \"café\" share one digest"
+          }
+        ],
+        "wallMs": 4657
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 460061
+    },
+    {
+      "id": "M84",
+      "cls": "wire-hash-preimage",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the digest is taken over the CALLER value, not the re-validated one — a hand-built (untrimmed, un-shaped) request hashes without the codec ever seeing it",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 5,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with a NUL id is refused, not hashed",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with malformed hex is refused, not hashed",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with an unpaired surrogate is refused (the r8-1 guard runs in hash too)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+          }
+        ],
+        "wallMs": 453213
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S48",
+            "error": "Error: a hand-built request with a NUL caseId was hashed without re-validation"
+          }
+        ],
+        "wallMs": 3956
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 453240
+    },
+    {
+      "id": "M85",
+      "cls": "wire-hash-preimage",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the absent-witness sentinel is dropped: the \"no round bond\" slot is an empty string, a value the field separator can also produce",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the request hash binds the round-bond witness two requests differing ONLY in the round bond hash differently",
+            "message": "AssertionError: expected 'court:market-r43-wire:1\\u00001\\u00007…' to contain '\\u0000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T1 (H-6) — the \"-\" sentinel is a value no request field can be a literal \"-\" witness is refused, and absent ≠ present in the preimage",
+            "message": "AssertionError: expected 'court:market-r48-wire:1\\u00001\\u00007…' to be 'court:market-r48-wire:1\\u00001\\u00007…' // Object.is equality"
+          }
+        ],
+        "wallMs": 454769
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S36",
+            "error": "Error: the absent slot is not the \"-\" sentinel: \"court:market-r47-probe:1\\u00001\\u00007777777777777777777777777777777777777777777777777777777777777777\\u0000d200000000000000000000000000000000000000000000000000000000000000\\u0000e200000000000000000000000000000000000000000000000000000000000000\\u0000\\u00008888888888888888888888888888888888888888888888888888888888888888\\u00001790000000\\u00000\""
+          }
+        ],
+        "wallMs": 4154
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 454850
+    },
+    {
+      "id": "M86",
+      "cls": "wire-hash-preimage",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the domain/body boundary is the \"-\" FIELD sentinel byte instead of NUL: domain separation now shares a byte with the preimage alphabet",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the request hash binds the round-bond witness pins the v2 domain and a known-answer digest shared with the host",
+            "message": "AssertionError: expected '3b54ce4600a38a68f53d793d28cf38616f53e…' to be '38f94655c82847e158c451d02e338db9f6742…' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) replaying relay: duplicates are idempotent and never yield a second signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+          }
+        ],
+        "wallMs": 453746
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S37",
+            "error": "Error: digest 04938ef3b3cef371a60654c8eec7b3f963c58c30ef59a43e347c307fc1259698 != sha256(domain‖0x00‖preimage) 5021f7f1e3e8ffb78641adb6d327665afd05243566f0888db61b87111c1e1946"
+          }
+        ],
+        "wallMs": 4493
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 453797
+    },
+    {
+      "id": "M87",
+      "cls": "wire-unknown-field-acceptance",
+      "file": "courtEscalationRequest.ts",
+      "intent": "unknown fields are IGNORED rather than refused — `additionalProperties: false` is gone, and a peer silently drops the field that mattered (H-6)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the escalation request wire round-trips, and the parse is strict refuses unknown fields (additionalProperties: false is the wire contract)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-4) — a repeated field is refused, not silently resolved unknown fields, __proto__ and confusables are still refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 401743
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S38",
+            "error": "Error: unknown field accepted (JSON text)"
+          }
+        ],
+        "wallMs": 2098
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 402181
+    },
+    {
+      "id": "M88",
+      "cls": "wire-unknown-field-acceptance",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the field whitelist runs on the JSON STRING path only: a host that hands over its own parsed body accepts any extra field",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the escalation request wire round-trips, and the parse is strict refuses unknown fields (additionalProperties: false is the wire contract)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-4) — a repeated field is refused, not silently resolved unknown fields, __proto__ and confusables are still refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 386468
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S38",
+            "error": "Error: unknown field accepted (parsed object)"
+          }
+        ],
+        "wallMs": 2689
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 386485
+    },
+    {
+      "id": "M89",
+      "cls": "wire-duplicate-key-acceptance",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the duplicate-key scan is not run: `{\"roundBondProofHash\":null,\"roundBondProofHash\":\"<real>\"}` is one request to the codec and two claims to an audit",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 3,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-4) — a repeated field is refused, not silently resolved \"null then real\" no longer parses to the real witness (JSON.parse last-wins)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-4) — a repeated field is refused, not silently resolved a repeated field spelled with a JSON escape is the same field",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-4) — a repeated field is refused, not silently resolved a repeated `concession` cannot flip a signed flag",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 400462
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S39",
+            "error": "Error: a repeated roundBondProofHash was resolved last-wins"
+          }
+        ],
+        "wallMs": 2201
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 400852
+    },
+    {
+      "id": "M90",
+      "cls": "wire-duplicate-key-acceptance",
+      "file": "courtEscalationRequest.ts",
+      "intent": "keys are compared as RAW source text, so a duplicate spelled with a JSON escape (`\"c\\u0061seId\"`) is a different key and the last one wins",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-4) — a repeated field is refused, not silently resolved a repeated field spelled with a JSON escape is the same field",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 398553
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S39",
+            "error": "Error: an escaped duplicate key was not seen as a duplicate"
+          }
+        ],
+        "wallMs": 2602
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 398703
+    },
+    {
+      "id": "M91",
+      "cls": "wire-field-coercion",
+      "file": "courtEscalationRequest.ts",
+      "intent": "`caseId` is coerced instead of shape-checked: a numeric id becomes \"42\", and a MISSING id becomes the literal string \"undefined\"",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 5,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C14 (M91) — parse shape-checks caseId instead of coercing it a numeric id is refused (String() would mint the id \"42\")",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C14 (M91) — parse shape-checks caseId instead of coercing it a MISSING id is refused (String(undefined) would mint the id \"undefined\")",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/mutationClosuresV014.test.ts",
+            "name": "C14 (M91) — parse shape-checks caseId instead of coercing it an id that is not a string at all never reaches the preimage",
+            "message": "AssertionError: expected function to throw an error, but it didn't"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) reordering relay: per-juror delivery order differs yet the outcome is identical",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+          }
+        ],
+        "wallMs": 282510
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S40",
+            "error": "Error: a numeric caseId was coerced"
+          }
+        ],
+        "wallMs": 2923
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 282534
+    },
+    {
+      "id": "M92",
+      "cls": "wire-field-coercion",
+      "file": "courtEscalationRequest.ts",
+      "intent": "`round` is coerced instead of typed: the wire form `\"2\"` (and `true`, and `[2]`) passes the integer check as 2",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/mutationClosuresV014.test.ts",
+            "name": "C15 (M92) — parse shape-checks round instead of coercing it a stringly round is refused (Number(\"2\") would accept it as 2)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 272568
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S40",
+            "error": "Error: round \"2\" was coerced to an integer"
+          }
+        ],
+        "wallMs": 12712
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 272635
+    },
+    {
+      "id": "M93",
+      "cls": "wire-round-bounds",
+      "file": "courtEscalationRequest.ts",
+      "intent": "a fractional / out-of-ladder `round` is accepted by the codec, so the ceiling lives only in whatever the host happens to check",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the escalation request wire round-trips, and the parse is strict refuses junk: bad JSON, non-objects, malformed hex, bad rounds, bad clock",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/mutationClosuresV014.test.ts",
+            "name": "C13 (M84) — the digest covers the RE-VALIDATED request a hand-built request with malformed hex is refused, not hashed",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/mutationClosuresV014.test.ts",
+            "name": "C15 (M92) — parse shape-checks round instead of coercing it a stringly round is refused (Number(\"2\") would accept it as 2)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/mutationClosuresV014.test.ts",
+            "name": "C15 (M92) — parse shape-checks round instead of coercing it a non-integer number is refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 279411
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S40",
+            "error": "Error: round \"2\" was coerced to an integer"
+          },
+          {
+            "id": "S41",
+            "error": "Error: round 0 was accepted"
+          }
+        ],
+        "wallMs": 17970
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 279501
+    },
+    {
+      "id": "M94",
+      "cls": "escalation-identity-binding",
+      "file": "courtEscalationRequest.ts",
+      "intent": "THE r8-2 BUG AS A MUTANT: the wire `challengerPubkey` is forwarded uncompared, so a bonded challenger mints an escalation naming ANY juror (the r29-2 attribution harm)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check (a) challengerPubkey must be the pubkey the request authenticated as",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 270574
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S42",
+            "error": "Error: an unverified challengerPubkey minted an escalation"
+          }
+        ],
+        "wallMs": 16035
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 270615
+    },
+    {
+      "id": "M95",
+      "cls": "escalation-identity-binding",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the roster index comes from the ROSTER HEAD rather than from the challenge that owns the bond — the escalation is attributed to juror 1 whoever bonded",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 8,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the machine event built from the wire is field-for-field the reducer's carries every witness field, and takes only the host-known fields from the CASE",
+            "message": "AssertionError: expected { type: 'escalate', …(8) } to deeply equal { type: 'escalate', …(8) }"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the strict path ACCEPTS a transported round bond a request with a round bond escalates a requireRoundBond case and is logged",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the strict path ACCEPTS a transported round bond the SAME transported request without the witness is refused by the strict case",
+            "message": "AssertionError: expected [Function] to throw error matching /requires a per-round bond witness/ but got 'escalation bond proof hash does not m…'"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check (a) challengerPubkey must be the pubkey the request authenticated as",
+            "message": "AssertionError: expected 1 to be 2 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check the wire `now` is the HOST clock: the request cannot steer it, and NaN is refused",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check over-strictness: the strict case still escalates end-to-end through the wire",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check over-strictness: a request built for the round the case IS resolving is accepted",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T3 (r8-6) — resolve_round re-checks that the history is ONE record per resolved round every legal resolve still passes (over-strictness control)",
+            "message": "CourtConfirmationTransitionError: escalation bond proof hash does not match an accepted challenge bond of this challenger"
+          }
+        ],
+        "wallMs": 388204
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S42",
+            "error": "Error: challengerIdx 1 is not the bond owner (2)"
+          }
+        ],
+        "wallMs": 1338
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 388422
+    },
+    {
+      "id": "M96",
+      "cls": "escalation-witness-ambiguity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "a restored ledger with one bond hash and two owners is resolved to the FIRST instead of refused (r38-1 harm: the second owner's bond vanishes)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check an ambiguous bond ledger (one hash, two owners) is refused rather than resolved",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 414220
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S43",
+            "error": "Error: an ambiguous bond ledger was resolved to the first owner"
+          }
+        ],
+        "wallMs": 1328
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 414274
+    },
+    {
+      "id": "M97",
+      "cls": "escalation-round-binding",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the signed round is ignored: a request signed for round 1 opens round 3, replayable on every round of a legacy case",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check (b) a stale request cannot open a round its signer never authorised",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 410254
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S44",
+            "error": "Error: a stale request opened a later rung"
+          }
+        ],
+        "wallMs": 1466
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 410299
+    },
+    {
+      "id": "M98",
+      "cls": "host-clock-authority",
+      "file": "courtEscalationRequest.ts",
+      "intent": "the reducer event carries the REQUEST's `signedAtSec` as `now`: a challenger chooses the case clock (and can step it forward past a deadline)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/escalationRequestWire.test.ts",
+            "name": "(H-6) the machine event built from the wire is field-for-field the reducer's carries every witness field, and takes only the host-known fields from the CASE",
+            "message": "AssertionError: expected { type: 'escalate', …(8) } to deeply equal { type: 'escalate', …(8) }"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check the wire `now` is the HOST clock: the request cannot steer it, and NaN is refused",
+            "message": "AssertionError: expected 9999999999 to be 3200 // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check over-strictness: a request built for the round the case IS resolving is accepted",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-2/__tests__/reviewRound8.test.ts",
+            "name": "T3 (r8-6) — resolve_round re-checks that the history is ONE record per resolved round every legal resolve still passes (over-strictness control)",
+            "message": "CourtConfirmationTransitionError: now must not precede a previously observed timestamp"
+          }
+        ],
+        "wallMs": 406939
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S45",
+            "error": "Error: the request steered `now`"
+          }
+        ],
+        "wallMs": 1792
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 406957
+    },
+    {
+      "id": "M99",
+      "cls": "host-clock-authority",
+      "file": "courtEscalationRequest.ts",
+      "intent": "a bad host clock FAILS OPEN to the wire clock — the validation that keeps a caller from choosing `now` becomes a fallback",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-0/__tests__/reviewRound8.test.ts",
+            "name": "T2 (r8-2) — the mapping binds the three claims the reducer cannot check the wire `now` is the HOST clock: the request cannot steer it, and NaN is refused",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 392506
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S45",
+            "error": "Error: a bad host clock (NaN) was accepted or replaced by the wire clock"
+          }
+        ],
+        "wallMs": 16578
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 392545
+    },
+    {
+      "id": "M100",
+      "cls": "build-snapshot-purity",
+      "file": "courtEscalationRequest.ts",
+      "intent": "THE r8-5 BUG AS A MUTANT: `caseId` is validated from the SNAPSHOT and returned from a SECOND live read, so a getter validates A and the request carries B",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 4,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/mutationClosuresV014.test.ts",
+            "name": "C11 (M82) — the id that is hashed is the id that was validated a padded id is trimmed ONCE, in build, and every later step sees the trimmed id",
+            "message": "AssertionError: expected '  court:market-r47-closure:1\\t' to be 'court:market-r47-closure:1' // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r30MultiProcessCeremony.test.ts",
+            "name": "multi-process ceremony (round 30) completes a real 3-process DKG + signing round with one group key",
+            "message": "AssertionError: expected [ { …(2) }, { …(2) }, { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/r33ByzantineRelay.test.ts",
+            "name": "multi-process ceremony under a Byzantine relay (round 33) inverting one sender's commit/reveal pair: order-sensitivity yields at most one signature",
+            "message": "AssertionError: expected [ { …(2) } ] to deeply equal []"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-1/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-5) — validate what you return: no getter double-fetch a shifting getter cannot be validated as A and returned as B",
+            "message": "AssertionError: expected 2 to be 1 // Object.is equality"
+          }
+        ],
+        "wallMs": 369483
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S33",
+            "error": "Error: accepted id \" court:1 \" came back as \" court:1 \" — the codec rewrote a value it validated"
+          },
+          {
+            "id": "S46",
+            "error": "Error: caseId was read 2 times — a getter can return a different value per read"
+          }
+        ],
+        "wallMs": 2455
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 369523
+    },
+    {
+      "id": "M101",
+      "cls": "signed-flag-type",
+      "file": "courtEscalationRequest.ts",
+      "intent": "a signed flag becomes a truthiness test: `\"true\"`, `1`, `{}` and `null` all parse as `false`, flipping a refusal into a dropped appeal",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-hic2jA/work-3/__tests__/reviewRound8.test.ts",
+            "name": "T1 (r8-3) — a signed flag is not a truthiness test a non-boolean concession is refused instead of coerced to false",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 378461
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S47",
+            "error": "Error: concession \"true\" was coerced"
+          }
+        ],
+        "wallMs": 2105
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 378491
+    }
+  ]
+}

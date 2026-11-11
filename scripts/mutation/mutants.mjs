@@ -56,6 +56,20 @@ export const CLASSES = {
   'policy-flag-recording': 'R25 quorum policy flag not recorded',
   'ladder-bond-schedule': 'escalation bond schedule under-priced (02-ladder Thm 2)',
   'quorum-capture-arithmetic': 'quorum capture baseline (κ) measured against the wrong quorum',
+
+  // ── v0.14.0 transport surface (round 47 campaign) ────────────────────────
+  'caseid-injectivity': 'caseId is encoded injectively into the hash preimage (canonical, NUL-free, bounded, trimmed)',
+  'wire-hash-preimage': 'the request digest covers the NORMALISED request and separates absent from present',
+  'wire-unknown-field-acceptance': 'unknown wire fields accepted (additionalProperties: false dropped)',
+  'wire-duplicate-key-acceptance': 'a repeated wire field silently resolved (r8-4)',
+  'wire-field-coercion': 'a wire field is coerced instead of shape-checked (validated A, used B)',
+  'wire-round-bounds': 'the request round is not an integer inside the ladder ceiling',
+  'escalation-identity-binding': 'the escalation names a challenger nothing verified (r8-2 attribution)',
+  'escalation-witness-ambiguity': 'one bond hash with two owners resolved silently (r38-1)',
+  'escalation-round-binding': 'a signed round is ignored: a stale request opens a later rung',
+  'host-clock-authority': 'the request steers the host clock (`now`) instead of the case',
+  'build-snapshot-purity': 'build reads a field twice (validated A, returned B — r8-5)',
+  'signed-flag-type': 'a signed flag is a truthiness test, not a boolean (r8-3)',
 };
 
 /** @typedef {keyof typeof CLASSES} MutantClass */
@@ -694,8 +708,8 @@ export const MUTANTS = [
     id: 'M65',
     cls: 'escalation-ledger-completeness',
     file: 'confirmationMachineHandlers.ts',
-    find: '  assertValidEscalationLog(state);\n  const expectedRound = state.ladderRound + 1;',
-    replace: '  const expectedRound = state.ladderRound + 1;',
+    find: '  assertValidEscalationLog(state);\n  // The escalation witness test below reads',
+    replace: '  // The escalation witness test below reads',
     intent: 'the ledger barrier is only re-run at finalize: a stripped snapshot opens (and seats) one free rung before the case bricks',
     machine: 'confirmation',
   },
@@ -829,6 +843,247 @@ export const MUTANTS = [
     intent: 'κ is measured against a one-seat-weaker baseline whenever N ≡ 1 (mod 3), so the correction a host prices is understated',
     machine: null,
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // v0.14.0 escalation TRANSPORT (courtEscalationRequest.ts) — round 47
+  //
+  // Campaigns 1 and 2 both predate this file and the round-8 fixes, so every
+  // mutant below is new ground. The classes are the codec's own published
+  // claims: injective encoding of `caseId`, a digest over the NORMALISED
+  // request with an absent/present sentinel, a fail-closed parser, and a mapper
+  // that binds the three wire claims the reducer cannot check (r8-2).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── caseId injectivity (r8-1) ────────────────────────────────────────────
+  {
+    id: 'M79',
+    cls: 'caseid-injectivity',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (trimmed.includes(\'\\u0000\')) {\n    throw new CourtConfirmationTransitionError(\'escalation request caseId must not contain U+0000\');\n  }',
+    replace: '',
+    intent: 'a NUL inside `caseId` blurs a preimage field boundary again — the codec depends on the field COUNT to stay sound instead of on the bytes',
+    machine: null,
+  },
+  {
+    id: 'M80',
+    cls: 'caseid-injectivity',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (textEncoder.encode(trimmed).length > MAX_ESCALATION_CASE_ID_BYTES) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request caseId exceeds ${MAX_ESCALATION_CASE_ID_BYTES} bytes`,\n    );\n  }',
+    replace: '',
+    intent: 'the 256-byte cap on a routing key is gone: a megabyte caseId is hashed and written to the host log',
+    machine: null,
+  },
+  {
+    id: 'M81',
+    cls: 'caseid-injectivity',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (!isCanonicalUtf8Text(trimmed)) {\n    throw new CourtConfirmationTransitionError(\n      \'escalation request caseId must be canonical UTF-8 (no unpaired surrogates)\',\n    );\n  }',
+    replace: '',
+    intent: 'THE r8-1 BUG AS A MUTANT: the well-formedness guard is skipped, so `TextEncoder` maps an unpaired surrogate to U+FFFD and two different case ids share one digest',
+    machine: null,
+  },
+  {
+    id: 'M82',
+    cls: 'caseid-injectivity',
+    file: 'courtEscalationRequest.ts',
+    find: '  const trimmed = value.trim();',
+    replace: '  const trimmed = value;',
+    intent: 'the id is validated untrimmed but hashed trimmed: `"court:1"` and `" court:1"` are two wire strings with ONE digest (H-6 one field over)',
+    machine: null,
+  },
+  {
+    id: 'M83',
+    cls: 'caseid-injectivity',
+    file: 'courtEscalationRequest.ts',
+    find: '  return trimmed;',
+    replace: '  return trimmed.normalize(\'NFC\');',
+    intent: 'the codec NORMALISES instead of refusing: an NFD id and its NFC twin are different wire strings with one digest',
+    machine: null,
+  },
+
+  // ── the hash preimage ────────────────────────────────────────────────────
+  {
+    id: 'M84',
+    cls: 'wire-hash-preimage',
+    file: 'courtEscalationRequest.ts',
+    find: '  const normalised = buildCourtEscalationRequest(request);\n  const domain = textEncoder.encode(COURT_ESCALATION_REQUEST_DOMAIN);',
+    replace: '  const normalised = request;\n  const domain = textEncoder.encode(COURT_ESCALATION_REQUEST_DOMAIN);',
+    intent: 'the digest is taken over the CALLER value, not the re-validated one — a hand-built (untrimmed, un-shaped) request hashes without the codec ever seeing it',
+    machine: null,
+  },
+  {
+    id: 'M85',
+    cls: 'wire-hash-preimage',
+    file: 'courtEscalationRequest.ts',
+    find: '    request.roundBondProofHash ?? \'-\',',
+    replace: '    request.roundBondProofHash ?? \'\',',
+    intent: 'the absent-witness sentinel is dropped: the "no round bond" slot is an empty string, a value the field separator can also produce',
+    machine: null,
+  },
+  {
+    id: 'M86',
+    cls: 'wire-hash-preimage',
+    file: 'courtEscalationRequest.ts',
+    find: '  input[domain.length] = 0x00;',
+    replace: '  input[domain.length] = 0x2d;',
+    intent: 'the domain/body boundary is the "-" FIELD sentinel byte instead of NUL: domain separation now shares a byte with the preimage alphabet',
+    machine: null,
+  },
+
+  // ── unknown fields (H-6 wire contract) ───────────────────────────────────
+  {
+    id: 'M87',
+    cls: 'wire-unknown-field-acceptance',
+    file: 'courtEscalationRequest.ts',
+    find: '  for (const key of Object.keys(value)) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);\n    }\n  }',
+    replace: '',
+    intent: 'unknown fields are IGNORED rather than refused — `additionalProperties: false` is gone, and a peer silently drops the field that mattered (H-6)',
+    machine: null,
+  },
+  {
+    id: 'M88',
+    cls: 'wire-unknown-field-acceptance',
+    file: 'courtEscalationRequest.ts',
+    find: '  for (const key of Object.keys(value)) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);\n    }\n  }',
+    replace: '  for (const key of typeof raw === \'string\' ? Object.keys(value) : []) {\n    if (!(WIRE_FIELDS as readonly string[]).includes(key)) {\n      throw new CourtConfirmationTransitionError(`escalation request has an unknown field ${key}`);\n    }\n  }',
+    intent: 'the field whitelist runs on the JSON STRING path only: a host that hands over its own parsed body accepts any extra field',
+    machine: null,
+  },
+
+  // ── duplicate keys (r8-4) ────────────────────────────────────────────────
+  {
+    id: 'M89',
+    cls: 'wire-duplicate-key-acceptance',
+    file: 'courtEscalationRequest.ts',
+    find: '    assertNoRepeatedWireFields(raw);',
+    replace: '',
+    intent: 'the duplicate-key scan is not run: `{"roundBondProofHash":null,"roundBondProofHash":"<real>"}` is one request to the codec and two claims to an audit',
+    machine: null,
+  },
+  {
+    id: 'M90',
+    cls: 'wire-duplicate-key-acceptance',
+    file: 'courtEscalationRequest.ts',
+    find: '    const key = decodeJsonStringAt(text, index);',
+    replace: '    const keyEnd = text.indexOf(\'"\', index + 1) + 1;\n    const key = { value: text.slice(index + 1, keyEnd - 1), end: keyEnd };',
+    intent: 'keys are compared as RAW source text, so a duplicate spelled with a JSON escape (`"c\\u0061seId"`) is a different key and the last one wins',
+    machine: null,
+  },
+
+  // ── field coercion (validated A, used B) ─────────────────────────────────
+  {
+    id: 'M91',
+    cls: 'wire-field-coercion',
+    file: 'courtEscalationRequest.ts',
+    find: '    caseId: value.caseId as string,',
+    replace: '    caseId: String(value.caseId),',
+    intent: '`caseId` is coerced instead of shape-checked: a numeric id becomes "42", and a MISSING id becomes the literal string "undefined"',
+    machine: null,
+  },
+  {
+    id: 'M92',
+    cls: 'wire-field-coercion',
+    file: 'courtEscalationRequest.ts',
+    find: '    round: value.round as number,',
+    replace: '    round: Number(value.round),',
+    intent: '`round` is coerced instead of typed: the wire form `"2"` (and `true`, and `[2]`) passes the integer check as 2',
+    machine: null,
+  },
+
+  // ── the round ceiling ────────────────────────────────────────────────────
+  {
+    id: 'M93',
+    cls: 'wire-round-bounds',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (\n    !Number.isSafeInteger(roundRaw)\n    || (roundRaw as number) < 1\n    || (roundRaw as number) > MAX_ESCALATION_REQUEST_ROUND\n  ) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request round must be an integer in 1..${MAX_ESCALATION_REQUEST_ROUND} `\n      + `(got ${String(roundRaw)})`,\n    );\n  }',
+    replace: '',
+    intent: 'a fractional / out-of-ladder `round` is accepted by the codec, so the ceiling lives only in whatever the host happens to check',
+    machine: null,
+  },
+
+  // ── the identity binding (r8-2) ──────────────────────────────────────────
+  {
+    id: 'M94',
+    cls: 'escalation-identity-binding',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (normalised.challengerPubkey !== authenticatedPubkey) {\n    throw new CourtConfirmationTransitionError(\n      \'escalation request challengerPubkey is not the pubkey the request authenticated as: the wire \'\n      + \'claim is unverified, so an escalation may not be attributed to it\',\n    );\n  }',
+    replace: '',
+    intent: 'THE r8-2 BUG AS A MUTANT: the wire `challengerPubkey` is forwarded uncompared, so a bonded challenger mints an escalation naming ANY juror (the r29-2 attribution harm)',
+    machine: null,
+  },
+  {
+    id: 'M95',
+    cls: 'escalation-identity-binding',
+    file: 'courtEscalationRequest.ts',
+    find: '    challengerIdx: bond.idx,',
+    replace: '    challengerIdx: state.participantIndices[0],',
+    intent: 'the roster index comes from the ROSTER HEAD rather than from the challenge that owns the bond — the escalation is attributed to juror 1 whoever bonded',
+    machine: null,
+  },
+
+  // ── one bond, one owner (r38-1) ──────────────────────────────────────────
+  {
+    id: 'M96',
+    cls: 'escalation-witness-ambiguity',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (bonds.length > 1) {\n    throw new CourtConfirmationTransitionError(\n      `the case binds one bond proof hash to ${bonds.length} accepted challenges: the escalation `\n      + \'witness is ambiguous\',\n    );\n  }',
+    replace: '',
+    intent: 'a restored ledger with one bond hash and two owners is resolved to the FIRST instead of refused (r38-1 harm: the second owner\'s bond vanishes)',
+    machine: null,
+  },
+
+  // ── the round binding (r8-2c) ────────────────────────────────────────────
+  {
+    id: 'M97',
+    cls: 'escalation-round-binding',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (normalised.round !== state.ladderRound) {\n    throw new CourtConfirmationTransitionError(\n      `escalation request was signed to escalate past round ${normalised.round} but the case is `\n      + `resolving round ${state.ladderRound} — a stale request must not open a rung its signer never `\n      + \'authorised\',\n    );\n  }',
+    replace: '',
+    intent: 'the signed round is ignored: a request signed for round 1 opens round 3, replayable on every round of a legacy case',
+    machine: null,
+  },
+
+  // ── the clock ────────────────────────────────────────────────────────────
+  {
+    id: 'M98',
+    cls: 'host-clock-authority',
+    file: 'courtEscalationRequest.ts',
+    find: '    roundIndex: state.ladderRound + 1,\n    now,',
+    replace: '    roundIndex: state.ladderRound + 1,\n    now: normalised.signedAtSec,',
+    intent: 'the reducer event carries the REQUEST\'s `signedAtSec` as `now`: a challenger chooses the case clock (and can step it forward past a deadline)',
+    machine: null,
+  },
+  {
+    id: 'M99',
+    cls: 'host-clock-authority',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (!Number.isSafeInteger(now) || now < 0) {\n    throw new CourtConfirmationTransitionError(\'escalation event now must be a non-negative safe integer\');\n  }',
+    replace: '  if (!Number.isSafeInteger(now) || now < 0) {\n    now = normalised.signedAtSec;\n  }',
+    intent: 'a bad host clock FAILS OPEN to the wire clock — the validation that keeps a caller from choosing `now` becomes a fallback',
+    machine: null,
+  },
+
+  // ── snapshot purity (r8-5) ───────────────────────────────────────────────
+  {
+    id: 'M100',
+    cls: 'build-snapshot-purity',
+    file: 'courtEscalationRequest.ts',
+    find: '  const caseId = normalizeCaseId(caseIdRaw);',
+    replace: '  normalizeCaseId(caseIdRaw);\n  const caseId = input.caseId;',
+    intent: 'THE r8-5 BUG AS A MUTANT: `caseId` is validated from the SNAPSHOT and returned from a SECOND live read, so a getter validates A and the request carries B',
+    machine: null,
+  },
+
+  // ── the signed flag (r8-3) ───────────────────────────────────────────────
+  {
+    id: 'M101',
+    cls: 'signed-flag-type',
+    file: 'courtEscalationRequest.ts',
+    find: '  if (concessionRaw !== undefined && typeof concessionRaw !== \'boolean\') {\n    throw new CourtConfirmationTransitionError(\n      \'escalation request concession must be a boolean (or absent, meaning false)\',\n    );\n  }',
+    replace: '',
+    intent: 'a signed flag becomes a truthiness test: `"true"`, `1`, `{}` and `null` all parse as `false`, flipping a refusal into a dropped appeal',
+    machine: null,
+  },
 ];
 
 /** Stable class order for reporting. */
@@ -837,11 +1092,15 @@ export const CLASS_ORDER = Object.keys(CLASSES);
 /** Guard: ids are unique and ordered. */
 export function validateCatalogue(list = MUTANTS) {
   const seen = new Set();
-  let previous = '';
+  let previous = 0;
   for (const m of list) {
-    if (!/^M\d{2}$/.test(m.id)) throw new Error(`bad mutant id ${m.id}`);
+    // Two digits carried the catalogue through M01–M99; the v0.14 transport
+    // campaign passes 100, so the id is `M` + 2-or-3 digits and is ordered
+    // NUMERICALLY (string order would put M100 before M99).
+    if (!/^M\d{2,3}$/.test(m.id)) throw new Error(`bad mutant id ${m.id}`);
+    const ordinal = Number(m.id.slice(1));
     if (seen.has(m.id)) throw new Error(`duplicate mutant id ${m.id}`);
-    if (previous && m.id <= previous) throw new Error(`mutants must be ordered by id (${previous} → ${m.id})`);
+    if (previous && ordinal <= previous) throw new Error(`mutants must be ordered by id (M${previous} → ${m.id})`);
     if (!CLASSES[m.cls]) throw new Error(`${m.id}: unknown class ${m.cls}`);
     if (!m.find) throw new Error(`${m.id}: empty find`);
     if (m.find === m.replace) throw new Error(`${m.id}: no-op mutation`);
@@ -849,7 +1108,7 @@ export function validateCatalogue(list = MUTANTS) {
       throw new Error(`${m.id}: bad machine ${m.machine}`);
     }
     seen.add(m.id);
-    previous = m.id;
+    previous = ordinal;
   }
   return list.length;
 }
