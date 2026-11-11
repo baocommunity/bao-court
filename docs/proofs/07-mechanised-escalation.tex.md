@@ -205,12 +205,12 @@ pins it. Line numbers are for `origin/main` @ `v0.14.2` (post review rounds
 
 | Conjunct (mechanised form) | Implementation | Mechanised by |
 |---|---|---|
-| `E[π](d) = ρ − a_f^d(ρ+β)` and its sign | `ladderEconomics.ts:165` `escalationOptionEv` | `safe` (def) + `safe_depth_bound` |
-| break-even is NOT safe (strict `< 0`) | `ladderEconomics.ts:95` `ladderSignBoundary`; `:131` `deriveMaxLadderRounds` (the `boundary <= 1 → 0` branch) | `break_even_not_safe` |
-| `ok = maxLadderRounds < flipRound` | `ladderEconomics.ts:186` `ladderCapWithinBound` | `safe_depth_bound` (both directions) |
-| `derivedCap = floor(boundary)`, `0` = no safe depth | `ladderEconomics.ts:131` `deriveMaxLadderRounds` | `derivedCap`, `derivedCapZero_no_safe_depth` |
-| monotone non-decreasing in `a_f`, in `β` | `ladderEconomics.ts:113–130` (docstring contract) | `flipRound_mono_accuracy`, `flipRound_mono_bond`, `derivedCap_mono_*` |
-| `a_f = 1` ⇒ unbounded boundary | `ladderEconomics.ts:97` (`if (a_f === 1) return +∞`) | `perfect_jury_all_depths_safe` |
+| `E[π](d) = ρ − a_f^d(ρ+β)` and its sign | `ladderEconomics.ts:302` `escalationOptionEv` | `safe` (def) + `safe_depth_bound` |
+| break-even is NOT safe (strict `< 0`) | `ladderEconomics.ts:184` `strictlySafeAtDepth`; `:260` `deriveMaxLadderRounds`; `:324` `ladderCapWithinBound` | `break_even_not_safe` |
+| `ok = maxLadderRounds < flipRound` ⟺ `safe(maxLadderRounds)` | `ladderEconomics.ts:324` `ladderCapWithinBound` | `safe_depth_bound` (both directions) |
+| `derivedCap = flipRound − 1` (clamped), `0` = no safe depth | `ladderEconomics.ts:260` `deriveMaxLadderRounds` (exact integer scan, R52) | `derivedCap`, `derivedCapZero_no_safe_depth` |
+| monotone non-decreasing in `a_f`, in `β` | `ladderEconomics.ts` `deriveMaxLadderRounds` docstring contract | `flipRound_mono_accuracy`, `flipRound_mono_bond`, `derivedCap_mono_*` |
+| `a_f = 1` ⇒ unbounded boundary | `ladderEconomics.ts:222` (`if (a_f === 1) return +∞`) | `perfect_jury_all_depths_safe` |
 | one bond witness ⇒ one challenger | `handlers.ts:166` `onAcceptChallenge` (`bondOwner` refusal at `:206–211`); `core.ts:564,633` (`challengeBondOwners`) | `one_hash_one_index`, `one_index_one_hash` |
 | round bond fresh, ≠ membership, ≠ any accepted bond | `handlers.ts:668–681` (`roundBondProofHash === bondProofHash`, `membershipBond` lookup) | `round_bond_not_membership`, `round_bond_not_accepted` |
 | round bond never consumed twice | `handlers.ts:686–690` (`consumed` refusal); `core.ts:438` (`seenRoundBonds`) | `round_bond_consumed_once`, `consumed_not_reused` |
@@ -301,21 +301,25 @@ reachable ledger states) or over all states up to a depth bound (Apalache) /
    with a first unsafe round — is precisely what makes the derived integer
    sufficient. Anyone who changes the gate to compare the BOUNDARY numerically
    re-opens this gap.
-2. **Floating point, and one REAL code↔model gap it exposes.** The
-   mechanisation is exact rational arithmetic; the code evaluates the same
-   products in IEEE-754 doubles, so a cap within one ulp of the boundary is not
-   covered. The sign comparison (`safe cap`) is the safer formulation and is what
-   the gate does. **Finding (verified, r46):** `deriveMaxLadderRounds` is
-   `floor(boundary)` while the theorem's `derivedCap` is `flipRound - 1`; these
-   differ by one at an EXACT-INTEGER boundary `≥ 2` (`a_f = 0.5`, `β = 3ρ`
-   reproduces it with plain floats), where the exported cap names the break-even
-   round — the one round `safe_depth_bound` says is NOT safe. The GATE
-   (`ladderCapWithinBound`) compares signs and still refuses that cap, so no host
-   that re-derives with the gate is exposed; a host that reads `derivedCap` alone
-   as "the deepest safe round" over-admits by one. Pinned, with both halves
-   asserted, in `__tests__/mechanisedArtifacts.test.ts` ("KNOWN EDGE"), and
-   reported to the review round rather than fixed here (this artifact does not
-   touch `ladderEconomics.ts`).
+2. **Floating point — and the code↔model gap it DID expose, now closed (R52).**
+   The mechanisation is exact rational arithmetic; the code used to evaluate
+   `floor(ln(ρ/(ρ+β))/ln a_f)` in IEEE-754 doubles. That was not a one-ulp
+   curiosity: at an EXACT-INTEGER boundary the `floor` named the break-even
+   round, while the mechanised `derivedCap` is `flipRound − 1` and the theorem
+   `safe_depth_bound` says break-even is NOT safe. Verified in round 46a at
+   `a_f = ½, β = 3ρ` (plain floats): the exported cap was 2, `E[π](2) = 0`, and
+   the GATE refused the very number it exported — report-vs-decision mismatch
+   (H-2) for any host that trusted the number instead of re-deriving. **Fixed in
+   R52:** the cap is now the predicate, evaluated in integers —
+   `R·D^d < A^d·(R+B)` on the exact rational each parameter names
+   (`0.03` → `3/100`) — identical at every boundary and everywhere else, so
+   `deriveMaxLadderRounds = flipRound − 1` (clamped) is now a code↔model
+   equality, not an approximation. What remains un-mechanised is only the
+   rounding of `escalationOptionEv` (a float REPORTING function that no decision
+   reads) and `ladderSignBoundary` (float telemetry: it can still overflow to
+   `+∞` where the exact path answers correctly). Property-locked over a
+   460-configuration grid in `__tests__/ladderBoundExact.test.ts` (independent
+   exact-rational oracle, boundary table, and the `d = A·B` witness).
 3. **The wire codec's canonicalisation.** UTF-8 injectivity of `caseId`
    (r8-1), the duplicate-key refusal (r8-4), the non-boolean `concession`
    refusal (r8-3), the singleton-read discipline (r8-5) and the v2 hash preimage

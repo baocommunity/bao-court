@@ -11,6 +11,36 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (round 52 — the exported ladder bound IS the safe predicate)
+- **`deriveMaxLadderRounds` named the BREAK-EVEN round at an exact-integer
+  boundary (r52-1; found by round 46a's mechanisation, class H-2).** The cap was
+  `min(MAX, floor(ln(ρ/(ρ+β))/ln a_f))`; at `a_f = ½, β = 3ρ` that `floor` lands
+  exactly on the break-even depth (`E[π](2) = 0`), which the safety contract —
+  strict `E[π](d) < 0` — EXCLUDES. The published gate `ladderCapWithinBound`
+  refused the exported cap, so the number a host reads and the decision the gate
+  makes disagreed by one round: the report-vs-decision mismatch class. Verified
+  at `a_f = ½, β = kρ` for `k = 3, 7, 15, 31` and at `a_f = ¾, β/ρ = 7/9`: the
+  old value was `flipRound`, the new value is `flipRound − 1`.
+  The cap is now the predicate itself, evaluated exactly — `R·D^d < A^d·(R+B)`
+  in `BigInt` on the rational each parameter names (`0.03` → `3/100`) — with no
+  logarithm and no floating-point comparison on the decision path. Boundary
+  semantics, now explicit in the docstring and the docs: **the returned depth is
+  the largest strictly-profitable-to-refuse depth; the break-even depth is not
+  included.** `deriveLadderFlipRound` is likewise the first depth that is not
+  strictly unprofitable (exact for every round a legal cap can reach), so
+  `deriveMaxLadderRounds = flipRound − 1` (clamped) holds at EVERY parameter
+  point. `ladderCapWithinBound().ok` uses the same exact predicate, so the gate,
+  `derivedCap` and the retired `cap <= derivedCap` composition now agree
+  (r40-4's divergence is gone). Side effects, both in the safe direction: a
+  `ρ+β` overflow (`1e308 + 1e308`) no longer reports a perfect jury (cap 5 →
+  0 — the ratio is exactly ½), and `ladderSignBoundary` is documented as float
+  telemetry that no decision reads.
+  **Consumer impact:** a cap may be one round SHALLOWER than before, and only at
+  an exact-integer boundary; no accepted escalation changes. New property suite
+  `__tests__/ladderBoundExact.test.ts`: 460-configuration grid against an
+  independent exact-rational oracle, the boundary table, and the Lean `d = A·B`
+  witness through the module's exports.
+
 ### Fixed (round-49 differential — the escalation wire reimplemented independently)
 - **The escalation mapper threw raw `TypeError`s on a restored snapshot
   (r49-d1).** `escalationRequestToMachineEvent` read `state.ladderRound` and

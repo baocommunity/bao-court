@@ -513,11 +513,12 @@ probe('S25', 'a_f at or below ρ/(ρ+β) derives 0 safe rounds and refuses every
   }
 });
 
-// ── S26 the gate is decided by the SIGN, not by derivedCap ────────────────
-probe('S26', 'an EXACT integer boundary: the cap at the flip round is refused (sign, not derivedCap)', () => {
+// ── S26 the cap IS the sign predicate, at an exact integer boundary too ───
+probe('S26', 'an EXACT integer boundary: the cap stops below break-even and the flip round is refused', () => {
   // a_f = 0.5, ρ = 1, β = 3 ⇒ ln(0.25)/ln(0.5) = 2 exactly: round 2 breaks even.
   const params = { a_f: 0.5, rho: 1, beta: 3 };
-  assert(ladder.deriveMaxLadderRounds(params) === 2, 'derived cap for an exact boundary is not 2');
+  assert(ladder.deriveMaxLadderRounds(params) === 1, 'the cap named the break-even round instead of stopping below it');
+  assert(ladder.deriveLadderFlipRound(params) === 2, 'the flip round is not the break-even round');
   assert(ladder.ladderCapWithinBound({ ...params, maxLadderRounds: 1 }).ok === true, 'the safe cap 1 was refused');
   assert(
     ladder.ladderCapWithinBound({ ...params, maxLadderRounds: 2 }).ok === false,

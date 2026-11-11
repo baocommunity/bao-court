@@ -293,15 +293,20 @@ order of operations, and it is the one to check before arming:
    host policy.
 3. **Cap the ladder from the measured accuracy** until every deployment is
    strict: `deriveMaxLadderRounds({ a_f, rho, beta })` is the boxed rule of
-   06 §1.5. Use `deriveLadderFlipRound` for alerting — it is the first round
-   that is *profitable* (7 at `a_f = 0.9`, 5 at 0.85, 3 at 0.75), one above the
-   safe cap (6/4/2, clamped to the machine ceiling 5). `ladderCapWithinBound`
-   returns the verdict plus both numbers for a refusal message; its `ok` is
-   sign-based (`cap < flipRound`), and `derivedCap = 0` means **no depth is
-   safe** — refuse the ladder (R33, r33-6). Read the SIGN-BASED verdict, not the
-   two integers: composing `cap <= derivedCap` is a different predicate, and it
-   blesses a break-even rung (`E[π] = 0`) whenever the boundary is an exact
-   integer — unreachable at ρ = β, reachable as soon as they differ (R40, r40-4).
+   06 §1.5, evaluated as the exact integer predicate (`E[π](d) < 0` strictly, so
+   the **break-even depth is not included**; R52). Use `deriveLadderFlipRound`
+   for alerting — it is the first round that is *not strictly unprofitable*
+   (7 at `a_f = 0.9`, 5 at 0.85, 3 at 0.75), one above the safe cap (6/4/2,
+   clamped to the machine ceiling 5) at every parameter point, exact-integer
+   boundaries included. `ladderCapWithinBound` returns the verdict plus both
+   numbers for a refusal message; its `ok` is the same sign predicate
+   (`E[π](cap) < 0`, equivalently `cap < flipRound`), and `derivedCap = 0` means
+   **no depth is safe** — refuse the ladder (R33, r33-6). Read the SIGN-BASED
+   verdict, or `derivedCap`, or the flip round: since R52 all three are the same
+   predicate, and the retired composition `cap <= derivedCap` now agrees with the
+   gate too (it used to bless a break-even rung whenever the boundary was an
+   exact integer — unreachable at ρ = β, reachable as soon as they differ; R40,
+   r40-4, fixed in R52).
    The host gates the *assumed* accuracy (0.85) at creation since R39, which is
    not a measurement: r33-7 stays open, and the boot backfill / NULL fallback
    paths still write the depth from the unbounded config (r40-5).

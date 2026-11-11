@@ -235,9 +235,12 @@ Two honest qualifiers, both of which cut against over-claiming:
 > per-round witness on a strict case, a relabelled membership bond, and a
 > consumed hash; `assertValidEscalationLog` re-derives the same three rules.
 > Matrix: `docs/PER_ROUND_BOND.md`. The boxed cap rule below is exported as
-> `deriveMaxLadderRounds` (safe cap, clamped to the machine ceiling) with its
-> companion `deriveLadderFlipRound` (the first profitable round — this section's
-> 7/5/4/3/2 column), and the schedule as `escalationBondMultiple` /
+> `deriveMaxLadderRounds` (the safe cap — the largest depth with `E[π] < 0`
+> strictly, **break-even excluded**, evaluated as the exact integer inequality
+> `R·D^d < A^d·(R+B)` since R52, clamped to the machine ceiling) with its
+> companion `deriveLadderFlipRound` (the first round that is not strictly
+> unprofitable — this section's 7/5/4/3/2 column, always exactly one above the
+> unclamped cap), and the schedule as `escalationBondMultiple` /
 > `cumulativeLadderBondMultiple`.
 
 **Registered, host (small, and the helper already exists).** The per-round

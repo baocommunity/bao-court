@@ -209,16 +209,23 @@ describe('T1 — the sign-rule predicate takes three parameters, two of them mon
     expect(deriveMaxLadderRounds(P(0.85, 3, 3))).toBe(deriveMaxLadderRounds(P(0.85, 0.03, 0.03)));
   });
 
-  it('(r41-T1) β ≠ ρ at an integral boundary: the sign rule REFUSES break-even (r40-4 regression lock)', () => {
+  it('(r41-T1, R52) β ≠ ρ at an integral boundary: the cap STOPS BELOW break-even (r40-4 regression lock)', () => {
     const p = P(0.5, 0.03, 0.09); // boundary exactly 2: a_f = ρ/(ρ+β)
     expect(ladderSignBoundary(p)).toBe(2);
-    expect(deriveMaxLadderRounds(p)).toBe(2);
+    // R52: the exported cap is the safe PREDICATE, so the break-even round is
+    // excluded from it (pre-R52 this returned 2 — the break-even round itself —
+    // while the gate refused cap 2: report-vs-decision mismatch, H-2).
+    expect(deriveMaxLadderRounds(p)).toBe(1);
     expect(deriveLadderFlipRound(p)).toBe(2);
     // E[π(2)] = 0 EXACTLY — a free option, not a deterrent.
     expect(escalationOptionEv({ ...p, rounds: 2 })).toBe(0);
+    expect(escalationOptionEv({ ...p, rounds: 1 })).toBeLessThan(0);
     expect(ladderCapWithinBound({ ...p, maxLadderRounds: 2 }).ok).toBe(false);
-    // What the retired composition (`cap <= derivedCap`) would have said:
-    expect(2 <= deriveMaxLadderRounds(p)).toBe(true);
+    expect(ladderCapWithinBound({ ...p, maxLadderRounds: 1 }).ok).toBe(true);
+    // The retired composition (`cap <= derivedCap`) now agrees with the gate at
+    // the boundary: cap 2 is above the derived cap 1, and cap 1 is inside it.
+    expect(2 <= deriveMaxLadderRounds(p)).toBe(false);
+    expect(1 <= deriveMaxLadderRounds(p)).toBe(true);
     // …and the depth one below the boundary is still safe at every β/ρ ratio
     // probed here, so the refusal is the break-even rung and nothing wider.
     for (const beta of [0.03, 0.05, 0.09, 0.15]) {
@@ -296,15 +303,17 @@ describe('T1 — the sign-rule predicate takes three parameters, two of them mon
     expect(ladderCapWithinBound({ a_f: 1, rho: 0.03, beta: 0.03, maxLadderRounds: 5 }).ok).toBe(true);
   });
 
-  it('(r41-T1) an overflowing ρ+β reads as a PERFECT jury (boundary = ∞ ⇒ cap 5)', () => {
-    // Not reachable with fractions of V (ρ+β ≤ 2), but the failure mode is
-    // silent: `Number.isFinite(boundary)` is the only test, so Infinity from
-    // overflow takes the same branch as `a_f = 1`. Pinned, not fixed: the
-    // package contract is a fraction of V, and tightening it here would change
-    // the documented `a_f = 1` semantics with it.
+  it('(r41-T1, R52) a bond that would overflow ρ+β in floats is still evaluated exactly', () => {
+    // Not reachable with fractions of V (ρ+β ≤ 2). Pre-R52 the float sum
+    // overflowed to Infinity, which took the `a_f = 1` branch and reported the
+    // ceiling; the exact-integer predicate has no such branch, so the verdict is
+    // the real one: ratio ρ/(ρ+β) = ½ = a_f ⇒ break-even at round 1 ⇒ no safe
+    // depth. `ladderSignBoundary` is still telemetry and still overflows.
     const p = { a_f: 0.5, rho: 1e308, beta: 1e308 };
     expect(ladderSignBoundary(p)).toBe(Number.POSITIVE_INFINITY);
-    expect(deriveMaxLadderRounds(p)).toBe(MAX_LADDER_ROUNDS);
+    expect(deriveMaxLadderRounds(p)).toBe(0);
+    expect(deriveLadderFlipRound(p)).toBe(1);
+    expect(ladderCapWithinBound({ ...p, maxLadderRounds: 1 }).ok).toBe(false);
   });
 
   it('(r41-T1) `derivedCap = 0` means "refuse every ladder", and no cap 1..5 is blessed', () => {
