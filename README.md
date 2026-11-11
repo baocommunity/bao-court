@@ -49,6 +49,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`REVIEW_SIMULATION.md`](docs/REVIEW_SIMULATION.md) | external-review simulation: reviewer findings and dispositions |
 | [`TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | how the test suite is organized; how to add tests the house way |
 | [`benchmarks/SCALE_CAMPAIGN.md`](docs/benchmarks/SCALE_CAMPAIGN.md) | the large-corpus campaign: 1.17M seeded cases / 3.5M assertions across the six production surfaces, the committed artifact, and what the sizes buy statistically |
+| [`MUTATION_TESTING.md`](docs/MUTATION_TESTING.md) | the spec's blindness audit: 53 mutants × 18 bug classes, 3 detectors, the 7 survivors found and the pins that close them |
 | [`REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) | one-command reproduction contract (`scripts/reproduce.sh`), variance bounds, committed repro record |
 | [`ESCROW-SLASHING.md`](docs/ESCROW-SLASHING.md) | escrow lifecycle and slashing math |
 | [`SETTLEMENT-RAILS.md`](docs/SETTLEMENT-RAILS.md) | settlement-rail contracts (Panel A Lightning, Panel B Liquid) |
@@ -475,7 +476,7 @@ winning_secret_commitment`.
 
 ```bash
 npm install        # installs runtime deps (noble, nostr-tools, @vbyte/frost)
-npm test           # vitest suite (1,520 passing; 1 env-gated live test skipped)
+npm test           # vitest suite (1,534 passing; 1 env-gated live test skipped)
 npm run test:live   # env-gated elementsregtest taproot spend proof
                     # (needs BAO_LIVE_TAPROOT=true + host-injected targets)
 npm run typecheck  # tsc --noEmit

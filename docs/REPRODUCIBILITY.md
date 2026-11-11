@@ -22,7 +22,7 @@ exact pre-run bytes restored afterwards).
 |---|---|---|---|
 | a | clean-environment check | Node ≥ 22, npm, git, lockfile present; warns if tree is dirty | none (boolean) |
 | b | `npm ci` | lockfile-exact dependency install | registry latency only |
-| c | `npm test` (full suite) → json + junit | the full suite is green (1,492 passed / 1 skipped at the 2026-11-10 record; pass-counts re-pinned per round in CROSS_CHECK §1); machine-readable reports | pass/fail is boolean; wall time is load-dependent |
+| c | `npm test` (full suite) → json + junit | the full suite is green (1,534 passed / 1 skipped at the 2026-11-11 record; pass-counts re-pinned per round in CROSS_CHECK §1); machine-readable reports | pass/fail is boolean; wall time is load-dependent |
 | d | typechecks ×3 | `tsc --noEmit` green for impl / scripts / tests | none (boolean) |
 | e | `simulate:court` | end-to-end deterministic whole-court sim ends `RESULT: ALL GREEN` | none (seeded; same seed → same result, asserted in-suite) |
 | f | `model-check --fast` + fixture comparison | state-space sweep is **digit-identical** to the committed fixture `__fixtures__/model-check-summary.json` (only timing fields excluded) | digits: **zero tolerance**; wall time: load-dependent |

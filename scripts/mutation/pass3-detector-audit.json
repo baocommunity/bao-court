@@ -1,0 +1,230 @@
+{
+  "tool": "scripts/mutation/run-mutants.mjs",
+  "generatedAt": "2026-11-11T01:31:47.795Z",
+  "repoRoot": "/home/bob/Documents/bao-court--test-mutation",
+  "precision": "single semantic mutation per source file, applied to a sandbox copy",
+  "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+  "cleanTree": {
+    "pristineBefore": "M README.md\n M docs/CROSS_CHECK.md\n M docs/EVALUATION.md\n M docs/MUTATION_TESTING.md\n M docs/REPRODUCIBILITY.md\n M docs/TESTING_GUIDE.md\n M docs/presentation/DEMO_SCRIPT.md\n M scripts/mutation/pass2-postclosure.json",
+    "pristineAfter": "M README.md\n M docs/CROSS_CHECK.md\n M docs/EVALUATION.md\n M docs/MUTATION_TESTING.md\n M docs/REPRODUCIBILITY.md\n M docs/TESTING_GUIDE.md\n M docs/presentation/DEMO_SCRIPT.md\n M scripts/mutation/pass2-postclosure.json",
+    "trackedTreeUnchanged": true,
+    "sourceFilesHashed": [
+      "courtCeremonyCore.ts",
+      "confirmationMachineHandlers.ts",
+      "courtVoteMachine.ts",
+      "selection.ts",
+      "courtSigningMachine.ts",
+      "validator.ts",
+      "courtConfirmationMachine.ts",
+      "batchAttestation.ts",
+      "courtSession.ts"
+    ],
+    "sourceFilesUnchanged": true,
+    "unchanged": true
+  },
+  "parallelism": 3,
+  "testTimeoutSec": 420,
+  "baseline": {
+    "totalTests": 1506,
+    "passedTests": 1505,
+    "failedTests": 0,
+    "failedSuites": 0,
+    "failing": [],
+    "success": true,
+    "wallMs": 46725
+  },
+  "summary": {
+    "total": 3,
+    "captured": 2,
+    "survived": 1,
+    "score": 0.6666666666666666,
+    "byClass": {
+      "phase-guard-loosened": {
+        "description": "terminal-phase guard loosened (post-terminal event accepted)",
+        "total": 1,
+        "captured": 0,
+        "score": 0,
+        "survivors": [
+          "M40"
+        ]
+      },
+      "hex-case": {
+        "description": "uppercase hex accepted where canonical lowercase is required",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "proof-bounds": {
+        "description": "batch proof/duplicate bounds loosened",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      }
+    },
+    "byDetector": {
+      "tests": {
+        "total": 3,
+        "captured": 2,
+        "score": 0.6666666666666666
+      },
+      "spot": {
+        "total": 3,
+        "captured": 1,
+        "score": 0.3333333333333333
+      },
+      "model": {
+        "total": 3,
+        "captured": 0,
+        "score": 0,
+        "applicable": 1,
+        "scoreApplicable": 0
+      }
+    },
+    "survivors": [
+      {
+        "id": "M40",
+        "cls": "phase-guard-loosened",
+        "file": "courtVoteMachine.ts",
+        "intent": "same guard removal in the vote machine"
+      }
+    ],
+    "baselineTests": 1506
+  },
+  "mutants": [
+    {
+      "id": "M40",
+      "cls": "phase-guard-loosened",
+      "file": "courtVoteMachine.ts",
+      "intent": "same guard removal in the vote machine",
+      "machine": "vote",
+      "captured": false,
+      "capturedBy": [],
+      "detectors": {
+        "tests": false,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 0,
+        "failedSuites": 0,
+        "failing": [],
+        "wallMs": 76801
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 746
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "vote n=2 k=2 [probe]",
+            "ok": true,
+            "states": 2650,
+            "wallMs": 832
+          },
+          {
+            "name": "vote n=2 k=3 [probe]",
+            "ok": true,
+            "states": 5482,
+            "wallMs": 4380
+          }
+        ],
+        "wallMs": 5553
+      },
+      "wallMs": 82360
+    },
+    {
+      "id": "M47",
+      "cls": "hex-case",
+      "file": "courtSession.ts",
+      "intent": "same uppercase acceptance in the session encoder",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-wlP5Ws/work-2/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C8 (M47) — canonical session params reject uppercase hex rejects an UPPERCASE block hash (one value, two spellings)",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 76063
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 840
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 76075
+    },
+    {
+      "id": "M52",
+      "cls": "proof-bounds",
+      "file": "batchAttestation.ts",
+      "intent": "proof index bound off-by-one: index === count is treated as inside the batch",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests",
+        "spot"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": true,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-wlP5Ws/work-1/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C9 (M52) — proof index bound is index < count rejects index === count before recomputing the root",
+            "message": "AssertionError: expected 'Proof does not recompute the batch ro…' to match /outside the declared batch count/"
+          }
+        ],
+        "wallMs": 76104
+      },
+      "spot": {
+        "failed": [
+          {
+            "id": "S17",
+            "error": "Error: unexpected reason: Proof does not recompute the batch root"
+          }
+        ],
+        "wallMs": 743
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 76123
+    }
+  ]
+}

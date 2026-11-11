@@ -203,7 +203,7 @@ confession."
 ```
 
 **Say:** "One command from a clean clone — `bash scripts/reproduce.sh` —
-regenerates every artifact the paper cites: the full 1,492-test suite, three
+regenerates every artifact the paper cites: the full 1,534-test suite, three
 typechecks, the simulation, the model-check fixture **digit-identical**,
 bench within ±20% of baseline, the cross-check, and the contract-suite
 pass-counts. Total: 17 minutes. This is the committed run — and the model

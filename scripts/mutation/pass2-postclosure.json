@@ -1,0 +1,425 @@
+{
+  "tool": "scripts/mutation/run-mutants.mjs",
+  "generatedAt": "2026-11-11T01:25:36.484Z",
+  "repoRoot": "/home/bob/Documents/bao-court--test-mutation",
+  "precision": "single semantic mutation per source file, applied to a sandbox copy",
+  "testDetectorScope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+  "cleanTree": {
+    "pristineBefore": "M README.md\n M docs/CROSS_CHECK.md\n M docs/EVALUATION.md\n M docs/MUTATION_TESTING.md\n M docs/REPRODUCIBILITY.md\n M docs/TESTING_GUIDE.md\n M docs/presentation/DEMO_SCRIPT.md",
+    "pristineAfter": "M README.md\n M docs/CROSS_CHECK.md\n M docs/EVALUATION.md\n M docs/MUTATION_TESTING.md\n M docs/REPRODUCIBILITY.md\n M docs/TESTING_GUIDE.md\n M docs/presentation/DEMO_SCRIPT.md",
+    "trackedTreeUnchanged": true,
+    "sourceFilesHashed": [
+      "courtCeremonyCore.ts",
+      "confirmationMachineHandlers.ts",
+      "courtVoteMachine.ts",
+      "selection.ts",
+      "courtSigningMachine.ts",
+      "validator.ts",
+      "courtConfirmationMachine.ts",
+      "batchAttestation.ts",
+      "courtSession.ts"
+    ],
+    "sourceFilesUnchanged": true,
+    "unchanged": true
+  },
+  "parallelism": 3,
+  "testTimeoutSec": 420,
+  "baseline": {
+    "totalTests": 1506,
+    "passedTests": 1505,
+    "failedTests": 0,
+    "failedSuites": 0,
+    "failing": [],
+    "success": true,
+    "wallMs": 38844
+  },
+  "summary": {
+    "total": 7,
+    "captured": 7,
+    "survived": 0,
+    "score": 1,
+    "byClass": {
+      "tie-break-reversal": {
+        "description": "deterministic tie-break order (UTF-8 bytes vs UTF-16 units)",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "ledger-barrier-removed": {
+        "description": "ledger barrier (assertValid*) skipped",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "clamp-boundary": {
+        "description": "clamp / boundary comparison flipped (>= vs >)",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "signer-set-check-dropped": {
+        "description": "signer-set length / freeze check dropped",
+        "total": 2,
+        "captured": 2,
+        "score": 1,
+        "survivors": []
+      },
+      "cap-off-by-one": {
+        "description": "cap boundary off-by-one (attempt/round/batch cap)",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      },
+      "clawback-dedup-removed": {
+        "description": "clawback flag dedup removed",
+        "total": 1,
+        "captured": 1,
+        "score": 1,
+        "survivors": []
+      }
+    },
+    "byDetector": {
+      "tests": {
+        "total": 7,
+        "captured": 7,
+        "score": 1
+      },
+      "spot": {
+        "total": 7,
+        "captured": 0,
+        "score": 0
+      },
+      "model": {
+        "total": 7,
+        "captured": 0,
+        "score": 0,
+        "applicable": 3,
+        "scoreApplicable": 0
+      }
+    },
+    "survivors": [],
+    "baselineTests": 1506
+  },
+  "mutants": [
+    {
+      "id": "M07",
+      "cls": "tie-break-reversal",
+      "file": "selection.ts",
+      "intent": "exact-priority ties rank pubkeys descending — the draw stops being reproducible across implementations",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C5 (M07) — jury draw tie-break is pubkey-ascending orders exactly-tied jurors by ascending pubkey bytes (not descending)",
+            "message": "AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]"
+          }
+        ],
+        "wallMs": 55022
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 654
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 55031
+    },
+    {
+      "id": "M15",
+      "cls": "ledger-barrier-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "resolve_round takes clawback indices from an unverified confirmation ledger",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-2/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C3 (M15) — resolve_round re-verifies the confirmation ledger refuses to resolve on a confirmation ledger whose hashes were never accepted",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 55186
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 652
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 40573
+          }
+        ],
+        "wallMs": 41109
+      },
+      "wallMs": 96314
+    },
+    {
+      "id": "M24",
+      "cls": "clamp-boundary",
+      "file": "selection.ts",
+      "intent": "r = 1 escapes the clamp → priority 0 → that juror deterministically wins every draw",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-1/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C6 (M24) — quadraticPriority clamps r = 1 clamps r = 1 to 1 - EPS (a positive priority, never 0)",
+            "message": "AssertionError: expected 0 to be greater than 0"
+          }
+        ],
+        "wallMs": 55132
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 766
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 55149
+    },
+    {
+      "id": "M30",
+      "cls": "signer-set-check-dropped",
+      "file": "validator.ts",
+      "intent": "a signer set of any size paired with any declared threshold validates (signerSet root still matches its own set)",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 2,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C1 (M30) — v2 finality: |signerSet| must equal threshold rejects a correctly-rooted signer set that is smaller than the threshold",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          },
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C1 (M30) — v2 finality: |signerSet| must equal threshold rejects a correctly-rooted signer set that is LARGER than the threshold",
+            "message": "AssertionError: expected true to be false // Object.is equality"
+          }
+        ],
+        "wallMs": 50926
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 569
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 50938
+    },
+    {
+      "id": "M31",
+      "cls": "signer-set-check-dropped",
+      "file": "courtSigningMachine.ts",
+      "intent": "a restored signing state's frozen signer set is no longer re-verified against the stored commitments (A-1)",
+      "machine": "signing",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-1/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C2 (M31) — signing restore barrier: finalizedSignerSet ⊆ commitments rejects a restored signer set that is a PREFIX of the committed set",
+            "message": "AssertionError: expected [Function] to throw an error"
+          }
+        ],
+        "wallMs": 50800
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 594
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "signing n=2 t=1 [inline clock 4/8]",
+            "ok": true,
+            "states": 877,
+            "wallMs": 758
+          },
+          {
+            "name": "signing n=3 t=2 [inline clock 4/8]",
+            "ok": true,
+            "states": 6862,
+            "wallMs": 5295
+          }
+        ],
+        "wallMs": 6522
+      },
+      "wallMs": 57329
+    },
+    {
+      "id": "M35",
+      "cls": "cap-off-by-one",
+      "file": "batchAttestation.ts",
+      "intent": "batch cap off-by-one: exactly MAX_BATCH_VERDICTS is refused",
+      "machine": null,
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-2/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C7 (M35) — batch size cap is inclusive at MAX accepts exactly MAX_BATCH_VERDICTS leaves",
+            "message": "BatchAttestationError: verdictHashes length 10000 exceeds maximum of 10000"
+          }
+        ],
+        "wallMs": 51781
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 589
+      },
+      "model": {
+        "instances": [],
+        "note": "not modelled (no phase machine in this file)",
+        "wallMs": 0
+      },
+      "wallMs": 51794
+    },
+    {
+      "id": "M37",
+      "cls": "clawback-dedup-removed",
+      "file": "confirmationMachineHandlers.ts",
+      "intent": "round_flip flags duplicate per voter (idempotence of the flip-flop rule broken)",
+      "machine": "confirmation",
+      "captured": true,
+      "capturedBy": [
+        "tests"
+      ],
+      "detectors": {
+        "tests": true,
+        "spot": false,
+        "model": false
+      },
+      "tests": {
+        "scope": "full suite minus __tests__/modelChecking.test.ts (Detector B) and __tests__/simulateCourt.test.ts (wall-clock budget gate)",
+        "timedOut": false,
+        "hitCap": false,
+        "failedTests": 1,
+        "failedSuites": 0,
+        "failing": [
+          {
+            "file": "/tmp/bao-court-mutation-obRSP3/work-0/__tests__/mutationClosures.test.ts",
+            "name": "mutation closure C4 (M37) — round_flip flags stay idempotent does not duplicate a round_flip flag already present for that round",
+            "message": "AssertionError: expected [ 1, 1, 2 ] to deeply equal [ 1, 2 ]"
+          }
+        ],
+        "wallMs": 51054
+      },
+      "spot": {
+        "failed": [],
+        "wallMs": 601
+      },
+      "model": {
+        "instances": [
+          {
+            "name": "confirm n=3 q=1 r=2 [probe clock 4/8/10]",
+            "ok": true,
+            "states": 108157,
+            "wallMs": 42435
+          }
+        ],
+        "wallMs": 42873
+      },
+      "wallMs": 93937
+    }
+  ]
+}

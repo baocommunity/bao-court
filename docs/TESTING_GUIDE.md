@@ -4,7 +4,7 @@ How the test suite is organized, what each category verifies, and how to add
 a test the house way. Read this before writing your first test here.
 
 ```
-npm test                        # full suite (62 files, 1,520 tests + 1 env-gated live test)
+npm test                        # full suite (64 files, 1,534 tests + 1 env-gated live test)
 npm run campaign                # scale campaign FAST subset (== the scaleCampaign tests)
 npm run campaign:full           # scale campaign FULL corpus → docs/benchmarks/campaign-<date>.json
 npx vitest run <file>           # one file
@@ -30,6 +30,7 @@ Every test must pass deterministically — no sleeps, no `Date.now()`, no
 | **Pipeline / E2E** | `confirmationPipeline.test.ts`, `settlementE2E.test.ts`, `simulateCourt.test.ts`, `multiRoundLadder.test.ts` | Modules interlocking with real cryptography: cohort → confirmation machine → verdict → Merkle batch → attestation → finality binding → epoch handoff. |
 | **Invariant assertions** | `invariantAssertions.test.ts` | The INV-X-* cross-machine invariants from `docs/FORMAL_INVARIANTS.md`, expressed as executable fixtures (deadline precedence, monotonic ledger, signed-domain separation). |
 | **Regressions / findings** | `regressions.test.ts`, `r3Findings.test.ts`, `hardening20260815.test.ts` | Every past finding is a permanent named lock (r3-1, F-12, …). New findings get a test here, named after the finding. |
+| **Mutation closure** | `mutationClosures.test.ts` | Pins C1–C9: each asserts the one boundary a mutant moved in `scripts/mutation/` (`docs/MUTATION_TESTING.md`). A pin must fail when its mutant is re-applied — the sweep proves it does. |
 | **Vectors / crypto audit** | `cryptoLiteratureAudit.test.ts` | Known-answer vectors from the cryptographic literature (RFC 6962-style folds, NIP-44 vectors). |
 | **Escrow / rails** | `escrow.test.ts`, `taprootSpend.test.ts`, `lnSettlement.test.ts`, `bondVerification.test.ts`, `liquidEscrow.test.ts` | Settlement-rail contracts against the fakes/real-minicraft scripts (Taproot key-path spends, LN hold invoices, covenant PSETs). |
 | **Scale campaign** | `scale/scaleCampaign.test.ts` + `scale/*Corpus.ts` (`scripts/campaign/run-campaign.mjs`) | The large-corpus campaigns over six production surfaces — confirmation sequences, plurality tallies, Merkle batches, signed v2 attestations, jury selection, canonical encodings. `npm test` runs the declared FAST subset; the FULL corpus is the standalone runner, whose JSON artifact is committed under `docs/benchmarks/`. Read `docs/benchmarks/SCALE_CAMPAIGN.md` before changing a corpus size or the artifact. |

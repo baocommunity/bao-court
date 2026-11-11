@@ -46,6 +46,39 @@ frozen.
   found and fixed by the campaign itself (a no-op forgery mutation that left a
   genuinely valid event).
 
+### Added (mutation testing — symposium round 21)
+
+- **`scripts/mutation/` — a mutation-testing harness with three independent
+  detectors:** a 53-mutant / 18-bug-class catalogue (`mutants.mjs`), a
+  sandboxed runner with a green-baseline gate, an exactly-once ambiguity guard,
+  a clean-tree assertion and per-mutant checkpointing (`run-mutants.mjs`), a
+  bounded model-explorer probe (`model-probe.mjs`), and 18 black-box invariant
+  probes (`spot-check.mjs`). Detector A is the vitest battery, B the exhaustive
+  explorer over the reduced machine instances, C the invariant spot-check.
+- **`docs/MUTATION_TESTING.md` — the campaign record.** Pass 1 (as found on the
+  pre-R25 base): **86.8 %** (46/53) with **7 survivors** — M07 jury tie-break
+  order, M15 `resolve_round` ledger barrier, M24 `r = 1` clamp, M30/M31
+  signer-set freeze (the worst class, 0/2), M35 batch cap, M37 `round_flip`
+  clawback idempotence. Per detector: A 83.0 %, B 31.3 % of the 32
+  machine-attached mutants, C 43.4 % — and B missed 3 survivors the explorer
+  walks exhaustively, i.e. exhaustive reachability is not exhaustive property
+  coverage.
+- **`__tests__/mutationClosures.test.ts` — 9 pin groups / 14 tests.** C1–C7
+  close the 7 survivors; C8 closes an eighth (M47) whose pass-1 capture turned
+  out to be the end-to-end test's 5 s wall-clock budget failing under load, not a
+  behavioural assertion; C9 hardens M52 (already caught by spot probe S17). Pass
+  2 re-applies every survivor to a sandbox containing the pins: **7/7 caught, 0
+  survived, clean tree PRISTINE**; pass 3 adjudicates the two wall-clock captures
+  (M47 caught by C8 alone; **M40 is an equivalent mutant** — every vote handler
+  re-checks its own phase, so removing the reducer-wide guard only changes the
+  error text). Post-closure score **52/52 applicable (100 %)**, detector A
+  50/52 (96.2 %), one known equivalent mutant left in the catalogue on purpose.
+- **Finding for CI, not just for the sweep:** two of 46 pass-1 captures (4 %)
+  were a performance assertion failing under load, and the same `simulateCourt`
+  5 s budget made full-suite runs red on a loaded box with no code change. Tight
+  wall-clock gates corrupt both mutation verdicts and CI; see
+  `docs/MUTATION_TESTING.md` §7.
+
 ### Changed (parameter hardening — R25, from the R22b quantitative findings)
 
 - **`confirmQuorum` default is now the roster supermajority ⌈2N/3⌉, not 1.**
