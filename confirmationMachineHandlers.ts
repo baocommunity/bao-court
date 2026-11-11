@@ -778,6 +778,15 @@ export function onFlagClawback(
       `cannot flag clawbacks during ${state.phase}`,
     );
   }
+  // One round number per case (r11-3). This is the only reader of the ladder
+  // counters the r10-4 sweep missed: the flag record below is stamped with
+  // `state.ladderRound`, so a restored `fee_settlement` snapshot whose two
+  // counters disagree wrote a clawback attributed to a round the ladder never
+  // opened (measured: `ladderRound 3`, `ladder.round 2` → a round-3 flag on a
+  // round-2 case). The record is an audit/fee input, not a verdict input, which
+  // is why this is the lowest-severity entry on the list — and still the same
+  // class: a persisted round number picked by side effect.
+  assertRoundCountersAgree(state);
   assertParticipant(state, event.idx);
   if (
     typeof event.reason !== 'string'

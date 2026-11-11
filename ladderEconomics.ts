@@ -39,7 +39,22 @@
  * `BigInt`. There is no logarithm and no floating-point comparison left on the
  * decision path, so an exact boundary cannot round in either direction, and
  * `β = 3ρ` — exact in decimal policy arithmetic, off by an ulp in binary — is
- * seen as the boundary the document derives.
+ * seen as the boundary the document derives *for the decimal the parameter
+ * names*.
+ *
+ * ROUND 11 MEASURED THE EDGE OF THAT SENTENCE (r11-5). The input is a `number`,
+ * and a number is rationalised as `String(value)` — its own shortest
+ * round-trip text — so a policy constant expressed by ARITHMETIC carries the
+ * binary fuzz into the bound: `beta: 3 * 0.1` names `0.30000000000000004`, a
+ * DIFFERENT rational from `0.3`, and at the exact boundary `a_f = ½, β = 3ρ`
+ * that spelling returns cap 2 where the strict predicate allows 1 — with
+ * `ladderCapWithinBound` reporting `ok: true` for the break-even round. The
+ * exactness this module proves is exactness about the PARAMETER VALUE, never
+ * about the policy it was computed from. A host that must sit on the boundary
+ * passes the literal decimal (`beta: 0.3`); a host that wants to pass policy
+ * TEXT has no route today (string parameters are refused by design — the
+ * `a_f as a string` pin in `__tests__/reviewRound5.test.ts`), which is the
+ * deferred half of the finding (see `docs/REVIEW_ROUND_11.md` §4).
  *
  * Boundary semantics, stated once
  * ------------------------------
@@ -255,6 +270,10 @@ export function ladderSignBoundary(params: LadderParameters): number {
  * deriveMaxLadderRounds({ a_f: 0.75, rho: 0.03, beta: 0.03 }); // 2 (derivation 2.41)
  * deriveMaxLadderRounds({ a_f: 0.45, rho: 0.03, beta: 0.03 }); // 0 (no safe depth)
  * deriveMaxLadderRounds({ a_f: 0.5, rho: 1, beta: 3 });        // 1 (boundary 2 = break-even, excluded)
+ *
+ * deriveMaxLadderRounds({ a_f: 0.5, rho: 0.1, beta: 0.3 });    // 1 (β = 3ρ exactly)
+ * deriveMaxLadderRounds({ a_f: 0.5, rho: 0.1, beta: 3 * 0.1 });// 2 (β = 0.30000000000000004,
+ *                                                             //    the ulp spelling — r11-5)
  * ```
  */
 export function deriveMaxLadderRounds(params: LadderParameters): number {

@@ -491,9 +491,19 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
  * `ladder.round = 2` passed every barrier `finalize` runs and minted ROUND 2's
  * verdict over the round the last paid panel actually decided
  * (`docs/REVIEW_ROUND_10.md` §4). The invariant therefore lives here — beside
- * the barriers — and is enforced at the ONE point every event passes (the
- * reducer's pre-dispatch block), so no present or future transition inherits
- * the gap.
+ * the barriers — and is enforced by every entry that CONSUMES a round number:
+ * `finalize`, `escalate`, `open_ladder_round` (r10-4), `resolve_round` (r9-4),
+ * the transport mapper (r9-4) and `flag_clawback` (r11-3, which persisted the
+ * counter into a clawback record). It is deliberately NOT a pre-dispatch barrier:
+ * three existing pins construct a skewed snapshot on purpose to exercise the
+ * OTHER guards it exists to test, and preempting them would cost the suite its
+ * teeth (`docs/REVIEW_ROUND_10.md` §4.4) — so the list of entries is the
+ * invariant, and `reviewRound11.test.ts` sweeps it.
+ *
+ * Round 11 measured that this doc comment claimed the pre-dispatch placement the
+ * round-10 write-up had explicitly reverted, and that the barrier's own refusal
+ * echoed the (snapshot-shaped) counters verbatim (r11-1: a restored
+ * `ladderRound: "3\nESCALATION ACCEPTED"` forged a log line). Both corrected.
  */
 export function assertRoundCountersAgree(state: CourtConfirmationMachineState): void {
   const ladder = state.ladder;
@@ -502,12 +512,25 @@ export function assertRoundCountersAgree(state: CourtConfirmationMachineState): 
   if (ladder === undefined || ladder === null) return;
   if (ladder.round !== state.ladderRound) {
     throw new CourtConfirmationTransitionError(
-      `the round counters disagree: ladderRound is ${String(state.ladderRound)} but the open round is `
-      + `${String(ladder.round)} — the machine writes both in the same transition, and the history `
-      + 'rule reads one while every escalation rule reads the other, so a restored snapshot with two '
-      + 'round numbers is not one it could have produced (r9-4/r10-4)',
+      `the round counters disagree: ladderRound is ${quoteCounter(state.ladderRound)} but the open `
+      + `round is ${quoteCounter(ladder.round)} — the machine writes both in the same transition, and `
+      + 'the history rule reads one while every escalation rule reads the other, so a restored snapshot '
+      + 'with two round numbers is not one it could have produced (r9-4/r10-4)',
     );
   }
+}
+
+/**
+ * A round counter for a refusal message (r11-1). A restored snapshot can carry
+ * ANY value here — that is the state this barrier exists to refuse — so the
+ * echo must be total: a non-integer is described, never stringified (a
+ * `toString` on a restored object runs caller code and can throw, and a string
+ * counter would put its newlines straight into the operator's log).
+ */
+function quoteCounter(value: unknown): string {
+  return typeof value === 'number' && Number.isSafeInteger(value)
+    ? String(value)
+    : '<not an integer>';
 }
 
 /**
