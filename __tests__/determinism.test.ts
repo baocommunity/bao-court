@@ -224,8 +224,12 @@ describe('determinism: the static rules hold across the whole suite', () => {
     // exactly the shape that flaked in round 10. Subprocess option timeouts
     // (`spawnSync`, `execFile`) are watchdogs too, so they go through wd()
     // for the same reason.
+    // Same allowlist as the timer rule: the env-gated LIVE taproot test waits on
+    // a real network and is not part of `npm test`.
+    const ALLOWLIST = new Set(['__tests__/taprootSpend-live.test.ts']);
     const offenders: string[] = [];
     for (const file of files) {
+      if (ALLOWLIST.has(relative(REPO, file))) continue;
       const source = stripComments(readFileSync(file, 'utf8'));
       const lines = source.split('\n');
       lines.forEach((line, i) => {
@@ -238,6 +242,13 @@ describe('determinism: the static rules hold across the whole suite', () => {
         // argument of `it(name, fn, TIMEOUT)`. (Threshold 5 s: the harness
         // default is 5 s, so a smaller positional number is always a real
         // argument — a fee, a clock literal — never a watchdog.)
+        // Inline positional form: `}, 60_000);` — the third argument of
+        // `it(name, fn, TIMEOUT)` written on one line.
+        const inline = /^\s*\}\s*,\s*([0-9][0-9_]*)\s*,?\s*\)\s*;?\s*$/.exec(line);
+        if (inline && Number(inline[1]!.replace(/_/g, '')) >= 5_000) {
+          offenders.push(`${relative(REPO, file)}:${i + 1}: ${line.trim().slice(0, 100)}`);
+          return;
+        }
         if (/^\s*[0-9][0-9_]*\s*,?\s*$/.test(line)) {
           const value = Number(line.trim().replace(/[,_]/g, ''));
           let next = i + 1;

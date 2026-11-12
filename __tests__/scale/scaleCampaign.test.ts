@@ -261,7 +261,7 @@ describe('scale campaign: verdict finality chains', () => {
 });
 
 describe('scale campaign: escalation-request transport (v0.14.0 wire)', () => {
-  it('fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement', { timeout: 300_000 }, () => {
+  it('fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement', { timeout: wd(300_000) }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['escalationTransport'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -289,7 +289,7 @@ describe('scale campaign: escalation-request transport (v0.14.0 wire)', () => {
 });
 
 describe('scale campaign: restored-snapshot ledger barriers', () => {
-  it('accepts every reducer-reachable state and matches the independent oracle on every forged one', { timeout: 300_000 }, () => {
+  it('accepts every reducer-reachable state and matches the independent oracle on every forged one', { timeout: wd(300_000) }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['ledgerBarrier'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -314,7 +314,7 @@ describe('scale campaign: restored-snapshot ledger barriers', () => {
 });
 
 describe('scale campaign: per-round bond consumption', () => {
-  it('binds one hash to one index, never re-consumes a witness, and matches the 3^R schedule', { timeout: 300_000 }, () => {
+  it('binds one hash to one index, never re-consumes a witness, and matches the 3^R schedule', { timeout: wd(300_000) }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['bondAlgebra'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
