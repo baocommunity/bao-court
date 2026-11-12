@@ -425,6 +425,24 @@ function faultScenarios() {
   return new Set(ROTATION.filter((s) => !s.expectSignature).map((s) => s.name));
 }
 
+/**
+ * The armed timer's next elapse, straight from systemd (`--user`), or null when
+ * no timer is installed (a manual/cron deployment). Never fatal: status must
+ * work on a box where the timer was never installed.
+ */
+function systemdNextElapse() {
+  const r = spawnSync('systemctl', [
+    '--user', 'show', 'bao-court-ceremony-soak.timer',
+    '-p', 'NextElapseUSecRealtime', '-p', 'ActiveState', '--no-pager',
+  ], { encoding: 'utf8', timeout: 5000 });
+  if (r.status !== 0) return null;
+  const next = /NextElapseUSecRealtime=(.+)/.exec(r.stdout ?? '')?.[1]?.trim();
+  if (!next || next === 'n/a') return null;
+  // `systemctl show` prints a timestamp like "Thu 2026-11-12 18:02:03 GMT".
+  const parsed = new Date(next);
+  return Number.isNaN(parsed.getTime()) ? null : { next: parsed.toISOString(), raw: next };
+}
+
 function statusBlock(records, state) {
   const runs = records.filter((r) => r.outcome && r.outcome !== 'gap');
   const byScenario = {};
@@ -447,7 +465,11 @@ function statusBlock(records, state) {
   const last = runs[runs.length - 1] ?? null;
   const gaps = records.filter((r) => r.outcome === 'gap').length;
   const paused = existsSync(PAUSE);
-  const nextRunMs = paused || !state.lastRunTs ? null : state.lastRunTs + intervalHours * 3600_000;
+  // `nextCadenceSlot` is arithmetic (last run + cadence). The AUTHORITY on the
+  // next run is the systemd timer: read it when it is installed, so status
+  // never claims a time the scheduler is not going to keep.
+  const nextCadenceMs = paused || !state.lastRunTs ? null : state.lastRunTs + intervalHours * 3600_000;
+  const nextSystemd = systemdNextElapse();
 
   return {
     host: hostname(),
@@ -468,7 +490,9 @@ function statusBlock(records, state) {
     lastFailure: lastFailure
       ? { ts: lastFailure.ts, scenario: lastFailure.scenario, outcome: lastFailure.outcome, classification: lastFailure.classification }
       : null,
-    nextRunAt: nextRunMs ? new Date(nextRunMs).toISOString() : null,
+    nextCadenceSlot: nextCadenceMs ? new Date(nextCadenceMs).toISOString() : null,
+    nextRunAt: nextSystemd?.next ?? (nextCadenceMs ? new Date(nextCadenceMs).toISOString() : null),
+    nextRunSource: nextSystemd ? 'systemd timer' : 'last run + cadence',
     consecutiveFailures: state.consecutiveFailures ?? 0,
     /** The honest line. Never drop it from the output. */
     note: 'Four boxes owned by ONE operator on one network path: a continuous '
@@ -490,7 +514,7 @@ function printStatus(block) {
   console.log(`  classifications: ${Object.entries(block.classificationHistogram).map(([k, v]) => `${k}:${v}`).join('  ') || '—'}`);
   console.log(`  last run: ${block.lastRun ? `${block.lastRun.ts} ${block.lastRun.scenario} ${block.lastRun.outcome}` : '—'}`);
   console.log(`  last failure: ${block.lastFailure ? `${block.lastFailure.ts} ${block.lastFailure.scenario} ${block.lastFailure.outcome} (${block.lastFailure.classification})` : 'none'}`);
-  console.log(`  next run: ${block.nextRunAt ?? (block.paused ? 'paused' : 'on timer')}`);
+  console.log(`  next run: ${block.nextRunAt ?? (block.paused ? 'paused' : 'on timer')}  (${block.nextRunSource})`);
   console.log(`  NOTE: ${block.note}`);
 }
 
