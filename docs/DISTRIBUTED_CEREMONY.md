@@ -67,6 +67,13 @@ coordinator's own machine as a participant proves less. It coordinates only.
 
 ## 2. Roster shape: bond reference (carried now, verified later)
 
+> **Round 53 update:** the reference is no longer carry-only. With
+> `BAO_COURT_BOND_CHECK_CMD` set, the ceremony PROVES each juror's bond before
+> the DKG and excludes/refuses an unproven one (`ROSTER_BELOW_THRESHOLD`).
+> Contract, enforcement point, artifacts and the live runs:
+> `docs/MULTI_PROCESS_CEREMONY.md` § "The bond gate". The text below describes
+> the original carry-only round (still the default when the variable is unset).
+
 Operator direction: the ceremony roster becomes stake-backed in a later round,
 with **Liquid testnet first**. This round makes the shape and the pass-through
 real, and records it, but does **not** verify anything.
