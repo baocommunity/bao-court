@@ -47,8 +47,17 @@ class MockBunkerSigner implements CourtEventSigner {
     this.inner = new SeckeyCourtSigner(seckey);
   }
 
+  /**
+   * Model "the signer is external, so every call is async" WITHOUT a timer.
+   *
+   * Round 51: this used `setTimeout(resolve, 1)`, i.e. a real millisecond per
+   * signer call. Nothing asserts that latency, but a test may not sleep as
+   * synchronisation (docs/TEST_DETERMINISM.md), and under load a 1 ms timer is
+   * an arbitrary delay. A resolved promise keeps the only property the mock is
+   * for — the call crosses a tick and is not synchronous — at zero clock cost.
+   */
   private async delay(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await Promise.resolve();
   }
 
   async getPublicKey(): Promise<string> {

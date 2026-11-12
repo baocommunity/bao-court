@@ -35,7 +35,14 @@ import {
   type CourtConfirmationMachineState,
 } from '../courtConfirmationMachine';
 import { MAX_LADDER_ROUNDS } from '../confirmationMachineCore';
-import { budgetMs, DEFAULT_BUDGET_MS } from './helpers/budget';
+import {
+  DEFAULT_WATCHDOG_MS,
+  MAX_LOAD_FACTOR,
+  WATCHDOG_ENV,
+  loadFactor,
+  suiteTestTimeoutMs,
+  watchdogMs,
+} from './helpers/watchdog';
 import { hexId, padHexId } from './helpers/ids';
 
 const SESSION = hexId('1');
@@ -358,8 +365,14 @@ describe('T4 witness × finality', () => {
   });
 });
 
-describe('T3 the deterministic budget helper is pinned, not trusted', () => {
-  const envKey = 'REVIEW_R29_BUDGET_MS';
+describe('T3 the watchdog kit is pinned, not trusted (round 51)', () => {
+  // Round 29 shipped `budgetMs`: an env-tunable ABSOLUTE ceiling. Round 51
+  // replaced it with a load-normalised watchdog (helpers/watchdog.ts) because
+  // an absolute ceiling is a statement about the box. The pinned properties
+  // below are exactly the ones a careless "simplification" would break — a
+  // watchdog that returns Infinity, ignores the override, or is unbounded
+  // makes every gate in the suite vacuous while the rest stays green.
+  const envKey = WATCHDOG_ENV;
 
   const withEnv = (value: string | undefined, fn: () => void): void => {
     const previous = process.env[envKey];
@@ -373,31 +386,38 @@ describe('T3 the deterministic budget helper is pinned, not trusted', () => {
     }
   };
 
-  it('defaults to a FINITE 30 s ceiling when the variable is absent or junk', () => {
-    // A mutation that returned Infinity (or ignored junk) would make every
-    // ceiling assertion vacuous while the rest of the suite stayed green.
-    withEnv(undefined, () => expect(budgetMs(envKey)).toBe(DEFAULT_BUDGET_MS));
-    withEnv(undefined, () => expect(Number.isFinite(budgetMs(envKey))).toBe(true));
-    expect(DEFAULT_BUDGET_MS).toBe(30_000);
+  it('derives a FINITE ceiling from the measured box, and junk in the override is ignored', () => {
+    // A mutation that returned Infinity (or honoured junk) would make every
+    // ceiling assertion vacuous.
+    withEnv(undefined, () => expect(Number.isFinite(watchdogMs())).toBe(true));
+    withEnv(undefined, () => expect(Number.isFinite(watchdogMs(120_000))).toBe(true));
     for (const junk of ['', ' ', 'abc', '0', '-1', 'NaN', 'Infinity']) {
-      withEnv(junk, () => expect(budgetMs(envKey), `junk ${JSON.stringify(junk)}`).toBe(DEFAULT_BUDGET_MS));
+      withEnv(junk, () => expect(watchdogMs(7_000), `junk ${JSON.stringify(junk)}`).toBe(Math.floor(7_000 * loadFactor())));
     }
   });
 
   it('honours an explicit positive override (slow boxes raise it without a code edit)', () => {
-    withEnv('2500', () => expect(budgetMs(envKey)).toBe(2500));
-    withEnv('120000', () => expect(budgetMs(envKey)).toBe(120_000));
-    // An explicit default still wins when the variable is absent.
-    withEnv(undefined, () => expect(budgetMs(envKey, 7)).toBe(7));
+    withEnv('2500', () => expect(watchdogMs()).toBe(2500));
+    withEnv('120000', () => expect(watchdogMs(600_000)).toBe(120_000));
+    // The override REPLACES the derived value: it is a ceiling, not a floor.
+    withEnv('1000', () => expect(watchdogMs(600_000)).toBe(1000));
   });
 
-  it('the ceiling is live: the shipped budgets are generous but finite', () => {
-    // Both budgeted tests (simulateCourt, adversarialNostr) assert deterministic
-    // behaviour BEFORE the ceiling, so nothing passes *because* of the budget.
-    // Pin the ordering property that makes them non-vacuous: 30 s is ~25x the
-    // 1.2 s baseline and far below the 60 s vitest timeout, so a real 100x
-    // regression trips an ASSERTION, not a timeout.
-    expect(DEFAULT_BUDGET_MS).toBeGreaterThan(5_000);
-    expect(DEFAULT_BUDGET_MS).toBeLessThan(60_000);
+  it('is bounded on both sides and always ordered under the harness timeout', () => {
+    // Lower bound: never below the author's declared margin (load may only
+    // WIDEN a gate; a gate that shrinks under load would be a flake source).
+    for (const base of [1_000, 5_000, 120_000, 600_000]) {
+      withEnv(undefined, () => expect(watchdogMs(base)).toBeGreaterThanOrEqual(base));
+      // Upper bound: a runaway box must not license an hour.
+      withEnv(undefined, () => expect(watchdogMs(base)).toBeLessThanOrEqual(base * MAX_LOAD_FACTOR));
+    }
+    // Ordering: the harness timeout is never tighter than the declared gate, so
+    // a slow assertion reports "watchdog" rather than an opaque timeout.
+    withEnv(undefined, () => expect(suiteTestTimeoutMs(DEFAULT_WATCHDOG_MS)).toBeGreaterThan(watchdogMs(DEFAULT_WATCHDOG_MS)));
+    withEnv('5000', () => expect(suiteTestTimeoutMs(DEFAULT_WATCHDOG_MS)).toBeGreaterThan(watchdogMs(DEFAULT_WATCHDOG_MS)));
+    // 5 s is vitest's own default; the kit must never be tighter than that.
+    // ≥ 12x the measured cost of the slowest default-timeout test, and above
+    // the worst load-inflation observed in reproduction (48 s).
+    expect(DEFAULT_WATCHDOG_MS).toBeGreaterThanOrEqual(60_000);
   });
 });

@@ -4,7 +4,7 @@ How the test suite is organized, what each category verifies, and how to add
 a test the house way. Read this before writing your first test here.
 
 ```
-npm test                        # full suite (75 files, 1,677 tests + 1 env-gated live test)
+npm test                        # full suite (85 files, 1,873 tests + 1 env-gated live test)
 npm run campaign                # scale campaign FAST subset (== the scaleCampaign tests)
 npm run campaign:full           # scale campaign FULL corpus → docs/benchmarks/campaign-<date>.json
 npx vitest run <file>           # one file
@@ -14,7 +14,15 @@ npm run typecheck:tests         # tsc over __tests__ (CI gate, same as tests)
 
 CI (`.github/workflows/ci.yml`) runs `npm run typecheck:tests` + `npm test`.
 Every test must pass deterministically — no sleeps, no `Date.now()`, no
-`Math.random()` in assertions.
+`Math.random()` in assertions — **on a loaded box as well as an idle one**.
+The full rule set, the inventory that found each violation and the load-sensitivity
+evidence are in [TEST_DETERMINISM.md](TEST_DETERMINISM.md); the rules are
+enforced by a static guard test, not by reviewer memory:
+
+```bash
+BAO_TEST_WATCHDOG_TRACE=1 npm test     # per-worker load factor + harness timeout
+BAO_TEST_WATCHDOG_MS=300000 npm test   # replace every derived watchdog ceiling
+```
 
 ---
 
@@ -62,7 +70,7 @@ const key = secFrom(r);              // 32 random bytes from the stream
 const rc = childRng(1000, 'salts');  // labeled child stream — no cross-talk
 ```
 
-**Determinism rules:**
+**Determinism rules:** (full set: [TEST_DETERMINISM.md](TEST_DETERMINISM.md) §4)
 - Every generator-driven test names its seed literal in the body
   (`mulberry32(4242)`) — a failure is reproducible from the seed alone.
 - One logical stream per concern: use `childRng(SEED, 'label')` per fixture
@@ -71,6 +79,16 @@ const rc = childRng(1000, 'salts');  // labeled child stream — no cross-talk
 - Never `Math.random()` / `Date.now()` in a test. If it needs entropy, it's
   a `keys.ts` CSPRNG fixture, and uniqueness — not reproducibility — is the
   point (uniqueness assertions stay value-independent).
+- **Never assert elapsed time.** No `expect(Date.now() - start)`,
+  `expect(elapsedMs).toBeLessThan(...)`. Assert state transitions, counts or
+  sequences instead. Performance lives in `scripts/bench-vs-baseline.mjs`.
+- **A timeout is a watchdog**, and only that: `wd(measuredCost × margin)` from
+  `helpers/watchdog.ts` (load-normalised, `BAO_TEST_WATCHDOG_MS`-overridable).
+  Never a bare literal — the static guard fails on `{ timeout: 120_000 }`.
+- **Never sleep or poll as synchronisation.** `await` the promise the code under
+  test resolves; if there is none, the SUT has a testability gap, not the test.
+- **Subprocess deadlines are watchdogs too**: `--deadline-ms=${wd(4000)}`, never
+  a literal (a fixed phase deadline made honest jurors "fail closed" under load).
 
 ### `ids.ts` — deterministic hex ids
 

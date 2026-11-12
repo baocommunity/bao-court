@@ -35,6 +35,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { wd } from './helpers/watchdog';
+
 import {
   COURT_ESCALATION_REQUEST_DOMAIN,
   buildCourtEscalationRequest,
@@ -52,7 +54,7 @@ const REFERENCE = path.join(REPO, 'scripts', 'differential', 'wire_ref.py');
 const TSX = path.join(REPO, 'node_modules', '.bin', 'tsx');
 
 function pythonAvailable(): boolean {
-  const probe = spawnSync('python3', ['--version'], { encoding: 'utf8', timeout: 20_000 });
+  const probe = spawnSync('python3', ['--version'], { encoding: 'utf8', timeout: wd(20_000) });
   return probe.status === 0;
 }
 
@@ -102,7 +104,7 @@ const UNICODE_ONLY_WHITESPACE = ['\u0085', '\u001c', '\u001d', '\u001e', '\u001f
 
 describe('(r49) the reference implementation reproduces the shared known answer', () => {
   it.skipIf(!HAS_PYTHON)('wire_ref.py --selftest is green (KAT digest, sentinel, class table)', () => {
-    const run = spawnSync('python3', [REFERENCE, '--selftest'], { encoding: 'utf8', timeout: 60_000 });
+    const run = spawnSync('python3', [REFERENCE, '--selftest'], { encoding: 'utf8', timeout: wd(60_000) });
     expect(run.stdout).toContain('selftest: OK');
     expect(run.status).toBe(0);
   });
@@ -111,7 +113,7 @@ describe('(r49) the reference implementation reproduces the shared known answer'
     const run = spawnSync('python3', ['-c', 'import sys; sys.path.insert(0, "scripts/differential"); import wire_ref; print(wire_ref.DOMAIN)'], {
       cwd: REPO,
       encoding: 'utf8',
-      timeout: 30_000,
+      timeout: wd(30_000),
     });
     expect(run.stdout.trim()).toBe('BAO-Court/Escalation/Request/v2');
     expect(run.stderr).toBe('');
@@ -122,7 +124,7 @@ describe('(r49) the differential harness agrees over the fast corpus', () => {
   it.skipIf(!HAS_PYTHON || !HAS_TSX)(
     'run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements',
     () => {
-      const run = spawnSync(TSX, [RUNNER, '--only'], { encoding: 'utf8', timeout: 300_000, cwd: REPO });
+      const run = spawnSync(TSX, [RUNNER, '--only'], { encoding: 'utf8', timeout: wd(300_000), cwd: REPO });
       const output = `${run.stdout}\n${run.stderr}`;
       // A disagreement makes the harness exit non-zero AND print the repro.
       expect(output).toContain('disagreements=0');
@@ -135,7 +137,7 @@ describe('(r49) the differential harness agrees over the fast corpus', () => {
       expect(Number(accept)).toBeGreaterThan(500);
       expect(Number(refuse)).toBeGreaterThan(500);
     },
-    300_000,
+    wd(300_000),
   );
 
   it.skipIf(!HAS_PYTHON)('the committed 100k campaign artifact is consistent with its own register', () => {

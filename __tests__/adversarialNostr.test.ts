@@ -67,10 +67,7 @@ import type { SelectedJuror, StakeCommitment } from '../types';
 /* ------------------------------------------------------------------------- */
 
 import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
-import { budgetMs } from './helpers/budget';
-
-/** Generous, env-tunable ceiling for the linear tag scan (see helpers/budget). */
-const VALIDATOR_BUDGET_MS = budgetMs('VALIDATOR_BUDGET_MS');
+import { wd } from './helpers/watchdog';
 
 const MY_BYTE = 2;
 const MY_PUBKEY = nostrPubkey(MY_BYTE);
@@ -277,54 +274,100 @@ describe('tag abuse: duplicates, nesting, emptiness, and scale', () => {
       .toThrowError(/exactly one value|invalid/);
   });
 
-  it('100k `e` mention tags: the v1 validator bounds at 10k AFTER a bounded scan — parse cost stays linear and completes', () => {
+  it('over-served `e` mention tags: the v1 validator bounds at 10k and its scan stays LINEAR (work count, not wall clock)', () => {
     const marketId = randomBytes(32).toString('hex');
     const disputeId = randomBytes(32).toString('hex');
     const outcome = 'NO';
-    // Hand-build the event: the BUILDER caps at 10k, the VALIDATOR is the
-    // relay-data boundary and must survive an over-served event.
-    const supporting = Array.from({ length: 100_000 }, (_, i) =>
-      deriveSimulatedRevealEventId(i + 1, outcome, `salt-${i}`));
-    const event = finalizeEvent(
-      {
-        kind: 39007,
-        created_at: SESSION_CREATED,
-        tags: [
-          ['d', disputeId],
-          ['e', marketId, '', 'root'],
-          ['m', marketId],
-          ['p', 'ee'.repeat(32)],
-          ['outcome', outcome],
-          ['round', '1'],
-          ['nonce', 'ab'.repeat(32)],
-          ['sig', 'ab'.repeat(64)],
-          ['dispute', disputeId],
-          ['verdict', 'cc'.repeat(32)],
-          ...supporting.map((id): [string, string, string, string] => ['e', id, '', 'mention']),
-        ],
-        content: JSON.stringify({
-          marketId, outcome, round: '1', message: 'x',
-          disputeEventId: disputeId, verdictHash: 'cc'.repeat(32),
-          supportingEventIds: supporting,
-        }),
-      },
-      secret(1),
-    );
-    const start = Date.now();
-    const result = validateAttestationEvent(event);
-    // The >10k tag bound rejects this event BEFORE any hashing, so the scan is
-    // linear in the tag count — the behavioural assertion is the typed error
-    // below. The ceiling is deliberately generous (30 s default, env-tunable
-    // via VALIDATOR_BUDGET_MS) because an absolute wall-clock gate measures
-    // the box, not the code: see __tests__/helpers/budget.ts and
-    // docs/MUTATION_TESTING.md §7.
-    expect(
-      Date.now() - start,
-      `100k-tag rejection took longer than ${VALIDATOR_BUDGET_MS}ms`,
-    ).toBeLessThan(VALIDATOR_BUDGET_MS);
-    expect(result.valid).toBe(false);
-    expect(result.error).toMatch(/1\.\.10000/);
-  }, 30_000);
+
+    /**
+     * Hand-build an over-served event and validate it with a counting Proxy in
+     * place of `tags`.
+     *
+     * Round 51 replaced this test's `Date.now()` ceiling. A duration is a
+     * statement about the box, and this one was measurably untrue (30 s budget
+     * against a 2.9 s clean run is not a proof of anything). The property the
+     * old gate was groping at is "the scan is linear in the tag count, not
+     * quadratic" — which is an OPERATION COUNT and can be measured exactly:
+     * every element read goes through the Proxy's `get`, so the same event at
+     * two sizes yields two counts, and their RATIO is load-free. Quadratic
+     * behaviour would show a 25x ratio for a 5x size increase; linear shows
+     * ~5x. The ratio bound is deliberately loose (12x) so it tracks the
+     * implementation's pass count across nostr-tools versions instead of
+     * pinning one.
+     *
+     * The BUILDER caps at 10k; the VALIDATOR is the relay-data boundary and
+     * must survive an over-served event with a TYPED rejection.
+     */
+    const buildOverserved = (mentionCount: number): NostrEvent => {
+      const supporting = Array.from({ length: mentionCount }, (_, i) =>
+        deriveSimulatedRevealEventId(i + 1, outcome, `salt-${i}`));
+      return finalizeEvent(
+        {
+          kind: 39007,
+          created_at: SESSION_CREATED,
+          tags: [
+            ['d', disputeId],
+            ['e', marketId, '', 'root'],
+            ['m', marketId],
+            ['p', 'ee'.repeat(32)],
+            ['outcome', outcome],
+            ['round', '1'],
+            ['nonce', 'ab'.repeat(32)],
+            ['sig', 'ab'.repeat(64)],
+            ['dispute', disputeId],
+            ['verdict', 'cc'.repeat(32)],
+            ...supporting.map((id): [string, string, string, string] => ['e', id, '', 'mention']),
+          ],
+          content: JSON.stringify({
+            marketId, outcome, round: '1', message: 'x',
+            disputeEventId: disputeId, verdictHash: 'cc'.repeat(32),
+            supportingEventIds: supporting,
+          }),
+        },
+        secret(1),
+      );
+    };
+
+    /** Validate with a Proxy counting every read of a tag element. */
+    const validateCountingTagReads = (event: NostrEvent): { valid: boolean; error?: string; reads: number } => {
+      const holder = { reads: 0 };
+      const counting: string[][] = new Proxy([...event.tags], {
+        get(target, prop, receiver) {
+          if (typeof prop === 'string' && /^\d+$/.test(prop)) holder.reads += 1;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+      const probed = { ...event, tags: counting } as NostrEvent;
+      const result = validateAttestationEvent(probed);
+      return { valid: result.valid, error: result.error, reads: holder.reads };
+    };
+
+    // Both sizes are OVER the 10k bound so they take the same rejection path
+    // (an under-bound event would be accepted and recompute a verdict hash, a
+    // different path, and the ratio would compare apples with oranges). 5x the
+    // size is enough to separate linear from quadratic while keeping the test
+    // cheap: 120k tags cost ~3 s clean, 6 s+ under load.
+    const SMALL = 12_000;
+    const LARGE = 60_000;
+
+    const small = validateCountingTagReads(buildOverserved(SMALL));
+    const large = validateCountingTagReads(buildOverserved(LARGE));
+
+    // Both sizes are rejected by the SAME typed bound, never by a crash.
+    for (const probe of [small, large]) {
+      expect(probe.valid).toBe(false);
+      expect(probe.error).toMatch(/1\.\.10000/);
+    }
+
+    // Anti-vacuity: the tags array really was traversed (a validator that
+    // short-circuited on `length` alone would read almost nothing and could
+    // not be said to have "scanned" anything).
+    expect(small.reads).toBeGreaterThan(SMALL / 2);
+    expect(large.reads).toBeGreaterThan(LARGE / 2);
+
+    // Linear, not quadratic: 5x the tags must cost at most 12x the reads.
+    expect(large.reads / small.reads).toBeLessThanOrEqual(12);
+  }, wd(60_000));
 
   it('MB-scale tag values: the v2 validator enforces marketId/outcome/round byte bounds before hashing', () => {
     const marketId = randomBytes(32).toString('hex');
@@ -527,7 +570,7 @@ describe('inbox flooding: dedupe key and capacity under adversarial relay input'
     expect(again.record.relays).toEqual(['wss://relay-a.example', 'wss://relay-b.example']);
   });
 
-  it('ingest is fail-closed at capacity: the flooding relay cannot evict seen wraps (no LRU to lose track of)', { timeout: 60_000 }, () => {
+  it('ingest is fail-closed at capacity: the flooding relay cannot evict seen wraps (no LRU to lose track of)', { timeout: wd(60_000) }, () => {
     const inbox = createCourtInbox({ myPubkey: MY_PUBKEY });
     const first = {
       kind: COURT_GIFT_WRAP_KIND,
@@ -604,7 +647,8 @@ function makeSelectedJuror(idx: number): SelectedJuror {
     categories: ['bitcoin'],
     registeredAt: Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60,
     idx,
-    priority: Math.random(),
+    // Deterministic (round 51): see the seeded-RNG rule in helpers/rng.ts.
+    priority: idx / 10,
   };
 }
 
@@ -640,7 +684,7 @@ function buildValidAttestationEvent(): { event: NostrEvent; marketId: string; di
 }
 
 describe('watcher binding: resolution fields come from the validated tags only', () => {
-  it('R8 FIX: a hostile re-publisher appending an extra `o` tag cannot steer the reported outcome away from the FROST-certified one', { timeout: 30_000 }, async () => {
+  it('R8 FIX: a hostile re-publisher appending an extra `o` tag cannot steer the reported outcome away from the FROST-certified one', { timeout: wd(30_000) }, async () => {
     const { event, marketId, disputeId, outcome, groupPubkey } = buildValidAttestationEvent();
 
     // The attacker re-publishes the valid attestation with an extra
@@ -667,7 +711,7 @@ describe('watcher binding: resolution fields come from the validated tags only',
     expect(resolution?.eventId).toBe(republished.id);
   });
 
-  it('an extra `market` alias tag cannot override the validated `m` tag', { timeout: 30_000 }, async () => {
+  it('an extra `market` alias tag cannot override the validated `m` tag', { timeout: wd(30_000) }, async () => {
     const { event, marketId, groupPubkey } = buildValidAttestationEvent();
     const foreignMarket = randomBytes(32).toString('hex');
     const republished = finalizeEvent(
@@ -684,7 +728,7 @@ describe('watcher binding: resolution fields come from the validated tags only',
     expect(resolution?.marketId).not.toBe(foreignMarket);
   });
 
-  it('the certified path is unchanged: the honest event resolves with the certified outcome', { timeout: 30_000 }, async () => {
+  it('the certified path is unchanged: the honest event resolves with the certified outcome', { timeout: wd(30_000) }, async () => {
     const { event, marketId, disputeId, outcome, groupPubkey } = buildValidAttestationEvent();
     const watcher = new FrostAppealWatcher({
       relays: [],

@@ -27,6 +27,8 @@ import {
 } from '../events';
 
 import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
+import { mulberry32 } from './helpers/rng';
+import { wd } from './helpers/watchdog';
 
 function parameters(): CourtSessionParameters {
   return {
@@ -155,8 +157,12 @@ describe('adversarial parser fuzz (typed failures only)', () => {
     );
   });
 
-  it('200 random-tag mutations never crash untyped', { timeout: 60_000 }, () => {
-    const rng = (max: number): number => Math.floor(Math.random() * max);
+  it('200 random-tag mutations never crash untyped', { timeout: wd(60_000) }, () => {
+    // Seeded (round 51): an unseeded fuzz corpus cannot be replayed from the
+    // test body, so a failure would be a one-off. Same draw count as before —
+    // only the source of the numbers changed.
+    const stream = mulberry32(0x5eed_4a11);
+    const rng = (max: number): number => Math.floor(stream() * max);
     const pool = ['commit', 'session', 'juror', 'pok_n', 'pok_z', 'threshold', 'phase_nonce', 'dispute', 'p', 'host', 'suite', 'attempt', 'strange'];
     const values = ['', 'a', '0x10', '99999999999999999999999', `02${'1'.repeat(64)}`, '0'.repeat(64), '%', JSON.stringify({ a: 1 })];
     for (let round = 0; round < 200; round += 1) {
