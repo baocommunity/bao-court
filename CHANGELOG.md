@@ -11,6 +11,37 @@ frozen.
 
 ## [Unreleased]
 
+### Added (distributed ceremony soak — the ceremony on a 6-hourly timer)
+- **`scripts/court/distributed-ceremony-soak.mjs`** — the unattended runner: it
+  rotates `happy-k2`, `happy-kn`, `kill` (SIGKILL over ssh mid-signing), `replay`
+  and `reorder` (Byzantine *delivery*: the relay repeats or re-orders signed
+  records, never forges one), plus opt-in `silence`, and writes one JSONL record
+  per run (`ts, scenario, k, n, outcome, groupKeyFingerprint, signatureVerified,
+  durationMs, perBoxWallMs, relayRttP50, classification, evidencePath` and the
+  cleanup proof). It preflights every box (reachable? Node present?) and records
+  a `blocked` outcome with the reason instead of hanging; it kills strays by
+  EXACT command line before and after each run; it accounts for reboots as
+  `gap` records (boot-id + elapse), never as failures; it keeps a rolling cap on
+  evidence directories. No key, share, seed, nonce or token is ever written.
+- **`scripts/court/systemd/bao-court-ceremony-soak.{service,timer}`** —
+  `OnBootSec=15min`, `OnUnitActiveSec=6h`, `Persistent=true`,
+  `RandomizedDelaySec=5min`; the service wraps the run in `flock -n` and
+  `timeout --kill-after=60s 600s` and treats exit 1/2 (failed/blocked ceremony)
+  as data, not unit failure.
+- **`scripts/court/ceremony-soakctl.sh`** — `install|uninstall|start|stop|pause|
+  status|report|run-now|logs|preflight|next` over user units (no root).
+- **`relay-server.mjs` gains delivery policies** `honest` (unchanged default),
+  `replay` (deterministic stride of byte-identical duplicates, re-delivered
+  late), `reorder` (seeded sender permutation × window, per-sender FIFO kept) and
+  `silence` (one juror's records withheld). Deterministic by construction: a run
+  always exercises the policy instead of depending on a coin flip.
+- **Coordinator dedupes replayed commitments** exactly as a receiving juror
+  does: one *distinct* commitment per juror, with byte-identical repeats counted
+  and two different commitments from one juror reported as equivocation.
+- `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program" — cadence,
+  rotation, JSONL shape, timer/control, status block, what a series proves over
+  a single run, and what it still does not.
+
 ### Added (distributed ceremony — three real boxes, one real network)
 - **`scripts/court/relay-server.mjs`** — the ceremony relay as a standalone
   process: the same JSON protocol the harness speaks (`POST/GET /events`,

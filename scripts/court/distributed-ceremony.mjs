@@ -64,7 +64,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
 const CHILD = join(HERE, 'juror-child.ts');
 const RELAY = join(HERE, 'relay-server.mjs');
-const ARTIFACTS = join(ROOT, 'docs', 'benchmarks', 'distributed-ceremony');
+const DEFAULT_ARTIFACTS = join(ROOT, 'docs', 'benchmarks', 'distributed-ceremony');
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -77,7 +77,21 @@ function arg(name, fallback) {
 }
 const flag = (name) => process.argv.includes(`--${name}`);
 
-const scenario = arg('scenario', 'happy'); // happy | kill | all
+/**
+ * `happy` (both thresholds) | `happy-k2` | `happy-kn` (all-of-N) | `kill` |
+ * `replay` | `reorder` | `silence` | `all`. The single-scenario names are what
+ * the soak runner (`distributed-ceremony-soak.mjs`) rotates through.
+ */
+const scenario = arg('scenario', 'happy');
+/** Relay delivery policy for every run of this invocation (see relay-server). */
+const relayModeArg = arg('relay-mode', 'honest');
+/**
+ * `--scenario=replay|reorder|silence` implies its own relay policy unless
+ * `--relay-mode=` says otherwise: the scenario NAME is the policy.
+ */
+const relayMode = relayModeArg !== 'honest'
+  ? relayModeArg
+  : (['replay', 'reorder', 'silence'].includes(scenario) ? scenario : 'honest');
 const jurorCount = Number(arg('jurors', '3'));
 const killThreshold = Number(arg('threshold', arg('kill-threshold', '3')));
 const relayBox = arg('relay-box', 'vps16gb');
@@ -95,6 +109,14 @@ const pollMs = Number(arg('poll-ms', '20'));
  * unchanged.
  */
 const killRevealDelayMs = Number(arg('kill-reveal-delay-ms', '450'));
+/**
+ * Where run artifacts go. The soak runner points this at its own state dir so a
+ * 100-hour program does not commit thousands of JSON files into the repo.
+ */
+const ARTIFACTS = arg('artifacts', DEFAULT_ARTIFACTS);
+const silenceIdx = Number(arg('silence-idx', '2'));
+const replayP = Number(arg('replay-p', '0.35'));
+const reorderWindowMs = Number(arg('reorder-window-ms', '90'));
 const sshDir = arg('ssh-dir', '/tmp/opencode/bao-dist-ssh');
 /**
  * BOND REFERENCE carried on every roster entry (operator direction: rosters
@@ -331,6 +353,10 @@ async function startRelay({ runId, token, tokenLocal, relayIpForProbe }) {
     relayBox,
     `cd ${dir} && setsid nohup ${node} relay-server.mjs --port=${port} --host=0.0.0.0 `
     + `--token-file=${dir}/relay-token --max-records=20000 --jurors=${jurorCount} `
+    // Delivery policy: the relay may lie about DELIVERY (replay duplicates,
+    // reorder holds, silence censors), never about content.
+    + `--mode=${relayMode} --seed=${runId} --silence-idx=${silenceIdx} `
+    + `--replay-p=${replayP} --reorder-window-ms=${reorderWindowMs} `
     + `--pid-file=${dir}/relay.pid --stats-file=${dir}/relay-stats.json `
     + `> ${dir}/relay.log 2>&1 < /dev/null`,
   );
@@ -378,7 +404,7 @@ async function stopRelay({ dir, pid, localStatsPath }) {
 // One ceremony run
 // ---------------------------------------------------------------------------
 
-async function runCeremony({ label, threshold, kill, bundlePath, token, relayIp, runId }) {
+async function runCeremony({ label, threshold, kill, policy, expectSignature, bundlePath, token, relayIp, runId }) {
   const dir = remoteDirFor(runId);
   const ceremonyId = randomBytes(32).toString('hex'); // public: disambiguates this run
   const relayUrl = `http://${relayIp}:${port}`;
@@ -402,6 +428,11 @@ async function runCeremony({ label, threshold, kill, bundlePath, token, relayIp,
       `${label}: the answering relay is the process this run started, with an empty log`,
       health.pid === relay.pid && health.records === 0,
       { records: health.records, uptimeMs: health.uptimeMs, pid: health.pid, expectedPid: relay.pid },
+    );
+    check(
+      `${label}: the relay is running this scenario's delivery policy`,
+      health.mode === relayMode,
+      { expected: relayMode, actual: health.mode ?? null },
     );
     const unauth = await fetch(`${relayUrl}/stats`, { signal: AbortSignal.timeout(5000) });
     check(`${label}: the relay refuses an unauthenticated observer (bearer token is enforced)`, unauth.status === 401, {
@@ -600,11 +631,31 @@ touch "$D/done-$IDX"
     // ── the relay's own receive log: the coordinator's audit trail ────────
     const wire = await fetchJson(`${relayUrl}/log`, { headers: auth });
     const records = wire.records;
-    const commitments = records
-      .filter((r) => r.phase === 'dkg-commit' && r.event)
-      .map((r) => parseDkgCommitmentEvent(r.event))
-      .filter(Boolean);
-    const groupKeyRecomputed = commitments.length === jurorCount
+    /**
+     * One commitment per juror, from the relay's log. A REPLAYED record is a
+     * byte-identical repeat of the same signed event: the coordinator dedupes it
+     * exactly as a receiving juror does. Two DIFFERENT commitments from one
+     * juror is equivocation and must never be papered over.
+     */
+    const commitmentEvents = records.filter((r) => r.phase === 'dkg-commit' && r.event);
+    const parsedCommitments = commitmentEvents.map((r) => parseDkgCommitmentEvent(r.event)).filter(Boolean);
+    const perJurorCommitments = new Map();
+    let duplicateCommitments = 0;
+    const equivocatingJurors = [];
+    for (const [i, parsed] of parsedCommitments.entries()) {
+      const existing = perJurorCommitments.get(parsed.jurorIdx);
+      if (!existing) {
+        perJurorCommitments.set(parsed.jurorIdx, { parsed, eventId: commitmentEvents[i].event.id });
+        continue;
+      }
+      const identical = existing.eventId === commitmentEvents[i].event.id
+        && JSON.stringify(existing.parsed.vssCommits) === JSON.stringify(parsed.vssCommits)
+        && existing.parsed.pok === parsed.pok;
+      if (identical) duplicateCommitments += 1;
+      else equivocatingJurors.push(parsed.jurorIdx);
+    }
+    const commitments = [...perJurorCommitments.values()].map((v) => v.parsed);
+    const groupKeyRecomputed = commitments.length === jurorCount && equivocatingJurors.length === 0
       ? commitments.reduce((sum, c) => sum.add(Point.fromHex(c.vssCommits[0])), Point.ZERO).toHex(true).slice(2)
       : null;
 
@@ -613,7 +664,8 @@ touch "$D/done-$IDX"
     const signedReports = perBox.filter((b) => b.report?.signature);
 
     // ── assertions ────────────────────────────────────────────────────────
-    if (!kill) {
+    let signatureVerified = false;
+    if (!kill && expectSignature) {
       check(`${label}: every juror reported an outcome`, perBox.every((b) => b.report), {
         saw: perBox.map((b) => b.report?.classification ?? 'none'),
       });
@@ -629,26 +681,47 @@ touch "$D/done-$IDX"
       );
       const expectedMessage = buildAttestationMessage('', 'YES', 1);
       const aggregate = perBox[0].report?.signature ?? '';
-      check(
-        `${label}: the coordinator verifies the FROST signature against THAT key`,
-        Boolean(groupKeyRecomputed)
+      signatureVerified = Boolean(groupKeyRecomputed)
         && aggregate.length === 128
         && verifyFinalSignature(
           groupKeyRecomputed,
           perBox[0].report?.message ?? expectedMessage,
           aggregate,
-        ),
+        );
+      check(
+        `${label}: the coordinator verifies the FROST signature against THAT key`,
+        signatureVerified,
         { message: perBox[0].report?.message ?? null, signatureBytes: aggregate.length / 2 },
       );
       check(
-        `${label}: the relay saw exactly one DKG commitment per juror (no equivocation)`,
-        commitments.length === jurorCount,
-        { count: commitments.length },
+        `${label}: the relay log carries exactly one DISTINCT DKG commitment per juror (no equivocation)`,
+        commitments.length === jurorCount && equivocatingJurors.length === 0,
+        { distinct: commitments.length, duplicatesIgnored: duplicateCommitments, equivocatingJurors },
       );
       check(
         `${label}: every juror's own wire log shows a reveal from every peer`,
         perBox.every((b) => (b.report?.disclosure?.committed ?? []).length === jurorCount),
         perBox.map((b) => b.report?.disclosure?.committed ?? null),
+      );
+    } else if (!kill) {
+      // Policy scenario that must NOT yield a signature (`silence`): a censored
+      // juror must make the attempt fail closed, never be papered over.
+      const cls = perBox.map((b) => b.report?.classification ?? 'none');
+      check(`${label}: every juror reported a fail-closed outcome`, perBox.every((b) => b.report && b.report.ok === false), { cls });
+      check(
+        `${label}: every classification is a typed "missing peer" abort, never a signature`,
+        cls.every((c) => ['DKG_MISSING_PARTICIPANT', 'SIGN_MISSING_PARTICIPANT', 'SIGN_MISSING_REVEAL'].includes(c)),
+        { cls },
+      );
+      check(
+        `${label}: NO juror emitted a signature (no partial, no aggregate)`,
+        signedReports.length === 0 && !records.some((r) => r.phase === 'report' && r.payload && r.payload.signature),
+        { signed: signedReports.map((b) => b.idx) },
+      );
+      check(
+        `${label}: the censored juror's records reached the relay and were withheld from delivery`,
+        records.some((r) => Number(r.from) === silenceIdx && r.phase === 'dkg-commit'),
+        { withheld: null },
       );
     } else {
       const victim = perBox.find((b) => b.idx === killed.idx);
@@ -691,6 +764,39 @@ touch "$D/done-$IDX"
     }
 
     const live = await fetchJson(`${relayUrl}/stats`, { headers: auth });
+    if (policy === 'replay') {
+      const dupes = perBox.reduce((sum, b) => sum + (b.report?.disclosure?.duplicatesSeen ?? 0), 0);
+      check(`${label}: the relay genuinely duplicated records (the mode did something)`, live.stats.duplicated > 0, {
+        duplicated: live.stats.duplicated,
+      });
+      check(`${label}: duplicate deliveries were seen and deduped by the jurors`, dupes > 0, { duplicatesSeen: dupes });
+      check(
+        `${label}: duplicates produced no second signature (exactly one aggregate on the wire)`,
+        new Set(perBox.map((b) => b.report?.signature).filter(Boolean)).size === 1,
+        { signatures: [...reportedSignatures] },
+      );
+    }
+    if (policy === 'reorder') {
+      const orders = live.subscribers
+        .filter((s) => s.as !== 'observer' && s.order.length > 0)
+        .map((s) => s.order.join(','));
+      check(
+        `${label}: the relay served different delivery orders to different boxes (reordering happened)`,
+        live.stats.delayed > 0 && new Set(orders).size > 1,
+        { delayed: live.stats.delayed, distinctOrders: new Set(orders).size },
+      );
+      check(
+        `${label}: reordering did not change the outcome (one group key, one verified signature)`,
+        signatureVerified && reportedKeys.size === 1 && reportedSignatures.size === 1,
+        { keys: [...reportedKeys].length, signatures: [...reportedSignatures].length },
+      );
+    }
+    if (policy === 'silence') {
+      check(`${label}: the relay genuinely withheld the censored juror's traffic`, live.stats.withheld > 0, {
+        withheld: live.stats.withheld,
+        silencedIdx: silenceIdx,
+      });
+    }
     check(
       `${label}: the relay stayed under its hard record cap and refused no ceremony traffic`,
       live.stats.refusedCap === 0 && live.stats.refusedMalformed === 0,
@@ -709,8 +815,8 @@ touch "$D/done-$IDX"
     );
     const signatureOfAggregate = records.find((r) => r.phase === 'report' && r.payload && r.payload.signature);
     check(
-      `${label}: ${kill ? 'no' : 'exactly one'} aggregate signature reached the relay's ` + '`report` records',
-      kill ? !signatureOfAggregate : Boolean(signatureOfAggregate),
+      `${label}: ${expectSignature ? 'exactly one' : 'no'} aggregate signature reached the relay's ` + '`report` records',
+      expectSignature ? Boolean(signatureOfAggregate) : !signatureOfAggregate,
       { leaked: Boolean(signatureOfAggregate) },
     );
     relayLiveStats = live;
@@ -743,6 +849,10 @@ touch "$D/done-$IDX"
       coordinatorWallMs: wallMs,
       slowestBoxWallMs: wallOnBox.length ? Math.max(...wallOnBox) : null,
       fastestBoxWallMs: wallOnBox.length ? Math.min(...wallOnBox) : null,
+      relayMode,
+      policy: policy ?? null,
+      expectSignature: Boolean(expectSignature),
+      signatureVerified,
       groupKey: groupKeyRecomputed,
       // Public identity of the group: the x-only key and a short hash of it.
       // No secret material is involved (the group key is published on chain).
@@ -753,6 +863,14 @@ touch "$D/done-$IDX"
       signatures: [...reportedSignatures],
       relayRecords: records.length,
       relayPhases: records.reduce((acc, r) => ({ ...acc, [r.phase]: (acc[r.phase] ?? 0) + 1 }), {}),
+      duplicateCommitmentsIgnored: duplicateCommitments,
+      relayPolicyCounters: {
+        duplicated: live.stats.duplicated,
+        withheld: live.stats.withheld,
+        delayed: live.stats.delayed,
+      },
+      classifications: perBox.map((b) => ({ idx: b.idx, classification: b.report?.classification ?? null })),
+      duplicatesSeen: perBox.reduce((sum, b) => sum + (b.report?.disclosure?.duplicatesSeen ?? 0), 0),
       killed,
       relayLive: relayLiveStats,
       perBox,
@@ -817,12 +935,34 @@ let exitCode = 0;
   console.log(`  juror bundle: ${bundlePath} (${(size / 1024).toFixed(0)} KiB, single file, no node_modules on the boxes)`);
 
   const plan = [];
+  const happy = (label, threshold) => plan.push({ label, threshold, kill: false, expectSignature: true });
   if (scenario === 'happy' || scenario === 'all') {
-    plan.push({ label: `happy-n${jurorCount}-k2`, threshold: 2, kill: false });
-    plan.push({ label: `happy-n${jurorCount}-k${jurorCount}`, threshold: jurorCount, kill: false });
+    happy(`happy-n${jurorCount}-k2`, 2);
+    happy(`happy-n${jurorCount}-k${jurorCount}`, jurorCount);
   }
-  if (scenario === 'kill' || scenario === 'all') {
-    plan.push({ label: `kill-n${jurorCount}-k${killThreshold}`, threshold: killThreshold, kill: true });
+  if (scenario === 'happy-k2' || scenario === 'all') happy(`happy-n${jurorCount}-k2`, 2);
+  if (scenario === 'happy-kn') happy(`happy-n${jurorCount}-k${jurorCount}`, jurorCount);
+  if ((scenario === 'kill' || scenario === 'all') && relayMode === 'honest') {
+    plan.push({
+      label: `kill-n${jurorCount}-k${killThreshold}`,
+      threshold: killThreshold,
+      kill: true,
+      expectSignature: false,
+    });
+  }
+  // Byzantine DELIVERY policies: the relay lies about delivery, never content.
+  if (['replay', 'reorder', 'silence'].includes(scenario)) {
+    plan.push({
+      label: `${scenario}-n${jurorCount}-k2`,
+      threshold: 2,
+      kill: false,
+      // replay/reorder must still produce one verified signature; silence must not.
+      expectSignature: scenario !== 'silence',
+      policy: scenario,
+    });
+  }
+  if (plan.length === 0) {
+    throw new Error(`unknown --scenario=${scenario} (happy|happy-k2|happy-kn|kill|replay|reorder|silence|all)`);
   }
 
   for (const [i, step] of plan.entries()) {
@@ -834,6 +974,8 @@ let exitCode = 0;
         label: step.label,
         threshold: step.threshold,
         kill: step.kill,
+        policy: step.policy ?? null,
+        expectSignature: step.expectSignature !== false,
         bundlePath,
         token,
         relayIp,
@@ -872,12 +1014,22 @@ let exitCode = 0;
       },
       runs: runs.map((r) => ({
         label: r.label,
+        scenario: r.label,
         threshold: r.threshold,
+        n: jurorCount,
         kill: r.kill,
+        relayMode: r.relayMode,
+        policy: r.policy,
+        expectSignature: r.expectSignature,
+        signatureVerified: r.signatureVerified,
+        classifications: r.classifications,
+        duplicatesSeen: r.duplicatesSeen ?? 0,
+        relayPolicyCounters: r.relayPolicyCounters ?? null,
         coordinatorWallMs: r.coordinatorWallMs,
         slowestBoxWallMs: r.slowestBoxWallMs,
         fastestBoxWallMs: r.fastestBoxWallMs,
         groupKey: r.groupKey,
+        groupKeyFingerprint: r.groupKeyFingerprint,
         relayRecords: r.relayRecords,
         relayPhases: r.relayPhases,
         perBox: r.perBox.map((b) => ({

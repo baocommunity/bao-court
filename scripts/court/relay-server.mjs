@@ -71,7 +71,48 @@ const statsFile = arg('stats-file', undefined);
 const pidFile = arg('pid-file', undefined);
 const durationMs = Number(arg('duration-ms', '0'));
 const jurorCount = Number(arg('jurors', '0'));
+/**
+ * DELIVERY MODE — the relay may LIE about delivery, never about content.
+ *
+ *   honest   (default) one order, every record to every subscriber. Byte-for-byte
+ *            the behaviour this server had before modes existed.
+ *   replay   duplicate a seeded fraction of records and re-deliver the copy
+ *            late. Content is byte-identical and correctly signed: the relay
+ *            can repeat, not forge. Tests receive-side idempotency over a real
+ *            network (a second partial signature must be impossible).
+ *   reorder  per-subscriber hold: each sender's records are released after a
+ *            seeded rank × window. Per-sender FIFO is preserved; only the
+ *            interleaving changes. Tests order-insensitivity between boxes.
+ *   silence  one juror's records are withheld from everyone else. Tests that a
+ *            censored juror cannot be blamed into a signature: the attempt must
+ *            fail closed.
+ *
+ * Selection is deterministic from (`--seed`, seq, subscriber), so a soak run is
+ * reproducible from its record.
+ */
+const MODES = ['honest', 'replay', 'reorder', 'silence'];
+const mode = arg('mode', 'honest');
+if (!MODES.includes(mode)) throw new Error(`--mode must be one of ${MODES.join('|')}, got "${mode}"`);
+const modeSeed = arg('seed', 'ceremony-soak');
+const replayP = Number(arg('replay-p', '0.35'));
+const replayLateMs = Number(arg('replay-late-ms', '120'));
+const reorderWindowMs = Number(arg('reorder-window-ms', '90'));
+const silenceIdx = Number(arg('silence-idx', '2'));
 const quiet = process.argv.includes('--quiet');
+
+/** Deterministic 32-bit hash — same inputs ⇒ same relay behaviour. */
+function hInt(parts) {
+  let h = 2166136261 >>> 0;
+  for (const part of parts) {
+    const text = String(part);
+    for (let i = 0; i < text.length; i += 1) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    h ^= 0x9e3779b9;
+  }
+  return h >>> 0;
+}
 
 if (!tokenFile) throw new Error('missing --token-file (this relay is not opened to the world)');
 // A bearer token is a secret: it is read here and never printed. The file is
@@ -104,9 +145,46 @@ function subscriber(as) {
       cursorMax: 0,
       firstPollAt: null,
       lastPollAt: null,
+      /** What this subscriber has actually been served, in ITS order. */
+      delivered: [],
+      /** Records held by `reorder`, with the wall time they may be released. */
+      pending: [],
     });
   }
   return subscribers.get(key);
+}
+
+/** Does this subscriber see this record at all? (`silence`) */
+function delivers(record, as) {
+  if (mode !== 'silence') return true;
+  const key = String(as ?? 'observer');
+  if (key === 'observer') return true; // the audit view is never censored
+  if (Number(record.from) !== silenceIdx) return true;
+  return Number(key) === silenceIdx; // the sender still sees its own traffic
+}
+
+/** When may this subscriber be served this record? (`reorder`) */
+function releaseDelay(record, as) {
+  if (mode !== 'reorder') return 0;
+  if (String(as ?? 'observer') === 'observer') return 0;
+  // A seeded PERMUTATION of the senders: distinct senders get distinct ranks, so
+  // the interleaving really changes (per-sender FIFO is still preserved).
+  const n = Math.max(1, jurorCount);
+  const offset = hInt(['rank-offset', modeSeed]) % n;
+  const rank = ((Number(record.from) || 0) + offset) % n;
+  return rank * reorderWindowMs;
+}
+
+/**
+ * Which records get a duplicate (`replay`)? EVERY Nth, deterministically, with
+ * a seeded phase offset — so a run always exercises idempotency instead of
+ * depending on a coin flip. `--replay-p` is the desired fraction; it is turned
+ * into an integer stride.
+ */
+const replayEvery = Math.max(1, Math.round(1 / Math.min(1, Math.max(0.05, replayP))));
+const replayPhase = hInt(['replay-phase', modeSeed]) % replayEvery;
+function replayDue(seq) {
+  return (seq + replayPhase) % replayEvery === 0;
 }
 
 const stats = {
@@ -119,7 +197,34 @@ const stats = {
   getHandlingMs: [],
   /** Per-phase volume, so the run report can attribute latency. */
   phases: {},
+  /** Delivery-policy counters (all zero in `honest`). */
+  duplicated: 0,
+  withheld: 0,
+  delayed: 0,
 };
+
+/**
+ * Route one received record to every subscriber the mode allows.
+ *
+ * In `honest` mode there is nothing to route: every subscriber's view IS the
+ * log, so GET serves `log.slice(since)` exactly as this server always did. Any
+ * policy mode (replay is content, not routing) needs the per-view bookkeeping.
+ */
+function fanout(record) {
+  subscriber('observer').delivered.push(record);
+  if (mode !== 'reorder' && mode !== 'silence') return;
+  for (let idx = 1; idx <= Math.max(jurorCount, 1); idx += 1) {
+    if (!delivers(record, idx)) {
+      stats.withheld += 1;
+      continue;
+    }
+    const delay = releaseDelay(record, idx);
+    if (delay > 0) stats.delayed += 1;
+    const view = subscriber(idx);
+    if (delay > 0) view.pending.push({ record, releaseAt: Date.now() + delay });
+    else view.delivered.push(record);
+  }
+}
 
 const now = () => Number(process.hrtime.bigint() - startedHr) / 1e6; // ms, monotonic
 const logLine = (obj) => {
@@ -172,8 +277,28 @@ function handled(req, res, body) {
     stats.accepted += 1;
     const phase = String(record.phase ?? 'unknown');
     stats.phases[phase] = (stats.phases[phase] ?? 0) + 1;
-    // Fan-out is implicit here (one honest view): every subscriber sees every
-    // record, in this order. Per-subscriber bookkeeping is updated on poll.
+    fanout(record);
+
+    // `replay`: append a byte-identical copy late. The relay cannot forge, only
+    // repeat — so this is exactly the "did the receiver dedupe it?" test.
+    if (mode === 'replay' && phase !== 'report' && !record.injected && replayDue(record.seq)) {
+      const inject = () => {
+        if (log.length >= maxRecords) return;
+        const copy = {
+          ...record,
+          seq: log.length + 1,
+          at: Date.now() - startedAt,
+          receivedAt: Date.now(),
+          injected: true,
+          replayedSeq: record.seq,
+        };
+        log.push(copy);
+        stats.duplicated += 1;
+        fanout(copy);
+      };
+      if (replayLateMs > 0) setTimeout(inject, replayLateMs).unref();
+      else inject();
+    }
 
     const handlingMs = now() - t0;
     stats.postHandlingMs.push(Number(handlingMs.toFixed(3)));
@@ -196,9 +321,25 @@ function handled(req, res, body) {
     const t0 = now();
     const as = url.searchParams.get('as');
     const since = Number(url.searchParams.get('since') ?? '0');
-    const from = Math.min(Math.max(0, Number.isFinite(since) ? since : 0), log.length);
-    const messages = log.slice(from);
     const sub = subscriber(as);
+    // Release anything whose reorder hold has expired, in (releaseAt, seq) order
+    // — that is the order this subscriber actually observes.
+    if (sub.pending.length > 0) {
+      const nowMs = Date.now();
+      const due = sub.pending.filter((p) => p.releaseAt <= nowMs);
+      if (due.length > 0) {
+        sub.pending = sub.pending.filter((p) => p.releaseAt > nowMs);
+        due.sort((a, b) => (a.releaseAt - b.releaseAt) || (a.record.seq - b.record.seq));
+        for (const item of due) sub.delivered.push(item.record);
+      }
+    }
+    // `honest` and `replay` serve the log itself: replay changes CONTENT (extra
+    // byte-identical copies), not routing, so every subscriber still sees every
+    // record. Only `reorder`/`silence` need per-view bookkeeping.
+    const plainView = mode === 'honest' || mode === 'replay';
+    const total = plainView ? log.length : sub.delivered.length;
+    const from = Math.min(Math.max(0, Number.isFinite(since) ? since : 0), total);
+    const messages = plainView ? log.slice(from) : sub.delivered.slice(from);
     const at = Date.now() - startedAt;
     if (sub.firstPollAt === null) sub.firstPollAt = at;
     sub.lastPollAt = at;
@@ -219,7 +360,7 @@ function handled(req, res, body) {
       at,
     });
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ messages, next: log.length, serverTime }));
+    res.end(JSON.stringify({ messages, next: total, serverTime }));
     return;
   }
 
@@ -258,6 +399,8 @@ function summarise() {
     host,
     port,
     jurors: jurorCount,
+    mode,
+    modeSeed,
     records: log.length,
     cap: maxRecords,
     stats: {
@@ -266,6 +409,9 @@ function summarise() {
       refusedAuth: stats.refusedAuth,
       refusedMalformed: stats.refusedMalformed,
       phases: stats.phases,
+      duplicated: stats.duplicated,
+      withheld: stats.withheld,
+      delayed: stats.delayed,
       postHandlingMs: {
         count: stats.postHandlingMs.length,
         p50: pct(stats.postHandlingMs, 50),
@@ -295,6 +441,9 @@ function summarise() {
       firstPollAt: s.firstPollAt,
       lastPollAt: s.lastPollAt,
       pollMsTotal: Number(s.pollMsTotal.toFixed(2)),
+      delivered: s.delivered.length,
+      /** The order THIS subscriber was served (first 64), for order proofs. */
+      order: ((mode === 'honest' || mode === 'replay') ? log : s.delivered).slice(0, 64).map((r) => r.seq),
     })),
     // Cursors: proof that every subscriber consumed the whole log (no split
     // view was created, deliberately, by this relay).

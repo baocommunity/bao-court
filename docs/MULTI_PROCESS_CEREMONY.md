@@ -302,3 +302,120 @@ minority. The **coordination structure** — separate processes, separate
 identities, signed messages, third-party ordering and per-subscriber views,
 independent verification, crash, replay, split-view, censorship and loss — is
 real.
+
+---
+
+## The continuous program (distributed soak)
+
+One distributed ceremony is evidence; a series of them is a programme. The
+three-box run (`docs/DISTRIBUTED_CEREMONY.md`) is executed unattended every six
+hours by `scripts/court/distributed-ceremony-soak.mjs`, on a systemd timer, for
+as long as the operator wants — the ceremony half of the ~100-hour test program
+whose rail half is the settlement soak.
+
+### What runs, and in what order
+
+Rotation (one scenario per invocation, persisted in `state.json`):
+
+| # | scenario | what it exercises | expected |
+|---|---|---|---|
+| 1 | `happy-k2` | 3 boxes, threshold 2: DKG → commit → reveal → aggregate | one key, one **verified** signature |
+| 2 | `happy-kn` | 3 boxes, threshold 3 (all-of-N) | one key, one **verified** signature |
+| 3 | `kill` | SIGKILL a juror over ssh after its `frost-commit` reaches the relay | **no** signature, survivors `SIGN_MISSING_REVEAL` |
+| 4 | `replay` | relay duplicates a deterministic stride of records and re-delivers them late | one key, one **verified** signature, duplicates deduped |
+| 5 | `reorder` | relay releases each sender's records after a seeded rank × 90 ms (per-sender FIFO kept) | one key, one **verified** signature, different delivery orders |
+| 6 | `silence` (opt-in `--with-silence`) | relay withholds one juror's records from the others | **no** signature, typed missing-peer abort |
+
+The relay may lie about **delivery** and never about **content**: every message
+on the wire is a signed Nostr event, so a duplicated or delayed record is
+byte-identical, and a censored one is simply absent. `replay` and `reorder` are
+therefore real idempotency/order tests over a real network, not injections.
+
+### One JSONL record per run
+
+`~/.local/state/bao-court-ceremony-soak/records.jsonl`, append-only:
+
+```jsonc
+{"ts":"…","scenario":"happy-k2","k":2,"n":3,"outcome":"pass",
+ "groupKeyFingerprint":"sha256(ffee8d18eb7c6ba5…)[0:16]=e87dbce455e2a36e",
+ "signatureVerified":true,"durationMs":16179,"perBoxWallMs":[1343,1335,1460],
+ "relayRttP50":3.05,"classification":"OK",
+ "evidencePath":"runs/…/dist-…-summary.json", "relayMode":"honest",
+ "relayRecords":18,"gap":null,"cleanup":{"straysBefore":[…],"after":[…],"prunedRuns":0}}
+```
+
+`outcome` is `pass`, `fail`, `timeout`, `blocked` (a box was down or had no
+Node — recorded with the reason, never a hang) or `gap` (a reboot or a long
+elapse: the programme was not observing, which is not a failure). **No key,
+share, seed, nonce or token is ever written**: the fingerprint is a hash prefix
+of the *public* group key.
+
+### Cadence, timer, control
+
+`scripts/court/ceremony-soakctl.sh` (user units — no root):
+
+```bash
+./scripts/court/ceremony-soakctl.sh install     # enable the 6-hourly timer for THIS checkout
+./scripts/court/ceremony-soakctl.sh status      # timer state + the status block
+./scripts/court/ceremony-soakctl.sh report --last=20
+./scripts/court/ceremony-soakctl.sh pause|start|stop|run-now|logs|preflight|next
+```
+
+Timer (`scripts/court/systemd/bao-court-ceremony-soak.timer`): `OnBootSec=15min`,
+`OnUnitActiveSec=6h`, `Persistent=true` (one missed slot is replayed after
+downtime), `RandomizedDelaySec=5min`, `AccuracySec=1min`. Service:
+`flock -n` on a lock file (a stuck run never overlaps the next tick),
+`timeout --kill-after=60s 600s` outside the runner's own 300 s budget,
+`SuccessExitStatus=0 1 2` so a failed or blocked ceremony stays *data* rather
+than a permanently failed unit.
+
+Boot-gap accounting: the runner compares `/proc/sys/kernel/random/boot_id` with
+the last stored value and also rejects an elapse > 2.5 × cadence, writing a
+`gap` record with the reason before it runs anything. A reboot is a gap in the
+series, not a failure — and the series says so out loud.
+
+Rolling artifact cap: the last `--keep-runs=120` evidence directories (≈30 days
+at the 6-hour cadence) are kept; older ones are pruned after each run.
+`records.jsonl` itself is append-only and tiny (~700 B/run).
+
+### Status block
+
+`status` prints, per scenario, runs/pass/fail/blocked; the verified-signature
+rate for honest scenarios (**must be 100%**) and the signed rate for fault
+scenarios (**must be 0%**); the classification histogram; the last failure; the
+next run; and the standing note that this is four boxes owned by one operator on
+one network path — a continuous transport/DKG/signing programme, **not** a
+Byzantine network.
+
+### What the series proves that a single run cannot
+
+- that the ceremony **keeps** working across reboots, OS/Node updates, code
+  changes and months of scheduler and network variance, rather than having
+  worked once;
+- that fail-closed behaviour is **stable**, not a lucky abort: every `kill` and
+  `silence` in the series must produce zero signatures, and the histogram shows
+  which classifications actually occur;
+- that the honest path's signature verification rate is 100% over time, which is
+  the only meaningful way to catch a rare timing-dependent defect (exactly the
+  class the three-box run found in its first hour: a faster peer's FROST
+  commitment being discarded);
+- that the operator's environment (the four boxes) stays capable — a box losing
+  Node or becoming unreachable shows up as `blocked` with a reason, before it
+  silently shrinks the topology.
+
+### What it still does not prove
+
+- **No adversarial network.** The relay's lies are delivery policies; there is
+  no packet loss, partition, eclipse, clock-skew attack or traffic analysis, and
+  all four machines have one owner. A Byzantine *juror* is out of scope (that is
+  the R30 replay suite plus the protocol's own gates).
+- **No real stake.** Every roster bond reference is `rail:"none"`; nothing is at
+  risk and nothing can be slashed. Bond verification is a later round (Liquid
+  testnet first).
+- **Custody is on disk.** Keys are 0600 files generated on each box, not HSMs or
+  threshold devices.
+- **Uptime is not the metric.** `gap` records are expected across reboots; the
+  series measures the ceremony when it runs, not the hosts' availability.
+- **One geography, one operator, three jurors.** Threshold 2-of-3 and 3-of-3
+  across three boxes is a liveness/correctness demonstration, not a
+  decentralisation claim.

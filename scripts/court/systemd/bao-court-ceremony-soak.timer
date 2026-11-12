@@ -1,0 +1,17 @@
+[Unit]
+Description=BAO Court — distributed ceremony soak, every 6 hours
+
+[Timer]
+# First run 15 minutes after boot (the boxes and the network need to be up),
+# then every 6 hours of ACTIVE time. Persistent=true replays one missed slot
+# after downtime instead of silently skipping it; the reboot itself is recorded
+# by the runner as a `gap` record, never as a failure.
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=5min
+Unit=bao-court-ceremony-soak.service
+
+[Install]
+WantedBy=timers.target
