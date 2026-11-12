@@ -11,6 +11,34 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (round 54 — replay is not equivocation: the collapse that must come first)
+- **False equivocation on replay.** `scripts/court/distributed-ceremony.mjs`
+  reported a duplicated-and-late-redelivered DKG commitment as an equivocation
+  and blamed an honest juror. The coordinator's audit of the relay log compared
+  the parsed proof-of-knowledge object by **reference**
+  (`existing.parsed.pok === parsed.pok`), which is false for two parses of the
+  same event, so the "byte-identical duplicate" branch could never fire.
+  Reproduced on untouched `origin/main` with `--scenario=replay` (n=3 k=2):
+  `equivocatingJurors:[2]`, `duplicatesIgnored:0`, and three assertions failed —
+  the group key could not be re-derived from the relay log, the FROST signature
+  could not be verified against it, and "exactly one DISTINCT commitment per
+  juror" failed.
+- **`courtCeremonyCore.ts`** gains `signedRecordIdentity` and
+  `collapseSignedRecords` (exported from `index.ts`): collapse **byte-identical
+  signed events** (same event id, payload hash as fallback — never the arrival
+  index) before any equivocation reasoning, keyed by `(phase, round, jurorIdx)`,
+  and report blame only for a **different** identity under the same key. The
+  harness now calls it instead of re-implementing the comparison; the session
+  classes already compared by value and are unchanged.
+- **Assertions**: the harness now requires the collapsed count to equal the
+  number of records the relay marked `injected` ("replay is not equivocation"),
+  and the equivocation check reports `duplicatesCollapsed` and
+  `unparsedCommitments` (an unparseable record is counted, never blamed).
+- **Tests**: `__tests__/replayEquivocation.test.ts` — the captured trace of the
+  failing run (`__fixtures__/replay-wire-n3-k2.json`) yields zero accusations,
+  while a constructed genuine equivocation is still detected and blamed on the
+  right juror, including replay and equivocation in one stream.
+
 ### Added (round 53 — the ceremony bond gate: a seat costs a PROVEN bond)
 - **`bondCheckGate.ts`** (`buildBondCheckArgs`, `parseBondCheckOutput`,
   `gateRosterOnBonds`, `BOND_CHECK_ENV`) — the protocol side of a pluggable,

@@ -1,0 +1,970 @@
+{
+ "capturedAt": "2026-11-12T21:10:15Z",
+ "source": "scripts/court/distributed-ceremony.mjs --scenario=replay (relay replay mode, --replay-p=0.35), relay /log dump, 3 boxes / n=3 k=2",
+ "records": [
+  {
+   "seq": 1,
+   "round": 1,
+   "phase": "dkg-commit",
+   "from": 1,
+   "event": {
+    "kind": 38031,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:1"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "p",
+      "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "1"
+     ],
+     [
+      "threshold",
+      "2"
+     ],
+     [
+      "phase_nonce",
+      "ca767356-4b84-43eb-8037-565286e8cddd"
+     ],
+     [
+      "pok_n",
+      "03ced8439a934afcfebbc06b9176346371f5e5bb89f54580494bccdd9dc52af263"
+     ],
+     [
+      "pok_z",
+      "84b5fff96f6d696a7a2e3ede3ee85a560453398426fc4f7c3002d1accd615252"
+     ],
+     [
+      "commit",
+      "037fe4196ce37ac7676fe08e0838d7f778a7fa3e7191b59796e58615ee162b9537"
+     ],
+     [
+      "commit",
+      "02cef85dca6b5a1e78d312d38e36cca6856b49c539b01347f8e079789dc9d8e726"
+     ],
+     [
+      "alt",
+      "BAO Court DKG commitment from juror 1"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":1,\"threshold\":2,\"phaseNonce\":\"ca767356-4b84-43eb-8037-565286e8cddd\",\"pok\":{\"nonce\":\"03ced8439a934afcfebbc06b9176346371f5e5bb89f54580494bccdd9dc52af263\",\"response\":\"84b5fff96f6d696a7a2e3ede3ee85a560453398426fc4f7c3002d1accd615252\"},\"vssCommits\":[\"037fe4196ce37ac7676fe08e0838d7f778a7fa3e7191b59796e58615ee162b9537\",\"02cef85dca6b5a1e78d312d38e36cca6856b49c539b01347f8e079789dc9d8e726\"]}",
+    "pubkey": "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc",
+    "id": "4a8bf9109671c215e3cb943835b6a319fa69e61e6ffb2e4e56975b79b4eed220",
+    "sig": "803775dbd6e7caa1ac62a5e953d2da22a584f3bdfd3c20b20b8b0cb22f83d37871973f87e120b92c4b8cb21aec5d619b07649cacccabfb863cb556c159b6053e"
+   }
+  },
+  {
+   "seq": 2,
+   "round": 1,
+   "phase": "dkg-commit",
+   "from": 2,
+   "event": {
+    "kind": 38031,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "p",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "2"
+     ],
+     [
+      "threshold",
+      "2"
+     ],
+     [
+      "phase_nonce",
+      "211091f6-78fd-4625-a248-52d69045fb97"
+     ],
+     [
+      "pok_n",
+      "035fa03af7a7ca5530207eae065c0b3e7829957e594834fe3b10093ba9ac2daa7f"
+     ],
+     [
+      "pok_z",
+      "8078952ad61c5f338365572818755d617a54a983c7a4b82d1ca875393fe50adc"
+     ],
+     [
+      "commit",
+      "03d2b1fc453fbdc3a1c85d0ee1c3cf50c2434dfbd42c2f96e3c05713770bd7477a"
+     ],
+     [
+      "commit",
+      "02c30db4d57695a554fcdb889f696461291db4b0f939b4d264570a8eb64ff53db9"
+     ],
+     [
+      "alt",
+      "BAO Court DKG commitment from juror 2"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":2,\"threshold\":2,\"phaseNonce\":\"211091f6-78fd-4625-a248-52d69045fb97\",\"pok\":{\"nonce\":\"035fa03af7a7ca5530207eae065c0b3e7829957e594834fe3b10093ba9ac2daa7f\",\"response\":\"8078952ad61c5f338365572818755d617a54a983c7a4b82d1ca875393fe50adc\"},\"vssCommits\":[\"03d2b1fc453fbdc3a1c85d0ee1c3cf50c2434dfbd42c2f96e3c05713770bd7477a\",\"02c30db4d57695a554fcdb889f696461291db4b0f939b4d264570a8eb64ff53db9\"]}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "c6fde021f7a0598fcfaef7f0a6e7ac243200ea92732bc0b25cab573347975a1b",
+    "sig": "f101fb2610abd3e6c450668270a20c36af2929e1461c15fc6dc4a33d3d0ca74ecb0a148e6ff529eb32b05ea8c5f325fd1bfd13a6973bf21cfc506f659b62266c"
+   }
+  },
+  {
+   "seq": 3,
+   "round": 1,
+   "phase": "dkg-commit",
+   "from": 2,
+   "injected": true,
+   "replayedSeq": 2,
+   "event": {
+    "kind": 38031,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "p",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "2"
+     ],
+     [
+      "threshold",
+      "2"
+     ],
+     [
+      "phase_nonce",
+      "211091f6-78fd-4625-a248-52d69045fb97"
+     ],
+     [
+      "pok_n",
+      "035fa03af7a7ca5530207eae065c0b3e7829957e594834fe3b10093ba9ac2daa7f"
+     ],
+     [
+      "pok_z",
+      "8078952ad61c5f338365572818755d617a54a983c7a4b82d1ca875393fe50adc"
+     ],
+     [
+      "commit",
+      "03d2b1fc453fbdc3a1c85d0ee1c3cf50c2434dfbd42c2f96e3c05713770bd7477a"
+     ],
+     [
+      "commit",
+      "02c30db4d57695a554fcdb889f696461291db4b0f939b4d264570a8eb64ff53db9"
+     ],
+     [
+      "alt",
+      "BAO Court DKG commitment from juror 2"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":2,\"threshold\":2,\"phaseNonce\":\"211091f6-78fd-4625-a248-52d69045fb97\",\"pok\":{\"nonce\":\"035fa03af7a7ca5530207eae065c0b3e7829957e594834fe3b10093ba9ac2daa7f\",\"response\":\"8078952ad61c5f338365572818755d617a54a983c7a4b82d1ca875393fe50adc\"},\"vssCommits\":[\"03d2b1fc453fbdc3a1c85d0ee1c3cf50c2434dfbd42c2f96e3c05713770bd7477a\",\"02c30db4d57695a554fcdb889f696461291db4b0f939b4d264570a8eb64ff53db9\"]}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "c6fde021f7a0598fcfaef7f0a6e7ac243200ea92732bc0b25cab573347975a1b",
+    "sig": "f101fb2610abd3e6c450668270a20c36af2929e1461c15fc6dc4a33d3d0ca74ecb0a148e6ff529eb32b05ea8c5f325fd1bfd13a6973bf21cfc506f659b62266c"
+   }
+  },
+  {
+   "seq": 4,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 1,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:1:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "1",
+      "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc"
+     ],
+     [
+      "to",
+      "2",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":1,\"fromPubkey\":\"7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc\",\"toIdx\":2,\"toPubkey\":\"7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec\",\"encryptedShare\":\"AmEemaX/KqN2JUFHa+XhISU1qXSXa2CLNGIRU9eSeIpBvAD2iQy5sKznu+IFxNbGRPkwgIObkYbyGK9a9y5mtbAybUB+XzBUcn84qKjncqB3T7xeowoCk24ZOjQyPyI1IlHJlP6XcNh7wTw42F9FCMvJ1IjqA4yiSqvHQek5ktI/r+Q=\",\"phaseNonce\":\"ca767356-4b84-43eb-8037-565286e8cddd\"}",
+    "pubkey": "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc",
+    "id": "ee924d22bf8cd8a73fae80a4acfdd373e041ffcd7fe4397532d91d97da461f87",
+    "sig": "419d1bccd8416d068305f39ed7f0ac6e38a5a9c5add2a8326442f8fb2c1c5a19600dc8b7f668f90010599bd605aa3851ba3415422bb6dac20ab8bb3ecd5d6e94"
+   }
+  },
+  {
+   "seq": 5,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 1,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:1:3"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "1",
+      "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc"
+     ],
+     [
+      "to",
+      "3",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":1,\"fromPubkey\":\"7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc\",\"toIdx\":3,\"toPubkey\":\"4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d\",\"encryptedShare\":\"Aiea+O+EF6hwuQIMsn67naLl0s7v15DiKPdJ22q5gywpJNk8bYGH5ifh8BvZRxFJAT+j4juFPWtdFRPBb5xRsErEPG5AhxxeazbgO8uM8eOfiSNoVwPZlLPDKHGhyT2PA1/92Fb/M6tCEf46MbhQs7JbzCvZn19uh61tKHbnTzv7pQA=\",\"phaseNonce\":\"ca767356-4b84-43eb-8037-565286e8cddd\"}",
+    "pubkey": "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc",
+    "id": "8642a4bb1f93c28f5bfc6d0433a1afc17a3b441e6d5d6216b32de0610319856b",
+    "sig": "6f92566bda6ec45554f51fd7364e68bcb24fc586dcaf549462871dfdde86d238bf5b4da593a2de05187a73f9f6659260d8a7414156f2d229150f419659567da7"
+   }
+  },
+  {
+   "seq": 6,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 2,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2:1"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "2",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ],
+     [
+      "to",
+      "1",
+      "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":2,\"fromPubkey\":\"7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec\",\"toIdx\":1,\"toPubkey\":\"7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc\",\"encryptedShare\":\"AuaP4XHu5gbyR+kTKpbzQd+QrzilWLOl9t17Wx/fXReMX/wwZ7cOAIKx6KnPN/KjNyANc9B3TvS0YOZG7xkQF+K42EolHtav5uwX6d0N3PuoePYixpnlDZ+h9aiI4p02FJi9uBlfmvNMWrCz28uGGEV8PHqc/bFTMGlgspAiP5QmpHc=\",\"phaseNonce\":\"211091f6-78fd-4625-a248-52d69045fb97\"}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "b6f9a113b22035675e61f7a9d3aba94053021956728f4fc51137c581622df870",
+    "sig": "1873d061e50aa830264c4678b1191b661a2eda9d09bef26600b881d5dd34f3099ad101c218763430e14ebe4fc6a7ff72c29c28c20b00cb6e0607550f55ce8872"
+   }
+  },
+  {
+   "seq": 7,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 2,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2:3"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "2",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ],
+     [
+      "to",
+      "3",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":2,\"fromPubkey\":\"7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec\",\"toIdx\":3,\"toPubkey\":\"4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d\",\"encryptedShare\":\"AuLBkvlmcAMLIcytZTSl5iN+pxHjcl/AFtvNeX+F0nAPf7tktTPeshuj/XTQwfgv3PkQZe8c9mIYHOJxInL8eO2GcPnlfyx8inG9NrObAGUA0sPL/ozSwWh9jtIDLNBk4DIgvKw6R9GqNNjzPCsy/K4DtkoclQH5gsWVtVeaWKhxQW8=\",\"phaseNonce\":\"211091f6-78fd-4625-a248-52d69045fb97\"}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "36f8821d53cb085823afbc5e75134f91562c761db4feb2e1c942da55d368a9e1",
+    "sig": "46b96da706b0c542108f096f9801428ad6b69301849a26385bb3e0fbe36e2180570dae4eafc91da18d6707d871e46dd24b5d1a621a8dde38184a565c50b5e3b6"
+   }
+  },
+  {
+   "seq": 8,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 1,
+   "injected": true,
+   "replayedSeq": 5,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:1:3"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "1",
+      "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc"
+     ],
+     [
+      "to",
+      "3",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":1,\"fromPubkey\":\"7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc\",\"toIdx\":3,\"toPubkey\":\"4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d\",\"encryptedShare\":\"Aiea+O+EF6hwuQIMsn67naLl0s7v15DiKPdJ22q5gywpJNk8bYGH5ifh8BvZRxFJAT+j4juFPWtdFRPBb5xRsErEPG5AhxxeazbgO8uM8eOfiSNoVwPZlLPDKHGhyT2PA1/92Fb/M6tCEf46MbhQs7JbzCvZn19uh61tKHbnTzv7pQA=\",\"phaseNonce\":\"ca767356-4b84-43eb-8037-565286e8cddd\"}",
+    "pubkey": "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc",
+    "id": "8642a4bb1f93c28f5bfc6d0433a1afc17a3b441e6d5d6216b32de0610319856b",
+    "sig": "6f92566bda6ec45554f51fd7364e68bcb24fc586dcaf549462871dfdde86d238bf5b4da593a2de05187a73f9f6659260d8a7414156f2d229150f419659567da7"
+   }
+  },
+  {
+   "seq": 9,
+   "round": 1,
+   "phase": "dkg-commit",
+   "from": 3,
+   "event": {
+    "kind": 38031,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:3"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "p",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "3"
+     ],
+     [
+      "threshold",
+      "2"
+     ],
+     [
+      "phase_nonce",
+      "cf465b81-bb7f-47e0-838d-d3af0afd9dfc"
+     ],
+     [
+      "pok_n",
+      "031bd9a9135f4bc894d38ac94c337028c0e462b6940f2228a0c379039f445ea551"
+     ],
+     [
+      "pok_z",
+      "84842a08ef365bb23e5c453a7247d25461bf46547aac061fa6675a7714083a66"
+     ],
+     [
+      "commit",
+      "03b420e3b39878e5c779630e6fe5556fbed07cf51ed4f746939a161f9a3da6f443"
+     ],
+     [
+      "commit",
+      "0293bf97417a982c7ccc2496fc444ae7b955fd115881d7d9405d19d1e19a729f3c"
+     ],
+     [
+      "alt",
+      "BAO Court DKG commitment from juror 3"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":3,\"threshold\":2,\"phaseNonce\":\"cf465b81-bb7f-47e0-838d-d3af0afd9dfc\",\"pok\":{\"nonce\":\"031bd9a9135f4bc894d38ac94c337028c0e462b6940f2228a0c379039f445ea551\",\"response\":\"84842a08ef365bb23e5c453a7247d25461bf46547aac061fa6675a7714083a66\"},\"vssCommits\":[\"03b420e3b39878e5c779630e6fe5556fbed07cf51ed4f746939a161f9a3da6f443\",\"0293bf97417a982c7ccc2496fc444ae7b955fd115881d7d9405d19d1e19a729f3c\"]}",
+    "pubkey": "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d",
+    "id": "4f9ee39d50749ec6ee5be062c493993d207c0954f88cb82862e1d0dffbab4ed4",
+    "sig": "3284d02b3b540b4b006347f8bec13647057c269438808cb6366487d3eaf4c4954b03ca2aab7549f860588b71904c8b36aad69f2efb77cd9642208efbd8a761b9"
+   }
+  },
+  {
+   "seq": 10,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 3,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:3:1"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "3",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ],
+     [
+      "to",
+      "1",
+      "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":3,\"fromPubkey\":\"4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d\",\"toIdx\":1,\"toPubkey\":\"7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc\",\"encryptedShare\":\"AlUJKvVeanqVOSDaAstUs6Iz3tpFVRLsOF6Tce9kmHclzGmwnPggTreM4zeVBExeWPAtNwVdy2ETul4/gb69Hzc0tfF4+/fhnOIBB2tqg49khlWbWraNqIXK02Yj1bSc4U7oR/6d9JbOfuO4IWWu0u0/t9JMJ7Y0NLtf/t8RZViDU+Q=\",\"phaseNonce\":\"cf465b81-bb7f-47e0-838d-d3af0afd9dfc\"}",
+    "pubkey": "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d",
+    "id": "fe756ed4f74ba888b2076962461fea4dbf4e2d57716030563fb81842cf387254",
+    "sig": "26cd06946109a1a78bdb72979dbbe1e3567c423b559a36c2d8d1263bccd7613fc37f5f062bd3d59eccd588c0635234348a7b460635c076f5d40f563f8f773f34"
+   }
+  },
+  {
+   "seq": 11,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 3,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:3:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "3",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ],
+     [
+      "to",
+      "2",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":3,\"fromPubkey\":\"4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d\",\"toIdx\":2,\"toPubkey\":\"7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec\",\"encryptedShare\":\"AnupF74nrj9+vGXkv24/rsGumHOLQv68rdxLLELGOwMX0a545xW4PgLqWAGVxNpogWQUw93B2IC9/uBp6mHJJklPFXkxSPssTwvDFo08bvqDxwq2IaenInUV6Yq7YfXlCqASvt9E/6gZhyYYaKFJczrED5RB/O09o/yN8i6wHyVoZ0w=\",\"phaseNonce\":\"cf465b81-bb7f-47e0-838d-d3af0afd9dfc\"}",
+    "pubkey": "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d",
+    "id": "bf0acbae7b02431703c49f0f57a36a13c2b3f83f60fcd702cfeff0e0b73f17f5",
+    "sig": "746328597878ece0ae04946ec12555d687381254f7a39b0ebe4d71c67ccbd80305d9372a72a562d250069ec8949e3080e4dc74ed5ab67df3f2b1aeb3484dd2ae"
+   }
+  },
+  {
+   "seq": 12,
+   "round": 1,
+   "phase": "frost-commit",
+   "from": 1,
+   "event": {
+    "kind": 39005,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:1"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "1"
+     ],
+     [
+      "binder_pn",
+      "03af1d27f3f75bdec8facf5c72253767c13684802b3b6c2ae4eadc614580f044e4"
+     ],
+     [
+      "hidden_pn",
+      "0289245c86b83e94a2c53a446e759377b0d23eef70ffa71c18551293ca2aa2d705"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing commitment from juror 1"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":1,\"commitmentPackage\":{\"idx\":1,\"binder_pn\":\"03af1d27f3f75bdec8facf5c72253767c13684802b3b6c2ae4eadc614580f044e4\",\"hidden_pn\":\"0289245c86b83e94a2c53a446e759377b0d23eef70ffa71c18551293ca2aa2d705\"}}",
+    "pubkey": "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc",
+    "id": "5f1870b8d38ed5d7aa8c558a825cdee0fe704c993e3ef1643d7c43e7fc3cba0a",
+    "sig": "4bed1dd6d289de76f6d71d46a027e7d6c4ac00e4e0c1fe55432ef15a7caee1b5aee2a8d1b64888a258d69c2f1ec82c28e8fe8670948c2eff02a327ca3f98d37e"
+   }
+  },
+  {
+   "seq": 13,
+   "round": 1,
+   "phase": "frost-commit",
+   "from": 2,
+   "event": {
+    "kind": 39005,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "2"
+     ],
+     [
+      "binder_pn",
+      "031edf523f1e84386a45140c447f466e535a073a664f72183795da2859870185be"
+     ],
+     [
+      "hidden_pn",
+      "029d63aa09ec000ee98d354b04ca43e1c10efec9083b0efb97f0b40fda6f5d86ba"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing commitment from juror 2"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":2,\"commitmentPackage\":{\"idx\":2,\"binder_pn\":\"031edf523f1e84386a45140c447f466e535a073a664f72183795da2859870185be\",\"hidden_pn\":\"029d63aa09ec000ee98d354b04ca43e1c10efec9083b0efb97f0b40fda6f5d86ba\"}}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "42cd43cdcc77b691bb0573409d608b72e3b73fe04cde863fec326653080e53f9",
+    "sig": "0430b075c06ceba0febdaf7fec0f5ab01a15063b50204d0c74d790c64078ac009b747c9f4d0b5324b62140f1645f8839084c73c013242b4ada2a15c270e7a6d2"
+   }
+  },
+  {
+   "seq": 14,
+   "round": 1,
+   "phase": "dkg-share",
+   "from": 3,
+   "injected": true,
+   "replayedSeq": 11,
+   "event": {
+    "kind": 39003,
+    "created_at": 1794517918,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:3:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "from",
+      "3",
+      "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d"
+     ],
+     [
+      "to",
+      "2",
+      "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"fromIdx\":3,\"fromPubkey\":\"4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d\",\"toIdx\":2,\"toPubkey\":\"7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec\",\"encryptedShare\":\"AnupF74nrj9+vGXkv24/rsGumHOLQv68rdxLLELGOwMX0a545xW4PgLqWAGVxNpogWQUw93B2IC9/uBp6mHJJklPFXkxSPssTwvDFo08bvqDxwq2IaenInUV6Yq7YfXlCqASvt9E/6gZhyYYaKFJczrED5RB/O09o/yN8i6wHyVoZ0w=\",\"phaseNonce\":\"cf465b81-bb7f-47e0-838d-d3af0afd9dfc\"}",
+    "pubkey": "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d",
+    "id": "bf0acbae7b02431703c49f0f57a36a13c2b3f83f60fcd702cfeff0e0b73f17f5",
+    "sig": "746328597878ece0ae04946ec12555d687381254f7a39b0ebe4d71c67ccbd80305d9372a72a562d250069ec8949e3080e4dc74ed5ab67df3f2b1aeb3484dd2ae"
+   }
+  },
+  {
+   "seq": 15,
+   "round": 1,
+   "phase": "frost-commit",
+   "from": 3,
+   "event": {
+    "kind": 39005,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:3"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "3"
+     ],
+     [
+      "binder_pn",
+      "02aa32c2e2e99afcfe0696b9678f4d304eeb53f01ba519b7480065ab881d910c3d"
+     ],
+     [
+      "hidden_pn",
+      "035d105accce9d71f8778a847deeeeb475d940bf8de334395664764ead1bd98ff9"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing commitment from juror 3"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":3,\"commitmentPackage\":{\"idx\":3,\"binder_pn\":\"02aa32c2e2e99afcfe0696b9678f4d304eeb53f01ba519b7480065ab881d910c3d\",\"hidden_pn\":\"035d105accce9d71f8778a847deeeeb475d940bf8de334395664764ead1bd98ff9\"}}",
+    "pubkey": "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d",
+    "id": "3be4848bcac0710356b2c5e31320cf4c9471850226b2b8ee648796d36badf424",
+    "sig": "20d704414e063fb0292e3184b5d564c8f77d363115a0769fca64513911c324b5248bfa73c03f39e615ad3cfa987a49a37bb574f6b99c9490a4bf9ca5411e26c6"
+   }
+  },
+  {
+   "seq": 16,
+   "round": 1,
+   "phase": "frost-reveal",
+   "from": 1,
+   "event": {
+    "kind": 39006,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:1"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "1"
+     ],
+     [
+      "pk",
+      "0235884ee7c507e8f0b3253e555fec9f1fc2b8d575125926e8864dbe5ce6af5a02"
+     ],
+     [
+      "nonce_binder",
+      "03af1d27f3f75bdec8facf5c72253767c13684802b3b6c2ae4eadc614580f044e4"
+     ],
+     [
+      "nonce_hidden",
+      "0289245c86b83e94a2c53a446e759377b0d23eef70ffa71c18551293ca2aa2d705"
+     ],
+     [
+      "psig",
+      "423a950f763d2cfd9f255c863d6ed94d6fab80191c61cf6c71dae0c918eb6c0d"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing reveal from juror 1"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":1,\"publicNonce\":{\"idx\":1,\"binder_pn\":\"03af1d27f3f75bdec8facf5c72253767c13684802b3b6c2ae4eadc614580f044e4\",\"hidden_pn\":\"0289245c86b83e94a2c53a446e759377b0d23eef70ffa71c18551293ca2aa2d705\"},\"partialSig\":\"423a950f763d2cfd9f255c863d6ed94d6fab80191c61cf6c71dae0c918eb6c0d\",\"frostPubkey\":\"0235884ee7c507e8f0b3253e555fec9f1fc2b8d575125926e8864dbe5ce6af5a02\"}",
+    "pubkey": "7727e053d3c4d2d8a17807ad8a519a426f167a92d9a8063766d6233d2daab9cc",
+    "id": "d696cb5cce757e57675ef650a92672b56be750d7e1e7cf3821149be35f024117",
+    "sig": "3d2a770d760ea7406d7584f3b1e6d6a86f153eccf557f6ac25a1785aeaa333e8ffa8cf3171a86163e04b56ed6780080c093f4ffd1c31c25735d08dccc2bf0af4"
+   }
+  },
+  {
+   "seq": 17,
+   "round": 1,
+   "phase": "frost-reveal",
+   "from": 2,
+   "event": {
+    "kind": 39006,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "2"
+     ],
+     [
+      "pk",
+      "02f49b85bfcbdef69b2f048fda4954b971c83fb9ae6d476fdf610edffceffa9c5c"
+     ],
+     [
+      "nonce_binder",
+      "031edf523f1e84386a45140c447f466e535a073a664f72183795da2859870185be"
+     ],
+     [
+      "nonce_hidden",
+      "029d63aa09ec000ee98d354b04ca43e1c10efec9083b0efb97f0b40fda6f5d86ba"
+     ],
+     [
+      "psig",
+      "30309c44eba41a265e55d5907049785adab9c2e2db460e4422c2bacc21e44cc9"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing reveal from juror 2"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":2,\"publicNonce\":{\"idx\":2,\"binder_pn\":\"031edf523f1e84386a45140c447f466e535a073a664f72183795da2859870185be\",\"hidden_pn\":\"029d63aa09ec000ee98d354b04ca43e1c10efec9083b0efb97f0b40fda6f5d86ba\"},\"partialSig\":\"30309c44eba41a265e55d5907049785adab9c2e2db460e4422c2bacc21e44cc9\",\"frostPubkey\":\"02f49b85bfcbdef69b2f048fda4954b971c83fb9ae6d476fdf610edffceffa9c5c\"}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "55fb7cf4e2b221602021556f914b6d506c9fe115b02e962093f9358ad3c2ff57",
+    "sig": "00baeb2c4e1476615e021b2b4b86c2f261ec86962dbb1d916916c5501d346bf81ece820a69750ec7ee1703590b2e1d74c6f71ade029e41d809f2576a94179dc5"
+   }
+  },
+  {
+   "seq": 18,
+   "round": 1,
+   "phase": "frost-reveal",
+   "from": 3,
+   "event": {
+    "kind": 39006,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:3"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "3"
+     ],
+     [
+      "pk",
+      "02d131d5924b4b89c212eb418247c42151eeb70e82f9161109e9de4926a909d73d"
+     ],
+     [
+      "nonce_binder",
+      "02aa32c2e2e99afcfe0696b9678f4d304eeb53f01ba519b7480065ab881d910c3d"
+     ],
+     [
+      "nonce_hidden",
+      "035d105accce9d71f8778a847deeeeb475d940bf8de334395664764ead1bd98ff9"
+     ],
+     [
+      "psig",
+      "c395f95847113111a716f471a391d586faba2f89450cd6cc5811694d12b0fbe6"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing reveal from juror 3"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":3,\"publicNonce\":{\"idx\":3,\"binder_pn\":\"02aa32c2e2e99afcfe0696b9678f4d304eeb53f01ba519b7480065ab881d910c3d\",\"hidden_pn\":\"035d105accce9d71f8778a847deeeeb475d940bf8de334395664764ead1bd98ff9\"},\"partialSig\":\"c395f95847113111a716f471a391d586faba2f89450cd6cc5811694d12b0fbe6\",\"frostPubkey\":\"02d131d5924b4b89c212eb418247c42151eeb70e82f9161109e9de4926a909d73d\"}",
+    "pubkey": "4885a2bee2f13c1a66149b9a4b0e010c0d96e9f2af4d4247ed9ac731958aa06d",
+    "id": "41145ae3acd2ae549b382b52f66596e60b579695fb0c7697869b95b43e7bf148",
+    "sig": "73c627ff19cab79d597e153e99f2f837372754e83c5dff313fed5c7d8dc671cbf6081d8d1790d996564ea8a3367e2234c1d7ad9e67e0c33d321ba8aaee7bac05"
+   }
+  },
+  {
+   "seq": 19,
+   "round": 1,
+   "phase": "frost-reveal",
+   "from": 2,
+   "injected": true,
+   "replayedSeq": 17,
+   "event": {
+    "kind": 39006,
+    "created_at": 1794517919,
+    "tags": [
+     [
+      "d",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5:2"
+     ],
+     [
+      "e",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5",
+      "",
+      "root"
+     ],
+     [
+      "dispute",
+      "bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5"
+     ],
+     [
+      "juror",
+      "2"
+     ],
+     [
+      "pk",
+      "02f49b85bfcbdef69b2f048fda4954b971c83fb9ae6d476fdf610edffceffa9c5c"
+     ],
+     [
+      "nonce_binder",
+      "031edf523f1e84386a45140c447f466e535a073a664f72183795da2859870185be"
+     ],
+     [
+      "nonce_hidden",
+      "029d63aa09ec000ee98d354b04ca43e1c10efec9083b0efb97f0b40fda6f5d86ba"
+     ],
+     [
+      "psig",
+      "30309c44eba41a265e55d5907049785adab9c2e2db460e4422c2bacc21e44cc9"
+     ],
+     [
+      "alt",
+      "BAO Court FROST signing reveal from juror 2"
+     ]
+    ],
+    "content": "{\"disputeId\":\"bd9559f71796a62ec207f9e6161a24f57dac35be532b9c0bf1e509f77fcf54b5\",\"jurorIdx\":2,\"publicNonce\":{\"idx\":2,\"binder_pn\":\"031edf523f1e84386a45140c447f466e535a073a664f72183795da2859870185be\",\"hidden_pn\":\"029d63aa09ec000ee98d354b04ca43e1c10efec9083b0efb97f0b40fda6f5d86ba\"},\"partialSig\":\"30309c44eba41a265e55d5907049785adab9c2e2db460e4422c2bacc21e44cc9\",\"frostPubkey\":\"02f49b85bfcbdef69b2f048fda4954b971c83fb9ae6d476fdf610edffceffa9c5c\"}",
+    "pubkey": "7ca0fda6f375fba78f128abd2a99e598e5eeaacbd03a94e041970c076aaffcec",
+    "id": "55fb7cf4e2b221602021556f914b6d506c9fe115b02e962093f9358ad3c2ff57",
+    "sig": "00baeb2c4e1476615e021b2b4b86c2f261ec86962dbb1d916916c5501d346bf81ece820a69750ec7ee1703590b2e1d74c6f71ade029e41d809f2576a94179dc5"
+   }
+  },
+  {
+   "seq": 20,
+   "round": 1,
+   "phase": "report",
+   "from": 2
+  },
+  {
+   "seq": 21,
+   "round": 1,
+   "phase": "report",
+   "from": 1
+  },
+  {
+   "seq": 22,
+   "round": 1,
+   "phase": "report",
+   "from": 3
+  }
+ ]
+}

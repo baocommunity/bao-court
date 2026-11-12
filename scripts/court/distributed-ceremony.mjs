@@ -57,6 +57,7 @@ import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { build } from 'esbuild';
 import { parseDkgCommitmentEvent } from '../../eventsParse';
 import { verifyFinalSignature, buildAttestationMessage } from '../../crypto';
+import { collapseSignedRecords, signedRecordIdentity } from '../../courtCeremonyCore';
 import { UNBONDED, formatCourtBondRef, parseCourtBondRef } from '../../bondVerification';
 import {
   BOND_CHECK_ENV,
@@ -966,28 +967,55 @@ touch "$D/done-$IDX"
     const wire = await fetchJson(`${relayUrl}/log`, { headers: auth });
     const records = wire.records;
     /**
-     * One commitment per juror, from the relay's log. A REPLAYED record is a
-     * byte-identical repeat of the same signed event: the coordinator dedupes it
-     * exactly as a receiving juror does. Two DIFFERENT commitments from one
-     * juror is equivocation and must never be papered over.
+     * One commitment per juror, from the relay's log.
+     *
+     * A REPLAYED record is a byte-identical repeat of the same signed event —
+     * same event id, therefore same bytes and same signature — so it is
+     * collapsed BEFORE any equivocation reasoning: re-delivery is idempotency,
+     * not a second claim. Only two DIFFERENT commitments from the same juror in
+     * the same round+phase is equivocation.
+     *
+     * The distinction is made in ONE place, `collapseSignedRecords`
+     * (`courtCeremonyCore.ts`), and this harness only calls it. It used to
+     * re-implement the comparison inline and compared the parsed `pok` object by
+     * REFERENCE (`existing.pok === parsed.pok`), which is false for two parses
+     * of the same event — so every relay re-delivery was reported as an
+     * equivocation and an honest juror was blamed for a replay.
      */
     const commitmentEvents = records.filter((r) => r.phase === 'dkg-commit' && r.event);
-    const parsedCommitments = commitmentEvents.map((r) => parseDkgCommitmentEvent(r.event)).filter(Boolean);
-    const perJurorCommitments = new Map();
-    let duplicateCommitments = 0;
-    const equivocatingJurors = [];
-    for (const [i, parsed] of parsedCommitments.entries()) {
-      const existing = perJurorCommitments.get(parsed.jurorIdx);
-      if (!existing) {
-        perJurorCommitments.set(parsed.jurorIdx, { parsed, eventId: commitmentEvents[i].event.id });
+    const commitmentEntries = [];
+    let unparsedCommitments = 0;
+    for (const record of commitmentEvents) {
+      const parsed = parseDkgCommitmentEvent(record.event);
+      if (!parsed) {
+        // Not attributable to a signer at all: counted, never blamed as an
+        // equivocation (an unparseable record is a malformed claim, and the
+        // "one distinct commitment per juror" assertion below still fails).
+        unparsedCommitments += 1;
         continue;
       }
-      const identical = existing.eventId === commitmentEvents[i].event.id
-        && JSON.stringify(existing.parsed.vssCommits) === JSON.stringify(parsed.vssCommits)
-        && existing.parsed.pok === parsed.pok;
-      if (identical) duplicateCommitments += 1;
-      else equivocatingJurors.push(parsed.jurorIdx);
+      commitmentEntries.push({
+        // Attribution key: the signer AND the round+phase it claims. The same
+        // signer in a different round is a different claim, not equivocation.
+        key: `dkg-commit:${record.round ?? 0}:${parsed.jurorIdx}`,
+        identity: signedRecordIdentity(record.event),
+        parsed,
+        seq: record.seq,
+        injected: Boolean(record.injected),
+      });
     }
+    const collapsed = collapseSignedRecords(commitmentEntries);
+    const perJurorCommitments = new Map();
+    for (const [key, identity] of collapsed.distinct) {
+      const entry = commitmentEntries.find((e) => e.key === key && e.identity === identity);
+      perJurorCommitments.set(entry.parsed.jurorIdx, { parsed: entry.parsed, eventId: identity, seq: entry.seq });
+    }
+    const duplicateCommitments = collapsed.duplicates;
+    const equivocatingJurors = collapsed.equivocations.map(
+      (e) => commitmentEntries.find((entry) => entry.key === e.key).parsed.jurorIdx,
+    );
+    /** Every record the relay marked as an injected copy, for the exact collapse count. */
+    const replayedCommitments = commitmentEntries.filter((e) => e.injected).length;
     const commitments = [...perJurorCommitments.values()].map((v) => v.parsed);
     const groupKeyRecomputed = commitments.length === seatCount && equivocatingJurors.length === 0
       ? commitments.reduce((sum, c) => sum.add(Point.fromHex(c.vssCommits[0])), Point.ZERO).toHex(true).slice(2)
@@ -1030,7 +1058,12 @@ touch "$D/done-$IDX"
       check(
         `${label}: the relay log carries exactly one DISTINCT DKG commitment per juror (no equivocation)`,
         commitments.length === seatCount && equivocatingJurors.length === 0,
-        { distinct: commitments.length, duplicatesIgnored: duplicateCommitments, equivocatingJurors },
+        {
+          distinct: commitments.length,
+          duplicatesCollapsed: duplicateCommitments,
+          unparsedCommitments,
+          equivocatingJurors,
+        },
       );
       check(
         `${label}: every juror's own wire log shows a reveal from every peer`,
@@ -1104,6 +1137,15 @@ touch "$D/done-$IDX"
         duplicated: live.stats.duplicated,
       });
       check(`${label}: duplicate deliveries were seen and deduped by the jurors`, dupes > 0, { duplicatesSeen: dupes });
+      check(
+        `${label}: the coordinator collapsed EVERY re-delivered commitment as the same signed event (replay is not equivocation)`,
+        equivocatingJurors.length === 0 && duplicateCommitments === replayedCommitments,
+        {
+          injectedCommitments: replayedCommitments,
+          collapsedByCoordinator: duplicateCommitments,
+          equivocatingJurors,
+        },
+      );
       check(
         `${label}: duplicates produced no second signature (exactly one aggregate on the wire)`,
         new Set(perBox.map((b) => b.report?.signature).filter(Boolean)).size === 1,
