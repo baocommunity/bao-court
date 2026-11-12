@@ -119,7 +119,16 @@ describe('FROST aggregate attribution', () => {
     const session = signSession();
     const journal = journalFor(session);
     const agg = aggregateOf(journal);
-    const tampered = { ...agg, signature: `${agg.signature.slice(0, 126)}ff` };
+    // Flip the final byte — never OVERWRITE it with a constant. `...ff` is a
+    // NO-OP whenever the signature already ends in `ff` (1 run in 256): the
+    // "tampered" aggregate then verifies and this test fails with
+    // `expected true to be false`. Observed once in three loaded full-suite
+    // runs on 2026-11-12; see docs/TEST_DETERMINISM.md rule 5 (a tamper must be
+    // a tamper by construction).
+    const lastByte = agg.signature.slice(-2);
+    const flipped = (Number.parseInt(lastByte, 16) ^ 0xff).toString(16).padStart(2, '0');
+    expect(flipped).not.toBe(lastByte); // the tamper always changes something
+    const tampered = { ...agg, signature: `${agg.signature.slice(0, -2)}${flipped}` };
 
     const result = verifyAggregateAttribution(
       journal,
