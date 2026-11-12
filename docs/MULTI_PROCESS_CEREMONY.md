@@ -660,3 +660,161 @@ is not "bonded".
   does) is the real defence.
 - **The gate does not slash.** Excluding a juror is a seat decision; taking the
   bond stays the rail's own spender path.
+
+---
+
+## Stable identities and funded bonds
+
+The bond gate (`bondCheckGate.ts`) decides who keeps a seat, but it can only
+prove a bond that was funded to **the key that actually sits**. Until this
+round the ceremony generated a fresh key per box per run — so a bond could never
+match, and `bondVerified:true` inside a ceremony was impossible. A seat is now
+**a proven key plus a proven bond**, and both halves must be stable.
+
+### Why the key has to be stable
+
+A bond is a UTXO locked to a 2-of-2 court⊕juror script. The script commits to
+the juror's public key. If the ceremony regenerates the key:
+
+- the funded bond pays a script for a key nobody holds any more (unspendable,
+  and the court cannot slash it either);
+- the bond check derives the script from the *new* key, so it refuses
+  (`BOND_SCRIPT_MISMATCH`) — or, worse, a deployment that skipped the check would
+  seat an unbonded juror;
+- "who was bonded for this verdict" becomes unanswerable after the fact.
+
+So a provisioned key must be created **before** the money moves, kept on its own
+box, and never replaced.
+
+### The identity contract (`--juror-keys=<dir>`)
+
+| rule | behaviour |
+|---|---|
+| source | `<dir>/juror-<idx>.sec` on the juror's own box, mode 0600, outside the repo (`$HOME` is resolved per box) |
+| never created | a missing file ⇒ `IDENTITY_BLOCKED {"reason":"JUROR_KEY_MISSING"}` (exit 3) and that juror **loses its seat**. Nothing regenerates a key, ever |
+| never replaced | provisioning is idempotent: an existing key is kept and only its public key printed |
+| even-Y only | a key whose SEC form is `03…` is refused at **load** (`BOND_KEY_NOT_XONLY_LIFTABLE`) and at **provisioning**. The bond script lifts x-only keys with BIP-340's even-Y convention, so an odd-Y key's bond can never be spent (measured on the host round: `NULLFAIL`) |
+| secrecy | the key is never printed, never transmitted, never in an argv, never in an artifact. Only the x-only **public** key crosses the network, and only to be put in the roster |
+| default unchanged | with no `--juror-keys`, each box generates a fresh key per run — exactly the transport behaviour the six-scenario matrix and the 6-hourly soak rely on |
+
+A blocked identity is not a driver crash: the run records it and fails closed
+with `ROSTER_BELOW_THRESHOLD` (no roster written, no juror launched, no key, no
+signature). Measured: with juror 3's file renamed away, `IDENTITY BLOCKED juror 3
+(bao-testnet): JUROR_KEY_MISSING` → `ROSTER BELOW THRESHOLD` → `RESULT: PASS` on
+the fail-closed assertion.
+
+### Provisioning
+
+```bash
+# creates juror-<idx>.sec on each box (0600, $HOME/.bao-court/jurors), prints
+# ONLY the x-only public keys; refuses odd-Y and never replaces an existing key
+node scripts/court/provision-jurors.mjs
+node scripts/court/provision-jurors.mjs --check      # print, change nothing
+node scripts/court/provision-jurors.mjs --json       # machine-readable
+```
+
+The box-side program runs from a 0600 temp file that is deleted immediately, uses
+only `node:crypto`'s built-in secp256k1 ECDH (no `node_modules` on the boxes),
+and regenerates on the spot until it gets an even-Y key. Output is public:
+
+```
+juror identities on 3 box(es) ($HOME/.bao-court/jurors)
+  1 → d02c52e2ff3ef3c9640c3944859bc1943a389067105fa030e51adfe510918326  (vps16gb, created)
+  2 → 3579338a464872ccde515664edcfac187f0e7005cff2078bcaa0add3e9ae1a50  (bao8gb, created)
+  3 → 326cd3f25f952a8d14e05ef16f651e16b37284f20abebee4d51fe1641f89eeda  (bao-testnet, created)
+```
+
+### Fund bonds, then run
+
+1. **Court bond key** — generated once, 0600 outside the repo, never printed;
+   only its x-only public key is used:
+   `0be886d2a5af64e0e14e25219a5c261019a9a6f6021dcaf0c5109893653bacde`.
+2. **Per juror**, derive the 2-of-2 script from (court key, juror key) with the
+   host's own `onchainCourtBondScript` (P2WSH over
+   `OP_2 <court> <juror> OP_2 OP_CHECKMULTISIG`) and fund it from the
+   private-signet node wallet. Public results of this round:
+
+   | seat | bond outpoint (public) | value |
+   |---|---|---|
+   | 1 | `496204cc8ea6cb2ec4614ba40a693e4cda9f63145e82e51124664823dea6373a:0` | 100 000 sats |
+   | 2 | `546db5bf6ff5fbe2ae531a0853a7ee045ebd4ba5277601e68ea359822a66839e:0` | 100 000 sats |
+   | 3 | `0ac4982dc03a1e146992bc69f7efb3642f9c1337240ebe26ec05fa2431122c8f:0` | 100 000 sats |
+
+3. **Run with the gate armed**:
+
+```bash
+export BAO_COURT_BOND_CHECK_CMD="npx tsx $HOME/.bao-court/ceremony/verify.mts \
+  --court-pubkey=0be886d2…bacde --bitcoind-ssh=bao8gb \
+  --second-source=https://mempool.bao.markets/api --min-confirmations=1"
+
+node --import tsx scripts/court/distributed-ceremony.mjs \
+  --scenario=happy-kn --juror-keys='$HOME/.bao-court/jurors' \
+  --require-bonds --bond-sats=100000 \
+  --bonds='onchain:private-signet:<ref1>,onchain:private-signet:<ref2>,onchain:private-signet:<ref3>'
+```
+
+The proof is the HOST's, behind the documented command contract (one JSON object:
+`{"ok":true,"proofRef":…,"sources":[…]}`). For the **private signet** the command
+used here derives the expected script from the host's `onchainCourtBondScript`
+and requires TWO independent sources to agree that the outpoint is unspent, pays
+that script, and carries ≥ `--bond-sats`: the first-party node
+(`ssh … gettxout`, the RPC is loopback-bound) and the private signet's Esplora
+(`mempool.bao.markets`). Spent-ness is treated as monotone: if **either** source
+reports the outpoint spent, the bond is refused (`BOND_SPENT`) — measured on this
+network, the two nodes do not always share a mempool, so a lagging source must
+never be able to re-seat a spent bond.
+
+### Results
+
+**Positive (N=3, k=3, all-of-N):** all three bonds `PROVEN` by
+`bitcoind-first-party+mempool.bao.markets` **at 1 confirmation** (the private
+signet's miner is irregular, so 1 is what the chain offered; `--min-confirmations=1`
+makes depth a requirement rather than a hope), then the ceremony ran on the
+provisioned keys:
+
+| seat | box | juror pubkey (x-only) | bondVerified |
+|---|---|---|---|
+| 1 | vps16gb | `d02c52e2…8326` | **true** |
+| 2 | bao8gb | `3579338a…a50` | **true** |
+| 3 | bao-testnet | `326cd3f2…eda` | **true** |
+
+One group key (`d823cd2aea92344e48d82b62fe09a7ddaa553863c2800c4375aa63d587f2f301`,
+fingerprint `sha256[0:16]=9c3a862af6bb63e5`), one aggregate signature
+(`8d3b9a1d…33b6`), verified by the coordinator against the key it re-derived from
+the relay's log. `bondGate.enforced:true`, `requireBonds:true`,
+`admitted:[1,2,3]`.
+
+**Negative — the bond is withdrawn.** A fourth bond was funded to a throwaway
+2-of-2 key pair and then **spent** (both signatures, broadcast:
+`a6fbda59a38704b4649d54af0ea80d82f98aea69bae4b027d7999a6cf9728180`), so the
+outpoint `dcda5eaf…c30c:1` genuinely no longer exists. Presented as juror 3's
+bond:
+
+```
+bond check juror 3 (bao-testnet): REFUSED BOND_SPENT onchain/private-signet:dcda5eaf…:1
+EXCLUDED juror 3: BOND_CHECK_REFUSED (BOND_SPENT)
+ROSTER BELOW THRESHOLD: 2 admitted, 3 required — ceremony refuses to start
+RESULT: PASS (failed closed with ROSTER_BELOW_THRESHOLD, NO key, NO signature)
+```
+
+### Honest limits
+
+- **A bond proves collateral, not honesty.** It makes a seat expensive and a
+  slash possible; it says nothing about how the juror will vote.
+- **One operator.** The court key, the node wallet, all four boxes and the
+  verifier's two sources are one person's. Nothing here is decentralised.
+- **Private signet, one confirmation.** The private signet mines irregularly
+  (no miner for stretches, then a block), so the bonds are confirmed to depth 1
+  and the *slash* spend is still in the mempool. Depth 1 proves the bond is in
+  the chain rather than relayed between mempools; it is not six confirmations,
+  and public testnet4 / signet-public evidence would be strictly stronger (the
+  hierarchy the operator set). The same ceremony runs there unchanged once a
+  funded bond exists.
+- **The private-signet verifier is purpose-built for this round** (two sources:
+  first-party node + Esplora), kept at `~/.bao-court/ceremony/verify.mts` with
+  the court bond key `0600` beside it. The host's shipped `verify-bond.mts` is wired for
+  Liquid testnet and Bitcoin testnet4; pointing it at the private signet is a
+  deployment task, not a protocol change — the ceremony contract is unchanged.
+- **Spending a bond needs both keys.** The spent-bond evidence used a throwaway
+  key pair, not juror 3's own key (which stays on its box), because that is what
+  a slash is: court key + juror key. The refusal path exercised is identical.

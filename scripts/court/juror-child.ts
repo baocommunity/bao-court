@@ -107,12 +107,16 @@ const revealDelayMs = Number(arg('reveal-delay-ms', '0'));
  * Distributed-ceremony options (absent ⇒ legacy loopback behaviour, unchanged):
  *   --token-file=    0600 file holding the relay's shared bearer token
  *   --identity-file= 0600 file holding THIS box's secret key (created if absent)
+ *   --juror-key-file= 0600 file holding a PRE-PROVISIONED juror key (never
+ *                    created here: a bond is funded to that key, so a silently
+ *                    regenerated key would invalidate the bond)
  *   --roster-file=   public roster [{idx, pubkey}] (no secrets)
  *   --timings-file=  JSONL of per-request wire timings (real RTT measurement)
- *   --identity-only  generate/load the identity, print `IDENTITY <pubkey>`, exit
+ *   --identity-only  load the identity, print `IDENTITY <pubkey>`, exit
  */
 const tokenFile = argOpt('token-file');
 const identityFile = argOpt('identity-file');
+const jurorKeyFile = argOpt('juror-key-file');
 const rosterFile = argOpt('roster-file');
 const timingsFile = argOpt('timings-file');
 const identityOnly = process.argv.includes('--identity-only');
@@ -132,6 +136,7 @@ const encoder = new TextEncoder();
  * wire format; the only change is where the secret comes from.
  */
 function identityFor(idx: number): { seckey: Uint8Array; pubkey: string } {
+  if (jurorKeyFile && idx === myIdx) return provisionedIdentity(jurorKeyFile);
   if (identityFile && idx === myIdx) return boxIdentity();
   const seckeyHex = scalarToHex(
     seededScalar(hexToBytes(seedHex), encoder.encode(`r30/juror/${idx}`)),
@@ -156,6 +161,50 @@ function boxIdentity(): { seckey: Uint8Array; pubkey: string } {
     writeFileSync(path, JSON.stringify({ seckey: seckeyHex }), { mode: 0o600 });
   }
   return { seckey: hexToBytes(seckeyHex), pubkey: deriveXOnlyPubkey(seckeyHex) };
+}
+
+/**
+ * A PRE-PROVISIONED identity (`--juror-key-file=`): the key already exists on
+ * this box because a bond was funded to its public key. Two hard rules:
+ *
+ *   1. NEVER create it. A missing file is a typed BLOCKED — regenerating would
+ *      produce a different key, and the bond funded to the old one would be
+ *      unspendable and unprovable (the ceremony would silently run a juror with
+ *      no bond, which is exactly what the bond gate exists to prevent).
+ *   2. NEVER accept an odd-Y key. The bond script commits to the BIP-340 lift
+ *      (`02‖x`), so an odd-Y key's bond can never be spent (`NULLFAIL` measured
+ *      on the host round). Refusing here means a bond can never be funded to a
+ *      key this ceremony would then seat.
+ */
+function provisionedIdentity(path: string): { seckey: Uint8Array; pubkey: string } {
+  // A function DECLARATION (not an arrow const) so TypeScript narrows `never`.
+  function blocked(reason: string, detail: string): never {
+    // Machine-readable, no secret: the driver turns this into a typed verdict.
+    process.stdout.write(`IDENTITY_BLOCKED ${JSON.stringify({ reason, detail, path })}\n`);
+    process.exit(3);
+  }
+  if (!existsSync(path)) {
+    blocked('JUROR_KEY_MISSING', `no pre-provisioned juror key at ${path}`);
+  }
+  let seckeyHex: string;
+  try {
+    seckeyHex = readFileSync(path, 'utf8').trim().toLowerCase();
+  } catch (error) {
+    blocked('JUROR_KEY_UNREADABLE', `cannot read ${path}: ${(error as Error).message.slice(0, 120)}`);
+  }
+  if (!/^[0-9a-f]{64}$/.test(seckeyHex)) {
+    blocked('JUROR_KEY_MALFORMED', `${path} is not 64 hex characters`);
+  }
+  const seckey = hexToBytes(seckeyHex);
+  // Parity guard: even-Y only. `getPublicKey(..., true)[0]` is 0x02 for even Y.
+  if (secp256k1.getPublicKey(seckey, true)[0] !== 0x02) {
+    blocked(
+      'BOND_KEY_NOT_XONLY_LIFTABLE',
+      'this juror key is ODD-Y: an x-only (BIP-340 lifted) bond script would commit to a different '
+        + 'curve point and the bond could never be spent',
+    );
+  }
+  return { seckey, pubkey: deriveXOnlyPubkey(seckeyHex) };
 }
 
 /**

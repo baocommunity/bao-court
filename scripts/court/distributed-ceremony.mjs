@@ -214,6 +214,17 @@ if (perJurorBonds && perJurorBonds.length !== boxes.length) {
 const bondForPosition = (position) => (perJurorBonds ? perJurorBonds[position - 1] : bondRef);
 /** Keep the boxes' run dirs (bundles, logs) for debugging instead of tearing down. */
 const keep = flag('keep');
+/**
+ * PRE-PROVISIONED IDENTITIES (`--juror-keys=<dir>`).
+ *
+ * Empty (default) = today's behaviour: each box generates a fresh key per run.
+ * Set = each box loads `<dir>/juror-<idx>.sec`, a 0600 file that must ALREADY
+ * exist. A missing or odd-Y key BLOCKS that juror (typed, never regenerated):
+ * a bond is funded to a public key, so a silently regenerated key would strand
+ * the bond and seat an unbonded juror. `$HOME` is resolved per box.
+ */
+const jurorKeysDirArg = arg('juror-keys', '');
+const identitySource = jurorKeysDirArg === '' ? 'generated' : 'provisioned';
 /** Node per box. bao-testnet has no system Node: static tarball under /opt. */
 function nodeFor(box) {
   if (box === 'bao-testnet') return '/opt/bao-court-node/bin/node';
@@ -608,12 +619,19 @@ async function runCeremony({ label, threshold, kill, policy, expectSignature, bu
 set -u
 D=$(cd "$(dirname "$0")" && pwd)
 IDX=$1; N=$2; K=$3; SEED=$4; RELAY=$5; DEAD=$6; POLL=$7; SDEAD=$8
-NODE_BIN=$9; REVEAL_DELAY=\${10:-0}
+NODE_BIN=$9; REVEAL_DELAY=\${10:-0}; KEYFILE=\${11:-}
+# Provisioned identities are read IN PLACE (0600, outside the run dir): the key
+# is never copied, so there is exactly one copy of a juror secret on its box.
+if [ -n "$KEYFILE" ]; then
+  IDARGS="--juror-key-file=$KEYFILE"
+else
+  IDARGS="--identity-file=$D/identity-$IDX.json"
+fi
 START=$(date +%s%3N)
 "$NODE_BIN" "$D/juror.mjs" \\
   --relay-url="$RELAY" \\
   --token-file="$D/relay-token" \\
-  --identity-file="$D/identity-$IDX.json" \\
+  $IDARGS \\
   --roster-file="$D/roster.json" \\
   --timings-file="$D/timings-$IDX.jsonl" \\
   --idx="$IDX" --jurors="$N" --threshold="$K" --seed="$SEED" \\
@@ -636,30 +654,70 @@ touch "$D/done-$IDX"
       scp(box, launcher, `${dir}/run-juror.sh`);
       scp(box, join(dirname(bundlePath), 'relay-token'), `${dir}/relay-token`);
       ssh(box, `chmod 600 ${dir}/relay-token && chmod 755 ${dir}/run-juror.sh`);
-      const { stdout } = ssh(box, `hostname; ${nodeFor(box)} -v; nproc; uname -r`);
-      const [hostname, nodeVersion, cores, kernel] = stdout.trim().split('\n');
-      hostInfo.push({ idx, box, hostname, nodeVersion, cores: Number(cores), kernel });
+      const { stdout } = ssh(box, `hostname; ${nodeFor(box)} -v; nproc; uname -r; echo $HOME`);
+      const [hostname, nodeVersion, cores, kernel, home] = stdout.trim().split('\n');
+      hostInfo.push({
+        idx, box, hostname, nodeVersion, cores: Number(cores), kernel, home,
+        // Where this box's pre-provisioned key lives (public path, not a secret).
+        jurorKeyPath: identitySource === 'provisioned' ? `${jurorKeysDirArg === '' ? `${home}/.bao-court/jurors` : jurorKeysDirArg}/juror-${idx}.sec` : null,
+      });
     }
     check(`${label}: every juror runs on a DISTINCT box`, new Set(hostInfo.map((h) => h.hostname)).size === boxes.length, hostInfo);
 
-    // ── phase 1: each box generates its own identity, publishes its pubkey ─
+    // ── phase 1: publish the identity (generated, or pre-provisioned) ──────
+    //
+    // In provisioned mode the key was created ON the box by
+    // `scripts/court/provision-jurors.mjs` and a bond may already be funded to
+    // it. The juror binary therefore NEVER creates it and never replaces it: a
+    // missing or odd-Y file comes back as `IDENTITY_BLOCKED <json>` and that
+    // juror loses its seat (typed), instead of a fresh key silently taking it.
     const roster = [];
+    const identityBlocked = [];
     for (const [i, box] of boxes.entries()) {
       const idx = i + 1;
+      const keyPath = hostInfo.find((h) => h.idx === idx)?.jurorKeyPath ?? null;
+      const identityArgs = keyPath
+        ? `--juror-key-file=${keyPath}`
+        : `--identity-file=${dir}/identity-${idx}.json`;
+      // Exit 3 is the TYPED "this juror cannot present an identity" answer, not
+      // a transport failure: parse it instead of throwing.
       const { stdout } = ssh(
         box,
-        `cd ${dir} && ${nodeFor(box)} juror.mjs --identity-only --identity-file=${dir}/identity-${idx}.json `
+        `cd ${dir} && ${nodeFor(box)} juror.mjs --identity-only ${identityArgs} `
         + `--idx=${idx} --jurors=${jurorCount} --threshold=${threshold} --seed=${ceremonyId} `
         + `--dir=${dir}/state --relay-url=${relayUrl}`,
+        { allowFail: true },
       );
       const match = stdout.match(/^IDENTITY ([0-9a-f]{64})$/m);
-      if (!match) throw new Error(`box ${box} did not publish an identity: ${stdout.slice(0, 200)}`);
-      roster.push({ idx, box, pubkey: match[1] });
+      if (match) {
+        roster.push({ idx, box, pubkey: match[1], jurorKeyPath: keyPath });
+        continue;
+      }
+      const blockedLine = stdout.match(/^IDENTITY_BLOCKED (\{.*\})$/m);
+      if (blockedLine) {
+        const parsed = JSON.parse(blockedLine[1]);
+        identityBlocked.push({
+          idx,
+          box,
+          jurorKeyPath: keyPath,
+          reason: String(parsed.reason ?? 'JUROR_KEY_MISSING'),
+          detail: String(parsed.detail ?? '').slice(0, 300),
+        });
+        console.log(`  IDENTITY BLOCKED juror ${idx} (${box}): ${parsed.reason} — ${String(parsed.detail ?? '').slice(0, 160)}`);
+        continue;
+      }
+      throw new Error(`box ${box} did not publish an identity: ${stdout.slice(0, 200)}`);
     }
     check(
-      `${label}: every identity was generated ON its own box and is distinct`,
-      new Set(roster.map((r) => r.pubkey)).size === boxes.length,
-      roster.map((r) => ({ idx: r.idx, box: r.box, pubkey: r.pubkey.slice(0, 16) + '…' })),
+      identitySource === 'provisioned'
+        ? `${label}: every seated identity came from a PRE-PROVISIONED key on its own box`
+        : `${label}: every identity was generated ON its own box and is distinct`,
+      new Set(roster.map((r) => r.pubkey)).size === roster.length && roster.length > 0,
+      {
+        identitySource,
+        seated: roster.map((r) => ({ idx: r.idx, box: r.box, pubkey: r.pubkey.slice(0, 16) + '…' })),
+        blocked: identityBlocked,
+      },
     );
 
     // ── THE BOND GATE: prove every seat BEFORE the DKG starts ─────────────
@@ -715,13 +773,28 @@ touch "$D/done-$IDX"
         );
       }
     }
-    const gate = gateRosterOnBonds({
-      jurors: claims,
-      threshold,
-      enforced: bondGateArmed,
-      requireBonds,
-      verdicts,
-    });
+    // An identity-blocked juror is not a claim at all: its key does not exist
+    // (or cannot back a bond), so it never reaches the bond gate. If that leaves
+    // fewer jurors than the threshold the ceremony must not start — the same
+    // typed `ROSTER_BELOW_THRESHOLD` stop the bond gate produces, for the same
+    // reason: a seat is a PROVEN key plus a PROVEN bond.
+    const gate = claims.length < threshold
+      ? {
+        enforced: bondGateArmed,
+        requireBonds,
+        threshold,
+        admitted: [],
+        excluded: [],
+        ok: false,
+        classification: 'ROSTER_BELOW_THRESHOLD',
+      }
+      : gateRosterOnBonds({
+        jurors: claims,
+        threshold,
+        enforced: bondGateArmed,
+        requireBonds,
+        verdicts,
+      });
     check(
       `${label}: the bond gate ${bondGateArmed ? 'ran on every claimed bond' : 'is INERT (no ' + BOND_CHECK_ENV + ')'}`,
       bondGateArmed
@@ -745,26 +818,46 @@ touch "$D/done-$IDX"
         label,
         runId,
         threshold,
+        identitySource,
+        identityBlocked,
         kill: Boolean(kill),
         relayUrl,
         relayBox,
         relayIp,
         boxes: hostInfo,
-        identities: claims.map((claim) => {
-          const verdict = [...gate.admitted, ...gate.excluded].find((v) => v.idx === claim.idx);
-          return {
-            idx: claim.idx,
-            box: claim.box,
-            pubkey: claim.pubkey,
-            bond: claim.bond,
-            bondRef: formatCourtBondRef(claim.bond),
-            bondVerified: verdict?.bondVerified ?? false,
-            admitted: verdict?.admitted ?? false,
-            refusal: verdict?.refusal ?? null,
-            bondCode: verdict?.code ?? null,
-            sources: verdict?.sources ?? [],
-          };
-        }),
+        identities: [
+          ...claims.map((claim) => {
+            const verdict = [...gate.admitted, ...gate.excluded].find((v) => v.idx === claim.idx);
+            return {
+              idx: claim.idx,
+              box: claim.box,
+              pubkey: claim.pubkey,
+              bond: claim.bond,
+              bondRef: formatCourtBondRef(claim.bond),
+              bondVerified: verdict?.bondVerified ?? false,
+              admitted: verdict?.admitted ?? false,
+              refusal: verdict?.refusal ?? null,
+              bondCode: verdict?.code ?? null,
+              sources: verdict?.sources ?? [],
+            };
+          }),
+          // Jurors whose IDENTITY blocked them never became claims: recorded
+          // here with their typed reason so the artifact shows every seat.
+          ...identityBlocked.map((b) => ({
+            idx: b.idx,
+            box: b.box,
+            pubkey: null,
+            bond: bondForPosition(b.idx),
+            bondRef: formatCourtBondRef(bondForPosition(b.idx)),
+            bondVerified: false,
+            admitted: false,
+            refusal: b.reason,
+            bondCode: b.reason,
+            detail: b.detail,
+            jurorKeyPath: b.jurorKeyPath,
+            sources: [],
+          })),
+        ],
         bondPlan: {
           enforced: bondGateArmed,
           requireBonds,
@@ -783,19 +876,27 @@ touch "$D/done-$IDX"
         groupKey: null,
         groupKeyFingerprint: null,
         relayRecords: 0,
-        classifications: claims.map((claim) => ({
-          idx: claim.idx,
-          classification: [...gate.admitted, ...gate.excluded].find((v) => v.idx === claim.idx)?.admitted
-            ? null
-            : classification,
-        })),
+        classifications: [
+          ...claims.map((claim) => ({
+            idx: claim.idx,
+            classification: [...gate.admitted, ...gate.excluded].find((v) => v.idx === claim.idx)?.admitted
+              ? null
+              : classification,
+          })),
+          ...identityBlocked.map((b) => ({ idx: b.idx, classification: b.reason })),
+        ],
         perBox: [],
         coordinatorWallMs: ms() - gateStartedAt,
       };
       check(
         `${label}: the ceremony failed closed with ${classification} and emitted NO key and NO signature`,
         classification === 'ROSTER_BELOW_THRESHOLD' && stopped.groupKey === null && stopped.signatures.length === 0,
-        { classification, admitted: gate.admitted.length, threshold },
+        {
+          classification,
+          admitted: gate.admitted.length,
+          threshold,
+          identityBlocked: identityBlocked.map((b) => ({ idx: b.idx, reason: b.reason })),
+        },
       );
       if (expectClassification !== '' && expectClassification !== classification) {
         failures.push({
@@ -819,11 +920,25 @@ touch "$D/done-$IDX"
     // taken above stays valid for the key that actually sits.
     const seats = gate.admitted.map((verdict, i) => {
       const entry = roster.find((r) => r.idx === verdict.idx);
-      return { seat: i + 1, idx: verdict.idx, box: entry.box, pubkey: verdict.pubkey, bond: verdict.bond, verdict };
+      return {
+        seat: i + 1,
+        idx: verdict.idx,
+        box: entry.box,
+        pubkey: verdict.pubkey,
+        jurorKeyPath: entry.jurorKeyPath ?? '',
+        bond: verdict.bond,
+        verdict,
+      };
     });
     const seatCount = seats.length;
     for (const seat of seats) {
       if (seat.seat === seat.idx) continue;
+      if (identitySource === 'provisioned') {
+        // No copy: the provisioned key is read in place from its own box, and
+        // the seat index is just the protocol index. Copying a juror secret to
+        // a second path would be one more copy to lose.
+        continue;
+      }
       ssh(seat.box, `cd ${dir} && cp -f identity-${seat.idx}.json identity-${seat.seat}.json && chmod 600 identity-${seat.seat}.json`);
     }
     // Every roster entry carries its bond REFERENCE and this run's verdict.
@@ -861,7 +976,8 @@ touch "$D/done-$IDX"
         seat.box,
         `cd ${dir} && setsid nohup sh ${dir}/run-juror.sh ${idx} ${seatCount} ${threshold} ${ceremonyId} `
         + `${relayUrl} ${dkgDeadlineMs} ${pollMs} ${kill ? killSignDeadlineMs : signDeadlineMs} `
-        + `${nodeFor(seat.box)} ${kill ? killRevealDelayMs : 0} > ${dir}/launch-${idx}.log 2>&1 < /dev/null`,
+        + `${nodeFor(seat.box)} ${kill ? killRevealDelayMs : 0} ${seat.jurorKeyPath ?? ''} `
+        + `> ${dir}/launch-${idx}.log 2>&1 < /dev/null`,
       );
     }
     // Give every box the same beat to reach its first poll (launch is now
