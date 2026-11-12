@@ -171,6 +171,8 @@
     "simulate:distributed": "tsx scripts/court/distributed-ceremony.mjs",
     "soak:distributed": "node --import tsx scripts/court/distributed-ceremony-soak.mjs run",
     "soak:status": "node --import tsx scripts/court/distributed-ceremony-soak.mjs status",
+    "jurors:provision": "node scripts/court/provision-jurors.mjs",
+    "jurors:check": "node scripts/court/provision-jurors.mjs --check",
     "relay:court": "node scripts/court/relay-server.mjs"
   },
   "devDependencies": {

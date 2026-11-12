@@ -11,6 +11,30 @@ frozen.
 
 ## [Unreleased]
 
+### Added (stable juror identities — a seat is a proven KEY plus a proven BOND)
+- **`--juror-keys=<dir>` (ceremony mode).** Each box loads a PRE-PROVISIONED
+  juror key from `<dir>/juror-<idx>.sec` (0600, outside the repo, `$HOME`
+  resolved per box) instead of generating one. A bond is funded to a public key,
+  so the key must exist before the money moves and must never change: a missing
+  file is a TYPED block (`IDENTITY_BLOCKED {"reason":"JUROR_KEY_MISSING"}`, exit
+  3, that juror loses its seat → `ROSTER_BELOW_THRESHOLD`, no key, no signature)
+  and never a regeneration. Odd-Y keys are refused at load
+  (`BOND_KEY_NOT_XONLY_LIFTABLE`): an x-only bond script would commit to a point
+  the key cannot sign for. With no flag, behaviour is unchanged (fresh key per
+  run), so the six-scenario matrix and the 6-hourly soak are untouched.
+- **`scripts/court/provision-jurors.mjs`** — creates those keys ON each box from
+  a 0600 temp program (built-in `node:crypto` secp256k1, no `node_modules`
+  needed), prints ONLY `idx → x-only pubkey`, regenerates until even-Y, and
+  refuses to replace an existing key. `--check` / `--json` / `--dir` / `--boxes`.
+- **`docs/MULTI_PROCESS_CEREMONY.md` §"Stable identities and funded bonds"** —
+  why identities must be stable for bonds to bind, the identity contract, the
+  provision → fund → run steps, and the round's evidence: three bonds
+  `bondVerified:true` on the private signet (100 000 sats each, 2-of-2
+  court⊕juror P2WSH, two agreeing sources), one group key, one verified
+  signature; and the negative — a genuinely SPENT bond (`BOND_SPENT`) excludes
+  its juror, the roster drops below threshold, and the ceremony emits no key and
+  no signature.
+
 ### Fixed (round 54 — replay is not equivocation: the collapse that must come first)
 - **False equivocation on replay.** `scripts/court/distributed-ceremony.mjs`
   reported a duplicated-and-late-redelivered DKG commitment as an equivocation
