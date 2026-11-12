@@ -428,6 +428,21 @@ export {
   type VerifyBondOptions,
 } from './bondVerification';
 
+// ─── Ceremony bond gate (pluggable, host-verified) ───────────────────────────
+
+export {
+  BOND_CHECK_ENV,
+  buildBondCheckArgs,
+  parseBondCheckOutput,
+  gateRosterOnBonds,
+  type BondCheckRequest,
+  type BondCheckVerdict,
+  type BondGateRefusal,
+  type JurorBondClaim,
+  type JurorBondVerdict,
+  type RosterBondGate,
+} from './bondCheckGate';
+
 export {
   ALPHA_INCOHERENT,
   ALPHA_NON_REVEAL,

@@ -11,6 +11,41 @@ frozen.
 
 ## [Unreleased]
 
+### Added (round 53 — the ceremony bond gate: a seat costs a PROVEN bond)
+- **`bondCheckGate.ts`** (`buildBondCheckArgs`, `parseBondCheckOutput`,
+  `gateRosterOnBonds`, `BOND_CHECK_ENV`) — the protocol side of a pluggable,
+  host-verified bond check. The host supplies
+  `BAO_COURT_BOND_CHECK_CMD`; the harness invokes it once per juror with
+  `--rail= --network= --proof= --bond-sats= --juror-pubkey=`, expects exit 0 +
+  `{"ok":true,"proofRef":…,"sources":[…]}` and treats EVERY other outcome
+  (non-zero, junk, timeout, a proven-but-different `proofRef`, a check that
+  never ran, `rail:"none"` under `--require-bonds`) as an exclusion. This
+  package stays free of chain clients: no explorer, no RPC, no credentials.
+- **Enforcement point**: `scripts/court/distributed-ceremony.mjs` gates the
+  roster AFTER the boxes publish their keys and BEFORE `roster.json` is written,
+  so an excluded juror never joins a DKG. Survivors are re-seated at sequential
+  indices with the key they generated on their own box; if they cannot reach the
+  threshold the ceremony fails closed with `ROSTER_BELOW_THRESHOLD` — no roster,
+  no key, no signature. `--require-bonds`, `--bond-sats=`, `--bonds=` /
+  `--bonds-file=`, `--bond-check-timeout-ms=`,
+  `--expect-classification=` (turns a refused run into a PASS for negative
+  tests). `--require-bonds` without the command is refused at startup. With the
+  environment variable unset the harness behaves exactly as before
+  (`bondVerified:false`, nothing enforced).
+- **Artifacts** record, per juror, `bondRef` / `bondVerified` / `sources` /
+  `code`, the exclusions with their typed refusal, and the gate decision; public
+  material only.
+- **Live proof** (3 boxes + relay, 2026-11-12): bonded quorum with three
+  Liquid-testnet bonds proven by `blockstream` + `liquid-network` (one key, one
+  verified signature); a negative k=3 run where a spent outpoint is `BOND_SPENT`
+  → `ROSTER_BELOW_THRESHOLD` with no key and no signature; a rail-agnostic run
+  with an on-chain testnet4 juror (first-party `gettxout` + `mempool.space`);
+  and the inert control run. `docs/MULTI_PROCESS_CEREMONY.md` § "The bond gate".
+- **`__tests__/bondCheckGate.test.ts`** — the argv contract, the strict output
+  parser, and every roster decision (inert, proven, refused, missing verdict,
+  proof mismatch, `rail:"none"` strict/non-strict, below-threshold,
+  impossible-input rejection).
+
 ### Added (distributed ceremony soak — the ceremony on a 6-hourly timer)
 - **`scripts/court/distributed-ceremony-soak.mjs`** — the unattended runner: it
   rotates `happy-k2`, `happy-kn`, `kill` (SIGKILL over ssh mid-signing), `replay`

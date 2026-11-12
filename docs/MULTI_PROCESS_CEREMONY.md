@@ -409,9 +409,12 @@ Byzantine network.
   no packet loss, partition, eclipse, clock-skew attack or traffic analysis, and
   all four machines have one owner. A Byzantine *juror* is out of scope (that is
   the R30 replay suite plus the protocol's own gates).
-- **No real stake.** Every roster bond reference is `rail:"none"`; nothing is at
-  risk and nothing can be slashed. Bond verification is a later round (Liquid
-  testnet first).
+- **No real stake** (in the soak's default configuration). The rotation runs with
+  the bond gate INERT, so every roster bond reference is `rail:"none"`, nothing
+  is at risk and nothing can be slashed. The gate can be armed per invocation —
+  see [The bond gate](#the-bond-gate--a-seat-costs-a-proven-bond-round-53) —
+  but the soak timer does not set it, and a bond still proves collateral at
+  verification time, not future honesty.
 - **Custody is on disk.** Keys are 0600 files generated on each box, not HSMs or
   threshold devices.
 - **Uptime is not the metric.** `gap` records are expected across reboots; the
@@ -419,3 +422,183 @@ Byzantine network.
 - **One geography, one operator, three jurors.** Threshold 2-of-3 and 3-of-3
   across three boxes is a liveness/correctness demonstration, not a
   decentralisation claim.
+
+---
+
+## The bond gate — a seat costs a proven bond (round 53)
+
+Until this round the roster carried a bond **reference** and verified nothing:
+`CourtBondRef {rail, network, proofRef}` was parsed, echoed on the wire and
+recorded with `bondVerified:false`. A well-formed reference for a bond nobody
+ever paid was a free seat.
+
+The gate closes that **in the ceremony**, without teaching this repository any
+chain dependency. The proof is the HOST's (bao.markets `CourtBondVerifier`, live
+for public Liquid testnet and Bitcoin testnet4 since bao.markets #2464); the
+ceremony decides only what a verdict **means**.
+
+### The contract
+
+```
+BAO_COURT_BOND_CHECK_CMD=<command line>   # unset ⇒ no enforcement at all
+```
+
+The harness runs the command **once per juror, on the coordinator**, appending
+exactly (fixed order, values validated so they can only be inert tokens):
+
+```
+<cmd> --rail=<liquid|onchain|lightning|cashu|none> \
+      --network=<testnet|signet-public|private-signet> \
+      --proof=<proofRef> \
+      --bond-sats=<n> \
+      --juror-pubkey=<64-hex x-only>
+```
+
+Anything the command needs beyond that is embedded in the command line itself —
+which is where policy lives (`--allow-own-script`, `--bond-script=`,
+`--court-pubkey=`, `--bitcoind-ssh=`). The harness passes no other flag.
+
+Exit **0** with ONE JSON object on stdout means proven:
+
+```json
+{"ok":true,"proofRef":"<the same proofRef>","sources":["blockstream","liquid-network"]}
+```
+
+Any other exit is a refusal:
+
+```json
+{"ok":false,"code":"BOND_SPENT","detail":"the outpoint is not an unspent Liquid output (…)"}
+```
+
+Strictness is deliberate, because every leniency here is a free seat:
+
+| observation | verdict |
+|---|---|
+| exit 0 + `ok:true` + `proofRef` equal to the roster's + non-empty `sources` | **proven** |
+| exit non-zero, typed body | `BOND_CHECK_REFUSED` with the command's own code (e.g. `BOND_SPENT`) |
+| exit 0 but body says `ok:false` | refusal (the same code path) |
+| exit non-zero but body says `ok:true` | `BOND_CHECK_FAILED` — a contradiction is never a pass |
+| no output, a log line, a JSON array, `{"ok":"yes"}`, `ok:true` without `proofRef`/`sources` | `BOND_CHECK_MALFORMED` |
+| no answer inside `--bond-check-timeout-ms` (default 60 s) | `BOND_CHECK_TIMEOUT` |
+| the command proves a **different** `proofRef` than the roster claims | `BOND_PROOF_MISMATCH` |
+| a juror whose check never ran (no verdict) | `BOND_CHECK_FAILED` |
+| `rail:"none"` under `--require-bonds` | `BOND_NOT_CLAIMED` |
+
+The parser and the roster decision are the protocol's: `bondCheckGate.ts`
+(`buildBondCheckArgs`, `parseBondCheckOutput`, `gateRosterOnBonds`), exported
+from the package root and covered by `__tests__/bondCheckGate.test.ts`. The
+harness only spawns the process.
+
+### The enforcement point
+
+For each run of `scripts/court/distributed-ceremony.mjs`:
+
+1. every box generates its own key and publishes its **x-only pubkey**
+   (`--identity-only`) — the check needs the seated key;
+2. **the gate runs here** — after the keys, **before** `roster.json` is written
+   and before **any** juror process starts, so an excluded juror never takes part
+   in a DKG at all;
+3. the survivors are **re-seated** at sequential indices 1..m. Each keeps the key
+   it generated on its own box (the identity file is copied to the new position),
+   so the proof taken in step 2 still covers the key that actually sits;
+4. if the survivors cannot reach `--threshold`, the ceremony **fails closed**
+   before the roster exists: `ROSTER_BELOW_THRESHOLD`, no key, no signature, no
+   roster written, no juror launched.
+
+`--require-bonds` with no command configured is refused at startup (a strict run
+with nothing to check with is a misconfiguration, not "no enforcement").
+
+`--expect-classification=ROSTER_BELOW_THRESHOLD` turns that refusal into a PASS
+for a negative run (otherwise a below-threshold roster is a driver failure, so a
+regression can never hide as "expected").
+
+Per-juror bonds come from `--bonds=<rail>:<network>:<proofRef>,…` (box order) or
+`--bonds-file=<json>`; without either, one shared `--bond-rail/--bond-network/--
+bond-proof-ref` applies to every juror (today: `none`).
+
+### The artifacts
+
+Each run JSON (and the summary) now carries, per seated juror and per excluded
+juror:
+
+```jsonc
+"identities": [
+  {"seat":1, "idx":1, "box":"vps16gb", "pubkey":"4775…",
+   "bond":{"rail":"liquid","network":"testnet","proofRef":"0f11…:0"},
+   "bondRef":"liquid/testnet:0f11…:0", "bondVerified":true,
+   "sources":["blockstream","liquid-network"], "bondCode":null},
+  …
+],
+"bondExclusions": [{"idx":3, "bondRef":"liquid/testnet:cce0…:1", "refusal":
+  "BOND_CHECK_REFUSED", "code":"BOND_SPENT", "detail":"…", "sources":[]}],
+"bondGate": {"enforced":true, "requireBonds":true, "bondSats":1000,
+             "threshold":3, "admitted":[1,2], "excluded":[3],
+             "classification":"ROSTER_BELOW_THRESHOLD", "verdicts":[…]},
+"classification": "ROSTER_BELOW_THRESHOLD"   // present only when it stopped
+```
+
+Only public material is written: rails, outpoints, values, heights, source names.
+No key, seed, nonce, token or RPC credential.
+
+### The runs (2026-11-12, four boxes)
+
+Command shape (the host CLI is bao.markets `scripts/court/verify-bond.mts`, a
+thin adapter over the shipped verifier):
+
+```bash
+export BAO_COURT_BOND_CHECK_CMD="cd <bao.markets> && npx tsx scripts/court/verify-bond.mts --allow-own-script --bitcoind-ssh=bao8gb"
+```
+
+| run | command | result |
+|---|---|---|
+| **A — bonded quorum** | `--scenario=happy-k2 --require-bonds --bond-sats=1000` and three Liquid-testnet refs | all three **PROVEN** (`blockstream` + `liquid-network` agree, 4140 sat, asset `144c6543…9a49`, height 2701339), DKG+signing complete, **one group key, one signature verified** by the coordinator |
+| **B — one bad bond, k=3** | `--scenario=happy-kn --require-bonds --bond-sats=1000`, juror 3's ref spent | juror 3 **BOND_SPENT** → excluded → 2 admitted < 3 → **`ROSTER_BELOW_THRESHOLD`**, `groupKey:null`, `signatures:[]`, relay records 0 |
+| **C — rail-agnostic** | `--scenario=happy-k2 --require-bonds --bond-sats=1000`, juror 1 on-chain | juror 1 **PROVEN** on Bitcoin testnet4 (`bitcoind-first-party` + `mempool.space/testnet4`, 4900000000 sat, 193 conf), jurors 2–3 Liquid → one key, one signature |
+| **control — inert** | `--scenario=happy-k2`, variable unset | unchanged behaviour: `bondVerified:false`, 18 relay records, one key, one signature |
+
+Bonds used, exactly:
+
+| juror | rail | proofRef | verdict |
+|---|---|---|---|
+| A/1 `vps16gb`, A/2 `bao8gb`, A/3 `bao-testnet` | liquid | `0f1186fabb1fbeb1862f67edadedb291f0a41a0bc0ca5936c3f1028577465d2a:0` | proven (the **same** audited outpoint for all three — see the limit below) |
+| B/1, B/2 | liquid | `0f1186fab…:0` | proven |
+| B/3 `bao-testnet` | liquid | `cce002762fc697a9debd5edd91d3587b34bbd403fb8e88561c2ed422d82cf699:1` | **BOND_SPENT** (spent by the very transaction that created the bond above) |
+| C/1 `vps16gb` | onchain | `f1a394de9060f7156a43d607c13ab5cb6920b86308fcd4b875afe11a6e382e74:0` | proven on testnet4 |
+| C/2, C/3 | liquid | `0f1186fab…:0` | proven |
+
+A refusal the gate also produces, shown directly against the CLI (same outpoint,
+wrong denomination): `--bond-script=<the outpoint's own script> --asset=bbbb…`
+→ `BOND_ASSET_MISMATCH` — a valid, unspent, correctly-scripted output that is
+denominated in the wrong asset is still refused. And a refusal with **no**
+script binding at all (no `--bond-script`/`--court-pubkey`, no
+`--allow-own-script`) is `BOND_UNVERIFIABLE`, never a pass: "I could not check"
+is not "bonded".
+
+### The honest limit
+
+- **A bond proves collateral at verification time — nothing more.** It does not
+  prove the juror cannot be bribed afterwards, cannot collude, or will not sign
+  the wrong outcome. It prices a seat; it does not buy honesty. The protocol's
+  safety still rests on the DKG/reveal gates and the threshold, not on the bond.
+- **`scriptBinding:"chain"` is weaker than `"configured"`.** The historical
+  outpoints were funded before this round, so they do **not** pay the court bond
+  lock, and the on-chain one does not pay the 2-of-2 court⊕juror script. In that
+  mode the two sources agree on the outpoint's *own* script — proving existence,
+  unspent-ness, asset, value and depth, but **not** that the coin is locked to
+  the court, and therefore not that it is slashable by the covenant spender.
+  Production must configure `--bond-script`/`--court-pubkey` and refuse everything
+  else. The artifact says which binding applied, so the two can never be blurred.
+- **Run A's three seats share ONE outpoint.** The Liquid testnet faucet still
+  rejects every address shape we derive (`local variable 'data' referenced before
+  assignment`), so no fresh bond could be funded; the audited outpoint was
+  therefore proven three times. That demonstrates the enforcement path (three
+  independent checks, three independent keys, a quorum that indeed signed), not
+  three independent coins — a real deployment needs three distinct, court-locked
+  bonds.
+- **The check runs on the coordinator.** A coordinator that lies about the
+  verdict is not detected by the ceremony; the boxes cannot check a chain. The
+  artifact records the command and every verdict so the lie is at least on the
+  record, and a host that re-verifies independently (as the API's admission path
+  does) is the real defence.
+- **The gate does not slash.** Excluding a juror is a seat decision; taking the
+  bond stays the rail's own spender path.

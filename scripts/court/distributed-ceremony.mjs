@@ -58,6 +58,12 @@ import { build } from 'esbuild';
 import { parseDkgCommitmentEvent } from '../../eventsParse';
 import { verifyFinalSignature, buildAttestationMessage } from '../../crypto';
 import { UNBONDED, formatCourtBondRef, parseCourtBondRef } from '../../bondVerification';
+import {
+  BOND_CHECK_ENV,
+  buildBondCheckArgs,
+  gateRosterOnBonds,
+  parseBondCheckOutput,
+} from '../../bondCheckGate';
 
 const Point = secp256k1.Point;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -133,6 +139,78 @@ const bondRef = parseCourtBondRef({
   network: bondNetwork,
   proofRef: bondProofRef === '' ? null : bondProofRef,
 });
+/**
+ * PER-JUROR bond references (one per box, in box order). Two forms:
+ *   --bonds=liquid:testnet:<txid:vout>,liquid:testnet:<txid:vout>,onchain:testnet:<txid:vout>
+ *   --bonds-file=<path to JSON [{"rail","network","proofRef"}, …]>
+ * Without either, every juror carries the single `--bond-*` reference above.
+ * Parsing is do-not-guess: a short/long list or an unknown rail fails here,
+ * before any process starts.
+ */
+const bondsSpec = arg('bonds', '');
+const bondsFile = arg('bonds-file', '');
+/**
+ * THE BOND GATE.
+ *
+ *   BAO_COURT_BOND_CHECK_CMD   the host command that PROVES a bond (required to
+ *                              arm the gate; unset ⇒ no enforcement at all)
+ *   --require-bonds            a juror claiming `rail:none` loses its seat too
+ *   --bond-sats=<n>            the bond the ceremony requires (default 0 = no
+ *                              floor: whatever value the rail proves)
+ *   --bond-check-timeout-ms    per-juror command budget (fail closed on expiry)
+ *   --expect-classification=…  assert the ceremony STOPPED with this code
+ *                              (e.g. ROSTER_BELOW_THRESHOLD) instead of a
+ *                              below-threshold roster being a driver failure
+ *
+ * With the command unset the harness behaves exactly as before: the reference
+ * is carried and recorded, `bondVerified:false`, nothing enforced.
+ */
+const bondCheckCmd = (arg('bond-check-cmd', '') || process.env[BOND_CHECK_ENV] || '').trim();
+const requireBonds = flag('require-bonds');
+const bondSats = Number(arg('bond-sats', '0'));
+const bondCheckTimeoutMs = Number(arg('bond-check-timeout-ms', '60000'));
+const expectClassification = arg('expect-classification', '');
+if (!Number.isSafeInteger(bondSats) || bondSats < 0) {
+  throw new Error(`--bond-sats must be a non-negative integer (got "${arg('bond-sats', '0')}")`);
+}
+const bondGateArmed = bondCheckCmd !== '';
+if (requireBonds && !bondGateArmed) {
+  // A strict run with nothing to check with is a MISCONFIGURATION, not
+  // "no enforcement": silently ignoring --require-bonds is exactly the class
+  // of bug this gate exists to close.
+  throw new Error(
+    `--require-bonds needs ${BOND_CHECK_ENV} (the host command that proves a bond). `
+      + 'Refusing to run a strict ceremony with no bond check.',
+  );
+}
+
+/** One per-juror bond reference, from `--bonds` / `--bonds-file` / the default. */
+function parseBondsSpec(spec) {
+  return spec.split(',').map((chunk) => {
+    const trimmed = chunk.trim();
+    const first = trimmed.indexOf(':');
+    const second = first === -1 ? -1 : trimmed.indexOf(':', first + 1);
+    if (first === -1 || second === -1) {
+      throw new Error(`--bonds entry "${trimmed}" must be <rail>:<network>:<proofRef>`);
+    }
+    return parseCourtBondRef({
+      rail: trimmed.slice(0, first),
+      network: trimmed.slice(first + 1, second),
+      proofRef: trimmed.slice(second + 1),
+    });
+  });
+}
+const perJurorBonds = bondsFile !== ''
+  ? JSON.parse(readFileSync(bondsFile, 'utf8')).map((entry) => parseCourtBondRef(entry))
+  : (bondsSpec !== '' ? parseBondsSpec(bondsSpec) : null);
+if (perJurorBonds && perJurorBonds.length !== boxes.length) {
+  throw new Error(
+    `per-juror bonds name ${perJurorBonds.length} juror(s) but the topology has ${boxes.length} box(es)`
+      + ' — every box needs exactly one bond reference',
+  );
+}
+/** The bond reference this box's juror runs under (positional, box order). */
+const bondForPosition = (position) => (perJurorBonds ? perJurorBonds[position - 1] : bondRef);
 /** Keep the boxes' run dirs (bundles, logs) for debugging instead of tearing down. */
 const keep = flag('keep');
 /** Node per box. bao-testnet has no system Node: static tarball under /opt. */
@@ -251,6 +329,89 @@ function check(name, ok, detail) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ms = () => Date.now();
+
+// ---------------------------------------------------------------------------
+// The bond check (host-supplied command; see bondCheckGate.ts)
+// ---------------------------------------------------------------------------
+
+/** Single-quote for /bin/sh: a proofRef must never be able to add a flag. */
+function shQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Run the host's bond check for ONE juror and normalise whatever happens into a
+ * verdict. Every path that is not "exit 0 and `{ok:true}`, with the sources
+ * that agreed" is a refusal — a crash, a timeout, a log line instead of JSON,
+ * a non-zero exit that still claims success.
+ */
+function runBondCheck(request) {
+  const started = ms();
+  const argv = buildBondCheckArgs(request);
+  const result = spawnSync('/bin/sh', ['-c', `${bondCheckCmd} ${argv.map(shQuote).join(' ')}`], {
+    encoding: 'utf8',
+    timeout: bondCheckTimeoutMs,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  const elapsedMs = ms() - started;
+  const stderr = (result.stderr ?? '').trim().slice(0, 300);
+  if (result.error && result.error.code === 'ETIMEDOUT') {
+    return {
+      verdict: {
+        ok: false,
+        code: 'BOND_CHECK_TIMEOUT',
+        detail: `the bond check did not answer within ${bondCheckTimeoutMs} ms`,
+        proofRef: null,
+        sources: [],
+      },
+      exitCode: null,
+      signal: 'SIGTERM',
+      elapsedMs,
+      stderr,
+    };
+  }
+  if (result.error) {
+    return {
+      verdict: {
+        ok: false,
+        code: 'BOND_CHECK_FAILED',
+        detail: `the bond check could not be run: ${result.error.message}`,
+        proofRef: null,
+        sources: [],
+      },
+      exitCode: null,
+      signal: null,
+      elapsedMs,
+      stderr,
+    };
+  }
+  const verdict = parseBondCheckOutput(result.stdout ?? '');
+  if (verdict.ok && result.status !== 0) {
+    return {
+      verdict: {
+        ok: false,
+        code: 'BOND_CHECK_FAILED',
+        detail: `the bond check exited ${result.status} but claimed success${stderr ? ` — ${stderr}` : ''}`,
+        proofRef: verdict.proofRef,
+        sources: verdict.sources,
+      },
+      exitCode: result.status,
+      signal: result.signal ?? null,
+      elapsedMs,
+      stderr,
+    };
+  }
+  if (!verdict.ok && verdict.code === 'BOND_CHECK_MALFORMED' && stderr) {
+    verdict.detail = `${verdict.detail ?? 'malformed output'} — ${stderr}`;
+  }
+  return {
+    verdict,
+    exitCode: result.status,
+    signal: result.signal ?? null,
+    elapsedMs,
+    stderr,
+  };
+}
 
 function pct(values, p) {
   if (!values || values.length === 0) return null;
@@ -499,16 +660,180 @@ touch "$D/done-$IDX"
       new Set(roster.map((r) => r.pubkey)).size === boxes.length,
       roster.map((r) => ({ idx: r.idx, box: r.box, pubkey: r.pubkey.slice(0, 16) + '…' })),
     );
-    // Every roster entry carries its bond REFERENCE verbatim. `rail:none` means
-    // "no bond claimed yet" — a claim, not a verified bond (verification is a
-    // separate per-rail step and is deliberately NOT part of this round).
+
+    // ── THE BOND GATE: prove every seat BEFORE the DKG starts ─────────────
+    //
+    // This is the enforcement point. It runs after the boxes publish their
+    // keys (the check needs --juror-pubkey) and BEFORE the roster is written
+    // and any juror process starts, so an excluded juror never takes part in
+    // a DKG. The proof itself is the HOST's: this repository shells out to
+    // BAO_COURT_BOND_CHECK_CMD and decides only what a verdict MEANS.
+    const claims = roster.map((entry) => ({
+      idx: entry.idx,
+      box: entry.box,
+      pubkey: entry.pubkey,
+      bond: bondForPosition(entry.idx),
+    }));
+    const gateStartedAt = ms();
+    const bondCheckRuns = [];
+    const verdicts = new Map();
+    if (bondGateArmed) {
+      for (const claim of claims) {
+        // `rail:none` has nothing to prove — the gate refuses it under
+        // --require-bonds and admits it unverified otherwise. No command run.
+        if (claim.bond.rail === 'none') continue;
+        if (claim.bond.proofRef === null) continue;
+        const request = {
+          rail: claim.bond.rail,
+          network: claim.bond.network,
+          proofRef: claim.bond.proofRef,
+          bondSats,
+          jurorPubkey: claim.pubkey,
+        };
+        const run = runBondCheck(request);
+        verdicts.set(claim.idx, run.verdict);
+        bondCheckRuns.push({
+          idx: claim.idx,
+          box: claim.box,
+          rail: claim.bond.rail,
+          network: claim.bond.network,
+          proofRef: claim.bond.proofRef,
+          bondSats,
+          jurorPubkey: claim.pubkey,
+          ok: run.verdict.ok,
+          code: run.verdict.code,
+          detail: run.verdict.detail,
+          sources: run.verdict.sources,
+          exitCode: run.exitCode,
+          elapsedMs: run.elapsedMs,
+        });
+        console.log(
+          `  bond check juror ${claim.idx} (${claim.box}): ${run.verdict.ok ? 'PROVEN' : `REFUSED ${run.verdict.code}`}`
+            + ` ${formatCourtBondRef(claim.bond)} in ${run.elapsedMs} ms`
+            + `${run.verdict.sources.length ? ` sources=${run.verdict.sources.join('+')}` : ''}`,
+        );
+      }
+    }
+    const gate = gateRosterOnBonds({
+      jurors: claims,
+      threshold,
+      enforced: bondGateArmed,
+      requireBonds,
+      verdicts,
+    });
+    check(
+      `${label}: the bond gate ${bondGateArmed ? 'ran on every claimed bond' : 'is INERT (no ' + BOND_CHECK_ENV + ')'}`,
+      bondGateArmed
+        ? bondCheckRuns.length === claims.filter((c) => c.bond.rail !== 'none' && c.bond.proofRef !== null).length
+        : true,
+      { armed: bondGateArmed, checks: bondCheckRuns.length, requireBonds, bondSats },
+    );
+    for (const verdict of gate.excluded) {
+      console.log(
+        `  EXCLUDED juror ${verdict.idx}: ${verdict.refusal}`
+          + `${verdict.code ? ` (${verdict.code})` : ''} ${verdict.bondRef}`
+          + `${verdict.detail ? ` — ${verdict.detail}` : ''}`,
+      );
+    }
+    if (!gate.ok) {
+      // FAIL CLOSED: no roster is written, no juror is launched, nothing is
+      // signed. The run artifact carries the classification and every refusal.
+      const classification = gate.classification ?? 'ROSTER_BELOW_THRESHOLD';
+      console.log(`  ROSTER BELOW THRESHOLD: ${gate.admitted.length} admitted, ${threshold} required — ceremony refuses to start`);
+      const stopped = {
+        label,
+        runId,
+        threshold,
+        kill: Boolean(kill),
+        relayUrl,
+        relayBox,
+        relayIp,
+        boxes: hostInfo,
+        identities: claims.map((claim) => {
+          const verdict = [...gate.admitted, ...gate.excluded].find((v) => v.idx === claim.idx);
+          return {
+            idx: claim.idx,
+            box: claim.box,
+            pubkey: claim.pubkey,
+            bond: claim.bond,
+            bondRef: formatCourtBondRef(claim.bond),
+            bondVerified: verdict?.bondVerified ?? false,
+            admitted: verdict?.admitted ?? false,
+            refusal: verdict?.refusal ?? null,
+            bondCode: verdict?.code ?? null,
+            sources: verdict?.sources ?? [],
+          };
+        }),
+        bondPlan: {
+          enforced: bondGateArmed,
+          requireBonds,
+          bondSats,
+          checkCmd: bondCheckCmd === '' ? null : bondCheckCmd,
+          threshold,
+          admitted: gate.admitted.map((v) => v.idx),
+          excluded: gate.excluded.map((v) => v.idx),
+          classification,
+          note: 'no roster written, no juror launched: the ceremony failed closed at the bond gate',
+        },
+        bondGate: { ...gate, verdicts: bondCheckRuns },
+        classification,
+        signatures: [],
+        signatureVerified: false,
+        groupKey: null,
+        groupKeyFingerprint: null,
+        relayRecords: 0,
+        classifications: claims.map((claim) => ({
+          idx: claim.idx,
+          classification: [...gate.admitted, ...gate.excluded].find((v) => v.idx === claim.idx)?.admitted
+            ? null
+            : classification,
+        })),
+        perBox: [],
+        coordinatorWallMs: ms() - gateStartedAt,
+      };
+      check(
+        `${label}: the ceremony failed closed with ${classification} and emitted NO key and NO signature`,
+        classification === 'ROSTER_BELOW_THRESHOLD' && stopped.groupKey === null && stopped.signatures.length === 0,
+        { classification, admitted: gate.admitted.length, threshold },
+      );
+      if (expectClassification !== '' && expectClassification !== classification) {
+        failures.push({
+          name: `${label}: expected classification ${expectClassification}, got ${classification}`,
+          ok: false,
+          detail: { classification },
+        });
+        exitCode = 1;
+      }
+      return stopped;
+    }
+    if (expectClassification !== '') {
+      throw new Error(`--expect-classification=${expectClassification} was requested but the ceremony proceeded`);
+    }
+
+    // ── re-seat the survivors at sequential indices (same keys, own boxes) ─
+    //
+    // The protocol needs indices 1..m, so an excluded juror leaves a gap only
+    // in the OLD numbering. Each survivor keeps the key it generated ON its
+    // box (the identity file is copied to its new position), so the bond proof
+    // taken above stays valid for the key that actually sits.
+    const seats = gate.admitted.map((verdict, i) => {
+      const entry = roster.find((r) => r.idx === verdict.idx);
+      return { seat: i + 1, idx: verdict.idx, box: entry.box, pubkey: verdict.pubkey, bond: verdict.bond, verdict };
+    });
+    const seatCount = seats.length;
+    for (const seat of seats) {
+      if (seat.seat === seat.idx) continue;
+      ssh(seat.box, `cd ${dir} && cp -f identity-${seat.idx}.json identity-${seat.seat}.json && chmod 600 identity-${seat.seat}.json`);
+    }
+    // Every roster entry carries its bond REFERENCE and this run's verdict.
+    // `rail:none` still means "no bond claimed" (recorded, never verified).
     const rosterJson = JSON.stringify(
-      roster.map(({ idx, pubkey }) => ({ idx, pubkey, bond: bondRef })),
+      seats.map((seat) => ({ idx: seat.seat, pubkey: seat.pubkey, bond: seat.bond })),
       null,
       2,
     );
     writeFileSync(join(dirname(bundlePath), 'roster.json'), rosterJson);
-    for (const box of boxes) {
+    for (const box of seats.map((s) => s.box)) {
       scp(box, join(dirname(bundlePath), 'roster.json'), `${dir}/roster.json`);
       ssh(box, `chmod 644 ${dir}/roster.json`);
     }
@@ -519,23 +844,23 @@ touch "$D/done-$IDX"
     // that is a false "missing participant". Launch them together.
     const t0 = ms();
     // Marker files first (one ssh each, in parallel), then the launches.
-    const staged = await Promise.allSettled(boxes.map((box, i) => sshAsync(
-      box,
-      `cd ${dir} && rm -f done-${i + 1} pid-${i + 1} timings-${i + 1}.jsonl && chmod 755 ${dir}/run-juror.sh && echo staged`,
+    const staged = await Promise.allSettled(seats.map((seat) => sshAsync(
+      seat.box,
+      `cd ${dir} && rm -f done-${seat.seat} pid-${seat.seat} timings-${seat.seat}.jsonl && chmod 755 ${dir}/run-juror.sh && echo staged`,
     )));
     const stagedFailures = staged.filter((r) => r.status === 'rejected');
     check(
-      `${label}: every box accepted the juror launcher`,
+      `${label}: every seated box accepted the juror launcher`,
       stagedFailures.length === 0,
       stagedFailures.map((r) => String(r.reason && r.reason.message ? r.reason.message : r.reason)),
     );
-    for (const [i, box] of boxes.entries()) {
-      const idx = i + 1;
+    for (const seat of seats) {
+      const idx = seat.seat;
       sshFireAndForget(
-        box,
-        `cd ${dir} && setsid nohup sh ${dir}/run-juror.sh ${idx} ${jurorCount} ${threshold} ${ceremonyId} `
+        seat.box,
+        `cd ${dir} && setsid nohup sh ${dir}/run-juror.sh ${idx} ${seatCount} ${threshold} ${ceremonyId} `
         + `${relayUrl} ${dkgDeadlineMs} ${pollMs} ${kill ? killSignDeadlineMs : signDeadlineMs} `
-        + `${nodeFor(box)} ${kill ? killRevealDelayMs : 0} > ${dir}/launch-${idx}.log 2>&1 < /dev/null`,
+        + `${nodeFor(seat.box)} ${kill ? killRevealDelayMs : 0} > ${dir}/launch-${idx}.log 2>&1 < /dev/null`,
       );
     }
     // Give every box the same beat to reach its first poll (launch is now
@@ -546,7 +871,9 @@ touch "$D/done-$IDX"
     let killed = null;
     if (kill) {
       const victimIdx = 2;
-      const victimBox = boxes[victimIdx - 1];
+      const victimSeat = seats.find((s) => s.seat === victimIdx);
+      if (!victimSeat) throw new Error('--scenario=kill needs a juror seated at index 2');
+      const victimBox = victimSeat.box;
       const deadline = ms() + 30000;
       let target = null;
       while (ms() < deadline && !target) {
@@ -574,7 +901,7 @@ touch "$D/done-$IDX"
     }
 
     // ── wait for every juror to finish (marker file per box) ──────────────
-    const markers = boxes.map((box, i) => ({ box, idx: i + 1, done: false }));
+    const markers = seats.map((seat) => ({ box: seat.box, idx: seat.seat, origIdx: seat.idx, done: false }));
     const waitDeadline = ms() + 90000;
     while (ms() < waitDeadline && markers.some((m) => !m.done)) {
       for (const marker of markers) {
@@ -600,9 +927,12 @@ touch "$D/done-$IDX"
       const timings = existsSync(localTimings) ? summariseTimings(readFileSync(localTimings, 'utf8')) : null;
       perBox.push({
         idx: marker.idx,
+        // `idx` is the protocol index (seat); `origIdx` the box's original
+        // position. They differ only when the bond gate excluded a juror.
+        origIdx: marker.origIdx,
         box: marker.box,
-        hostname: hostInfo.find((h) => h.idx === marker.idx)?.hostname,
-        nodeVersion: hostInfo.find((h) => h.idx === marker.idx)?.nodeVersion,
+        hostname: hostInfo.find((h) => h.idx === marker.origIdx)?.hostname,
+        nodeVersion: hostInfo.find((h) => h.idx === marker.origIdx)?.nodeVersion,
         wallMsOnBox: wallLine ? Number(wallLine[1]) : null,
         exitCode: wallLine ? Number(wallLine[2]) : null,
         report: reports[0] ?? null,
@@ -613,19 +943,23 @@ touch "$D/done-$IDX"
     }
 
     const bondEchoes = perBox.filter((b) => b.report);
+    // Each juror echoes ITS OWN roster bond (per-juror refs differ), verbatim.
+    const bondForSeat = (seat) => seats.find((s) => s.seat === seat)?.bond ?? UNBONDED;
     check(
-      `${label}: every reporting juror carried its roster bond reference through the ceremony verbatim`,
+      `${label}: every reporting juror carried its own roster bond reference through the ceremony verbatim`,
       bondEchoes.length > 0
-      && bondEchoes.every((b) => JSON.stringify(b.report.bond) === JSON.stringify(bondRef)),
+      && bondEchoes.every((b) => JSON.stringify(b.report.bond) === JSON.stringify(bondForSeat(b.idx))),
       {
-        rosterBond: formatCourtBondRef(bondRef),
+        rosterBonds: seats.map((s) => `${s.seat}:${formatCourtBondRef(s.bond)}`),
         echoed: perBox.map((b) => (b.report?.bond ? formatCourtBondRef(b.report.bond) : null)),
       },
     );
     check(
-      `${label}: the bond reference is a CLAIM, not verification (rail registered honestly)`,
-      bondRef.rail === 'none' ? bondRef.proofRef === null : typeof bondRef.proofRef === 'string',
-      bondRef,
+      `${label}: ${bondGateArmed ? 'every seated juror carries a VERIFIED bond' : 'the bond reference is a CLAIM, not verification (gate inert)'}`,
+      bondGateArmed
+        ? seats.every((s) => s.verdict.bondVerified === true)
+        : seats.every((s) => s.bond.rail === 'none' ? s.bond.proofRef === null : typeof s.bond.proofRef === 'string'),
+      bondGateArmed ? seats.map((s) => ({ seat: s.seat, bond: s.verdict.bondRef, verified: s.verdict.bondVerified })) : bondRef,
     );
 
     // ── the relay's own receive log: the coordinator's audit trail ────────
@@ -655,7 +989,7 @@ touch "$D/done-$IDX"
       else equivocatingJurors.push(parsed.jurorIdx);
     }
     const commitments = [...perJurorCommitments.values()].map((v) => v.parsed);
-    const groupKeyRecomputed = commitments.length === jurorCount && equivocatingJurors.length === 0
+    const groupKeyRecomputed = commitments.length === seatCount && equivocatingJurors.length === 0
       ? commitments.reduce((sum, c) => sum.add(Point.fromHex(c.vssCommits[0])), Point.ZERO).toHex(true).slice(2)
       : null;
 
@@ -695,12 +1029,12 @@ touch "$D/done-$IDX"
       );
       check(
         `${label}: the relay log carries exactly one DISTINCT DKG commitment per juror (no equivocation)`,
-        commitments.length === jurorCount && equivocatingJurors.length === 0,
+        commitments.length === seatCount && equivocatingJurors.length === 0,
         { distinct: commitments.length, duplicatesIgnored: duplicateCommitments, equivocatingJurors },
       );
       check(
         `${label}: every juror's own wire log shows a reveal from every peer`,
-        perBox.every((b) => (b.report?.disclosure?.committed ?? []).length === jurorCount),
+        perBox.every((b) => (b.report?.disclosure?.committed ?? []).length === seatCount),
         perBox.map((b) => b.report?.disclosure?.committed ?? null),
       );
     } else if (!kill) {
@@ -810,7 +1144,7 @@ touch "$D/done-$IDX"
     const jurorSubs = live.subscribers.filter((s) => s.as !== 'observer');
     check(
       `${label}: every juror polled the relay and was served the same honest view`,
-      jurorSubs.length === jurorCount && jurorSubs.every((s) => s.polls > 0),
+      jurorSubs.length === seatCount && jurorSubs.every((s) => s.polls > 0),
       jurorSubs.map((s) => ({ as: s.as, polls: s.polls, served: s.served, cursorMax: s.cursorMax })),
     );
     const signatureOfAggregate = records.find((r) => r.phase === 'report' && r.payload && r.payload.signature);
@@ -831,20 +1165,51 @@ touch "$D/done-$IDX"
       relayBox,
       relayIp,
       boxes: hostInfo,
-      identities: roster.map((r) => ({
-        idx: r.idx,
-        box: r.box,
-        pubkey: r.pubkey,
-        // VERBATIM, per juror: the bond reference the ceremony was run under.
-        bond: bondRef,
-        bondVerified: false,
+      identities: seats.map((seat) => ({
+        // `seat` is the protocol index; `idx` the box's original position.
+        seat: seat.seat,
+        idx: seat.idx,
+        box: seat.box,
+        pubkey: seat.pubkey,
+        // VERBATIM, per juror: the bond reference the ceremony ran under, the
+        // verdict the host's check returned, and the sources that agreed.
+        bond: seat.bond,
+        bondRef: seat.verdict.bondRef,
+        bondVerified: seat.verdict.bondVerified,
+        sources: seat.verdict.sources,
+        bondCode: seat.verdict.code,
       })),
+      // Excluded jurors are recorded too — an exclusion is evidence, not noise.
+      bondExclusions: gate.excluded.map((v) => ({
+        idx: v.idx,
+        pubkey: v.pubkey,
+        bondRef: v.bondRef,
+        refusal: v.refusal,
+        code: v.code,
+        detail: v.detail,
+        sources: v.sources,
+      })),
+      bondGate: {
+        enforced: bondGateArmed,
+        requireBonds,
+        bondSats,
+        checkCmd: bondCheckCmd === '' ? null : bondCheckCmd,
+        threshold,
+        admitted: gate.admitted.map((v) => v.idx),
+        excluded: gate.excluded.map((v) => v.idx),
+        classification: gate.classification,
+        verdicts: bondCheckRuns,
+      },
       bondPlan: {
-        rail: bondRef.rail,
-        network: bondRef.network,
-        proofRef: bondRef.proofRef,
-        note: 'carried and recorded only — verification is a separate per-rail step; '
-          + 'public testnet4 / signet-public evidence outranks private signet',
+        rails: [...new Set(seats.map((s) => s.bond.rail))],
+        networks: [...new Set(seats.map((s) => s.bond.network))],
+        perJuror: seats.map((s) => ({ seat: s.seat, bond: formatCourtBondRef(s.bond) })),
+        verified: bondGateArmed,
+        note: bondGateArmed
+          ? 'every seated juror was proven by the host bond check BEFORE the DKG started; '
+            + 'a bond proves collateral at verification time, not that the juror cannot be bribed afterwards'
+          : 'carried and recorded only — no bond check command configured; '
+            + 'public testnet4 / signet-public evidence outranks private signet',
       },
       coordinatorWallMs: wallMs,
       slowestBoxWallMs: wallOnBox.length ? Math.max(...wallOnBox) : null,
@@ -909,6 +1274,13 @@ let exitCode = 0;
 
 (async () => {
   console.log(`distributed ceremony — ${boxes.length} boxes, relay on ${relayBox}, coordinator on ${process.env.HOSTNAME ?? 'baospace'}`);
+  console.log(
+    bondGateArmed
+      ? `  bond gate: ARMED — ${BOND_CHECK_ENV} runs on the coordinator, once per juror, before the DKG `
+        + `(requireBonds=${requireBonds}, bondSats=${bondSats}, timeout=${bondCheckTimeoutMs} ms)\n`
+        + `             cmd: ${bondCheckCmd}`
+      : `  bond gate: INERT (${BOND_CHECK_ENV} unset) — bond references are carried and recorded, nothing enforced`,
+  );
 
   // Pre-flight: clear anything a previous attempt left behind (only our own
   // paths/patterns), then check every box is reachable.
@@ -1006,11 +1378,15 @@ let exitCode = 0;
       relay: { box: relayBox, port, protocol: 'HTTP/1.1 JSON envelopes, relay-assigned monotonic seq' },
       boxes, jurorCount, pollMs, dkgDeadlineMs, signDeadlineMs, killSignDeadlineMs,
       bond: {
-        rail: bondRef.rail,
-        network: bondRef.network,
-        proofRef: bondRef.proofRef,
-        verified: false,
-        note: 'every juror ran under this bond reference; it is a claim, not a verified bond',
+        enforced: bondGateArmed,
+        requireBonds,
+        bondSats,
+        checkCmd: bondCheckCmd === '' ? null : bondCheckCmd,
+        defaultRef: formatCourtBondRef(bondRef),
+        perJuror: perJurorBonds ? perJurorBonds.map(formatCourtBondRef) : null,
+        note: bondGateArmed
+          ? 'the host bond check ran per juror BEFORE the DKG; only proven seats took part'
+          : 'no bond check command configured: the bond reference is a claim, not a verified bond',
       },
       runs: runs.map((r) => ({
         label: r.label,
@@ -1023,6 +1399,18 @@ let exitCode = 0;
         expectSignature: r.expectSignature,
         signatureVerified: r.signatureVerified,
         classifications: r.classifications,
+        classification: r.classification ?? null,
+        bondGate: r.bondGate ? {
+          enforced: r.bondGate.enforced,
+          admitted: r.bondGate.admitted,
+          excluded: r.bondGate.excluded,
+          classification: r.bondGate.classification,
+        } : null,
+        signatures: r.signatures ?? [],
+        identities: (r.identities ?? []).map((i) => ({
+          seat: i.seat ?? i.idx, idx: i.idx, box: i.box, pubkey: i.pubkey,
+          bondRef: i.bondRef ?? null, bondVerified: i.bondVerified ?? false, sources: i.sources ?? [],
+        })),
         duplicatesSeen: r.duplicatesSeen ?? 0,
         relayPolicyCounters: r.relayPolicyCounters ?? null,
         coordinatorWallMs: r.coordinatorWallMs,
