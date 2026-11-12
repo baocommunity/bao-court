@@ -101,6 +101,10 @@ import { verifyEvent } from 'nostr-tools/pure';
 import { HEX_32, isRecord } from './courtEventParseCore';
 import { quoteCounter, quoteWireUnknown, quoteWireValue } from './courtEcho';
 import { isCanonicalUtf8Text } from './courtCeremonyCore';
+// The counter barrier lives beside the machine's other barriers and is shared
+// here rather than re-derived (v0.15.3): "one round number per case" is ONE rule,
+// and the mapper's version used to be a second implementation of it (r9-4).
+import { assertRoundCountersAgree } from './confirmationMachineCore';
 import type {
   CourtConfirmationMachineEvent,
   CourtConfirmationMachineState,
@@ -880,19 +884,21 @@ export function escalationRequestToMachineEvent(
   // could have produced — and the reducer's history rule sizes itself from
   // `ladder.round` while every escalation rule uses `ladderRound`, so minting an
   // attribution record for such a state picks a round number by side effect.
-  if (!isRecord(state.ladder)) {
+  //
+  // v0.15.3: "no ladder object" is NOT the same as "no round" (the r37-1 class).
+  // A host lane projection declares `projection: 'lane'` and keeps its round
+  // ledger in its own case row, so it carries a real `ladderRound` and no
+  // `ladder`; the mapper's "there is nothing to escalate past" precondition is
+  // therefore exempt for a DECLARED projection, and the round number itself is
+  // validated by the shared counter barrier (one rule, not two — the domain
+  // check plus the agreement rule when a ladder IS present).
+  if (state.projection !== 'lane' && !isRecord(state.ladder)) {
     throw new CourtConfirmationTransitionError(
       'escalation request landed on a case with no open ladder round: there is nothing to escalate '
       + `past (phase ${quoteWireUnknown(state.phase)})`,
     );
   }
-  if (state.ladder.round !== state.ladderRound) {
-    throw new CourtConfirmationTransitionError(
-      `the round counters disagree: ladderRound is ${quoteWireUnknown(state.ladderRound)} but the `
-      + `open round is ${quoteWireUnknown(state.ladder.round)} — an escalation must not be minted against a snapshot the machine `
-      + 'could not have produced (r9-4)',
-    );
-  }
+  assertRoundCountersAgree(state, 'transport');
   if (!Array.isArray(state.challenges)) {
     // r49-d: `challenges.filter` on a restored snapshot whose ledger is not an
     // array was a raw `TypeError` (`state.challenges.filter is not a function`).

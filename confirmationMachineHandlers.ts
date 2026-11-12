@@ -262,7 +262,7 @@ export function onOpenLadderRound(
   // would silently heal into a jump (`ladder.round` 2 -> 4) that the outcome
   // history, which is sized by the same number, can never satisfy: the case
   // resolves never again. Refused before the seat is spent.
-  assertRoundCountersAgree(state);
+  assertRoundCountersAgree(state, 'open_ladder_round');
   // Rung-spend barrier (round-40 finding r40-2). `open_ladder_round` is where a
   // pending escalation actually costs a panel seat, and it used to be the ONE
   // rung-opening transition with no barrier: a restored `ladder_pending`
@@ -394,7 +394,7 @@ export function onResolveRound(
   // Round 10 (r10-4) hoisted the same invariant into a shared barrier that the
   // reducer runs before EVERY event, so this entry can no longer be the only
   // place it is checked — see `assertRoundCountersAgree`.
-  assertRoundCountersAgree(state);
+  assertRoundCountersAgree(state, 'resolve_round');
   if (state.outcomeHistory.length !== state.ladder.round - 1) {
     throw new CourtConfirmationTransitionError(
       `cannot resolve round ${quoteCounter(state.ladder.round)}: the outcome history holds `
@@ -567,7 +567,7 @@ export function onEscalate(
   // ladder will never be able to resolve (the case bricks with value in escrow),
   // so it is refused before a panel seat is spent — and before the cap check,
   // which reads the same counter.
-  assertRoundCountersAgree(state);
+  assertRoundCountersAgree(state, 'escalate');
   // Fail closed: a hand-restored snapshot parked at round_resolved with
   // the cap already reached must not re-open the ladder.
   if (state.ladderRound >= state.maxLadderRounds) {
@@ -787,7 +787,7 @@ export function onFlagClawback(
   // round-2 case). The record is an audit/fee input, not a verdict input, which
   // is why this is the lowest-severity entry on the list — and still the same
   // class: a persisted round number picked by side effect.
-  assertRoundCountersAgree(state);
+  assertRoundCountersAgree(state, 'flag_clawback');
   assertParticipant(state, event.idx);
   if (
     typeof event.reason !== 'string'
@@ -829,7 +829,7 @@ export function onFinalize(
   // case mint ROUND 2's outcome on top of an append-only log recording that
   // rounds 2 AND 3 were opened and paid — the verdict discards the decision of
   // the last panel that was actually seated (`docs/REVIEW_ROUND_10.md` §4).
-  assertRoundCountersAgree(state);
+  assertRoundCountersAgree(state, 'finalize');
   // Ledger barrier (cross-module round 2, SEQUENCE-4): the confirmation
   // ledger becomes the verdict's supporting event ids, so a restored or
   // hand-tampered snapshot is re-verified against the canonical

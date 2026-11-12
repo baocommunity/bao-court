@@ -149,6 +149,16 @@ validation (`case_id_*`) → `binding_pubkey_format` → `binding_case_mismatch`
 (ledger not an array, D2) → `bond_none` → `bond_ambiguous` (r38-1) →
 `bond_txid` (r9-2) → `now`.
 
+**v0.15.3 — the lane projection.** A state that declares `projection: 'lane'`
+(courtEscalationRequest.ts, `docs/LANE-PROJECTION.md`) is exempt from
+`ladder_missing`: its round ledger is the host's case row, so it carries a real
+`ladderRound` and no `ladder`. The counter itself is validated by the shared
+barrier, so a lane with a non-integer counter is still `ladder_counters`
+(the reference implements the same rule from the spec, and the corpus carries six
+lane cases: `lane-projection`, `lane-projection-round2`,
+`lane-projection-with-ladder`, `lane-projection-counter-string`,
+`lane-projection-counter-float`, `unknown-projection-missing-ladder`).
+
 ---
 
 ## 4. Harness design

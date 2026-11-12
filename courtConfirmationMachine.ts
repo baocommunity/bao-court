@@ -137,6 +137,7 @@ export {
   type CourtEscalationRecord,
   type CourtConfirmationMachineState,
   type CourtConfirmationMachineEvent,
+  type CourtConfirmationStateProjection,
   CourtConfirmationTransitionError,
 } from './confirmationMachineTypes';
 
@@ -436,6 +437,21 @@ export function reduceCourtConfirmationMachine(
     && (typeof state.ladder !== 'object' || state.ladder === null || !Array.isArray(state.ladder.votes))
   ) {
     throw new CourtConfirmationTransitionError('ladder state is missing or malformed');
+  }
+  // Declared provenance (v0.15.3). ABSENT means "a FULL machine state" — every
+  // state this package produces. The one declared value, `'lane'`, marks a host
+  // projection whose round counter is backed by the host's own case row instead
+  // of an in-state ladder (see `CourtConfirmationStateProjection`). An unknown
+  // marker is refused HERE rather than being treated as "full": the counter
+  // barrier decides by provenance, so a typo must not silently re-strict a legal
+  // lane snapshot (the r37-1 over-strictness class) nor be read as a trust
+  // upgrade the machine never granted.
+  const projection: unknown = (state as { readonly projection?: unknown }).projection;
+  if (projection !== undefined && projection !== 'lane') {
+    throw new CourtConfirmationTransitionError(
+      `unknown state projection ${quoteWireUnknown(projection)}: the only declared projection is 'lane', `
+      + 'and a state the machine produced carries none (v0.15.3)',
+    );
   }
   // One round number per case (r10-4): the state carries `ladderRound` (every
   // escalation rule) and `ladder.round` (the vote ledger the verdict is derived

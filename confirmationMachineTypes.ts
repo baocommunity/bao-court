@@ -189,6 +189,36 @@ interface LadderRound {
 }
 
 /**
+ * Declared provenance of a PARTIAL state — a projection of the machine's state
+ * that the machine did not produce (v0.15.3, G-4).
+ *
+ * A host that persists only the escalation LANE of the machine (the fields the
+ * lane reads and writes: `phase`, `ladderRound`, the policy flags, the roster,
+ * the challenge and escalation ledgers) has a state whose round counter is
+ * backed by ITS OWN case row, not by an in-state `ladder` object. The counter is
+ * therefore real and integral while `ladder` is legitimately absent, and the
+ * machine cannot tell that shape from a forged snapshot by looking at the
+ * counter alone — so the host must SAY which one it is.
+ *
+ * `'lane'` is the only value, and it is deliberately NOT a trust upgrade:
+ *
+ *  - it does not relax the counter's write domain (a non-negative safe integer,
+ *    always) nor the agreement rule when a `ladder` IS present;
+ *  - it unlocks exactly ONE entry, `escalate` — the transition whose round
+ *    (`ladderRound + 1`) is not yet seated in the state by construction, and
+ *    whose own barrier (`assertValidEscalationLog`) sizes the ledger from the
+ *    same counter, so the log vouches for the round the host claims;
+ *  - every entry that reads the in-state ladder (`open_ladder_round`,
+ *    `resolve_round`, `flag_clawback`, `finalize`, the transport mapper) still
+ *    requires the FULL state, so a projection can never persist a round in a
+ *    clawback record or mint a verdict.
+ *
+ * Absent on every state the machine produces (`createCourtConfirmationMachine`
+ * and the reducer never write it), which is what makes "absent" mean "full".
+ */
+export type CourtConfirmationStateProjection = 'lane';
+
+/**
  * Immutable state of one universal-confirmation case. Deep-frozen by the
  * factory and reducer; `latestTimestamp` is the monotonic-clock ledger
  * (INV-CONF monotonicity); `outcomeHistory` is append-only.
@@ -220,6 +250,13 @@ export interface CourtConfirmationMachineState {
   readonly ladder?: LadderRound;
   /** Highest ladder round opened so far (0 = none). */
   readonly ladderRound: number;
+  /**
+   * Declared provenance of a PARTIAL state (v0.15.3, G-4). Absent on every
+   * state this package produces — which is what makes "absent" mean "the FULL
+   * machine state". See {@link CourtConfirmationStateProjection} for exactly
+   * what `'lane'` does and does not relax.
+   */
+  readonly projection?: CourtConfirmationStateProjection;
   /**
    * Maximum ladder rounds permitted for this case (1..5, default 2). When
    * round `maxLadderRounds` resolves, the case proceeds to fee_settlement;

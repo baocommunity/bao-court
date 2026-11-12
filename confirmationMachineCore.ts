@@ -515,8 +515,25 @@ export function assertValidEscalationLog(state: CourtConfirmationMachineState): 
  * a non-negative safe integer — on both counters, and requires `ladderRound` to
  * be `0` when no ladder is open (a round counter with no ledger is the mirror
  * image of a skew).
+ *
+ * v0.15.3 measured that the second half of that sentence was OVER-STRICT
+ * (r37-1's class, a third time): a host that persists only the escalation LANE
+ * of the machine has a REAL round counter (`market_disputes.dispute_round`) and
+ * no in-state `ladder`, because the ladder is the case row's, not the lane
+ * state's. "Absent ladder ⇒ counter 0" therefore refused every legal lane
+ * snapshot — 42 of 185 host court tests, including the R50 first-contact
+ * escalation. The rule is now stated by PROVENANCE rather than by absence: a
+ * state that declares `projection: 'lane'` may carry `ladderRound ≥ 1` with no
+ * ladder, for the ONE entry that opens a rung (`escalate`, whose own barrier
+ * sizes the log from the same counter). Every entry that READS the in-state
+ * ledger still needs the FULL state, so a lane projection can never persist a
+ * round in a clawback record or mint a verdict. The write domain is unchanged
+ * for both shapes, which is what keeps r12-1's forgery refused.
  */
-export function assertRoundCountersAgree(state: CourtConfirmationMachineState): void {
+export function assertRoundCountersAgree(
+  state: CourtConfirmationMachineState,
+  entry: RoundCounterEntry,
+): void {
   const ladder = state.ladder;
   const ladderRound: unknown = state.ladderRound;
   // "Agree" is not enough (r12-1). Round 11 made this barrier's MESSAGE total
@@ -538,14 +555,31 @@ export function assertRoundCountersAgree(state: CourtConfirmationMachineState): 
   }
   // Before the first rung opens there is no ladder round to compare with, and
   // `ladderRound` is 0 (`challenge_window`, `ladder_pending`'s first half). A
-  // snapshot that has a round but NO ladder is the mirror image of a skew: the
-  // counter exists and the ledger it names does not.
+  // snapshot that has a round but NO ladder is either (a) a declared lane
+  // projection — the host's case row IS its ledger — or (b) the mirror image of
+  // a skew: a counter with no ledger at all. Which one it is is now DECLARED
+  // (`projection: 'lane'`), never inferred from the absence (v0.15.3).
   if (ladder === undefined || ladder === null) {
     if (ladderRound === 0) return;
+    // The two entries whose round is NOT the in-state ladder's to vouch for:
+    // `escalate` opens `ladderRound + 1` (the rung no ledger covers yet) and the
+    // transport mapper only mints that event. Both may act on a DECLARED lane
+    // projection; neither may act on an undeclared one (v0.15.3).
+    if (entry === 'escalate' || entry === 'transport') {
+      if (state.projection === 'lane') return;
+      throw new CourtConfirmationTransitionError(
+        `the round counters disagree: ladderRound is ${quoteCounter(ladderRound)} but no ladder round is `
+        + 'open, and this state does not declare projection: \'lane\' — a FULL machine state cannot carry '
+        + 'a round counter without its ledger, and a host projection must say that it is one '
+        + '(r9-4/r10-4/r12-1/v0.15.3)',
+      );
+    }
     throw new CourtConfirmationTransitionError(
-      `the round counters disagree: ladderRound is ${quoteCounter(ladderRound)} but no ladder round is `
-      + 'open — a snapshot with a round counter and no ladder ledger is not one the machine could have '
-      + 'produced (r9-4/r10-4/r12-1)',
+      'this entry reads the in-state ladder ledger, and the state carries a round counter with no '
+      + 'ladder: either it is a lane projection (projection: \'lane\', whose ledger is the host case row) '
+      + '— and then only escalate and the transport mapper may act on it — or it is a full state with a '
+      + 'counter and no ledger, which the machine cannot produce. Round opening, round resolution, the '
+      + 'clawback record and the verdict all need the FULL machine state (G-4/r12-1/v0.15.3)',
     );
   }
   const openRound: unknown = ladder.round;
@@ -558,6 +592,31 @@ export function assertRoundCountersAgree(state: CourtConfirmationMachineState): 
     );
   }
 }
+
+/**
+ * Which entry is asking the counter barrier, i.e. what it is about to do with
+ * the round number (v0.15.3).
+ *
+ * `escalate` opens round `ladderRound + 1` — the one rung the state does not yet
+ * seat a ladder for, by construction — and its own barrier
+ * (`assertValidEscalationLog`) sizes the ledger from the same counter, so a
+ * declared lane projection is enough for it. The transport mapper (`'transport'`)
+ * only MINTS that event from the same one round number, so it is in the same
+ * group. Every other consumer READS the in-state ladder (`open_ladder_round`
+ * seats its panel, `resolve_round` tallies its votes, `flag_clawback` persists
+ * the number, `finalize` consumes it for the verdict) and therefore needs the
+ * FULL state. The reader is a REQUIRED argument (no default): a caller cannot
+ * "forget" it and inherit a rule it did not choose, and the sweep in
+ * `__tests__/overStrictness.test.ts` can tell the state-only barriers apart from
+ * this one by arity.
+ */
+export type RoundCounterEntry =
+  | 'open_ladder_round'
+  | 'resolve_round'
+  | 'escalate'
+  | 'flag_clawback'
+  | 'finalize'
+  | 'transport';
 
 /** The write domain of a ladder round counter: a non-negative safe integer. */
 function isRoundCounter(value: unknown): value is number {

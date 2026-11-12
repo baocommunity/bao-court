@@ -515,6 +515,65 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.15.3] — 2026-11-12
+
+### Fixed (r12-1 over-strictness — found by the host sync, not by a review)
+- **The counter barrier refused every legal host LANE snapshot.** r12-1 added
+  "no `ladder` ⇒ `ladderRound` must be 0". That clause is true of every state
+  the machine produces and false of the `bao.markets` escalation lane, whose
+  persisted slice is a `Pick` of `CourtConfirmationMachineState` (phase, counter,
+  policies, roster, ledgers) and **no `ladder`** — the ladder in that deployment
+  is the case row's (`market_disputes.dispute_round`). Measured on the host's
+  v0.15.2 vendor sync (PR #2488): **42 of 185 court tests red across 8 suites**,
+  including R50's first-contact escalation; green at v0.15.1, and reverting only
+  that clause made 52/52 green. It is the r37-1 class a third time: an invariant
+  stated as *shape* ("there is no ladder object") when it means *provenance*
+  ("whose ledger vouches for this round").
+- **Fixed by declaring provenance, not by reverting the clause.** New
+  `projection?: 'lane'` on the state (`CourtConfirmationStateProjection`): absent
+  on every state the factory and the reducer produce — so "absent" means the FULL
+  machine state — and `'lane'` on a host projection. `assertRoundCountersAgree`
+  now takes a **required** reader (`RoundCounterEntry`): a declared lane at
+  `ladderRound ≥ 1` with no ladder is accepted by `escalate` (which opens
+  `ladderRound + 1`, the rung no ledger covers yet, and whose log barrier sizes
+  itself from the same counter) and by the transport mapper that mints that event
+  (one rule, not two — r9-4 reuses the barrier), and refused by
+  `open_ladder_round`, `resolve_round`, `flag_clawback` and `finalize`, so a
+  projection can never persist a round or mint a verdict. The write domain
+  (non-negative safe integer) is unchanged on **both** shapes. Escalating does
+  not launder a projection into a full state (the marker survives the spread), an
+  unknown marker is a typed refusal at the reducer's front door, and the mapper
+  no longer demands a `ladder` record.
+- **Both directions proven** (`__tests__/overStrictness.test.ts`, 25 tests):
+  (a) r12-1's exploits still fail — a forged counter (hostile string, `2.5`,
+  `-1`, `null`, `NaN`, `2^53`) is refused on a lane projection too; a full state
+  with a counter and no ledger is refused; a lane projection re-stamped into
+  `fee_settlement` / `ladder_vote_closed` / `ladder_pending` reaches **no** write
+  path and writes nothing; an unknown/stripped marker closes the door. (b) the
+  host's exact G-4 shape (`buildCaseMachineLaneState`, reproduced field for
+  field) escalates from round 1 and from a later rung, and the mapper mints the
+  same event from the same state.
+- **New standing over-strictness suite** — the class that keeps recurring:
+  a shape × reader MATRIX over 12 legal host shapes (lane first contact, lane at
+  a later rung, lane mid-escalation, the older wire projection, the machine's own
+  state at every phase, the legacy shapes), every cell asserted in **both**
+  directions; plus a sweep that requires every exported `assert(state)` in
+  `confirmationMachineCore` to accept the lane unless the sweep's allow-list
+  names it with the reason — a new barrier can no longer re-strict a legal host
+  shape silently.
+
+### Changed
+- `courtEscalationRequest.ts` calls `assertRoundCountersAgree(state, 'transport')`
+  instead of re-deriving "one round number per case" (r9-4 stays one
+  implementation; a lane projection with a forged counter now fails the domain
+  check here too).
+- Docs: `docs/LANE-PROJECTION.md` (the host-facing contract), INV-CONF-37 in
+  `docs/FORMAL_INVARIANTS.md` + its row in `docs/CROSS_CHECK.md` (286 claims),
+  and the glossary entry in `CONTEXT.md`.
+- Suite **2,008 passed / 93 files** (1 env-gated live test skipped; +25 in this
+  release) and `cross-check` **286 claims / 521 refs**; the three typechecks and
+  `simulate:court` are unchanged.
+
 ## [0.15.2] — 2026-11-11
 
 ### Fixed (review-round-12, PR #131)

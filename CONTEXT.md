@@ -66,3 +66,14 @@ _Avoid_: unwrap helper, parser.
 coordinated by the appeal coordinator (a mutable driver, not a ceremony
 machine — see ADR-0001).
 _Avoid_: case, dispute (the on-chain dispute event the appeal responds to).
+
+**Lane projection**: A host-persisted PARTIAL confirmation-machine state — the
+escalation lane's `Pick` of `CourtConfirmationMachineState` — that declares
+`projection: 'lane'`. Its round counter is backed by the host's own case row
+instead of an in-state `ladder`, so `ladderRound ≥ 1` without a `ladder` is
+legal for the entries that do not read that ledger (`escalate`, `transport`)
+and refused for every entry that does (round opening/resolution, clawback,
+verdict). A state without the marker is a FULL state: the machine produced it.
+See `docs/LANE-PROJECTION.md` and INV-CONF-37.
+_Avoid_: partial state, fake state (the projection is a declared subset, not a
+fabrication — absent fields must never be invented).

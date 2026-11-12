@@ -597,6 +597,7 @@ export {
   type CourtConfirmationVerdict,
   type CourtConfirmationMachineState,
   type CourtConfirmationMachineEvent,
+  type CourtConfirmationStateProjection,
 } from './courtConfirmationMachine';
 
 export {
