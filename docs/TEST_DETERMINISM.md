@@ -382,6 +382,25 @@ Honest list. None of these can produce a false red in the default suite.
    construct, never on a generated wrap.
 5. **`taprootSpend-live.test.ts` sleeps.** It waits on a real chain. Allowlisted,
    env-gated, out of the default suite.
-6. **Directory listing order is assumed, not verified.** No test depends on it
+6. **The multi-process ceremony harness has load-sensitive SCENARIO checks.**
+   Found this round, **not fixed here** — `scripts/court/multi-process-ceremony.mjs`
+   is owned by a parallel workstream, and the fixes below are harness redesigns,
+   not test edits:
+   * `--reorder-style=invert` holds one sender for a **hardcoded 800 ms**.
+     Whether one juror signs and two starve, or all three sign the same message,
+     is decided by delivery latency. The harness's "at most ONE signature exists"
+     check compares signature *occurrences*, so three identical signatures fail
+     it even though `distinctSignatures === 1`. Derive the hold from the phase
+     deadline; compare distinct values.
+   * `reorder:<style>: the relay gave jurors DIFFERENT delivery orders` is not
+     style-guarded, and cannot pass under `invert` by construction.
+   * The R30 replay scenario requires the replayed commitment to land inside
+     round 2; under parallel load the round completes first, so no honest juror
+     fails closed. Needs a deterministic injection point, not a race.
+   All three were red on the **unmodified** tree in this round's first full-suite
+   run (r30 replay at 42 s, r33 three failures), so they are pre-existing. The
+   tests now separate harness instrumentation from the security property, so a
+   real equivocation still fails; the scenario checks need the harness owner.
+7. **Directory listing order is assumed, not verified.** No test depends on it
    today; a future test that iterates a directory would reintroduce a platform
    dependency (inode order). Sort directory listings before comparing.

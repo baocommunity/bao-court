@@ -143,24 +143,39 @@ describe('B. every ceiling is derived, and the ordering property holds', () => {
   });
 
   it('has one policy point: the tiers and the defaults all come from budgetMs()', () => {
-    // No tier may be a literal, and each must be env-overridable — the property
-    // the soak program depends on when it raises a ceiling on a loaded box.
-    process.env.BAO_HEAVY_BUDGET_MS = '7000';
+    // Hermetic: the campaign harness EXPORTS capacity overrides, so a test that
+    // assumed an empty environment would fail precisely when someone runs the
+    // loaded suite — which is how this assertion first went red. Save, clear,
+    // assert the defaults, restore.
+    const TIER_VARS = [
+      'BAO_HEAVY_BUDGET_MS',
+      'BAO_PROCESS_BUDGET_MS',
+      'BAO_SCALE_BUDGET_MS',
+    ] as const;
+    const saved = TIER_VARS.map((name) => [name, process.env[name]] as const);
     try {
+      for (const name of TIER_VARS) delete process.env[name];
+
+      // Defaults are the documented, generous values (rule 4: never lowered for
+      // speed). Pinned so a "make the suite feel fast" edit is a visible diff.
+      expect(DEFAULT_BUDGET_MS).toBe(30_000);
+      expect(DEFAULT_TEST_TIMEOUT_MS).toBe(60_000);
+      expect(budgetMs('BAO_NO_SUCH_VARIABLE')).toBe(DEFAULT_BUDGET_MS);
+      expect(derivedTimeout('BAO_NO_SUCH_VARIABLE')).toBe(60_000);
+      expect(heavyTimeout()).toBe(120_000);
+      expect(processTimeout()).toBe(180_000);
+      expect(scaleTimeout()).toBe(300_000);
+
+      // Each tier is env-overridable — the property the soak program depends on
+      // when it raises a ceiling on a loaded box.
+      process.env.BAO_HEAVY_BUDGET_MS = '7000';
       expect(heavyTimeout()).toBe(14_000);
     } finally {
-      delete process.env.BAO_HEAVY_BUDGET_MS;
+      for (const [name, value] of saved) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
-
-    // Defaults are the documented, generous values (rule 4: never lowered for
-    // speed). Pinned so a "make the suite feel fast" edit is a visible diff.
-    expect(DEFAULT_BUDGET_MS).toBe(30_000);
-    expect(DEFAULT_TEST_TIMEOUT_MS).toBe(60_000);
-    expect(budgetMs('BAO_NO_SUCH_VARIABLE')).toBe(DEFAULT_BUDGET_MS);
-    expect(derivedTimeout('BAO_NO_SUCH_VARIABLE')).toBe(60_000);
-    expect(heavyTimeout()).toBe(120_000);
-    expect(processTimeout()).toBe(180_000);
-    expect(scaleTimeout()).toBe(300_000);
   });
 });
 
