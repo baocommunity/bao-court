@@ -428,6 +428,15 @@ export {
   type VerifyBondOptions,
 } from './bondVerification';
 
+// ─── Ceremony core: replay collapse + shared invariants ─────────────────────
+
+export {
+  collapseSignedRecords,
+  signedRecordIdentity,
+  type SignedRecordIdentity,
+  type CollapsedSignedRecords,
+} from './courtCeremonyCore';
+
 // ─── Ceremony bond gate (pluggable, host-verified) ───────────────────────────
 
 export {

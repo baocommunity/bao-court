@@ -192,6 +192,64 @@ signs two different commitments under the same `(disputeId, phaseNonce)`. That
 is detected and disqualified by the same gates (R30 `--chaos=replay`,
 `__tests__/courtRelayAdversary.test.ts`, `courtInbox`/`courtOutbox` suite).
 
+### Replay is not equivocation — the collapse must happen FIRST
+
+A re-delivered record and an equivocation look identical to a sloppy comparator
+and are opposites in fact:
+
+| | replay | equivocation |
+|---|---|---|
+| who can do it | the **relay** (a delivery policy) | only a **signer** holding the key |
+| wire objects | ONE signed event, delivered twice | TWO signed events, different ids |
+| identity | same event id (Nostr ids are `sha256` over the serialised event, so same id ⇒ same bytes ⇒ same signature) | two distinct ids, both validly signed |
+| correct verdict | idempotent no-op | disqualify and blame that juror |
+| if misread | **false accusation against an honest juror** | a Byzantine juror escapes |
+
+**Where the collapse happens.** `collapseSignedRecords` in
+`courtCeremonyCore.ts` — the module that exists to hold ceremony invariants once
+— and nowhere else. Identity is the record's own signed event id (payload hash
+as the fallback for a record that carries no event), **never its arrival
+position**; the attribution key is `(phase, round, jurorIdx)`, so the same signer
+in another round is a different claim, not a second one. `scripts/court/distributed-ceremony.mjs`
+owns the comparison for the relay log and only *calls* it: first occurrence per
+key wins, an identical identity counts as a collapsed duplicate, and a
+**different** identity for the same key is the sole trigger for blame. The
+session classes already compared by value (`IndependentDkgSession.addCommitment`,
+`IndependentSigningSession.addCommitment/addReveal`,
+`courtSigningMachine`'s commitment guard); this closes the one place that did
+not.
+
+**The defect this replaced** (v0.15.3, reproduced on untouched `origin/main`,
+`--scenario=replay`, n=3 k=2): the coordinator compared the parsed
+proof-of-knowledge object by **reference** —
+`existing.parsed.pok === parsed.pok` — which is false for two parses of the same
+event, so the collapse branch could never fire. Every duplicate became an
+equivocation: `equivocatingJurors:[2]`, `duplicatesIgnored:0`, the group key could
+not be re-derived from the log, and three assertions failed (the re-derivation,
+the signature verification, and "exactly one DISTINCT commitment per juror").
+A re-delivered commitment was blamed on an honest juror — a false accusation in
+the one subsystem whose whole purpose is to blame correctly.
+
+**Pinned by** `__tests__/replayEquivocation.test.ts` against the captured trace
+of that failing run (`__fixtures__/replay-wire-n3-k2.json`, 22 relay records
+including the injected copy of seq 2 as seq 3):
+
+- `(a)` the captured replay trace → `equivocations: []`, `duplicates: 1`,
+  three distinct commitments, zero unparsed — **zero false accusations**;
+- `(a2)` the root cause isolated: two parses of one event are never `===` but are
+  `toEqual` — the old predicate, and the value identity the collapse uses;
+- `(a3)` order independence: any arrival order, same verdict;
+- `(b)` a **genuine** equivocation (two different commitments, same juror 2,
+  round 1, `dkg-commit`) → still detected, blamed on juror 2 and no one else;
+- `(b2)` replay *alongside* a real equivocation → the duplicate collapses, the
+  equivocation is still blamed (the fix cannot have neutered the check);
+- `(b3)` the same juror in a different round → not equivocation.
+
+At run time the harness asserts the same invariant on every replay run: *"the
+coordinator collapsed EVERY re-delivered commitment as the same signed event
+(replay is not equivocation)"* — the collapsed count must equal the number of
+records the relay marked `injected`, and the equivocation list must be empty.
+
 ### Normative completion semantics (A / N / P)
 
 These are the three properties the harness asserts and the deployment may rely
