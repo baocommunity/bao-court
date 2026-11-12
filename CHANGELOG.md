@@ -633,6 +633,20 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.16.0] — 2026-11-12
+
+### Added
+- **The ceremony bond gate** (`bondCheckGate.ts`): a seat costs a PROVEN bond. `BAO_COURT_BOND_CHECK_CMD` is invoked per juror as `<cmd> --rail= --network= --proof= --bond-sats= --juror-pubkey=`; only exit 0 with `{"ok":true,…}` admits a juror. Typed refusals `BOND_CHECK_REFUSED|_FAILED|_MALFORMED|_TIMEOUT`, `BOND_PROOF_MISMATCH`, `BOND_NOT_CLAIMED`; unset env reproduces the previous behaviour byte-for-byte. Enforcement runs after the boxes publish keys and **before `roster.json`** is written, so an excluded juror never joins a DKG; below threshold ⇒ `ROSTER_BELOW_THRESHOLD` with no roster, no key, no signature.
+- **Stable juror identities** (`--juror-key-file` / `--juror-keys`, `provision-jurors.mjs`): a pre-provisioned 0600 key per box, never generated when the flag is present, never printed or transmitted — only its x-only public key. A missing key is `IDENTITY_BLOCKED {"reason":"JUROR_KEY_MISSING"}` (seat lost), never a silent regeneration that would invalidate a bond. Odd-Y keys are refused at load (`BOND_KEY_NOT_XONLY_LIFTABLE`).
+- **Unattended ceremony soak**: a 6-hourly timer rotating happy-k2 → happy-kn → kill → replay → reorder (silence opt-in), one JSONL record per run, boot-gap accounting, rolling artifact cap.
+
+### Fixed
+- **Replay was read as equivocation**: the collapse branch compared parsed payload objects by REFERENCE (`existing.parsed.pok === parsed.pok`), which is false for two parses of one event, so every re-delivered byte-identical record fell through to blame. Identity is now the signed event id (payload-hash fallback) via `signedRecordIdentity`/`collapseSignedRecords`; identical repeats collapse, only a different identity is blamed. Both directions pinned: replay accuses nobody; a genuine two-different-commitments case still blames the right juror.
+- Determinism: no `vitest.config.ts` meant a 5 s default on 1,473 tests; assertions that could never fire; clock-decided ceremony verdicts; a 1-in-256 no-op tamper; a NUL byte hiding a test file. Suite is now load-proof (0/20 flake → 20/20 green under load) with the rules statically enforced.
+
+### Verified live (2026-11-12)
+Three jurors on three separate boxes, each with a **court-locked 2-of-2 bond** (100,000 sat, 1 conf, first-party node + `mempool.bao.markets` agreeing): all three `bondVerified:true`, one group key, **one verified FROST signature**. Negative: a genuinely spent bond presented for a seat → `BOND_SPENT`, roster below threshold, **no key and no signature**. Six-scenario matrix (happy-k2, happy-kn, kill, replay, reorder, silence) all pass. Suite 2,029 passed.
+
 ## [0.15.3] — 2026-11-12
 
 ### Fixed (r12-1 over-strictness — found by the host sync, not by a review)
