@@ -119,7 +119,14 @@ describe('FROST aggregate attribution', () => {
     const session = signSession();
     const journal = journalFor(session);
     const agg = aggregateOf(journal);
-    const tampered = { ...agg, signature: `${agg.signature.slice(0, 126)}ff` };
+    // Flip the final byte, do not OVERWRITE it with a constant: `...ff` is a
+    // NO-OP whenever the signature already ends in `ff` (1 in 256 runs), and the
+    // tampered signature then verifies and the test fails. Not hypothetical —
+    // this fired once in three loaded full-suite runs on 2026-11-12.
+    const lastByte = agg.signature.slice(-2);
+    const flipped = (Number.parseInt(lastByte, 16) ^ 0xff).toString(16).padStart(2, '0');
+    expect(flipped).not.toBe(lastByte); // the tamper always tampers
+    const tampered = { ...agg, signature: `${agg.signature.slice(0, -2)}${flipped}` };
 
     const result = verifyAggregateAttribution(
       journal,

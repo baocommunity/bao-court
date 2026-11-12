@@ -115,16 +115,19 @@ post-fix tree.
 | `r30MultiProcessCeremony.test.ts` 50 (original) | `--deadline-ms=4000` | **real bug** | **fixed** → same constant. A loaded run mis-classified a good DKG as `DKG_MISSING_PARTICIPANT`. |
 | `r30MultiProcessCeremony.test.ts` 87 (original) | `expect(report.latencyModel.phaseDeadlineMs).toBe(4000)` | latent | **fixed** → pins `CEREMONY_PHASE_DEADLINE_MS`, i.e. the derivation, so the harness and the test can never desynchronise. |
 
-### 3.3 Per-test timeouts — 50 declarations
+### 3.3 Per-test timeouts — 46 declarations, **0 literals**
 
 | Class | Count | Disposition |
 |---|---|---|
-| **Literal, single-line** `{ timeout: 120_000 }` etc. | 44 | **derived** → `heavyTimeout()` / `processTimeout()` / `scaleTimeout()`, preserving each ceiling exactly |
-| **Literal, redundant** `{ timeout: 60_000 }` / `{ timeout: 30_000 }` (compensating for the 5 s default) | 6 | **deleted** → inherit the derived 60 s global |
-| **Literal, legacy trailing argument** `}, 300_000)` | 6 | **derived** or bound to `MODEL_CHECK_TIMEOUT`. Found only by the AST guard — line greps miss the multi-line form. |
-| **Already derived** (`SIM_TIMEOUT`) | 3 | kept |
+| Literal, single-line `{ timeout: 120_000 }` etc. | 38 | **derived** → `heavyTimeout()` / `processTimeout()` / `scaleTimeout()`, preserving each ceiling exactly |
+| Literal, redundant `{ timeout: 60_000 }` / `{ timeout: 30_000 }` (compensating for the 5 s default) | 6 | **deleted** → inherit the derived 60 s global |
+| Literal, legacy trailing argument `}, 300_000)` / `}, 60_000);` | 6 | **derived**, or bound to `MODEL_CHECK_TIMEOUT`. Found only by the AST guard — line greps miss the multi-line form |
+| Already derived | 6 | kept |
+| **Remaining** | **46 derived** | verified by `determinismGuard.test.ts` R1 (AST) |
 
-Net: **0 literal per-test timeouts**, 50 derived, 1 global deriving from env.
+Two further budgets own both halves of their derivation (`MODEL_CHECK_TIMEOUT`,
+`PROPERTIES_BATCH_TIMEOUT`), and three **child** bounds use
+`childTimeoutFor()` — 56 timeout-shaped values in total, none a literal.
 
 ### 3.4 Unseeded randomness — 5 sites
 
@@ -241,10 +244,22 @@ The flakiest tests, before → after:
 
 ### 5.2 The whole suite
 
+The suite is 92 files / ~1980 tests. Four of them are exhaustive **workloads**
+(not timing-sensitive): `modelChecking` alone enumerates 111 667 states and
+6.7 M transitions. They are measured separately, because putting them inside a
+3× loaded campaign measures the box's throughput and nothing about determinism.
+
 | Run | Result |
 |---|---|
-| Full suite ×3, loaded (same 20 hogs) | **FULL3_PLACEHOLDER** |
-| Full suite, unloaded | **UNLOADED_PLACEHOLDER** |
+| Full suite ×3, loaded (same 20 hogs), excluding the exhaustive workload files | FULL3_PLACEHOLDER |
+| Exhaustive workloads ×1, loaded, with declared capacity | WORKLOAD_PLACEHOLDER |
+| Full suite, single run without the harness's hogs | UNLOADED_PLACEHOLDER |
+
+**Ambient load, stated plainly.** This box was not idle and could not be made
+idle: it carried ~100 load from **foreign** CPU loops (nine >3 h old, plus other
+agents' campaigns) throughout. The "unloaded" row therefore means *the harness
+added no hogs*; the box still had ~6× oversubscription. Every number in this
+document should be read as "under at least this much contention".
 
 ### 5.3 What actually caused it
 
@@ -345,6 +360,7 @@ Tuning without editing a test:
 | `INBOX_FLOOD_BUDGET_MS` | 30 000 | 10 k-ingest watchdog |
 | `MODEL_CHECK_BUDGET_MS` | 600 000 | model-check exploration (timeout ⇒ 1 200 s) |
 | `PROPERTIES_BATCH_BUDGET_MS` | 180 000 | PB1/PB2 proof sweeps (timeout ⇒ 360 s) |
+| `FUZZ_BUDGET_MS` | 30 000 | 200-round parser fuzz (timeout ⇒ 60 s) |
 | `CEREMONY_PHASE_DEADLINE_MS` | 20 000 | per-phase deadline handed to the multi-process harness |
 | `HOGS` | `cores + 4` | hog count for the harness |
 | `ITER_TIMEOUT` | 1800 | per-iteration process bound (s) |
