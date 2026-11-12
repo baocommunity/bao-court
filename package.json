@@ -167,7 +167,9 @@
     "campaign:full": "tsx scripts/campaign/run-campaign.mjs --full",
     "reproduce": "bash scripts/reproduce.sh",
     "preview": "vitest --ui --api.host 0.0.0.0 --api.port ${PORT:-4173} --open false",
-    "simulate:multiprocess": "tsx scripts/court/multi-process-ceremony.mjs"
+    "simulate:multiprocess": "tsx scripts/court/multi-process-ceremony.mjs",
+    "simulate:distributed": "tsx scripts/court/distributed-ceremony.mjs",
+    "relay:court": "node scripts/court/relay-server.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.5.2",

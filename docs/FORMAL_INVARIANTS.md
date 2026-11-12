@@ -1779,6 +1779,7 @@ true.
 | `LIQUID_ARGUMENT` / `LIQUID_STATE` | `LiquidEscrowError` | liquidEscrow.ts (21 sites) | covenant script well-formedness, curve lift |
 | `TAPROOT_ARGUMENT` / `TAPROOT_STATE` | `TaprootSpendError` | taprootSpend.ts (21 sites) | control-block/tapleaf integrity, curve lift |
 | `CRYPTO_ARGUMENT` / `CRYPTO_STATE` | `CourtCryptoError` | crypto.ts (7), nip44Crypto.ts (1) | attestation message field languages |
+| `BOND_ARGUMENT` | — (`CourtArgumentError`) | bondVerification.ts (bond reference shape: rail/network/proofRef) | rail-agnostic bond reference language |
 | `DISPUTE_ARGUMENT` | — (`CourtArgumentError`) | dispute.ts (4 sites) | commit salt/outcome languages |
 | `NOSTR_EVENT_ARGUMENT` | — (`CourtArgumentError`) | events.ts (3 sites) | event tag capacity limits |
 | `SIGNER_ARGUMENT` / `SIGNER_STATE` | `CourtSignerError` | courtSigner.ts (3 sites) | NIP-59 seal well-formedness |

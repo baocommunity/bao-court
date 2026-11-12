@@ -10,6 +10,7 @@
  */
 
 import type { StakeCommitment } from './types';
+import { CourtArgumentError } from './errors';
 
 export interface UtxoInfo {
   readonly txid: string;
@@ -28,6 +29,77 @@ export interface BondVerificationResult {
 
 export interface BondVerifier {
   readonly getUtxo: (txid: string, vout: number) => Promise<UtxoInfo | null>;
+}
+
+/**
+ * A RAIL-AGNOSTIC reference to a juror's bond.
+ *
+ * `StakeCommitment` above describes an on-chain UTXO (one rail). Bonds are
+ * moving to Liquid testnet first and will later exist on other rails, so a
+ * ceremony roster entry needs to say WHICH rail, WHICH network, and WHERE the
+ * proof lives — without the ceremony having to understand every rail.
+ *
+ * The reference is deliberately opaque (`proofRef`): for `liquid` it will be a
+ * Liquid testnet txid/asset commitment, for `lightning` a payment preimage
+ * hash, for `cashu` a token commitment, for `onchain` a Bitcoin txid:vout.
+ * Verification is a SEPARATE step (`verifyBond`, per-rail verifiers); this
+ * round only plumbs and records the reference, and never treats an unverified
+ * reference as a satisfied bond.
+ *
+ * Terminology (operator decision): the network historically called "demo" is
+ * `private-signet` in every human-readable string and field value. Evidence
+ * hierarchy is public testnet4 / signet-public ABOVE private signet, which is
+ * why new bond plans name `testnet` first.
+ */
+export const BOND_RAILS = ['liquid', 'lightning', 'onchain', 'cashu', 'none'] as const;
+export type BondRail = (typeof BOND_RAILS)[number];
+
+export const BOND_NETWORKS = ['testnet', 'signet-public', 'private-signet'] as const;
+export type BondNetwork = (typeof BOND_NETWORKS)[number];
+
+export interface CourtBondRef {
+  /** Settlement rail the bond lives on (`none` = no bond claimed yet). */
+  readonly rail: BondRail;
+  /** Network the bond lives on. Public testnet4 is `testnet`. */
+  readonly network: BondNetwork;
+  /** Rail-specific proof reference (txid, preimage hash, token id…), or null. */
+  readonly proofRef: string | null;
+}
+
+/** A roster entry that claims no bond yet — the honest default for this round. */
+export const UNBONDED: CourtBondRef = { rail: 'none', network: 'testnet', proofRef: null };
+
+/**
+ * Validate and normalise a bond reference supplied as JSON (roster file, wire
+ * payload). Unknown rails/networks are rejected rather than coerced: a typo
+ * must not silently become "no bond".
+ */
+export function parseCourtBondRef(value: unknown): CourtBondRef {
+  if (typeof value !== 'object' || value === null) {
+    throw new CourtArgumentError('BOND_ARGUMENT', 'bond reference must be an object');
+  }
+  const raw = value as Record<string, unknown>;
+  const rail = String(raw.rail ?? '');
+  const network = String(raw.network ?? '');
+  const proofRef = raw.proofRef ?? null;
+  if (!(BOND_RAILS as readonly string[]).includes(rail)) {
+    throw new CourtArgumentError('BOND_ARGUMENT', `bond.rail must be one of ${BOND_RAILS.join('|')}, got "${rail}"`);
+  }
+  if (!(BOND_NETWORKS as readonly string[]).includes(network)) {
+    throw new CourtArgumentError('BOND_ARGUMENT', `bond.network must be one of ${BOND_NETWORKS.join('|')}, got "${network}"`);
+  }
+  if (proofRef !== null && typeof proofRef !== 'string') {
+    throw new CourtArgumentError('BOND_ARGUMENT', 'bond.proofRef must be a string or null');
+  }
+  if (proofRef !== null && proofRef.length > 512) {
+    throw new CourtArgumentError('BOND_ARGUMENT', 'bond.proofRef must be at most 512 characters');
+  }
+  return { rail: rail as BondRail, network: network as BondNetwork, proofRef: proofRef as string | null };
+}
+
+/** The same reference, serialised for a log/artifact (never contains a secret). */
+export function formatCourtBondRef(bond: CourtBondRef): string {
+  return `${bond.rail}/${bond.network}${bond.proofRef ? `:${bond.proofRef}` : ''}`;
 }
 
 export interface VerifyBondOptions {

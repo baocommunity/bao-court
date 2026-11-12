@@ -11,6 +11,48 @@ frozen.
 
 ## [Unreleased]
 
+### Added (distributed ceremony — three real boxes, one real network)
+- **`scripts/court/relay-server.mjs`** — the ceremony relay as a standalone
+  process: the same JSON protocol the harness speaks (`POST/GET /events`,
+  relay-assigned monotonic `seq`), plus a shared bearer token read from a 0600
+  file, a hard `--max-records` cap, its own per-request handling timings, and a
+  token-gated `GET /log` so a coordinator can audit the run from the relay's
+  own receive log.
+- **`scripts/court/distributed-ceremony.mjs`** — the distributed driver:
+  `esbuild`-bundles `juror-child.ts` into a single `juror.mjs`, scp's it to one
+  box per juror (no repo, no `node_modules`), has each box GENERATE ITS OWN key
+  (0600, never transmitted; only the x-only public key crosses the wire),
+  launches the jurors over ssh, hosts the relay on another box, re-derives the
+  group key from the published commitments and verifies the aggregate itself,
+  measures real per-request RTT and per-box wall time, and delivers a SIGKILL
+  over ssh in the kill scenario.
+- **`bondVerification.ts`: `CourtBondRef` / `parseCourtBondRef` / `UNBONDED`** —
+  the rail-agnostic bond reference a ceremony roster entry now carries
+  (`rail: liquid|lightning|onchain|cashu|none`, `network:
+  testnet|signet-public|private-signet`, `proofRef`). Carried and recorded
+  verbatim; **verification is a separate per-rail step and is not implied** —
+  this round uses `rail:"none"` for every juror. New error code
+  `BOND_ARGUMENT`.
+- `juror-child.ts` gains `--relay-url`, `--token-file`, `--identity-file`,
+  `--roster-file`, `--timings-file`, `--identity-only` and
+  `--reveal-delay-ms`. With none of them supplied its behaviour is unchanged.
+- `docs/DISTRIBUTED_CEREMONY.md` + `docs/benchmarks/distributed-ceremony/` —
+  topology, exact commands (including the static Node install on the box that
+  had none), both happy runs (k=2, k=3), the kill-mid-signing run, the measured
+  latency table, and the honest limits.
+
+### Fixed (r30/r52a — a faster peer's FROST commitment was discarded)
+- **The phase-segregated receive loop threw away out-of-phase signing messages
+  (`juror-child.ts`).** The juror polled DKG traffic until the key was
+  computable, then signed; a peer that finished DKG first published its FROST
+  commitment while a slower peer was still in DKG, and the slower peer's cursor
+  had already advanced past that record — so an honest, healthy peer looked like
+  it never committed (`SIGN_MISSING_PARTICIPANT`). Invisible on loopback (a
+  few hundred microseconds of window); it fires across boxes with 25–70 ms
+  RTTs. `frost-commit`/`frost-reveal` records seen during DKG are now DEFERRED
+  and ingested when signing starts (`disclosure.deferredIngested`). Found by the
+  first three-box k=2 attempt.
+
 ### Fixed (round 52 — the exported ladder bound IS the safe predicate)
 - **`deriveMaxLadderRounds` named the BREAK-EVEN round at an exact-integer
   boundary (r52-1; found by round 46a's mechanisation, class H-2).** The cap was

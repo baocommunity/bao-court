@@ -1,0 +1,44 @@
+{
+  "harness": "multi-process-ceremony (loopback, in-process relay)",
+  "measured": "2026-11-11",
+  "command": "npx tsx scripts/court/multi-process-ceremony.mjs --jurors=3",
+  "note": "Wall clock INCLUDES the three tsx child starts (TypeScript transpile per process); the distributed runs launch a pre-bundled juror.mjs, so compare ceremony shape, not just ms.",
+  "runs": [
+    {
+      "elapsedMs": 6910,
+      "relayMessages": 18,
+      "result": "PASS"
+    },
+    {
+      "elapsedMs": 4385,
+      "relayMessages": 18,
+      "result": "PASS"
+    },
+    {
+      "elapsedMs": 6266,
+      "relayMessages": 18,
+      "result": "PASS"
+    }
+  ],
+  "medianElapsedMs": 6266,
+  "latencyModel": {
+    "transport": "HTTP/1.1 over loopback TCP",
+    "publishJitterMs": "(idx*13 + round*29 + phaseIndex*7) % 41",
+    "commitmentToSharesGapMs": 150,
+    "pollIntervalMs": 20,
+    "relayHandlingMs": "not instrumented per message (sub-millisecond by construction: same kernel)"
+  },
+  "distributedCounterpart": {
+    "happyN3K2": {
+      "coordinatorWallMs": 1936,
+      "slowestBoxWallMs": 1629,
+      "relayRecords": 18
+    },
+    "happyN3K3": {
+      "coordinatorWallMs": 3699,
+      "slowestBoxWallMs": 1637,
+      "relayRecords": 18
+    },
+    "note": "see dist-*-summary.json in this directory for the per-box and per-request numbers"
+  }
+}

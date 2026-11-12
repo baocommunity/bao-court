@@ -2,7 +2,18 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { computeRequiredBond, createBaoMempoolVerifier, verifyBond, type BondVerifier } from '../bondVerification';
+import {
+  BOND_NETWORKS,
+  BOND_RAILS,
+  UNBONDED,
+  computeRequiredBond,
+  createBaoMempoolVerifier,
+  formatCourtBondRef,
+  parseCourtBondRef,
+  verifyBond,
+  type BondVerifier,
+} from '../bondVerification';
+import { CourtArgumentError } from '../errors';
 
 describe('bondVerification', () => {
   it('computes required bond with default 1% rate and 1M sats minimum', () => {
@@ -242,5 +253,53 @@ describe('createBaoMempoolVerifier', () => {
     expect(utxo).not.toBeNull();
     expect(utxo?.amountSats).toBe(1_000_000);
     expect(utxo?.confirmations).toBe(6);
+  });
+
+  // ── rail-agnostic bond REFERENCE (ceremony roster carry-through) ─────────
+  // A roster entry must be able to name WHICH rail/network its bond lives on
+  // without the ceremony knowing any rail. This round carries `none`; verifies
+  // nothing. Liquid testnet comes first, so its rail value must exist now.
+  describe('CourtBondRef', () => {
+    it('accepts every documented rail and network', () => {
+      for (const rail of BOND_RAILS) {
+        for (const network of BOND_NETWORKS) {
+          const bond = parseCourtBondRef({ rail, network, proofRef: null });
+          expect(bond).toEqual({ rail, network, proofRef: null });
+        }
+      }
+      expect(BOND_RAILS).toContain('liquid');
+      expect(BOND_NETWORKS).toEqual(['testnet', 'signet-public', 'private-signet']);
+    });
+
+    it('carries a rail-specific proof reference verbatim', () => {
+      const liquid = parseCourtBondRef({
+        rail: 'liquid',
+        network: 'testnet',
+        proofRef: 'a'.repeat(64) + ':0',
+      });
+      expect(liquid.proofRef).toBe('a'.repeat(64) + ':0');
+      expect(formatCourtBondRef(liquid)).toBe(`liquid/testnet:${'a'.repeat(64)}:0`);
+    });
+
+    it('defaults to an unbonded claim on public testnet', () => {
+      expect(UNBONDED).toEqual({ rail: 'none', network: 'testnet', proofRef: null });
+      expect(formatCourtBondRef(UNBONDED)).toBe('none/testnet');
+    });
+
+    it('rejects an unknown rail or network instead of coercing it', () => {
+      expect(() => parseCourtBondRef({ rail: 'solana', network: 'testnet', proofRef: null }))
+        .toThrow(CourtArgumentError);
+      expect(() => parseCourtBondRef({ rail: 'liquid', network: 'demo', proofRef: null }))
+        .toThrow(/bond\.network must be one of/);
+      expect(() => parseCourtBondRef({ rail: 'none', network: 'testnet', proofRef: 42 }))
+        .toThrow(/proofRef/);
+      expect(() => parseCourtBondRef(null)).toThrow(CourtArgumentError);
+    });
+
+    it('bounds the proof reference so a roster line stays small', () => {
+      expect(() => parseCourtBondRef({
+        rail: 'onchain', network: 'testnet', proofRef: 'x'.repeat(513),
+      })).toThrow(/at most 512/);
+    });
   });
 });

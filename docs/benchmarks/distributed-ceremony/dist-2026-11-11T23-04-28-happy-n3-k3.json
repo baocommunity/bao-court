@@ -1,0 +1,401 @@
+{
+  "label": "happy-n3-k3",
+  "runId": "dist-2026-11-11T23-04-28-2",
+  "threshold": 3,
+  "kill": false,
+  "relayUrl": "http://46.225.208.172:18471",
+  "relayBox": "vps16gb",
+  "relayIp": "46.225.208.172",
+  "boxes": [
+    {
+      "idx": 1,
+      "box": "vps16gb",
+      "hostname": "ubuntu-16gb-nbg1-1",
+      "nodeVersion": "v22.22.0",
+      "cores": 8,
+      "kernel": "6.8.0-149-generic"
+    },
+    {
+      "idx": 2,
+      "box": "bao8gb",
+      "hostname": "bao8gb",
+      "nodeVersion": "v20.20.0",
+      "cores": 8,
+      "kernel": "6.8.0-149-generic"
+    },
+    {
+      "idx": 3,
+      "box": "bao-testnet",
+      "hostname": "ubuntu-26",
+      "nodeVersion": "v22.22.0",
+      "cores": 8,
+      "kernel": "7.0.0-43-generic"
+    }
+  ],
+  "identities": [
+    {
+      "idx": 1,
+      "box": "vps16gb",
+      "pubkey": "560dcf2e7bbc22a4f471a85710eb73cbf1624de81283309772b431d0ed059173",
+      "bond": {
+        "rail": "none",
+        "network": "testnet",
+        "proofRef": null
+      },
+      "bondVerified": false
+    },
+    {
+      "idx": 2,
+      "box": "bao8gb",
+      "pubkey": "95654fa46249188887b25b0a8e85b2db0d39dddc85a9394853656287ba4a4d8b",
+      "bond": {
+        "rail": "none",
+        "network": "testnet",
+        "proofRef": null
+      },
+      "bondVerified": false
+    },
+    {
+      "idx": 3,
+      "box": "bao-testnet",
+      "pubkey": "a54efee06843c4623f687b404191ba0dda1c9a417eece3206b2b299f100756b8",
+      "bond": {
+        "rail": "none",
+        "network": "testnet",
+        "proofRef": null
+      },
+      "bondVerified": false
+    }
+  ],
+  "bondPlan": {
+    "rail": "none",
+    "network": "testnet",
+    "proofRef": null,
+    "note": "carried and recorded only — verification is a separate per-rail step; public testnet4 / signet-public evidence outranks private signet"
+  },
+  "coordinatorWallMs": 3699,
+  "slowestBoxWallMs": 1556,
+  "fastestBoxWallMs": 1441,
+  "groupKey": "16c16683182c118a1ec5463ba06337ec1dd71ad82ac8d25416fbe1aebd3a0049",
+  "groupKeyFingerprint": "sha256(16c16683182c118a…)[0:16]=b66e84a80d6de3cc",
+  "signatures": [
+    "cf38bdd723cdf5a064dddbbc54195aaae6a3ca0b0b54207956920ab182a3fa2dfc8f0d48d1bf98ec964c12ff70dff0cc913a5c37efc5ea45b8f97c2b6d1efac9"
+  ],
+  "relayRecords": 18,
+  "relayPhases": {
+    "dkg-commit": 3,
+    "dkg-share": 6,
+    "frost-commit": 3,
+    "frost-reveal": 3,
+    "report": 3
+  },
+  "killed": null,
+  "relayLive": {
+    "pid": 3222954,
+    "startedAt": 1794438282851,
+    "uptimeMs": 31381,
+    "host": "0.0.0.0",
+    "port": 18471,
+    "jurors": 3,
+    "records": 18,
+    "cap": 20000,
+    "stats": {
+      "accepted": 18,
+      "refusedCap": 0,
+      "refusedAuth": 1,
+      "refusedMalformed": 0,
+      "phases": {
+        "dkg-commit": 3,
+        "dkg-share": 6,
+        "frost-commit": 3,
+        "frost-reveal": 3,
+        "report": 3
+      },
+      "postHandlingMs": {
+        "count": 18,
+        "p50": 0.042,
+        "p95": 0.14,
+        "max": 0.14
+      },
+      "getHandlingMs": {
+        "count": 110,
+        "p50": 0.016,
+        "p95": 0.043,
+        "max": 0.121
+      },
+      "arrivalGapMs": {
+        "count": 17,
+        "p50": 51,
+        "p95": 266,
+        "max": 266
+      }
+    },
+    "subscribers": [
+      {
+        "as": "1",
+        "polls": 58,
+        "served": 15,
+        "cursorMax": 14,
+        "firstPollAt": 25463,
+        "lastPollAt": 26650,
+        "pollMsTotal": 1.37
+      },
+      {
+        "as": "2",
+        "polls": 49,
+        "served": 15,
+        "cursorMax": 14,
+        "firstPollAt": 25598,
+        "lastPollAt": 26657,
+        "pollMsTotal": 0.85
+      },
+      {
+        "as": "3",
+        "polls": 3,
+        "served": 15,
+        "cursorMax": 12,
+        "firstPollAt": 26122,
+        "lastPollAt": 26655,
+        "pollMsTotal": 0.06
+      }
+    ],
+    "converged": true
+  },
+  "perBox": [
+    {
+      "idx": 1,
+      "box": "vps16gb",
+      "hostname": "ubuntu-16gb-nbg1-1",
+      "nodeVersion": "v22.22.0",
+      "wallMsOnBox": 1535,
+      "exitCode": 0,
+      "report": {
+        "round": 1,
+        "ok": true,
+        "classification": "OK",
+        "bond": {
+          "rail": "none",
+          "network": "testnet",
+          "proofRef": null
+        },
+        "groupPubkeyXOnly": "16c16683182c118a1ec5463ba06337ec1dd71ad82ac8d25416fbe1aebd3a0049",
+        "signature": "cf38bdd723cdf5a064dddbbc54195aaae6a3ca0b0b54207956920ab182a3fa2dfc8f0d48d1bf98ec964c12ff70dff0cc913a5c37efc5ea45b8f97c2b6d1efac9",
+        "message": "c5bf2d8981f805913c8095e71b59e9ec2c045c002029b2f0f30ec4584a2a4447",
+        "signatureVerifies": true,
+        "disclosure": {
+          "committed": [
+            1,
+            2,
+            3
+          ],
+          "deferredIngested": 0,
+          "replayedMessages": 0,
+          "duplicatesSeen": 0
+        }
+      },
+      "reports": 1,
+      "stderrTail": [],
+      "timings": {
+        "requests": 64,
+        "publish": {
+          "count": 6,
+          "p50": 1.6,
+          "p95": 13.72,
+          "max": 13.72
+        },
+        "poll": {
+          "count": 58,
+          "p50": 0.98,
+          "p95": 1.72,
+          "max": 1.85
+        },
+        "serverDeltaMs": {
+          "p50": 1,
+          "min": 0,
+          "max": 5
+        }
+      }
+    },
+    {
+      "idx": 2,
+      "box": "bao8gb",
+      "hostname": "bao8gb",
+      "nodeVersion": "v20.20.0",
+      "wallMsOnBox": 1441,
+      "exitCode": 0,
+      "report": {
+        "round": 1,
+        "ok": true,
+        "classification": "OK",
+        "bond": {
+          "rail": "none",
+          "network": "testnet",
+          "proofRef": null
+        },
+        "groupPubkeyXOnly": "16c16683182c118a1ec5463ba06337ec1dd71ad82ac8d25416fbe1aebd3a0049",
+        "signature": "cf38bdd723cdf5a064dddbbc54195aaae6a3ca0b0b54207956920ab182a3fa2dfc8f0d48d1bf98ec964c12ff70dff0cc913a5c37efc5ea45b8f97c2b6d1efac9",
+        "message": "c5bf2d8981f805913c8095e71b59e9ec2c045c002029b2f0f30ec4584a2a4447",
+        "signatureVerifies": true,
+        "disclosure": {
+          "committed": [
+            1,
+            2,
+            3
+          ],
+          "deferredIngested": 0,
+          "replayedMessages": 0,
+          "duplicatesSeen": 0
+        }
+      },
+      "reports": 1,
+      "stderrTail": [],
+      "timings": {
+        "requests": 55,
+        "publish": {
+          "count": 6,
+          "p50": 2.08,
+          "p95": 33.23,
+          "max": 33.23
+        },
+        "poll": {
+          "count": 49,
+          "p50": 1.41,
+          "p95": 2.05,
+          "max": 2.24
+        },
+        "serverDeltaMs": {
+          "p50": 2,
+          "min": 1,
+          "max": 8
+        }
+      }
+    },
+    {
+      "idx": 3,
+      "box": "bao-testnet",
+      "hostname": "ubuntu-26",
+      "nodeVersion": "v22.22.0",
+      "wallMsOnBox": 1556,
+      "exitCode": 0,
+      "report": {
+        "round": 1,
+        "ok": true,
+        "classification": "OK",
+        "bond": {
+          "rail": "none",
+          "network": "testnet",
+          "proofRef": null
+        },
+        "groupPubkeyXOnly": "16c16683182c118a1ec5463ba06337ec1dd71ad82ac8d25416fbe1aebd3a0049",
+        "signature": "cf38bdd723cdf5a064dddbbc54195aaae6a3ca0b0b54207956920ab182a3fa2dfc8f0d48d1bf98ec964c12ff70dff0cc913a5c37efc5ea45b8f97c2b6d1efac9",
+        "message": "c5bf2d8981f805913c8095e71b59e9ec2c045c002029b2f0f30ec4584a2a4447",
+        "signatureVerifies": true,
+        "disclosure": {
+          "committed": [
+            1,
+            2,
+            3
+          ],
+          "deferredIngested": 0,
+          "replayedMessages": 0,
+          "duplicatesSeen": 0
+        }
+      },
+      "reports": 1,
+      "stderrTail": [],
+      "timings": {
+        "requests": 9,
+        "publish": {
+          "count": 6,
+          "p50": 15.25,
+          "p95": 63.59,
+          "max": 63.59
+        },
+        "poll": {
+          "count": 3,
+          "p50": 14.17,
+          "p95": 16.57,
+          "max": 16.57
+        },
+        "serverDeltaMs": {
+          "p50": 9,
+          "min": 7,
+          "max": 21
+        }
+      }
+    }
+  ],
+  "relayStats": {
+    "pid": 3222954,
+    "startedAt": 1794438282851,
+    "uptimeMs": 31541,
+    "host": "0.0.0.0",
+    "port": 18471,
+    "jurors": 3,
+    "records": 18,
+    "cap": 20000,
+    "stats": {
+      "accepted": 18,
+      "refusedCap": 0,
+      "refusedAuth": 1,
+      "refusedMalformed": 0,
+      "phases": {
+        "dkg-commit": 3,
+        "dkg-share": 6,
+        "frost-commit": 3,
+        "frost-reveal": 3,
+        "report": 3
+      },
+      "postHandlingMs": {
+        "count": 18,
+        "p50": 0.042,
+        "p95": 0.14,
+        "max": 0.14
+      },
+      "getHandlingMs": {
+        "count": 110,
+        "p50": 0.016,
+        "p95": 0.043,
+        "max": 0.121
+      },
+      "arrivalGapMs": {
+        "count": 17,
+        "p50": 51,
+        "p95": 266,
+        "max": 266
+      }
+    },
+    "subscribers": [
+      {
+        "as": "1",
+        "polls": 58,
+        "served": 15,
+        "cursorMax": 14,
+        "firstPollAt": 25463,
+        "lastPollAt": 26650,
+        "pollMsTotal": 1.37
+      },
+      {
+        "as": "2",
+        "polls": 49,
+        "served": 15,
+        "cursorMax": 14,
+        "firstPollAt": 25598,
+        "lastPollAt": 26657,
+        "pollMsTotal": 0.85
+      },
+      {
+        "as": "3",
+        "polls": 3,
+        "served": 15,
+        "cursorMax": 12,
+        "firstPollAt": 26122,
+        "lastPollAt": 26655,
+        "pollMsTotal": 0.06
+      }
+    ],
+    "converged": true,
+    "shutdownReason": "SIGTERM"
+  },
+  "failures": []
+}
