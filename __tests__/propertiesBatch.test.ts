@@ -45,7 +45,8 @@ import {
 } from '../batchAttestation';
 import { hashCourtVerdict, CourtVoteTransitionError } from '../courtVoteMachine';
 import { CanonicalWriter } from '../courtSession';
-import { mulberry32, int, hex32, uniqueHex32, secFrom } from './helpers/rng';
+import { mulberry32, childRng, int, hex32, uniqueHex32, secFrom } from './helpers/rng';
+import { wd } from './helpers/watchdog';
 
 // ─── seeded LCG: now imported from helpers/rng (mulberry32) ─────────────────
 
@@ -208,7 +209,7 @@ describe('properties: batchAttestation', () => {
   const seeded = Array.from({ length: BATCHES }, (_, i) => mulberry32(1000 + i * 7919));
   const batches = seeded.map((r) => randomBatch(r));
 
-  it(`PB1/PB4: across ${BATCHES} random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones`, { timeout: 120_000 }, () => {
+  it(`PB1/PB4: across ${BATCHES} random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones`, { timeout: wd(120_000) }, () => {
     let verified = 0;
     let fullPipeline = 0;
     for (const { cases, tree, event, groupPub, epoch } of batches) {
@@ -267,8 +268,13 @@ describe('properties: batchAttestation', () => {
     for (const { cases, tree } of batches) {
       const hashes = cases.map((c) => c.verdictHash);
       const shuffled = [...hashes];
+      // Seeded shuffle (round 51): the ORDER is irrelevant to the assertion —
+      // that is the property under test — but a failure still has to be
+      // reproducible from the test body, so the permutation comes from a
+      // labeled stream, not `Math.random()`.
+      const shuffleRng = childRng(31_337, 'PB3-shuffle');
       for (let i = shuffled.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1)); // shuffle order irrelevant to the assertion
+        const j = Math.floor(shuffleRng() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
       }
       const rebuilt = buildBatchMerkleTree(shuffled);
@@ -277,7 +283,7 @@ describe('properties: batchAttestation', () => {
     }
   });
 
-  it(`PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (${MUTATION_SAMPLES_PER_BATCH} sampled indices per batch)`, { timeout: 120_000 }, () => {
+  it(`PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (${MUTATION_SAMPLES_PER_BATCH} sampled indices per batch)`, { timeout: wd(120_000) }, () => {
     for (const { cases, tree, event, groupPub } of batches) {
       const n = cases.length;
       const sortedVerdictHashes = [...cases.map((c) => c.verdictHash)].sort();

@@ -468,7 +468,19 @@ async function runRound(
     });
   }
 
-  // ── Collect until the key is computable or the phase deadline passes ──────
+  // ── Collect until the key is computable or the phase goes SILENT ─────────
+  //
+  // Round 51: this bound used to be absolute (`Date.now() < dkgDeadline`), which
+  // makes "the box is loaded" indistinguishable from "a juror is gone": under a
+  // 40+ load average the poll loop's own 20 ms sleeps stretch out, an HONEST
+  // phase overran the 4 s budget and the juror reported
+  // DKG_MISSING_PARTICIPANT for a peer that was merely slow. That is the flake
+  // `r30MultiProcessCeremony.test.ts` caught 4/20 times under load.
+  //
+  // The deadline now bounds SILENCE, not elapsed time: every accepted record
+  // resets it. A killed or silenced peer still produces no progress and aborts
+  // after exactly the same budget (same typed classification, same cost); a slow
+  // box keeps making progress and is never aborted for being slow.
   const ingestDkg = async (envelope: Envelope & { seq: number }): Promise<boolean> => {
     if (!envelope.event) return false;
     if (envelope.phase === 'dkg-commit') {
@@ -504,10 +516,10 @@ async function runRound(
     return false;
   };
 
-  const dkgDeadline = Date.now() + dkgDeadlineMs;
+  let lastDkgProgressAt = Date.now();
   let cursor = 0;
   let record = null;
-  while (Date.now() < dkgDeadline) {
+  while (Date.now() - lastDkgProgressAt < dkgDeadlineMs) {
     const { messages, next } = await poll(cursor);
     cursor = next;
     let fresh = 0;
@@ -539,6 +551,7 @@ async function runRound(
       }
     }
     if (fresh === 0) await sleep(pollMs);
+    else lastDkgProgressAt = Date.now();
   }
 
   if (!record) {
@@ -599,7 +612,6 @@ async function runRound(
   const revealed = new Set<number>();
   /** Earliest wall-clock time this juror may reveal (see `--reveal-delay-ms`). */
   let revealNotBefore = 0;
-  const signDeadline = Date.now() + signDeadlineMs;
   let attestation = null;
 
   /** One signing-phase record through the production gates. */
@@ -643,7 +655,11 @@ async function runRound(
     if (await ingestSign(message)) deferredIngested += 1;
   }
 
-  while (Date.now() < signDeadline) {
+  // Silence-bounded, like the DKG phase above (round 51): the clock is reset by
+  // progress, so a loaded box that is still making progress is never aborted
+  // while a dead/silenced peer still fails closed after the same budget.
+  let lastSignProgressAt = Date.now();
+  while (Date.now() - lastSignProgressAt < signDeadlineMs) {
     const { messages, next } = await poll(cursor);
     cursor = next;
     let fresh = 0;
@@ -668,6 +684,7 @@ async function runRound(
       break;
     }
     if (fresh === 0) await sleep(pollMs);
+    else lastSignProgressAt = Date.now();
   }
 
   if (!attestation) {

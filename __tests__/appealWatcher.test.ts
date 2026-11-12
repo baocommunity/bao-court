@@ -53,7 +53,9 @@ function makeSelectedJuror(idx: number): SelectedJuror {
     categories: ['bitcoin'],
     registeredAt: Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60,
     idx,
-    priority: Math.random(),
+    // Seeded, distinct, and derived from the juror index: a random priority
+    // made a failure irreproducible from the test body (round 51 rule).
+    priority: idx / 10,
   };
 }
 
@@ -101,28 +103,45 @@ describe('FrostAppealWatcher', () => {
     const watcher = new FrostAppealWatcher({ relays: ['wss://fake.example'], pool: fakePool });
     watcher.watchMarket(marketId, record.groupPubkeyXOnly);
 
-    const onResolution = vi.fn();
+    // Deliver through the subscription path. `onevent` is fire-and-forget by
+    // contract (nostr-tools hands us a void handler), so the test cannot await
+    // it directly — round 51 makes the EMISSION the synchronisation point: the
+    // callback resolves a promise, and the test awaits that. `vi.waitFor` (1 s
+    // poll deadline, load-sensitive) is gone; nothing here reads a clock.
+    let emitFirst: (resolution: unknown) => void = () => {};
+    const firstEmission = new Promise<unknown>((resolve) => { emitFirst = resolve; });
+    const emissions: unknown[] = [];
+    const onResolution = vi.fn((resolution: unknown) => {
+      emissions.push(resolution);
+      emitFirst(resolution);
+    });
     watcher.setCallbacks({ onResolution });
 
     watcher.start();
     expect(onevent).toBeDefined();
 
-    // Deliver through the subscription path.
     onevent!(event);
-    await vi.waitFor(() => expect(onResolution).toHaveBeenCalledTimes(1));
-    expect(onResolution.mock.calls[0]?.[0]).toMatchObject({
+    const emitted = await firstEmission;
+    expect(onResolution).toHaveBeenCalledTimes(1);
+    expect(emitted).toMatchObject({
       marketId,
       outcome: 'NO',
       disputeEventId: dispute.disputeId,
       eventId: event.id,
     });
 
-    // Dedup: redelivery neither re-validates into a second emit nor
-    // resolves again via direct handling.
+    // Dedup: redelivery neither re-validates into a second emit nor resolves
+    // again via direct handling.
+    //
+    // The reservation is taken SYNCHRONOUSLY at the top of handleEvent (before
+    // any await), so the second delivery's decision is already final when
+    // `onevent!` returns: no timer, no flush, no polling is needed — and the
+    // assertion is stronger than the old one, which only proved "no emit
+    // within one macrotask turn".
     onevent!(event);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(onResolution).toHaveBeenCalledTimes(1);
+    expect(emissions).toHaveLength(1);
     expect(await watcher.handleEvent(event)).toBeNull();
+    expect(emissions).toHaveLength(1);
 
     watcher.stop();
     // stop() must tear down the live subscription exactly once.

@@ -40,6 +40,7 @@ function hex(bytes: number): string {
 }
 
 import { jurorWithKeys as makeJurors } from './helpers/fixtures';
+import { wd } from './helpers/watchdog';
 
 
 /** Run a full 2-of-3 independent DKG; returns records keyed by juror idx. */
@@ -217,7 +218,7 @@ describe('AUDIT-2: deriveDisputeGroupPubkey input injectivity', () => {
 });
 
 describe('AUDIT-3: reveal set must equal commitment set (@vbyte/frost 1.1.5)', () => {
-  it('full-coverage flow (3 commit, 3 reveal) aggregates a valid attestation', { timeout: 120_000 }, async () => {
+  it('full-coverage flow (3 commit, 3 reveal) aggregates a valid attestation', { timeout: wd(120_000) }, async () => {
     const jurors = makeJurors(3);
     const disputeId = 'a'.repeat(64);
     const entries = await runDkg(jurors, disputeId, 'market-audit-3');
@@ -268,7 +269,7 @@ describe('AUDIT-3: reveal set must equal commitment set (@vbyte/frost 1.1.5)', (
     }
   });
 
-  it('canAggregate is false while a committed peer has not revealed (fail-early)', { timeout: 120_000 }, async () => {
+  it('canAggregate is false while a committed peer has not revealed (fail-early)', { timeout: wd(120_000) }, async () => {
     const jurors = makeJurors(3);
     const disputeId = 'b'.repeat(64);
     const entries = await runDkg(jurors, disputeId, 'market-audit-3b');
@@ -314,7 +315,7 @@ describe('AUDIT-3: reveal set must equal commitment set (@vbyte/frost 1.1.5)', (
 });
 
 describe('AUDIT-4: binding factors and challenge are message-bound (anti-Drijvers pin)', () => {
-  it('the signing context over the SAME commitment set differs for different messages', { timeout: 120_000 }, async () => {
+  it('the signing context over the SAME commitment set differs for different messages', { timeout: wd(120_000) }, async () => {
     const jurors = makeJurors(3);
     const disputeId = 'a'.repeat(64);
     const entries = await runDkg(jurors, disputeId, 'market-audit-4');
@@ -345,7 +346,7 @@ describe('AUDIT-4: binding factors and challenge are message-bound (anti-Drijver
     expect(ctxA2.bind_factors.map((f) => f.factor)).toEqual(ctxA.bind_factors.map((f) => f.factor));
   });
 
-  it('a group signature over message A does not verify over message B (no cross-message replay)', { timeout: 120_000 }, async () => {
+  it('a group signature over message A does not verify over message B (no cross-message replay)', { timeout: wd(120_000) }, async () => {
     const jurors = makeJurors(3);
     const disputeId = 'b'.repeat(64);
     const entries = await runDkg(jurors, disputeId, 'market-audit-4b');

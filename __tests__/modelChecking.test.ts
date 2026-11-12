@@ -88,6 +88,7 @@ import {
   type CourtSigningMachineState,
 } from '../courtSigningMachine';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { wd } from './helpers/watchdog';
 
 // ─── the reduced inline exhaustive suites (npm-test budget) ─────────────────
 
@@ -136,7 +137,7 @@ describe('exhaustive model checking — courtVoteMachine (reduced inline instanc
         expect(stats.rawThrows).toBe(0);
         expect(stats.states).toBeGreaterThan(0);
       },
-      600_000,
+      wd(600_000),
     );
   }
 });
@@ -160,7 +161,7 @@ describe('exhaustive model checking — courtConfirmationMachine (reduced inline
         // empty would make the witness invariant vacuous at this size).
         if (spec.maxLadderRounds >= 2) expect(stats.maxEscalationDepth).toBeGreaterThanOrEqual(1);
       },
-      600_000,
+      wd(600_000),
     );
   }
 });
@@ -182,7 +183,7 @@ describe('exhaustive model checking — courtSigningMachine (reduced inline inst
         expect(stats.rawThrows).toBe(0);
         expect(stats.states).toBeGreaterThan(0);
       },
-      600_000,
+      wd(600_000),
     );
   }
 });
@@ -287,7 +288,7 @@ describe('model checking — committed full-sweep fixture (__fixtures__/model-ch
         }
       }
     },
-    120_000,
+    wd(120_000),
   );
 });
 

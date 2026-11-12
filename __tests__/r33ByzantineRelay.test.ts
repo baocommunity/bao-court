@@ -23,6 +23,7 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { wd } from './helpers/watchdog';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HARNESS = join(ROOT, 'scripts/court/multi-process-ceremony.mjs');
@@ -68,12 +69,28 @@ interface HarnessReport {
   };
 }
 
+/**
+ * Idle budget handed to the harness: a watchdog, so it follows the box.
+ * Bounds SILENCE, not elapsed time (see `scripts/court/juror-child.ts`): a
+ * silenced/forked peer still aborts, a slow-but-progressing one does not.
+ */
+const HARNESS_DEADLINE_MS = wd(8_000);
+
+/**
+ * Reorder window handed to the relay (a delay per sender rank; the invert style
+ * holds a victim's commitments for 8x this). Derived from the same watchdog:
+ * 90 ms is right on an idle box and too short on a loaded one.
+ */
+const REORDER_WINDOW_MS = wd(90);
+
 function runHarness(args: readonly string[]): Promise<{ report: HarnessReport; stdout: string }> {
   return new Promise((resolve, reject) => {
     execFile(
       process.execPath,
-      ['--import', 'tsx', HARNESS, ...args, '--deadline-ms=2500'],
-      { cwd: ROOT, timeout: 180_000, maxBuffer: 16 * 1024 * 1024 },
+      // Derived, not fixed (round 51): a 2500 ms phase deadline tripped under
+      // load and made the honest-juror replay test report three bogus failures.
+      ['--import', 'tsx', HARNESS, ...args, `--deadline-ms=${HARNESS_DEADLINE_MS}`],
+      { cwd: ROOT, timeout: wd(180_000), maxBuffer: 16 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const runDir = /run dir (\S+)/.exec(stdout)?.[1];
         if (!runDir) {
@@ -94,7 +111,7 @@ function runHarness(args: readonly string[]): Promise<{ report: HarnessReport; s
 const SEED = 'c0ffee3300000000000000000000000000000000000000000000000000000000';
 
 describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
-  it('honest relay: every juror completes with one group key and one signature', { timeout: 180_000 }, async () => {
+  it('honest relay: every juror completes with one group key and one signature', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness(['--jurors=3', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.relayMode).toBe('honest');
@@ -106,8 +123,13 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.splitView.differs).toBe(false);
   });
 
-  it('reordering relay: per-juror delivery order differs yet the outcome is identical', { timeout: 180_000 }, async () => {
-    const { report } = await runHarness(['--jurors=3', '--mode=reorder', `--seed=${SEED}`]);
+  it('reordering relay: per-juror delivery order differs yet the outcome is identical', { timeout: wd(180_000) }, async () => {
+    // The reorder window is a timing model, so it follows the box like every
+    // other watchdog (round 51): a fixed 90 ms window collapsed under load and
+    // the ranks produced identical orders.
+    const { report } = await runHarness([
+      '--jurors=3', '--mode=reorder', `--reorder-window-ms=${REORDER_WINDOW_MS}`, `--seed=${SEED}`,
+    ]);
     expect(report.failures).toEqual([]);
     expect(report.relayMode).toBe('reorder');
     // The relay genuinely reordered: at least two jurors observed different orders.
@@ -117,7 +139,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.verdict).toBe('NO_EQUIVOCATION');
   });
 
-  it('lossy relay: every juror either completes or fails closed with a typed classification', { timeout: 180_000 }, async () => {
+  it('lossy relay: every juror either completes or fails closed with a typed classification', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=drop', '--drop-p=0.2', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.relayStats.dropped).toBeGreaterThan(0);
@@ -135,7 +157,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     }
   });
 
-  it('split-view from the start: nobody gets a key or a signature (the equivocation test)', { timeout: 180_000 }, async () => {
+  it('split-view from the start: nobody gets a key or a signature (the equivocation test)', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness(['--jurors=5', '--mode=fork', '--fork-variant=dkg', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.splitView.differs).toBe(true);
@@ -153,7 +175,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.perJurorView.some((v) => v.senders.length < report.jurorCount - 1)).toBe(true);
   });
 
-  it('split-view after DKG: the key is agreed but the reveal gate starves on both sides', { timeout: 180_000 }, async () => {
+  it('split-view after DKG: the key is agreed but the reveal gate starves on both sides', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=fork', '--fork-variant=sign', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.splitView.differs).toBe(true);
@@ -167,7 +189,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     }
   });
 
-  it('replaying relay: duplicates are idempotent and never yield a second signature', { timeout: 180_000 }, async () => {
+  it('replaying relay: duplicates are idempotent and never yield a second signature', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=replay', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.relayStats.duplicated).toBeGreaterThan(0);
@@ -176,7 +198,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.perJuror.every((j) => (j.duplicatesSeen ?? 0) > 0)).toBe(true);
   });
 
-  it('silencing one juror: fails closed everywhere and NAMES the silenced participant', { timeout: 180_000 }, async () => {
+  it('silencing one juror: fails closed everywhere and NAMES the silenced participant', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=silence', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     const victim = report.targetedJuror;
@@ -191,9 +213,10 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     }
   });
 
-  it('inverting one sender\'s commit/reveal pair: order-sensitivity yields at most one signature', { timeout: 180_000 }, async () => {
+  it('inverting one sender\'s commit/reveal pair: order-sensitivity yields at most one signature', { timeout: wd(180_000) }, async () => {
     const { report } = await runHarness([
-      '--jurors=3', '--mode=reorder', '--reorder-style=invert', `--seed=${SEED}`,
+      '--jurors=3', '--mode=reorder', '--reorder-style=invert',
+      `--reorder-window-ms=${REORDER_WINDOW_MS}`, `--seed=${SEED}`,
     ]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.verdict).toBe('NO_EQUIVOCATION');

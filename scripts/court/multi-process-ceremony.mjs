@@ -59,9 +59,13 @@
  *     a mid-round kill lands between them reproducibly.
  *   - Poll interval 20 ms, so a published message becomes visible to a peer
  *     within one poll tick (bounded by `seq` ordering, not by wall clock).
- *   - Phase deadlines (default 10 s) bound every wait: the harness cannot
- *     hang, and a failure is an explicit classification, never a timeout
- *     crash.
+ *   - Phase deadlines (default 10 s) bound every wait, but they bound
+ *     SILENCE, not elapsed time (round 51): every accepted record resets the
+ *     clock, so a loaded box that is still making progress is never aborted,
+ *     while a dead/silenced peer still fails closed after the same budget. An
+ *     absolute per-phase clock made "slow box" indistinguishable from "gone
+ *     juror" and flaked the replay test 4/20 under load. The harness cannot
+ *     hang, and a failure is an explicit classification, never a timeout crash.
  *
  * WHAT THIS DOES NOT PROVE (the honest scope):
  *   - It is still localhost: one kernel, one clock, one machine, no packet
@@ -219,7 +223,30 @@ function delayFor(record, juror) {
   if (reorderStyle === 'invert') {
     // Hold ONE juror's FROST commitments long enough that its reveal (sent
     // after it sees every commitment) overtakes its own commit at its peers.
-    return record.from === victimIdx && record.phase === 'frost-commit' ? 800 : 0;
+    //
+    // Round 51: this was a hard-coded 800 ms. Under load the whole pipeline is
+    // 10–20x slower, so 800 ms stopped being "long enough": the victim's commit
+    // arrived before its reveal, every juror saw the same order and the
+    // harness's own "the mode did something" check failed (r33 invert test,
+    // 2/6 under a 60+ load average). It now derives from `--reorder-window-ms`
+    // (which the test passes through the suite watchdog), keeping the 800 ms
+    // floor on an idle box.
+    // The hold must satisfy TWO bounds, which is why it is a duration:
+    //   - LONGER than the victim needs to publish its reveal (it must see the
+    //     peers' commitments first, so under load that is seconds), or every
+    //     juror completes normally and the inversion never happened;
+    //   - SHORTER than the peers' idle deadline (`--deadline-ms`), or they
+    //     abort for a missing COMMITMENT instead of a missing reveal and the
+    //     finding changes shape.
+    // A structural alternative ("release the commits once the victim's reveal
+    // is on the wire") was tried and is NOT usable here: the victim needs the
+    // peers' reveals to aggregate and the peers need the victim's commitment to
+    // reveal, so gating on the reveal deadlocks both sides. Hence 40x the
+    // reorder window: with the window at `wd(90)` that is ~45% of the idle
+    // deadline on any box, which is the middle of the safe interval.
+    return record.from === victimIdx && record.phase === 'frost-commit'
+      ? Math.max(800, reorderWindowMs * 40)
+      : 0;
   }
   const step = Math.max(1, Math.round(reorderWindowMs / jurorCount));
   return senderRank(record.from, juror) * step;
@@ -316,6 +343,7 @@ const relay = createServer((req, res) => {
 
     // Release everything whose adversarial hold has expired, in (releaseAt,
     // seq) order — that is the per-juror order the juror actually observes.
+    //
     const due = view.pending.filter((p) => p.releaseAt <= now);
     if (due.length > 0) {
       view.pending = view.pending.filter((p) => p.releaseAt > now);
@@ -386,6 +414,8 @@ function spawnJuror(idx, extraArgs = []) {
       `--threshold=${threshold}`,
       `--seed=${seed}`,
       `--dir=${runDir}`,
+      // Both are IDLE budgets (max silence), not phase clocks — see the
+      // latency-model note at the top of this file.
       `--dkg-deadline-ms=${deadlineMs}`,
       `--sign-deadline-ms=${deadlineMs}`,
       ...extraArgs,

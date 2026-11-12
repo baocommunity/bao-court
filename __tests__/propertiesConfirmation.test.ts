@@ -36,6 +36,7 @@ import { hashCourtVerdict, CourtVoteTransitionError } from '../courtVoteMachine'
 import { mulberry32, int, pick, hex32 } from './helpers/rng';
 import { assertConfirmationStateFrozen as assertFullyFrozen } from './helpers/asserts';
 import { escalateEvent, unwitnessedEscalate } from './helpers/machines';
+import { wd } from './helpers/watchdog';
 
 // ─── seeded LCG: now imported from helpers/rng (mulberry32) ─────────────────
 
@@ -510,7 +511,7 @@ function nextLegalEvent(
 const SEQUENCES = 400;
 
 describe('properties: confirmation machine legal-sequence sweep', () => {
-  it(`P1/P2/P4/P5: ${SEQUENCES} random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen`, { timeout: 120_000 }, () => {
+  it(`P1/P2/P4/P5: ${SEQUENCES} random legal sequences never throw, stay in-phase, keep the clock monotonic and the state graph frozen`, { timeout: wd(120_000) }, () => {
     const terminals = { final: 0, expired: 0, aborted: 0, open: 0 };
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
       const stats = runSequence(seed);
@@ -523,7 +524,7 @@ describe('properties: confirmation machine legal-sequence sweep', () => {
     expect(terminals.aborted).toBeGreaterThan(0);
   });
 
-  it('P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run', { timeout: 120_000 }, () => {
+  it('P3: challenge/ladder paths are exercised, verdicts recompute, overturns flag confirmers, multi-round escalation + concede paths run', { timeout: wd(120_000) }, () => {
     let ladderReached = 0;
     let overturned = 0;
     let multiRound = 0;

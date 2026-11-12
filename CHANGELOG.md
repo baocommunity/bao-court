@@ -83,6 +83,40 @@ frozen.
   independent exact-rational oracle, the boundary table, and the Lean `d = A·B`
   witness through the module's exports.
 
+### Changed (round 51 — the suite is load-insensitive by construction)
+- **No test asserts elapsed time any more.** The three remaining wall-clock
+  gates (`simulateCourt` 30 s, `adversarialNostr` 30 s, `r30InboxOutboxLoad`
+  120 s) are gone, not raised — they were the class that produced two false
+  mutation captures and an external 12-red reproduction on a docs-only tree.
+  `simulateCourt` keeps its eight-step/outcome contract plus a new seed-differs
+  anti-vacuity lock; the over-served-tag test now proves the scan is **linear by
+  counting tag reads at two sizes** (work count, no clock).
+- **Every harness timeout is a derived watchdog.** `__tests__/helpers/watchdog.ts`
+  calibrates the box per worker (min of short bursts = cycle cost, max of long
+  bursts ÷ that = load factor, clamped [1, 8]) and multiplies the declared
+  margin; `vitest.config.ts` + `__tests__/helpers/determinism.setup.ts` install
+  it as the default. `BAO_TEST_WATCHDOG_MS` replaces every ceiling,
+  `BAO_TEST_WATCHDOG_TRACE=1` prints the per-worker factor. All 49 declared
+  timeouts and the r30/r33 subprocess phase deadlines route through `wd()`
+  (the fixed `--deadline-ms=4000` made three honest jurors "fail closed" under
+  load — 2 of 7 reproduction failures).
+- **No polling or sleeping in tests**: `vi.waitFor` (1 s poll deadline) and two
+  `setTimeout` synchronisation hacks are replaced by awaiting the promise the
+  SUT resolves (the dedupe reservation is synchronous, so the assertion is
+  strictly stronger). Three unseeded `Math.random()` fixtures are seeded.
+- **The multi-process ceremony's phase deadline now bounds SILENCE, not elapsed
+  time** (`scripts/court/juror-child.ts`). `while (Date.now() < dkgDeadline)`
+  made "loaded box" indistinguishable from "juror died": the poll loop's own
+  20 ms sleeps stretch under load, an honest phase overran the budget and the
+  juror reported `DKG_MISSING_PARTICIPANT` for a live peer (the r30 replay test
+  flaked 4/20). Every accepted record now resets the clock; a dead/silenced peer
+  still fails closed with the same typed classification after the same budget.
+- **Enforced, not advisory**: `__tests__/determinism.test.ts` re-checks the
+  rules statically on every run (no clock assertions, no timers, no `waitFor`,
+  no `Math.random`, no bare numeric timeout, no fixed `--deadline-ms`) and
+  proves the watchdog FIRES on a deliberately starved run. Rules and evidence:
+  `docs/TEST_DETERMINISM.md`.
+
 ### Fixed (round-49 differential — the escalation wire reimplemented independently)
 - **The escalation mapper threw raw `TypeError`s on a restored snapshot
   (r49-d1).** `escalationRequestToMachineEvent` read `state.ladderRound` and

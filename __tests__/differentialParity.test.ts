@@ -88,6 +88,7 @@ import {
   refSelectJuryRanking,
 } from './reference/refLottery';
 import { refPluralityTally } from './reference/refTally';
+import { wd } from './helpers/watchdog';
 
 // ---------------------------------------------------------------------------
 // Deterministic randomness helpers
@@ -386,7 +387,7 @@ describe('differential parity: batch Merkle tree (batchAttestation)', () => {
     }
   });
 
-  it('exhaustive n=1..128: every production proof verifies under the reference verifier', { timeout: 120_000 }, () => {
+  it('exhaustive n=1..128: every production proof verifies under the reference verifier', { timeout: wd(120_000) }, () => {
     for (let n = 1; n <= 128; n += 1) {
       const production = buildBatchMerkleTree(MERKLE_HASH_POOL.slice(0, n));
       for (let index = 0; index < n; index += 1) {
@@ -414,7 +415,7 @@ describe('differential parity: batch Merkle tree (batchAttestation)', () => {
     }
   });
 
-  it('batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)', { timeout: 120_000 }, () => {
+  it('batch proof set: buildBatchMerkleProofs identical to per-proof API + reference verifier (n=1..128, 333, 1000)', { timeout: wd(120_000) }, () => {
     for (const n of [...Array.from({ length: 128 }, (_, i) => i + 1), 333, 1000]) {
       const production = buildBatchMerkleTree(MERKLE_HASH_POOL.slice(0, Math.min(n, MERKLE_HASH_POOL.length)));
       const size = production.leaves.length;
@@ -482,7 +483,7 @@ describe('differential parity: batch Merkle tree (batchAttestation)', () => {
     expect(() => refBuildBatchTree(upper)).toThrow();
   });
 
-  it('tampered paths reject: every sibling bit-flip, wrong index, truncated/extended path', { timeout: 120_000 }, () => {
+  it('tampered paths reject: every sibling bit-flip, wrong index, truncated/extended path', { timeout: wd(120_000) }, () => {
     for (const n of TAMPER_NS) {
       const production = buildBatchMerkleTree(MERKLE_HASH_POOL.slice(0, n));
       for (let index = 0; index < n; index += 1) {
