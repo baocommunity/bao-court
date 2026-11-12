@@ -1,0 +1,458 @@
+{
+  "generatedAt": "2026-11-11T23:05:44.876Z",
+  "coordinator": "baospace",
+  "relay": {
+    "box": "vps16gb",
+    "port": 18471,
+    "protocol": "HTTP/1.1 JSON envelopes, relay-assigned monotonic seq"
+  },
+  "boxes": [
+    "vps16gb",
+    "bao8gb",
+    "bao-testnet"
+  ],
+  "jurorCount": 3,
+  "pollMs": 20,
+  "dkgDeadlineMs": 15000,
+  "signDeadlineMs": 12000,
+  "killSignDeadlineMs": 6000,
+  "bond": {
+    "rail": "none",
+    "network": "testnet",
+    "proofRef": null,
+    "verified": false,
+    "note": "every juror ran under this bond reference; it is a claim, not a verified bond"
+  },
+  "runs": [
+    {
+      "label": "happy-n3-k2",
+      "threshold": 2,
+      "kill": false,
+      "coordinatorWallMs": 1936,
+      "slowestBoxWallMs": 1516,
+      "fastestBoxWallMs": 1322,
+      "groupKey": "38ef7f44bbdb8943d6b1d374c892d6275d0d3e1cfb2b5ed88d09d658832dc11a",
+      "relayRecords": 18,
+      "relayPhases": {
+        "dkg-commit": 3,
+        "dkg-share": 6,
+        "frost-commit": 3,
+        "frost-reveal": 3,
+        "report": 3
+      },
+      "perBox": [
+        {
+          "idx": 1,
+          "box": "vps16gb",
+          "hostname": "ubuntu-16gb-nbg1-1",
+          "nodeVersion": "v22.22.0",
+          "wallMsOnBox": 1322,
+          "ok": true,
+          "classification": "OK",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 54,
+            "publish": {
+              "count": 6,
+              "p50": 1.69,
+              "p95": 14.75,
+              "max": 14.75
+            },
+            "poll": {
+              "count": 48,
+              "p50": 0.9,
+              "p95": 1.48,
+              "max": 1.65
+            },
+            "serverDeltaMs": {
+              "p50": 1,
+              "min": 0,
+              "max": 6
+            }
+          }
+        },
+        {
+          "idx": 2,
+          "box": "bao8gb",
+          "hostname": "bao8gb",
+          "nodeVersion": "v20.20.0",
+          "wallMsOnBox": 1346,
+          "ok": true,
+          "classification": "OK",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 52,
+            "publish": {
+              "count": 6,
+              "p50": 1.87,
+              "p95": 37.69,
+              "max": 37.69
+            },
+            "poll": {
+              "count": 46,
+              "p50": 1.19,
+              "p95": 1.69,
+              "max": 1.73
+            },
+            "serverDeltaMs": {
+              "p50": 1,
+              "min": 1,
+              "max": 9
+            }
+          }
+        },
+        {
+          "idx": 3,
+          "box": "bao-testnet",
+          "hostname": "ubuntu-26",
+          "nodeVersion": "v22.22.0",
+          "wallMsOnBox": 1516,
+          "ok": true,
+          "classification": "OK",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 9,
+            "publish": {
+              "count": 6,
+              "p50": 20.8,
+              "p95": 69.14,
+              "max": 69.14
+            },
+            "poll": {
+              "count": 3,
+              "p50": 14.45,
+              "p95": 17.42,
+              "max": 17.42
+            },
+            "serverDeltaMs": {
+              "p50": 10,
+              "min": 7,
+              "max": 22
+            }
+          }
+        }
+      ],
+      "relayStats": {
+        "records": 18,
+        "accepted": 18,
+        "refusedAuth": 1,
+        "postHandlingMs": {
+          "count": 18,
+          "p50": 0.033,
+          "p95": 0.096,
+          "max": 0.096
+        },
+        "getHandlingMs": {
+          "count": 97,
+          "p50": 0.01,
+          "p95": 0.029,
+          "max": 0.092
+        },
+        "arrivalGapMs": {
+          "count": 17,
+          "p50": 48,
+          "p95": 240,
+          "max": 240
+        }
+      }
+    },
+    {
+      "label": "happy-n3-k3",
+      "threshold": 3,
+      "kill": false,
+      "coordinatorWallMs": 3699,
+      "slowestBoxWallMs": 1556,
+      "fastestBoxWallMs": 1441,
+      "groupKey": "16c16683182c118a1ec5463ba06337ec1dd71ad82ac8d25416fbe1aebd3a0049",
+      "relayRecords": 18,
+      "relayPhases": {
+        "dkg-commit": 3,
+        "dkg-share": 6,
+        "frost-commit": 3,
+        "frost-reveal": 3,
+        "report": 3
+      },
+      "perBox": [
+        {
+          "idx": 1,
+          "box": "vps16gb",
+          "hostname": "ubuntu-16gb-nbg1-1",
+          "nodeVersion": "v22.22.0",
+          "wallMsOnBox": 1535,
+          "ok": true,
+          "classification": "OK",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 64,
+            "publish": {
+              "count": 6,
+              "p50": 1.6,
+              "p95": 13.72,
+              "max": 13.72
+            },
+            "poll": {
+              "count": 58,
+              "p50": 0.98,
+              "p95": 1.72,
+              "max": 1.85
+            },
+            "serverDeltaMs": {
+              "p50": 1,
+              "min": 0,
+              "max": 5
+            }
+          }
+        },
+        {
+          "idx": 2,
+          "box": "bao8gb",
+          "hostname": "bao8gb",
+          "nodeVersion": "v20.20.0",
+          "wallMsOnBox": 1441,
+          "ok": true,
+          "classification": "OK",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 55,
+            "publish": {
+              "count": 6,
+              "p50": 2.08,
+              "p95": 33.23,
+              "max": 33.23
+            },
+            "poll": {
+              "count": 49,
+              "p50": 1.41,
+              "p95": 2.05,
+              "max": 2.24
+            },
+            "serverDeltaMs": {
+              "p50": 2,
+              "min": 1,
+              "max": 8
+            }
+          }
+        },
+        {
+          "idx": 3,
+          "box": "bao-testnet",
+          "hostname": "ubuntu-26",
+          "nodeVersion": "v22.22.0",
+          "wallMsOnBox": 1556,
+          "ok": true,
+          "classification": "OK",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 9,
+            "publish": {
+              "count": 6,
+              "p50": 15.25,
+              "p95": 63.59,
+              "max": 63.59
+            },
+            "poll": {
+              "count": 3,
+              "p50": 14.17,
+              "p95": 16.57,
+              "max": 16.57
+            },
+            "serverDeltaMs": {
+              "p50": 9,
+              "min": 7,
+              "max": 21
+            }
+          }
+        }
+      ],
+      "relayStats": {
+        "records": 18,
+        "accepted": 18,
+        "refusedAuth": 1,
+        "postHandlingMs": {
+          "count": 18,
+          "p50": 0.042,
+          "p95": 0.14,
+          "max": 0.14
+        },
+        "getHandlingMs": {
+          "count": 110,
+          "p50": 0.016,
+          "p95": 0.043,
+          "max": 0.121
+        },
+        "arrivalGapMs": {
+          "count": 17,
+          "p50": 51,
+          "p95": 266,
+          "max": 266
+        }
+      }
+    },
+    {
+      "label": "kill-n3-k3",
+      "threshold": 3,
+      "kill": true,
+      "coordinatorWallMs": 7849,
+      "slowestBoxWallMs": 7195,
+      "fastestBoxWallMs": 1368,
+      "groupKey": "aae2c8d26350e0f77ead6371db87d54092adb5b9a6a3d284a43e70f284d6a51f",
+      "relayRecords": 16,
+      "relayPhases": {
+        "dkg-commit": 3,
+        "dkg-share": 6,
+        "frost-commit": 3,
+        "frost-reveal": 2,
+        "report": 2
+      },
+      "perBox": [
+        {
+          "idx": 1,
+          "box": "vps16gb",
+          "hostname": "ubuntu-16gb-nbg1-1",
+          "nodeVersion": "v22.22.0",
+          "wallMsOnBox": 6891,
+          "ok": false,
+          "classification": "SIGN_MISSING_REVEAL",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 318,
+            "publish": {
+              "count": 6,
+              "p50": 1.9,
+              "p95": 14.67,
+              "max": 14.67
+            },
+            "poll": {
+              "count": 312,
+              "p50": 0.81,
+              "p95": 1.23,
+              "max": 1.49
+            },
+            "serverDeltaMs": {
+              "p50": 0,
+              "min": 0,
+              "max": 6
+            }
+          }
+        },
+        {
+          "idx": 2,
+          "box": "bao8gb",
+          "hostname": "bao8gb",
+          "nodeVersion": "v20.20.0",
+          "wallMsOnBox": 1368,
+          "ok": null,
+          "classification": null,
+          "bond": null,
+          "timings": {
+            "requests": 52,
+            "publish": {
+              "count": 4,
+              "p50": 2.31,
+              "p95": 31.01,
+              "max": 31.01
+            },
+            "poll": {
+              "count": 48,
+              "p50": 1.13,
+              "p95": 1.73,
+              "max": 1.97
+            },
+            "serverDeltaMs": {
+              "p50": 2,
+              "min": 1,
+              "max": 8
+            }
+          }
+        },
+        {
+          "idx": 3,
+          "box": "bao-testnet",
+          "hostname": "ubuntu-26",
+          "nodeVersion": "v22.22.0",
+          "wallMsOnBox": 7195,
+          "ok": false,
+          "classification": "SIGN_MISSING_REVEAL",
+          "bond": {
+            "rail": "none",
+            "network": "testnet",
+            "proofRef": null
+          },
+          "timings": {
+            "requests": 158,
+            "publish": {
+              "count": 6,
+              "p50": 24.4,
+              "p95": 72.18,
+              "max": 72.18
+            },
+            "poll": {
+              "count": 152,
+              "p50": 12.55,
+              "p95": 24.23,
+              "max": 231.98
+            },
+            "serverDeltaMs": {
+              "p50": 7,
+              "min": 6,
+              "max": 129
+            }
+          }
+        }
+      ],
+      "relayStats": {
+        "records": 16,
+        "accepted": 16,
+        "refusedAuth": 1,
+        "postHandlingMs": {
+          "count": 16,
+          "p50": 0.034,
+          "p95": 0.102,
+          "max": 0.102
+        },
+        "getHandlingMs": {
+          "count": 513,
+          "p50": 0.013,
+          "p95": 0.023,
+          "max": 0.116
+        },
+        "arrivalGapMs": {
+          "count": 15,
+          "p50": 119,
+          "p95": 4978,
+          "max": 4978
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "ok": true
+}
