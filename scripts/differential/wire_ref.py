@@ -586,9 +586,19 @@ def to_machine_event(
         raise Refusal("binding_round")
 
     ladder = state.get("ladder", ABSENT)
+    projection = state.get("projection", ABSENT)
+    # v0.15.3 (G-4, the r12-1 over-strictness): a state that DECLARES
+    # `projection: 'lane'` is a host projection whose round ledger is its own case
+    # row, so a real counter without an in-state ladder is legal HERE (the
+    # reducer's write paths still demand the full state). Anything else with no
+    # ladder has nothing to escalate past.
+    lane_projection = isinstance(projection, str) and projection == "lane"
     if not isinstance(ladder, dict):
-        raise Refusal("ladder_missing")
-    if not js_strict_equals(ladder.get("round", ABSENT), ladder_round):
+        if not lane_projection:
+            raise Refusal("ladder_missing")
+        if not is_safe_integer(ladder_round) or ladder_round < 0:
+            raise Refusal("ladder_counters")
+    elif not js_strict_equals(ladder.get("round", ABSENT), ladder_round):
         raise Refusal("ladder_counters")
 
     challenges = state.get("challenges", ABSENT)

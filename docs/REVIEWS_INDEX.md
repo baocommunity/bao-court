@@ -3,20 +3,22 @@
 **The single map of the self-verification campaign.** Every review, simulation,
 audit and campaign round this repository has run — in order, with what it
 attacked, what it found (by severity), where the fix landed, and how the
-residual was dispositioned. **Tracks `@bao/court` v0.15.2 · 2026-11-11.**
+residual was dispositioned. **Tracks `@bao/court` v0.15.3 · 2026-11-12.**
 
-**Current totals at `v0.15.2`** (each with its artifact): suite **1,953 tests /
-90 files** (clean-runner CI battery); mutant catalogue **101** across three
-campaigns (`docs/MUTATION_TESTING*.md`); scale campaign **1,587,000 units /
-8,286,823 assertions / 0 failures** (`docs/benchmarks/SCALE_CAMPAIGN_V2.md`);
-model checking **3,869,232 states / 213,521,172 applications / 60,020,684
-illegal-witness probes, 0 accepted**; mechanised proofs **42 Lean 4
-declarations** (`proofs/lean4/`, no `sorry`) + Apalache exhaustive
-(`proofs/mechanized/`); independent wire differential **100,000 cases, 0
-disagreements** (`docs/DIFFERENTIAL_WIRE.md`); three-day soak **32/32
-assertions** (`docs/benchmarks/SOAK_3DAY.md`); cross-check **285 claims / 516
-refs / 95.1 %**. Rounds 1–12 and the v0.11.0 → v0.15.2 release ladder are mapped
-in the tables below; the narrative summary is `docs/CAMPAIGN_REPORT.md`.
+**Current totals at `v0.15.3`** (each with its artifact): suite **2,008 passed /
+93 files** (1 env-gated live test skipped; v0.15.3 adds the 25-test
+over-strictness suite); mutant catalogue
+**101** across three campaigns (`docs/MUTATION_TESTING*.md`); scale campaign
+**1,587,000 units / 8,286,823 assertions / 0 failures**
+(`docs/benchmarks/SCALE_CAMPAIGN_V2.md`); model checking **3,869,232 states /
+213,521,172 applications / 60,020,684 illegal-witness probes, 0 accepted**;
+mechanised proofs **42 Lean 4 declarations** (`proofs/lean4/`, no `sorry`) +
+Apalache exhaustive (`proofs/mechanized/`); independent wire differential
+**100,000 cases, 0 disagreements** (`docs/DIFFERENTIAL_WIRE.md`); three-day soak
+**32/32 assertions** (`docs/benchmarks/SOAK_3DAY.md`); cross-check **286 claims /
+521 refs / 95.1 %**. Rounds 1–12 and the v0.11.0 → v0.15.3 release ladder are
+mapped in the tables below; the narrative summary is
+`docs/CAMPAIGN_REPORT.md`.
 
 **How to use it.** This file is the index, not the record. A round's authoritative
 statement is its own document (column *Record* below); this page exists so a
@@ -126,6 +128,8 @@ quotes them, so they are part of the record this index maps.
 | v0.12.0 · v0.12.1 | #93 · #97 | escalate witness, derived cap, deterministic budget; **r29-1 fix** |
 | v0.13.0 · v0.13.1 · v0.13.2 | #100 · #106 · #110 | per-round bond (r30-1); **r33 fixes**; **r38-1 + r40 fixes**, mutation campaign 2, strict round-bond default |
 | v0.14.0 · v0.14.1 | #114 · #116 | **r41-1** (the finality derivation) + the H-6 escalation-request transport (#113); **r8-1…r8-6** (canonical `caseId`, the required wire binding, the duplicate-key/concession/one-read fixes, `resolve_round`'s history bound) |
+| v0.15.0 · v0.15.1 · v0.15.2 | #128 · #131 · #135 | the exported ladder bound as the safe predicate (r52); **round-11** (a total `quoteWireValue`, the shape gate, the clawback reader); **round-12** (the escape path over all four files, the counters' write domain) |
+| v0.15.3 | this PR | **r12-1 over-strictness, found by the host sync** (bao.markets PR #2488): the counter barrier required `ladderRound = 0` with no `ladder`, which refused the host's whole G-4 lane projection (42/185 host court tests). Fixed by a declared `projection: 'lane'` + a required reader argument, with a standing over-strictness matrix — `docs/LANE-PROJECTION.md`, INV-CONF-37 |
 
 ---
 

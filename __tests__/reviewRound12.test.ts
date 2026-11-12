@@ -596,7 +596,10 @@ describe('T1 (r11-1 attacked at the class) — the echo must be total over the r
         `finalize ${String(value)}`,
       );
     }
-    // A counter with no ladder is the mirror image of a skew (r12-1).
+    // A counter with no ladder is the mirror image of a skew (r12-1). v0.15.3
+    // re-states it by PROVENANCE: the clause holds for a FULL state, and a host
+    // lane projection opens it only by DECLARING `projection: 'lane'` (see
+    // `__tests__/overStrictness.test.ts` for the shape that made this a defect).
     const noLadder = expectTypedOneLine(
       () => reduceCourtConfirmationMachine(
         forge(threeRoundLadder(), { ladder: undefined }),
@@ -604,7 +607,30 @@ describe('T1 (r11-1 attacked at the class) — the echo must be total over the r
       ),
       'ladder removed',
     );
-    expect(noLadder.message).toMatch(/ladderRound is 3 but no ladder round is open/);
+    // The clawback WRITER is the entry r12-1's harm ran through: it reads the
+    // in-state ledger, so a counter with no ledger is refused before the record.
+    expect(noLadder.message).toMatch(/FULL machine state/);
+    // The escalation entry refuses the same state for the same reason, and says
+    // which declaration would have made it legal (the host's G-4 lane).
+    const escalateNoLadder = expectTypedOneLine(
+      () => reduceCourtConfirmationMachine(
+        forge(threeRoundLadder(), { phase: 'round_resolved', ladder: undefined }),
+        {
+          type: 'escalate',
+          authority: 'challenger',
+          challengerIdx: 2,
+          challengerPubkey: CHALLENGER_PUBKEY,
+          requestHash: hid('r4'),
+          bondProofHash: MEMBERSHIP_BOND,
+          roundBondProofHash: hid('b4'),
+          roundIndex: 4,
+          now: 6000,
+        },
+      ),
+      'ladder removed · escalate',
+    );
+    expect(escalateNoLadder.message).toMatch(/ladderRound is 3 but no ladder round is open/);
+    expect(escalateNoLadder.message).toMatch(/does not declare projection: 'lane'/);
   });
 });
 
@@ -1058,7 +1084,7 @@ describe('T3 (r11-3 attacked) — every ladder writer, and the ordering the barr
       .toEqual([{ idx: 1, reason: 'late fee', round: 0 }]);
     // (d) every state the machine actually produced satisfies the invariant.
     for (const state of [challengeWindow(), ladderPending(), resolvedRoundOne(), threeRoundLadder(), conceded]) {
-      expect(() => assertRoundCountersAgree(state), state.phase).not.toThrow();
+      expect(() => assertRoundCountersAgree(state, 'flag_clawback'), state.phase).not.toThrow();
     }
     // (e) the flag during a live round is refused by the PHASE, not the barrier —
     // the barrier did not take over a rule it does not own.
@@ -1087,21 +1113,31 @@ describe('T3 (r11-3 attacked) — every ladder writer, and the ordering the barr
       const state = forge(ladder, { ladderRound: value, ladder: { ...ladder.ladder!, round: openRound } });
       const legal = typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
       if (legal) {
-        expect(() => assertRoundCountersAgree(state), String(value)).not.toThrow();
+        expect(() => assertRoundCountersAgree(state, 'flag_clawback'), String(value)).not.toThrow();
       } else {
-        expect(() => assertRoundCountersAgree(state), String(value)).toThrow(
+        expect(() => assertRoundCountersAgree(state, 'flag_clawback'), String(value)).toThrow(
           CourtConfirmationTransitionError,
         );
       }
     }
-    // No ladder: 0 is legal, anything else is a counter with no ledger.
-    expect(() => assertRoundCountersAgree(forge(ladder, { ladder: undefined, ladderRound: 0 }))).not.toThrow();
-    expect(() => assertRoundCountersAgree(forge(ladder, { ladder: undefined, ladderRound: 1 })))
+    // No ladder: 0 is legal, anything else is a counter with no ledger — on
+    // EVERY reader, and with the message the reader's group deserves (v0.15.3:
+    // the lane projection is matched by a DECLARATION, not by the absence).
+    expect(() => assertRoundCountersAgree(forge(ladder, { ladder: undefined, ladderRound: 0 }), 'flag_clawback'))
+      .not.toThrow();
+    for (const entry of ['escalate', 'transport', 'flag_clawback', 'finalize'] as const) {
+      expect(() => assertRoundCountersAgree(forge(ladder, { ladder: undefined, ladderRound: 1 }), entry), entry)
+        .toThrow(CourtConfirmationTransitionError);
+    }
+    expect(() => assertRoundCountersAgree(forge(ladder, { ladder: undefined, ladderRound: 1 }), 'escalate'))
       .toThrow(/no ladder round is open/);
+    expect(() => assertRoundCountersAgree(forge(ladder, { ladder: undefined, ladderRound: 1 }), 'flag_clawback'))
+      .toThrow(/FULL machine state/);
     // A fractional ladderRound with a numeric ladder.round is refused too (the
     // pre-r12 shape: "2.5 !== 2" was refused, "2.5 === 2.5" was not).
-    expect(() => assertRoundCountersAgree(forge(ladder, { ladderRound: 2.5, ladder: { ...ladder.ladder!, round: 2 } })))
-      .toThrow(/round counters disagree/);
+    expect(() => assertRoundCountersAgree(
+      forge(ladder, { ladderRound: 2.5, ladder: { ...ladder.ladder!, round: 2 } }), 'flag_clawback',
+    )).toThrow(/round counters disagree/);
     // Default ladder length is unaffected by the tightening.
     expect(DEFAULT_LADDER_ROUNDS).toBeLessThanOrEqual(MAX_LADDER_ROUNDS);
   });

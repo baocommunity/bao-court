@@ -275,8 +275,22 @@ describe('T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real
         forge(state, { ladderRound: 1, ladder: { ...state.ladder!, round: hostile } }),
         request(), 3300, BINDING,
       )).message],
-      ['phase (snapshot)', () => caught(() => escalationRequestToMachineEvent(
-        forge(state, { phase: `challenge_window${hostile}`, ladder: undefined }), request(), 3300, BINDING,
+      ['phase (snapshot)', () => caught(() => reduceCourtConfirmationMachine(
+        // The phase is echoed by every "cannot <move> during <phase>" refusal;
+        // the mapper no longer refuses on `phase` at all (v0.15.3: it refuses on
+        // the round counter, which this state legitimately has), so the site is
+        // the reduce path — same value, same property.
+        forge(state, { phase: `challenge_window${hostile}` }),
+        {
+          type: 'escalate' as const,
+          authority: 'challenger' as const,
+          challengerIdx: 1,
+          challengerPubkey: CHALLENGER_PUBKEY,
+          requestHash: '12'.repeat(32),
+          bondProofHash: state.challenges[0].bondProofHash,
+          roundIndex: state.ladderRound + 1,
+          now: 3400,
+        },
       )).message],
       ['assertRoundCountersAgree', () => caught(() => reduceCourtConfirmationMachine(
         forge(threeRoundLadder(), { ladderRound: hostile }),

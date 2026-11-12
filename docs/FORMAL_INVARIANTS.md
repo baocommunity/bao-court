@@ -897,6 +897,34 @@ ladder — and is left named rather than implied.
   Test: `courtConfirmationMachine.test.ts` › 'freezes state so ledgers cannot be
   mutated between transitions'; `adversarialMachines.test.ts` › 'deep-freezes
   every returned state' (confirmation).
+- **INV-CONF-37 (one round number per case — stated by PROVENANCE, v0.15.3).**
+  Every consumer of a round number sees ONE number: `ladderRound` and, when a
+  ladder is present, `ladder.round` must both be non-negative safe integers and
+  equal (r9-4/r10-4). When no ladder is present, the counter is legal only for a
+  state that **declares** `projection: 'lane'` — a host projection whose ledger
+  is its own case row, not the lane state — and only for the two entries whose
+  round is not the in-state ladder's to vouch for: `escalate` (which opens
+  `ladderRound + 1`, the rung no ledger covers yet, and whose log barrier sizes
+  itself from the same counter) and the transport mapper that mints it. Round
+  opening, round resolution, the clawback record and the verdict require the
+  FULL state; a projection therefore can never persist a round or mint a
+  verdict. The reader is a required argument (no default). «Absent marker» means
+  the machine produced the state — the factory and the reducer never write it —
+  and an unknown marker is a typed refusal at the front door.
+  *Round 12 stated the rule as "no ladder ⇒ ladderRound = 0" and the host's G-4
+  lane — `ladderRound ≥ 1` with no ladder, by design — was refused whole (42 of
+  185 host tests); the r37-1 class again, a third time.*
+  Guards: `confirmationMachineCore.ts` (`assertRoundCountersAgree`),
+  `courtConfirmationMachine.ts` (front-door marker check),
+  `courtEscalationRequest.ts` (calls the same barrier, `'transport'`).
+  Tests: `overStrictness.test.ts` › 'a declared lane projection escalates from
+  round 1, and the result is a legal lane'; › 'a forged counter is refused on a
+  LANE projection too (the domain check is provenance-blind)'; › 'a forged
+  counter with NO ladder in a FULL state (no marker) is still refused'; › 'a
+  lane projection cannot reach a WRITE path (clawback, verdict, resolve, open)';
+  › 'the marker is not an authorisation: an unknown projection is a typed
+  refusal'; › 'sweeps every exported `assert(state)` in
+  confirmationMachineCore'. Host-facing contract: `docs/LANE-PROJECTION.md`.
 
 ---
 
@@ -1511,6 +1539,7 @@ Full invariant ↔ guard ↔ test table. "—" in the test column marks a gap
 | INV-CONF-34 | flags ∉ verdict inputs | courtConfirmationMachine.ts:1132-1174 | adversarialCrossModule.test.ts › re-finalizing…IDENTICAL verdictHash |
 | INV-CONF-35 | verdict domain reuse | courtConfirmationMachine.ts:1170-1174 | invariantAssertions.test.ts › domain-binding test |
 | INV-CONF-36 | freeze discipline | courtConfirmationMachine.ts:398-429 | courtConfirmationMachine.test.ts › freezes state…; adversarialMachines.test.ts › deep-freezes… |
+| INV-CONF-37 | one round number per case, stated by PROVENANCE (v0.15.3, r9-4/r10-4/r12-1): `ladderRound`/`ladder.round` in the write domain and equal when a ladder exists; no ladder is legal only for a declared `projection: 'lane'`, and only for `escalate`/`transport` (write paths need the FULL state) | confirmationMachineCore.ts (assertRoundCountersAgree); courtConfirmationMachine.ts (front-door marker check); courtEscalationRequest.ts | overStrictness.test.ts › a declared lane projection escalates from round 1; overStrictness.test.ts › a forged counter with NO ladder in a FULL state is still refused; overStrictness.test.ts › a lane projection cannot reach a WRITE path; reviewRound12.test.ts › two counters forged to the SAME non-integer |
 | INV-SIGN-1 | signing session binding | courtSigningMachine.ts:165-189 | courtSigningMachine.test.ts › binds the signing session hash… |
 | INV-SIGN-2 | state ⇄ binding consistency | courtSigningMachine.ts:219-236,382 | adversarialMachines.test.ts › re-derives the signing session hash… |
 | INV-SIGN-3 | threshold range | courtSigningMachine.ts:331-342 | courtSigningMachine.test.ts (creation); invariantAssertions.test.ts |

@@ -507,6 +507,21 @@ function boundaryCases() {
   push('to_event', { ...eventBase, state: { ...eventBase.state, ladder: [] } }, 'ladder-array');
   push('to_event', { ...eventBase, state: { ...eventBase.state, ladder: { round: 2 } } }, 'ladder-counters');
   push('to_event', { ...eventBase, state: { ...eventBase.state, ladder: { round: '1' } } }, 'ladder-counters-string');
+  // v0.15.3 — the G-4 lane projection (the r12-1 over-strictness fix): a DECLARED
+  // counter with no in-state ladder is the host's persisted shape and the mapper
+  // must mint from it; the same shape WITHOUT the marker still refuses.
+  const laneBase = {
+    phase: 'round_resolved',
+    projection: 'lane',
+    ladderRound: 1,
+    challenges: [{ idx: 2, bondTxid: base.bondTxid, bondProofHash: base.bondProofHash }],
+  };
+  push('to_event', { ...eventBase, state: laneBase }, 'lane-projection');
+  push('to_event', { ...eventBase, state: { ...laneBase, ladderRound: 2, }, request: { ...base, round: 2 } }, 'lane-projection-round2');
+  push('to_event', { ...eventBase, state: { ...eventBase.state, projection: 'lane' } }, 'lane-projection-with-ladder');
+  push('to_event', { ...eventBase, state: { ...laneBase, ladderRound: '1' } }, 'lane-projection-counter-string');
+  push('to_event', { ...eventBase, state: { ...laneBase, ladderRound: 2.5 } }, 'lane-projection-counter-float');
+  push('to_event', { ...eventBase, state: { ...laneBase, projection: 'wallet' } }, 'unknown-projection-missing-ladder');
   push('to_event', { ...eventBase, state: { ...eventBase.state, challenges: [] } }, 'no-bond');
   push('to_event', {
     ...eventBase,
