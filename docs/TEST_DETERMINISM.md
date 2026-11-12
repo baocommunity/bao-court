@@ -29,7 +29,14 @@ measurement taken on the box that is running the tests.
 
 ---
 
-## 1. Inventory (whole suite: 85 test files, 1,873 tests)
+## 1. Inventory (whole suite: 85 test files, 1,873 tests at `621b154`)
+
+> **Rebase note.** This branch was rebased onto `#139` (distributed ceremony),
+> which added 6 test files (91 files / 1,984 tests) — and with them **5 new bare
+> numeric timeouts** (`{ timeout: 300_000 }` ×3, `}, 60_000);` ×1, plus the
+> env-gated live test). The static guard caught them on the first loaded run
+> after the rebase (§4, rule 5), and they are wrapped. That is the guard doing
+> exactly what it exists for: the class cannot come back through a merge.
 
 Produced mechanically (`__tests__/determinism.test.ts` re-runs the static half
 of it on every `npm test`; the AST pass that produced this table is described
@@ -123,33 +130,34 @@ why the fix has to be a *ratio*, not a bigger constant.
 
 ### 2.3 After the fix — same harness, same box, same ambient load
 
-*Final shipping build; the three loaded runs, then one unloaded:*
+*Final shipping build (rebased onto `#139`): the three loaded runs, then one
+unloaded. 1,984 tests / 91 files after the rebase.*
 
 | Run | Result | Wall | 1-min load avg | Slowest test |
 |---|---|---|---|---|
-| loaded 1 | **green** / 1,884 | 1,786 s | 77–81 | model-check instance **836 s** |
-| loaded 2 | **green** / 1,884 | 1,854 s | 78–81 | **943 s** |
-| loaded 3 | **green** / 1,884 | 1,943 s | 60–81 | **968 s** |
-| **unloaded** | **green** / 1,884 | 1,274 s | 24–58 | 613 s |
+| loaded 1 | **green** / 1,984 | 2,229 s | 82–90 | model-check instance **1,126 s** |
+| loaded 2 | **green** / 1,984 | 1,977 s | 87–115 | **999 s** |
+| loaded 3 | **green** / 1,984 | 2,472 s | 84–113 | **1,127 s** |
+| **unloaded** | **green** / 1,984 | 1,646 s | 78–86 | 715 s |
 
 **This is the decisive number.** The slowest tests in the three loaded runs took
-**836 s, 943 s and 968 s** — every one of them against the **600 s literal** it
-carried before this change. With the assertion fixes *alone* those runs would
-still have been red; they are green because that ceiling is now
-`wd(600_000)` → `min(600 s × factor, 30 min)`: a hang gate that follows the box
-instead of a constant that expires.
+**1,126 s, 999 s and 1,127 s** — every one of them against the **600 s literal**
+it carried before this change, i.e. **1.7–1.9× over**. With the assertion fixes
+*alone* all three of those runs would still have been red; they are green because
+that ceiling is now `wd(600_000)` → `min(600 s × factor, 30 min)`: a hang gate
+that follows the box instead of a constant that expires.
 
 Fairness note: the *before* runs carried load 45–68; these after-runs carried
-**60–81** — heavier, not lighter, so the comparison does not favour the fix. The
-"unloaded" run is only as unloaded as a shared 16-core box allows (24–58, because
-a parallel campaign ran through it); it is green too. The per-test isolation
-matrix (§2.5) used one identical harness for both sides.
+**78–115** — heavier, not lighter, so the comparison does not favour the fix. The
+"unloaded" run is only as unloaded as a shared 16-core box allows (78–86, because
+parallel campaigns were running through it) and it is green too. The per-test
+isolation matrix (§2.5) used one identical harness for both sides.
 
 ### 2.4 Nothing was weakened
 
 | | Before | After |
 |---|---|---|
-| Tests | 1,873 | **1,884** (+11) |
+| Tests | 1,873 | **1,984** (+111: +11 from this round, +100 from `#139`) |
 | Skipped | 1 (env-gated live taproot) | 1 (same) |
 | `typecheck` / `typecheck:scripts` / `typecheck:tests` | green | green |
 | Mutation detectors | suite was one of three | unchanged — and the two historical **false captures (M40/M47) can no longer happen**: the budget that produced them is deleted, and the behaviour they were supposed to violate is asserted structurally |
