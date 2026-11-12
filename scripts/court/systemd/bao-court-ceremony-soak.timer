@@ -7,7 +7,12 @@ Description=BAO Court — distributed ceremony soak, every 6 hours
 # after downtime instead of silently skipping it; the reboot itself is recorded
 # by the runner as a `gap` record, never as a failure.
 OnBootSec=15min
-OnUnitActiveSec=6h
+# Calendar-based as well as boot-based. `OnUnitActiveSec=6h` alone leaves the
+# timer with NO next elapse while the unit is running (and computes a nonsense
+# one afterwards), which makes "when is the next ceremony?" unanswerable.
+# OnCalendar pins it to 00:00/06:00/12:00/18:00 local time; Persistent=true
+# replays one missed slot after downtime.
+OnCalendar=*-*-* 00/6:00:00
 Persistent=true
 AccuracySec=1min
 RandomizedDelaySec=5min
