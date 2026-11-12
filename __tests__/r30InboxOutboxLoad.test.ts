@@ -38,8 +38,12 @@ import {
 } from '../courtOutbox';
 import { wrapProtocolEvent } from '../nip59';
 import { SeckeyCourtSigner } from '../courtSigner';
+import { budgetMs, scaleTimeout, testTimeoutFor } from './helpers/budget';
 
 const T0 = 1_787_000_000;
+
+/** Watchdog for the 10k-call flood (docs/TEST_DETERMINISM.md rule 4). */
+const FLOOD_BUDGET_MS = budgetMs('INBOX_FLOOD_BUDGET_MS');
 
 // ---------------------------------------------------------------------------
 // Cheap synthetic wraps
@@ -68,7 +72,7 @@ function syntheticWrap(recipientPubkey: string, marker: number, createdAt = T0):
 // ---------------------------------------------------------------------------
 
 describe('A. 10k-event flood with 90% duplicates', () => {
-  it('keeps exactly one record per wrap and one provenance entry per relay', { timeout: 120_000 }, () => {
+  it('keeps exactly one record per wrap and one provenance entry per relay', { timeout: testTimeoutFor(FLOOD_BUDGET_MS) }, () => {
     const recipient = getPublicKey(generateSecretKey());
     const inbox = createCourtInbox({ myPubkey: recipient });
 
@@ -126,7 +130,13 @@ describe('A. 10k-event flood with 90% duplicates', () => {
     expect(inbox.listRecords()).toHaveLength(UNIQUE);
 
     // Hard bound on the ingest loop (~25k calls/s means the gates are O(1)).
-    expect(elapsedMs).toBeLessThan(120_000);
+    // Watchdog, not a performance pin: derived + env-overridable, and the
+    // per-test timeout is derived FROM it so the assertion can always fire
+    // first (docs/TEST_DETERMINISM.md rule 3). A literal 120 s assertion under
+    // a literal 120 s timeout is the vacuity class: the abort wins the race and
+    // the message names a timeout instead of the real regression.
+    expect(elapsedMs, `10k-call ingest exceeded its ${FLOOD_BUDGET_MS} ms watchdog`)
+      .toBeLessThan(FLOOD_BUDGET_MS);
   });
 });
 
@@ -211,7 +221,7 @@ describe('C. per-relay provenance and capacity semantics', () => {
     expect(inbox.listRecords()).toHaveLength(0);
   });
 
-  it('fails closed at MAX_RECORDS but still dedupes known wraps at the bound', { timeout: 300_000 }, () => {
+  it('fails closed at MAX_RECORDS but still dedupes known wraps at the bound', { timeout: scaleTimeout() }, () => {
     const recipient = getPublicKey(generateSecretKey());
     const inbox = createCourtInbox({ myPubkey: recipient });
     const CAP = 100_000;

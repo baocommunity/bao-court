@@ -36,6 +36,20 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { budgetMs, testTimeoutFor } from './helpers/budget';
+
+/**
+ * Exhaustive state-space exploration is the single most expensive thing in the
+ * suite: the heaviest instance enumerates 111 667 states and 6.7 M transitions.
+ * One budget derives both the ceiling and the per-test timeout, so the two can
+ * never desynchronise: `MODEL_CHECK_BUDGET_MS=1200000 npm test`.
+ *
+ * This is a WORKLOAD budget, not a correctness ceiling — the enumeration count
+ * is fixed and the assertions are deterministic; only the wall runtime moves
+ * with the host. Measured 705 s under a 20-hog load against a 600 s ceiling, so
+ * the ceiling was the wrong thing, not the test.
+ */
+const MODEL_CHECK_TIMEOUT = testTimeoutFor(budgetMs('MODEL_CHECK_BUDGET_MS', 600_000));
 
 import {
   BOND_PROOF,
@@ -136,7 +150,7 @@ describe('exhaustive model checking — courtVoteMachine (reduced inline instanc
         expect(stats.rawThrows).toBe(0);
         expect(stats.states).toBeGreaterThan(0);
       },
-      600_000,
+      MODEL_CHECK_TIMEOUT,
     );
   }
 });
@@ -160,7 +174,7 @@ describe('exhaustive model checking — courtConfirmationMachine (reduced inline
         // empty would make the witness invariant vacuous at this size).
         if (spec.maxLadderRounds >= 2) expect(stats.maxEscalationDepth).toBeGreaterThanOrEqual(1);
       },
-      600_000,
+      MODEL_CHECK_TIMEOUT,
     );
   }
 });
@@ -182,7 +196,7 @@ describe('exhaustive model checking — courtSigningMachine (reduced inline inst
         expect(stats.rawThrows).toBe(0);
         expect(stats.states).toBeGreaterThan(0);
       },
-      600_000,
+      MODEL_CHECK_TIMEOUT,
     );
   }
 });
@@ -287,7 +301,6 @@ describe('model checking — committed full-sweep fixture (__fixtures__/model-ch
         }
       }
     },
-    120_000,
   );
 });
 

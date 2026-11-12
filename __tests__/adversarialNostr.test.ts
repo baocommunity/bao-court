@@ -68,6 +68,14 @@ import type { SelectedJuror, StakeCommitment } from '../types';
 
 import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
 import { budgetMs } from './helpers/budget';
+import { stableUnit } from './helpers/rng';
+
+/**
+ * Deterministic selection priority per juror index — reproducible from `idx`
+ * alone, unique per juror, so a priority tie can never make roster order
+ * host-dependent.
+ */
+const priorityFor = (idx: number): number => stableUnit(0x5eed, idx);
 
 /** Generous, env-tunable ceiling for the linear tag scan (see helpers/budget). */
 const VALIDATOR_BUDGET_MS = budgetMs('VALIDATOR_BUDGET_MS');
@@ -324,7 +332,7 @@ describe('tag abuse: duplicates, nesting, emptiness, and scale', () => {
     ).toBeLessThan(VALIDATOR_BUDGET_MS);
     expect(result.valid).toBe(false);
     expect(result.error).toMatch(/1\.\.10000/);
-  }, 30_000);
+  });
 
   it('MB-scale tag values: the v2 validator enforces marketId/outcome/round byte bounds before hashing', () => {
     const marketId = randomBytes(32).toString('hex');
@@ -527,7 +535,7 @@ describe('inbox flooding: dedupe key and capacity under adversarial relay input'
     expect(again.record.relays).toEqual(['wss://relay-a.example', 'wss://relay-b.example']);
   });
 
-  it('ingest is fail-closed at capacity: the flooding relay cannot evict seen wraps (no LRU to lose track of)', { timeout: 60_000 }, () => {
+  it('ingest is fail-closed at capacity: the flooding relay cannot evict seen wraps (no LRU to lose track of)', () => {
     const inbox = createCourtInbox({ myPubkey: MY_PUBKEY });
     const first = {
       kind: COURT_GIFT_WRAP_KIND,
@@ -604,7 +612,9 @@ function makeSelectedJuror(idx: number): SelectedJuror {
     categories: ['bitcoin'],
     registeredAt: Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60,
     idx,
-    priority: Math.random(),
+    // Seeded, not `Math.random()`: a fixture field must be reproducible from
+    // the test body so a red run replays exactly (docs/TEST_DETERMINISM.md).
+    priority: priorityFor(idx),
   };
 }
 
@@ -640,7 +650,7 @@ function buildValidAttestationEvent(): { event: NostrEvent; marketId: string; di
 }
 
 describe('watcher binding: resolution fields come from the validated tags only', () => {
-  it('R8 FIX: a hostile re-publisher appending an extra `o` tag cannot steer the reported outcome away from the FROST-certified one', { timeout: 30_000 }, async () => {
+  it('R8 FIX: a hostile re-publisher appending an extra `o` tag cannot steer the reported outcome away from the FROST-certified one', async () => {
     const { event, marketId, disputeId, outcome, groupPubkey } = buildValidAttestationEvent();
 
     // The attacker re-publishes the valid attestation with an extra
@@ -667,7 +677,7 @@ describe('watcher binding: resolution fields come from the validated tags only',
     expect(resolution?.eventId).toBe(republished.id);
   });
 
-  it('an extra `market` alias tag cannot override the validated `m` tag', { timeout: 30_000 }, async () => {
+  it('an extra `market` alias tag cannot override the validated `m` tag', async () => {
     const { event, marketId, groupPubkey } = buildValidAttestationEvent();
     const foreignMarket = randomBytes(32).toString('hex');
     const republished = finalizeEvent(
@@ -684,7 +694,7 @@ describe('watcher binding: resolution fields come from the validated tags only',
     expect(resolution?.marketId).not.toBe(foreignMarket);
   });
 
-  it('the certified path is unchanged: the honest event resolves with the certified outcome', { timeout: 30_000 }, async () => {
+  it('the certified path is unchanged: the honest event resolves with the certified outcome', async () => {
     const { event, marketId, disputeId, outcome, groupPubkey } = buildValidAttestationEvent();
     const watcher = new FrostAppealWatcher({
       relays: [],

@@ -27,6 +27,12 @@ import {
 } from '../events';
 
 import { seckey as secret, nostrPubkey, hostPubkey } from './helpers/keys';
+import { budgetMs, testTimeoutFor } from './helpers/budget';
+import { mulberry32 } from './helpers/rng';
+
+/** Seeded fuzz campaign — replay any red run with `FUZZ_SEED=<n>`. */
+const FUZZ_SEED = Number(process.env.FUZZ_SEED ?? 0xc0ffee);
+const FUZZ_BUDGET_MS = budgetMs('FUZZ_BUDGET_MS');
 
 function parameters(): CourtSessionParameters {
   return {
@@ -155,8 +161,13 @@ describe('adversarial parser fuzz (typed failures only)', () => {
     );
   });
 
-  it('200 random-tag mutations never crash untyped', { timeout: 60_000 }, () => {
-    const rng = (max: number): number => Math.floor(Math.random() * max);
+  it('200 random-tag mutations never crash untyped', { timeout: testTimeoutFor(FUZZ_BUDGET_MS) }, () => {
+    // Seeded (rule 3): an unseeded fuzz that finds a crash publishes an
+    // unreproducible result. The stream is derived from FUZZ_SEED, which the
+    // failure message prints, so a red run replays exactly:
+    // `FUZZ_SEED=... npm test`.
+    const fuzzStream = mulberry32(FUZZ_SEED);
+    const rng = (max: number): number => Math.floor(fuzzStream() * max);
     const pool = ['commit', 'session', 'juror', 'pok_n', 'pok_z', 'threshold', 'phase_nonce', 'dispute', 'p', 'host', 'suite', 'attempt', 'strange'];
     const values = ['', 'a', '0x10', '99999999999999999999999', `02${'1'.repeat(64)}`, '0'.repeat(64), '%', JSON.stringify({ a: 1 })];
     for (let round = 0; round < 200; round += 1) {

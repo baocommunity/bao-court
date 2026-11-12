@@ -65,6 +65,7 @@ import {
   reverseHex,
   SIGHASH_DEFAULT,
 } from '../taprootSpend.js';
+import { heavyTimeout } from './helpers/budget.js';
 
 // ---------------------------------------------------------------------------
 // Config — live infra is injected via env (public repo: no hosts/IPs in code).
@@ -391,5 +392,5 @@ describe.skipIf(!LIVE_ENABLED)('WS-A taproot spend — REAL script-path spend on
     console.log(`   Tree math, tweak/program, control-block parity,`);
     console.log(`   taprootSighashElements, witness composition: CONSENSUS-VALID.`);
     console.log(`   WS-A §8.6:     CONFIRMED`);
-  }, 120_000);
+  }, heavyTimeout());
 });

@@ -23,6 +23,7 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { budgetMs, childTimeoutFor, processTimeout } from './helpers/budget';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HARNESS = join(ROOT, 'scripts/court/multi-process-ceremony.mjs');
@@ -68,12 +69,28 @@ interface HarnessReport {
   };
 }
 
+/**
+ * Phase deadline handed to the ceremony harness.
+ *
+ * This was a literal `--deadline-ms=2500`, and it decided the VERDICT, not just
+ * the runtime: under load the honest reordering scenario had `completed: 0,
+ * signatures: 0` because three processes could not finish a FROST round in
+ * 2.5 s, and the test failed on `report.failures`. That is the wall-clock-as-
+ * verdict class (docs/TEST_DETERMINISM.md rule 1) — a healthy ceremony scored
+ * as broken because the box was busy.
+ *
+ * Derived and env-overridable now: `CEREMONY_PHASE_DEADLINE_MS=60000 npm test`.
+ * The fail-closed scenarios (fork/silence) still classify correctly; they wait
+ * for this deadline and then report the stall, which is their subject.
+ */
+const CEREMONY_PHASE_DEADLINE_MS = budgetMs('CEREMONY_PHASE_DEADLINE_MS', 20_000);
+
 function runHarness(args: readonly string[]): Promise<{ report: HarnessReport; stdout: string }> {
   return new Promise((resolve, reject) => {
     execFile(
       process.execPath,
-      ['--import', 'tsx', HARNESS, ...args, '--deadline-ms=2500'],
-      { cwd: ROOT, timeout: 180_000, maxBuffer: 16 * 1024 * 1024 },
+      ['--import', 'tsx', HARNESS, ...args, `--deadline-ms=${CEREMONY_PHASE_DEADLINE_MS}`],
+      { cwd: ROOT, timeout: childTimeoutFor(processTimeout()), maxBuffer: 16 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const runDir = /run dir (\S+)/.exec(stdout)?.[1];
         if (!runDir) {
@@ -94,7 +111,7 @@ function runHarness(args: readonly string[]): Promise<{ report: HarnessReport; s
 const SEED = 'c0ffee3300000000000000000000000000000000000000000000000000000000';
 
 describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
-  it('honest relay: every juror completes with one group key and one signature', { timeout: 180_000 }, async () => {
+  it('honest relay: every juror completes with one group key and one signature', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=3', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.relayMode).toBe('honest');
@@ -106,7 +123,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.splitView.differs).toBe(false);
   });
 
-  it('reordering relay: per-juror delivery order differs yet the outcome is identical', { timeout: 180_000 }, async () => {
+  it('reordering relay: per-juror delivery order differs yet the outcome is identical', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=reorder', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.relayMode).toBe('reorder');
@@ -117,7 +134,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.verdict).toBe('NO_EQUIVOCATION');
   });
 
-  it('lossy relay: every juror either completes or fails closed with a typed classification', { timeout: 180_000 }, async () => {
+  it('lossy relay: every juror either completes or fails closed with a typed classification', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=drop', '--drop-p=0.2', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.relayStats.dropped).toBeGreaterThan(0);
@@ -135,7 +152,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     }
   });
 
-  it('split-view from the start: nobody gets a key or a signature (the equivocation test)', { timeout: 180_000 }, async () => {
+  it('split-view from the start: nobody gets a key or a signature (the equivocation test)', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=5', '--mode=fork', '--fork-variant=dkg', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.splitView.differs).toBe(true);
@@ -153,7 +170,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.perJurorView.some((v) => v.senders.length < report.jurorCount - 1)).toBe(true);
   });
 
-  it('split-view after DKG: the key is agreed but the reveal gate starves on both sides', { timeout: 180_000 }, async () => {
+  it('split-view after DKG: the key is agreed but the reveal gate starves on both sides', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=fork', '--fork-variant=sign', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.splitView.differs).toBe(true);
@@ -167,7 +184,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     }
   });
 
-  it('replaying relay: duplicates are idempotent and never yield a second signature', { timeout: 180_000 }, async () => {
+  it('replaying relay: duplicates are idempotent and never yield a second signature', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=replay', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     expect(report.equivocation.relayStats.duplicated).toBeGreaterThan(0);
@@ -176,7 +193,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     expect(report.equivocation.perJuror.every((j) => (j.duplicatesSeen ?? 0) > 0)).toBe(true);
   });
 
-  it('silencing one juror: fails closed everywhere and NAMES the silenced participant', { timeout: 180_000 }, async () => {
+  it('silencing one juror: fails closed everywhere and NAMES the silenced participant', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness(['--jurors=3', '--mode=silence', `--seed=${SEED}`]);
     expect(report.failures).toEqual([]);
     const victim = report.targetedJuror;
@@ -191,7 +208,7 @@ describe('multi-process ceremony under a Byzantine relay (round 33)', () => {
     }
   });
 
-  it('inverting one sender\'s commit/reveal pair: order-sensitivity yields at most one signature', { timeout: 180_000 }, async () => {
+  it('inverting one sender\'s commit/reveal pair: order-sensitivity yields at most one signature', { timeout: processTimeout() }, async () => {
     const { report } = await runHarness([
       '--jurors=3', '--mode=reorder', '--reorder-style=invert', `--seed=${SEED}`,
     ]);

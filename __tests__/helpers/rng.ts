@@ -74,3 +74,14 @@ export function secFrom(r: () => number): Uint8Array {
   for (let i = 0; i < 32; i += 1) sec[i] = Math.floor(r() * 256);
   return sec;
 }
+
+/**
+ * A stable unit value in `[0,1)` derived from `(seed, label)` alone.
+ *
+ * For fixture fields that must look spread out but be reproducible — the case
+ * `Math.random()` in a fixture gets wrong: it buys nothing (the assertion
+ * never depends on spread) and costs replayability.
+ */
+export function stableUnit(seed: number, label: string | number): number {
+  return childRng(seed, String(label))();
+}

@@ -15,6 +15,15 @@ import {
   deriveSimulatedRevealEventId,
 } from '../index';
 import type { SelectedJuror, StakeCommitment } from '../types';
+import { drainJobs, drainUntil } from './helpers/async';
+import { stableUnit } from './helpers/rng';
+
+/**
+ * Deterministic selection priority per juror index. Reproducible from `idx`
+ * alone and unique per juror, so a priority tie can never make roster order
+ * host-dependent.
+ */
+const priorityFor = (idx: number): number => stableUnit(0x5eed, idx);
 
 /**
  * Derive the verdict commitment exactly like the coordinator does at tally
@@ -53,7 +62,9 @@ function makeSelectedJuror(idx: number): SelectedJuror {
     categories: ['bitcoin'],
     registeredAt: Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60,
     idx,
-    priority: Math.random(),
+    // Seeded, not `Math.random()`: a fixture field must be reproducible from
+    // the test body so a red run can be replayed exactly (rule 3).
+    priority: priorityFor(idx),
   };
 }
 
@@ -107,9 +118,13 @@ describe('FrostAppealWatcher', () => {
     watcher.start();
     expect(onevent).toBeDefined();
 
-    // Deliver through the subscription path.
+    // Deliver through the subscription path. The handler chain is a fixed
+    // number of `await`s, so a bounded microtask drain is sufficient BY
+    // CONSTRUCTION — `vi.waitFor` polls a real clock and made this test's
+    // verdict depend on host speed (docs/TEST_DETERMINISM.md rule 2).
     onevent!(event);
-    await vi.waitFor(() => expect(onResolution).toHaveBeenCalledTimes(1));
+    await drainUntil(() => onResolution.mock.calls.length > 0, 64, 'onResolution emit');
+    expect(onResolution).toHaveBeenCalledTimes(1);
     expect(onResolution.mock.calls[0]?.[0]).toMatchObject({
       marketId,
       outcome: 'NO',
@@ -118,9 +133,11 @@ describe('FrostAppealWatcher', () => {
     });
 
     // Dedup: redelivery neither re-validates into a second emit nor
-    // resolves again via direct handling.
+    // resolves again via direct handling. `setTimeout(0)` here was the vacuity
+    // class: it observed a half-drained chain, so a regression that double-
+    // emitted after the sleep was invisible.
     onevent!(event);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await drainJobs();
     expect(onResolution).toHaveBeenCalledTimes(1);
     expect(await watcher.handleEvent(event)).toBeNull();
 

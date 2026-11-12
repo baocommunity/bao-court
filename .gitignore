@@ -6,3 +6,4 @@ dist/
 proofs/mechanized/_apalache-out/
 SETTLEMENT_RAILS_PLAN.md
 .repro-artifacts/
+__pycache__/

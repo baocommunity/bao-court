@@ -29,6 +29,7 @@ import { SIZES, percentile, timingMetrics, type CampaignResult, type MetricValue
 import { CAMPAIGNS, CORPUS_NAMES, declaredSizes, runCampaign } from './index';
 import { TRANSPORT_ROWS } from './escalationTransportCorpus';
 import { GRID_CELLS } from './ledgerBarrierCorpus';
+import { scaleTimeout } from '../helpers/budget';
 
 /** Assert a campaign is green and its failure detail is attached to the message. */
 function expectGreen(result: CampaignResult): void {
@@ -105,7 +106,7 @@ describe('scale campaign: scaffolding', () => {
 });
 
 describe('scale campaign: confirmation machine sequences', () => {
-  it('drives legal sequences with the invariant battery after every transition', { timeout: 300_000 }, () => {
+  it('drives legal sequences with the invariant battery after every transition', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['confirmation'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -125,7 +126,7 @@ describe('scale campaign: confirmation machine sequences', () => {
 });
 
 describe('scale campaign: plurality tallies', () => {
-  it('matches the independent reduce oracle on every tally (winner + supporting ids)', { timeout: 300_000 }, () => {
+  it('matches the independent reduce oracle on every tally (winner + supporting ids)', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['tally'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -140,7 +141,7 @@ describe('scale campaign: plurality tallies', () => {
 });
 
 describe('scale campaign: Merkle batches', () => {
-  it('re-derives every root, verifies proofs, and rejects the tamper matrix', { timeout: 300_000 }, () => {
+  it('re-derives every root, verifies proofs, and rejects the tamper matrix', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['merkle'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -154,7 +155,7 @@ describe('scale campaign: Merkle batches', () => {
 });
 
 describe('scale campaign: signed v2 attestations', () => {
-  it('honours the accept/reject matrix row by row (real signatures, real pins)', { timeout: 300_000 }, () => {
+  it('honours the accept/reject matrix row by row (real signatures, real pins)', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['validator'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -166,7 +167,7 @@ describe('scale campaign: signed v2 attestations', () => {
 });
 
 describe('scale campaign: jury selection', () => {
-  it('is deterministic, duplicate-free, oracle-agreeing and weight-proportional', { timeout: 300_000 }, () => {
+  it('is deterministic, duplicate-free, oracle-agreeing and weight-proportional', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['selection'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -181,7 +182,7 @@ describe('scale campaign: jury selection', () => {
 });
 
 describe('scale campaign: canonical encodings', () => {
-  it('is byte-identical to the reference writer and round-trips through the independent parser', { timeout: 300_000 }, () => {
+  it('is byte-identical to the reference writer and round-trips through the independent parser', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['encoding'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -195,7 +196,7 @@ describe('scale campaign: canonical encodings', () => {
 });
 
 describe('scale campaign: escalation witnesses (v0.12.0 escalate witness)', () => {
-  it('refuses every illegal witness and accepts only the witnessed escalation', { timeout: 300_000 }, () => {
+  it('refuses every illegal witness and accepts only the witnessed escalation', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['witness'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -219,7 +220,7 @@ describe('scale campaign: escalation witnesses (v0.12.0 escalate witness)', () =
 });
 
 describe('scale campaign: batch attestations across epoch rotations', () => {
-  it('binds epoch + cohort, refuses neighbour pins, and re-batches across epochs', { timeout: 300_000 }, () => {
+  it('binds epoch + cohort, refuses neighbour pins, and re-batches across epochs', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['epochRotation'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -235,7 +236,7 @@ describe('scale campaign: batch attestations across epoch rotations', () => {
 });
 
 describe('scale campaign: verdict finality chains', () => {
-  it('drives windows + escalations to a verdict and applies every finality shape', { timeout: 300_000 }, () => {
+  it('drives windows + escalations to a verdict and applies every finality shape', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['finality'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -260,7 +261,7 @@ describe('scale campaign: verdict finality chains', () => {
 });
 
 describe('scale campaign: escalation-request transport (v0.14.0 wire)', () => {
-  it('fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement', { timeout: 300_000 }, () => {
+  it('fails closed on every boundary id, duplicate key, pollution attempt and binding disagreement', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['escalationTransport'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -288,7 +289,7 @@ describe('scale campaign: escalation-request transport (v0.14.0 wire)', () => {
 });
 
 describe('scale campaign: restored-snapshot ledger barriers', () => {
-  it('accepts every reducer-reachable state and matches the independent oracle on every forged one', { timeout: 300_000 }, () => {
+  it('accepts every reducer-reachable state and matches the independent oracle on every forged one', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['ledgerBarrier'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);
@@ -313,7 +314,7 @@ describe('scale campaign: restored-snapshot ledger barriers', () => {
 });
 
 describe('scale campaign: per-round bond consumption', () => {
-  it('binds one hash to one index, never re-consumes a witness, and matches the 3^R schedule', { timeout: 300_000 }, () => {
+  it('binds one hash to one index, never re-consumes a witness, and matches the 3^R schedule', { timeout: scaleTimeout() }, () => {
     const result = runCampaign({ profile: PROFILE, seed: SEED, only: ['bondAlgebra'] });
     const campaign = result.results[0]!;
     expectGreen(campaign);

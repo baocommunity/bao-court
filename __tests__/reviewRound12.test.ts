@@ -75,6 +75,7 @@ import {
   deriveMaxLadderRounds,
   ladderCapWithinBound,
 } from '../ladderEconomics';
+import { heavyTimeout } from './helpers/budget';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures (the same honest ladder the round-11 file builds, so the two rounds
@@ -817,7 +818,7 @@ describe('T2 (r11-2 attacked) — the shape gate, fuzzed from its own grammar', 
     }
     expect(typedRefusals).toBe(20_000);
     expect(reachedCrypto).toBeGreaterThan(1_500);
-  }, 60_000);
+  }, heavyTimeout());
 
   it('r12-3: every LEGAL nostr shape binds (the gate is not over-strict)', () => {
     // The reverse direction: shapes `verifyEvent` would accept because they are

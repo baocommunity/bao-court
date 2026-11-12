@@ -46,6 +46,16 @@ import {
 import { hashCourtVerdict, CourtVoteTransitionError } from '../courtVoteMachine';
 import { CanonicalWriter } from '../courtSession';
 import { mulberry32, int, hex32, uniqueHex32, secFrom } from './helpers/rng';
+import { budgetMs, testTimeoutFor } from './helpers/budget';
+
+/**
+ * Workload budget, not a correctness ceiling: PB1 verifies every proof of 48
+ * batches (n = 1..300). The count is fixed and the assertions are deterministic;
+ * only the WALL RUNTIME varies with the host. Measured 124.6 s under a
+ * 20-hog load against a 120 s ceiling, so the ceiling (not the test) was wrong.
+ * Override with `PROPERTIES_BATCH_BUDGET_MS`.
+ */
+const PROPERTIES_BATCH_TIMEOUT = testTimeoutFor(budgetMs('PROPERTIES_BATCH_BUDGET_MS', 180_000));
 
 // ─── seeded LCG: now imported from helpers/rng (mulberry32) ─────────────────
 
@@ -208,7 +218,7 @@ describe('properties: batchAttestation', () => {
   const seeded = Array.from({ length: BATCHES }, (_, i) => mulberry32(1000 + i * 7919));
   const batches = seeded.map((r) => randomBatch(r));
 
-  it(`PB1/PB4: across ${BATCHES} random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones`, { timeout: 120_000 }, () => {
+  it(`PB1/PB4: across ${BATCHES} random batches (n=1..300) every index's proof recomputes the root (independent oracle) with sane path lengths; full verifyCaseInBatch on every index of small batches and a sample of large ones`, { timeout: PROPERTIES_BATCH_TIMEOUT }, () => {
     let verified = 0;
     let fullPipeline = 0;
     for (const { cases, tree, event, groupPub, epoch } of batches) {
@@ -264,11 +274,15 @@ describe('properties: batchAttestation', () => {
   });
 
   it('PB3: root determinism — shuffled submission order yields the identical root and leaves', () => {
+    // Seeded Fisher-Yates (rule 3). The assertion is order-insensitivity, so a
+    // seeded permutation proves it exactly as well as a random one and makes
+    // any red run replayable.
+    const shuffleRng = mulberry32(0x5b0ff1e);
     for (const { cases, tree } of batches) {
       const hashes = cases.map((c) => c.verdictHash);
       const shuffled = [...hashes];
       for (let i = shuffled.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1)); // shuffle order irrelevant to the assertion
+        const j = Math.floor(shuffleRng() * (i + 1)); // shuffle order irrelevant to the assertion
         [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
       }
       const rebuilt = buildBatchMerkleTree(shuffled);
@@ -277,7 +291,7 @@ describe('properties: batchAttestation', () => {
     }
   });
 
-  it(`PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (${MUTATION_SAMPLES_PER_BATCH} sampled indices per batch)`, { timeout: 120_000 }, () => {
+  it(`PB2: no mutation of any proof byte/sibling/index (and no swapped case inputs) verifies (${MUTATION_SAMPLES_PER_BATCH} sampled indices per batch)`, { timeout: PROPERTIES_BATCH_TIMEOUT }, () => {
     for (const { cases, tree, event, groupPub } of batches) {
       const n = cases.length;
       const sortedVerdictHashes = [...cases.map((c) => c.verdictHash)].sort();

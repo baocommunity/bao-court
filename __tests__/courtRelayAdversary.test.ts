@@ -759,7 +759,7 @@ describe('forge: ingest input hygiene', () => {
 
   // R8: ingest now verifies the NIP-01 id commitment per wrap, so the
   // 100k-record capacity sweep does 100k id hashes — give it room.
-  it('accepts MAX_RECORDS distinct wraps and rejects the next new wrap id', { timeout: 60_000 }, () => {
+  it('accepts MAX_RECORDS distinct wraps and rejects the next new wrap id', () => {
     const inbox = createCourtInbox({ myPubkey: MY_PUBKEY });
     for (let i = 0; i < 100_000; i += 1) {
       // Distinct created_at ⇒ distinct committed ids (fakeWrap derives id).
@@ -1142,7 +1142,7 @@ describe('store tamper: inbox snapshot restore re-validates everything', () => {
     }
   });
 
-  it('rejects a snapshot with more than MAX_RECORDS records', { timeout: 60_000 }, () => {
+  it('rejects a snapshot with more than MAX_RECORDS records', () => {
     const records = [];
     for (let i = 0; i < 100_001; i += 1) {
       const id = i.toString(16).padStart(64, '0');

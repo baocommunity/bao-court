@@ -48,7 +48,12 @@ class MockBunkerSigner implements CourtEventSigner {
   }
 
   private async delay(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    // A real bunker is async, but it is not TIMER-bound: yielding a microtask
+    // is enough to prove the transport tolerates an async signer without
+    // making the test's runtime depend on the host's timer phase.
+    // (`setTimeout(..., 1)` was the only timer in this file — see
+    // docs/TEST_DETERMINISM.md rule 2.)
+    await Promise.resolve();
   }
 
   async getPublicKey(): Promise<string> {

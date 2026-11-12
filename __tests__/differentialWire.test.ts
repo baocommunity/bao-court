@@ -44,6 +44,7 @@ import {
   serializeCourtEscalationRequest,
 } from '../courtEscalationRequest';
 import { CourtConfirmationTransitionError } from '../courtConfirmationMachine';
+import { childTimeoutFor, scaleTimeout } from './helpers/budget';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -121,8 +122,13 @@ describe('(r49) the reference implementation reproduces the shared known answer'
 describe('(r49) the differential harness agrees over the fast corpus', () => {
   it.skipIf(!HAS_PYTHON || !HAS_TSX)(
     'run.mjs --only: 2 000 cases, every boundary sweep, zero disagreements',
+    { timeout: scaleTimeout() },
     () => {
-      const run = spawnSync(TSX, [RUNNER, '--only'], { encoding: 'utf8', timeout: 300_000, cwd: REPO });
+      // The child bound is derived from this test's own timeout and stays just
+      // under it, so a slow harness reports its own reason instead of being
+      // aborted by vitest. (It used to be a literal 300 s inside a test with no
+      // declared timeout at all — i.e. a 300 s child inside the 5 s default.)
+      const run = spawnSync(TSX, [RUNNER, '--only'], { encoding: 'utf8', timeout: childTimeoutFor(scaleTimeout()), cwd: REPO });
       const output = `${run.stdout}\n${run.stderr}`;
       // A disagreement makes the harness exit non-zero AND print the repro.
       expect(output).toContain('disagreements=0');
@@ -135,7 +141,6 @@ describe('(r49) the differential harness agrees over the fast corpus', () => {
       expect(Number(accept)).toBeGreaterThan(500);
       expect(Number(refuse)).toBeGreaterThan(500);
     },
-    300_000,
   );
 
   it.skipIf(!HAS_PYTHON)('the committed 100k campaign artifact is consistent with its own register', () => {

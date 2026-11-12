@@ -60,6 +60,7 @@ import {
   type CourtConfirmationMachineState,
 } from '../courtConfirmationMachine';
 import { MAX_LADDER_ROUNDS } from '../confirmationMachineCore';
+import { budgetMs, testTimeoutFor } from './helpers/budget';
 import {
   deriveLadderFlipRound,
   deriveMaxLadderRounds,
@@ -67,6 +68,13 @@ import {
   ladderCapWithinBound,
   type LadderParameters,
 } from '../ladderEconomics';
+
+/**
+ * Watchdog for the exact-bound scan (r11-4). Derived and env-overridable —
+ * never a literal 5 s performance pin: `LADDER_SCAN_BUDGET_MS=60000 npm test`
+ * raises it on a loaded box without editing this file.
+ */
+const SCAN_BUDGET_MS = budgetMs('LADDER_SCAN_BUDGET_MS');
 
 const hexId = (ch: string): string => ch.repeat(64);
 const hid = (label: string): string =>
@@ -217,7 +225,6 @@ function echoOf(message: string, open: string, close: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 // T1 — r10-1's escape path (attacked as code)
 // ─────────────────────────────────────────────────────────────────────────────
-
 describe('T1 (r10-1 attacked) — the echo path must be TOTAL and its bound real', () => {
   it('r11-1: the budget is spent on the ESCAPED output, not on the input', () => {
     // MEASURED ON fe47ba4: `quoteWireValue` clipped the INPUT to 64 code points
@@ -777,7 +784,7 @@ describe('T4 (the exact bound) — the predicate, the clamp, and the parameter t
     expect(escalationOptionEv({ ...arithmetic, rounds: 2 })).toBeGreaterThan(-1e-18);
   });
 
-  it('r11-4: no parameter can overflow the scan or hang it', () => {
+  it('r11-4: no parameter can overflow the scan or hang it', { timeout: testTimeoutFor(SCAN_BUDGET_MS) }, () => {
     // `exactRational` builds `10n ** k` from the shortest decimal text; the scan
     // is bounded at MAX_LADDER_ROUNDS (the flip round adds one). Extreme
     // exponents must not turn into an unbounded loop or a bogus cap.
@@ -797,12 +804,17 @@ describe('T4 (the exact bound) — the predicate, the clamp, and the parameter t
       const flip = deriveLadderFlipRound(params);
       expect(Number.isNaN(flip), JSON.stringify(params)).toBe(false);
     }
-    // A hang detector, not a performance pin: 300 derivations of `10n ** 324n`
-    // arithmetic finish in milliseconds on any host this suite runs on.
-    for (let i = 0; i < 60; i += 1) {
+    // A hang detector, not a performance pin (docs/TEST_DETERMINISM.md rule 4):
+    // the budget is env-overridable and generous, and its liveness is proven by
+    // determinismGuard.test.ts. It stays an IN-BODY assertion on purpose —
+    // the scan is synchronous, and vitest's timeout cannot interrupt a
+    // synchronous loop, so an in-body check is the only ceiling that can fire.
+    const scans = 60;
+    for (let i = 0; i < scans; i += 1) {
       deriveMaxLadderRounds({ a_f: 0.5 + i / 1000, rho: 5e-324, beta: 1e308 });
     }
-    expect(Date.now() - started).toBeLessThan(5000);
+    expect(Date.now() - started, `ladder scan exceeded its ${SCAN_BUDGET_MS} ms watchdog`)
+      .toBeLessThan(SCAN_BUDGET_MS);
   });
 
   it('r11-4: flipRound is telemetry — it never understates the first unsafe round', () => {

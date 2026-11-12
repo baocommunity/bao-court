@@ -19,6 +19,15 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { budgetMs, childTimeoutFor, heavyTimeout } from './helpers/budget';
+
+/**
+ * Phase deadline for the ceremony harness — derived, never a literal (rule 1).
+ * A literal `--deadline-ms=4000` made a healthy multi-process DKG report
+ * `DKG_MISSING_PARTICIPANT` when the box was loaded. Override with
+ * `CEREMONY_PHASE_DEADLINE_MS`.
+ */
+const CEREMONY_PHASE_DEADLINE_MS = budgetMs('CEREMONY_PHASE_DEADLINE_MS', 20_000);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HARNESS = join(ROOT, 'scripts/court/multi-process-ceremony.mjs');
@@ -38,8 +47,8 @@ function runHarness(args: readonly string[]): Promise<{ report: HarnessReport; s
   return new Promise((resolve, reject) => {
     execFile(
       process.execPath,
-      ['--import', 'tsx', HARNESS, ...args, '--deadline-ms=4000'],
-      { cwd: ROOT, timeout: 120_000, maxBuffer: 8 * 1024 * 1024 },
+      ['--import', 'tsx', HARNESS, ...args, `--deadline-ms=${CEREMONY_PHASE_DEADLINE_MS}`],
+      { cwd: ROOT, timeout: childTimeoutFor(heavyTimeout()), maxBuffer: 8 * 1024 * 1024 },
       (error, stdout, stderr) => {
         // The harness writes report.json even when assertions fail; read it
         // first so a failure message carries the harness's own detail.
@@ -60,7 +69,7 @@ function runHarness(args: readonly string[]): Promise<{ report: HarnessReport; s
 }
 
 describe('multi-process ceremony (round 30)', () => {
-  it('completes a real 3-process DKG + signing round with one group key', { timeout: 120_000 }, async () => {
+  it('completes a real 3-process DKG + signing round with one group key', { timeout: heavyTimeout() }, async () => {
     const { report, stdout } = await runHarness(['--jurors=3', '--chaos=none']);
     expect(report.failures).toEqual([]);
     expect(report.ok).toBe(true);
@@ -72,10 +81,13 @@ describe('multi-process ceremony (round 30)', () => {
     expect(stdout).toContain('the aggregated signature verifies against the group key');
     // The honest-scope statement ships with the report, not in a doc nobody reads.
     expect(report.doesNotProve.length).toBeGreaterThan(2);
-    expect(report.latencyModel.phaseDeadlineMs).toBe(4000);
+    // Pin the DERIVATION, not the number: the harness must receive exactly the
+    // configured deadline, so raising it can never silently desynchronise the
+    // two sides (docs/TEST_DETERMINISM.md rule 5).
+    expect(report.latencyModel.phaseDeadlineMs).toBe(CEREMONY_PHASE_DEADLINE_MS);
   });
 
-  it('fails closed with SIGN_MISSING_REVEAL when a process dies mid-signing', { timeout: 120_000 }, async () => {
+  it('fails closed with SIGN_MISSING_REVEAL when a process dies mid-signing', { timeout: heavyTimeout() }, async () => {
     const { report, stdout } = await runHarness(['--jurors=3', '--chaos=kill', '--kill-phase=sign']);
     expect(report.failures).toEqual([]);
     expect(report.ok).toBe(true);
@@ -83,7 +95,7 @@ describe('multi-process ceremony (round 30)', () => {
     expect(stdout).toContain('no survivor produced a signature');
   });
 
-  it('fails closed with DKG_MISSING_PARTICIPANT when a process dies mid-DKG', { timeout: 120_000 }, async () => {
+  it('fails closed with DKG_MISSING_PARTICIPANT when a process dies mid-DKG', { timeout: heavyTimeout() }, async () => {
     const { report, stdout } = await runHarness(['--jurors=3', '--chaos=kill', '--kill-phase=dkg']);
     expect(report.failures).toEqual([]);
     expect(report.ok).toBe(true);
@@ -91,7 +103,7 @@ describe('multi-process ceremony (round 30)', () => {
     expect(stdout).toContain('no survivor accepted a group key');
   });
 
-  it('rejects a process replaying its previous round messages', { timeout: 120_000 }, async () => {
+  it('rejects a process replaying its previous round messages', { timeout: heavyTimeout() }, async () => {
     const { report, stdout } = await runHarness(['--jurors=3', '--chaos=replay']);
     expect(report.failures).toEqual([]);
     expect(report.ok).toBe(true);
