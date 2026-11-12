@@ -1,0 +1,21 @@
+[Unit]
+Description=BAO Court — distributed ceremony soak (ONE run: relay + 3 juror boxes + coordinator)
+Documentation=file:@REPO@/docs/MULTI_PROCESS_CEREMONY.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+# flock -n: a run that is still going (or stuck) must never overlap the next
+# timer tick. timeout is the outer hard bound; the runner has its own inner one.
+ExecStart=/usr/bin/flock -n %t/bao-court-ceremony-soak.lock /usr/bin/timeout --kill-after=60s 600s /usr/bin/node --import tsx @REPO@/scripts/court/distributed-ceremony-soak.mjs run
+TimeoutStartSec=900
+TimeoutStopSec=60
+# The run records its own outcome in records.jsonl (pass/fail/blocked/gap).
+# 1 = a failed ceremony, 2 = blocked preflight: both are DATA, not a reason to
+# leave the unit in a failed state and stop observing.
+SuccessExitStatus=0 1 2
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

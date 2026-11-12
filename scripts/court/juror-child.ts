@@ -546,6 +546,7 @@ async function runRound(
           ok: false,
           classification: 'DKG_DISQUALIFIED',
           blamedIdx: [...rejected][0],
+          bond: myBond,
           disclosure: { error: (error as Error).message.slice(0, 200), duplicatesSeen: duplicateDeliveries },
         };
       }
@@ -566,6 +567,7 @@ async function runRound(
         ok: false,
         classification: 'DKG_DISQUALIFIED',
         blamedIdx: Math.min(...rejected),
+        bond: myBond,
         disclosure: {
           rejectedIdx: [...rejected].sort((a, b) => a - b),
           sawCommitment: [...sawCommitment].sort((a, b) => a - b),
@@ -580,6 +582,7 @@ async function runRound(
       ok: false,
       classification: 'DKG_MISSING_PARTICIPANT',
       blamedIdx: missing.length > 0 ? Math.min(...missing) : undefined,
+      bond: myBond,
       disclosure: {
         missingIdx: missing.sort((a, b) => a - b),
         sawCommitment: [...sawCommitment].sort((a, b) => a - b),
