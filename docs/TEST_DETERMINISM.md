@@ -409,9 +409,8 @@ onevent!(event); expect(emissions).toHaveLength(1);
 ## 7. Verify
 
 ```bash
-npm test                                  # 1,873 tests, clean box
-node /tmp/opencode/r51/hog.mjs 3600 &     # 20 busy loops (cores + 4)
-npm test                                  # same verdict under load
+npm test                                  # clean box
+./scripts/determinism/loaded-run.sh       # 3 loaded runs, N = cores + 4 hogs
 BAO_TEST_WATCHDOG_TRACE=1 npm test        # per-worker factor + timeout
 BAO_TEST_WATCHDOG_MS=300000 npm test      # replace every derived ceiling
 npm run typecheck && npm run typecheck:tests
@@ -419,6 +418,27 @@ npm run typecheck && npm run typecheck:tests
 
 A flake under load is now a **bug in the suite**, not a season: open it against
 this document and add the missing rule to §4 rather than raising a number.
+
+### 7.1 The loaded-run harness is committed
+
+`scripts/determinism/loaded-run.sh` is the reproduction harness, committed so a
+soak run can cite a command instead of reproducing a script from `/tmp`:
+
+* it spawns the hogs itself — `N = cores + 4` busy loops, never ambient luck;
+* it **reaps them on exit, including SIGINT/SIGTERM** (nine wedged loops, one
+  3.6 h old, were found on this box during round 52 — that is how a box reaches
+  load 100);
+* it bounds each iteration with `timeout`, because a *synchronous* hang cannot be
+  preempted by any in-process watchdog (vitest's timeout only fires at an await
+  point);
+* it prints the exact `npx vitest run` command, so a log is self-describing;
+* it sets **no timeout knob**. The ceilings are load-normalised per worker, so a
+  loaded run must need no hand-raised budget. Needing
+  `BAO_TEST_WATCHDOG_MS=…` is a finding to record, not a knob to bake in.
+
+`scripts/determinism/summarise-campaign.mjs <log-dir> <n>` turns a campaign into
+the per-test flake table (failures / iterations plus distinct causes), so §2.5
+numbers are derived from logs rather than typed by hand.
 
 ---
 

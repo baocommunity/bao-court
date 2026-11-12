@@ -1102,7 +1102,7 @@ describe('differential parity: plurality tally + tie-break', () => {
 
   it('compareOutcomeUtf8 === Buffer.compare order over randomized unicode pairs', () => {
     const next = mulberry32(0x71e);
-    const pool = [...UNICODE_OUTCOMES, '\u{10FFF}', '\u{1F1E6}', 'ﬀ', '℀', ' '];
+    const pool = [...UNICODE_OUTCOMES, '\u{10FFF}', '\u{1F1E6}', 'ﬀ', '℀', '\u0000'];
     for (let trial = 0; trial < 500; trial += 1) {
       const left = pick(pool, next);
       const right = pick(pool, next);
