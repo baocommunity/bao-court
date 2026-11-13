@@ -124,7 +124,7 @@ if (flag('help')) {
   console.log(`distributed-ceremony-soak — verbs: ${VERBS.join(', ')}
   --state-dir=  --boxes=  --relay-box=  --port=  --interval-hours=6
   --deadline-ms=300000  --keep-runs=120  --scenario=  --with-silence  --json
-  --bond-plan=  --bond-cli=  --bond-check-cmd=  --ln-box=  --ln-cli=
+  --bond-plan=  --bond-cli=  --bond-check-cmd=  --soak-env-file=  --ln-box=  --ln-cli=
   env: BAO_COURT_BOND_CHECK_CMD (verbatim) | BAO_COURT_BOND_CLI (path to verify-bond.mts)`);
   process.exit(0);
 }
@@ -147,8 +147,49 @@ const bondPlan = JSON.parse(readFileSync(BOND_PLAN_PATH, 'utf8'));
  * flags that say WHAT "the right script" is live in the command line, which is
  * where the operator's policy belongs.
  */
-const bondCheckCmdOverride = arg('bond-check-cmd', '').trim() || (process.env.BAO_COURT_BOND_CHECK_CMD ?? '').trim();
-const bondCli = arg('bond-cli', '').trim() || (process.env.BAO_COURT_BOND_CLI ?? '').trim();
+/**
+ * The gate command, and WHERE it came from.
+ *
+ * The timer is the authority in practice: `ceremony-soakctl.sh install` writes
+ * the command into `~/.config/bao-court/ceremony-soak.env`, which the unit reads
+ * through `EnvironmentFile=-`. A shell that runs `status` has none of those
+ * variables, so without this fallback `status` would print "NOT CONFIGURED"
+ * while the timer was ARMED — a status line that lies about the program it is
+ * describing. Read the same file (when the vars are unset) and say which source
+ * won, so the answer is the same in a shell and in the unit.
+ */
+const SOAK_ENV_FILE = arg(
+  'soak-env-file',
+  join(process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'bao-court', 'ceremony-soak.env'),
+);
+/** systemd `EnvironmentFile` syntax: `KEY=value`, `#` comments, no expansion. */
+function readEnvFile(path) {
+  if (!existsSync(path)) return {};
+  const out = {};
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    out[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  return out;
+}
+const soakEnv = readEnvFile(SOAK_ENV_FILE);
+
+const bondCheckCmdOverride = arg('bond-check-cmd', '').trim()
+  || (process.env.BAO_COURT_BOND_CHECK_CMD ?? '').trim()
+  || (soakEnv.BAO_COURT_BOND_CHECK_CMD ?? '').trim();
+const bondCli = arg('bond-cli', '').trim()
+  || (process.env.BAO_COURT_BOND_CLI ?? '').trim()
+  || (soakEnv.BAO_COURT_BOND_CLI ?? '').trim();
+const bondGateSource = arg('bond-check-cmd', '').trim() !== '' || arg('bond-cli', '').trim() !== ''
+  ? 'argument'
+  : ((process.env.BAO_COURT_BOND_CHECK_CMD ?? '').trim() !== '' || (process.env.BAO_COURT_BOND_CLI ?? '').trim() !== ''
+    ? 'environment'
+    : ((soakEnv.BAO_COURT_BOND_CHECK_CMD ?? '').trim() !== '' || (soakEnv.BAO_COURT_BOND_CLI ?? '').trim() !== ''
+      ? `env-file ${SOAK_ENV_FILE}`
+      : 'none'));
 const composedBondCmd = bondCli === ''
   ? ''
   : [
@@ -849,6 +890,7 @@ function statusBlock(records, state) {
     },
     bond: bondStatusBlock(runs),
     bondGateConfigured: bondGateCmd !== '',
+    bondGateSource,
     classificationHistogram: histogram,
     lastRun: last ? { ts: last.ts, scenario: last.scenario, outcome: last.outcome } : null,
     lastFailure: lastFailure
@@ -876,7 +918,8 @@ function printStatus(block) {
   console.log(`  verified signatures (honest): ${block.signatureRate.honest.verified}/${block.signatureRate.honest.runs} = ${rate(block.signatureRate.honest.rate)}`);
   console.log(`  signatures from fault runs:   ${block.signatureRate.fault.signed}/${block.signatureRate.fault.runs} = ${rate(block.signatureRate.fault.rate)} (must be 0)`);
   const b = block.bond;
-  console.log(`  bond gate: ${block.bondGateConfigured ? 'ARMED' : 'NOT CONFIGURED (bonded-* scenarios will block)'}`);
+  console.log(`  bond gate: ${block.bondGateConfigured ? 'ARMED' : 'NOT CONFIGURED (bonded-* scenarios will block)'}`
+    + `${block.bondGateConfigured ? `  (from ${block.bondGateSource})` : ''}`);
   console.log(`    runs ${b.runs}  honest all-verified ${b.honest.allBondsVerified}/${b.honest.runs}  `
     + `negative with expected code ${b.negative.expectedCodePresent}/${b.negative.runs}  `
     + `gate-not-enforced ${b.gateNotEnforced}  assertion-failures ${b.assertionFailures}  heldHtlcs ${b.heldHtlcs ?? 'n/a'}`);
@@ -928,7 +971,7 @@ if (verb === 'preflight') {
   for (const p of pre) {
     console.log(`${p.ok ? 'ok  ' : 'DOWN'} ${p.box.padEnd(14)} ${p.hostname ?? '-'}  ${p.nodeVersion ?? ''}  ${p.ok ? `cores ${p.cores}` : p.reason}`);
   }
-  console.log(`bond gate: ${bondGateCmd !== '' ? bondGateCmd : 'NOT CONFIGURED'}`);
+  console.log(`bond gate: ${bondGateCmd !== '' ? `${bondGateCmd}  (from ${bondGateSource})` : 'NOT CONFIGURED'}`);
   process.exit(pre.every((p) => p.ok) ? 0 : 2);
 }
 
