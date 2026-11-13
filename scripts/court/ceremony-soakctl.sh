@@ -50,6 +50,21 @@ install_units() {
     sed "s|@REPO@|$REPO|g" "$REPO/scripts/court/systemd/${UNIT_NAME}.${unit}" \
       > "$UNIT_DIR/${UNIT_NAME}.${unit}"
   done
+  # Persist the bond gate's command if this shell has one: without it every
+  # `bonded-*` scenario records `blocked` (never a silent rail:none pass).
+  local env_file="${XDG_CONFIG_HOME:-$HOME/.config}/bao-court/ceremony-soak.env"
+  if [ -n "${BAO_COURT_BOND_CHECK_CMD:-}${BAO_COURT_BOND_CLI:-}" ]; then
+    mkdir -p "$(dirname "$env_file")"
+    ( umask 077; : > "$env_file" )
+    [ -n "${BAO_COURT_BOND_CHECK_CMD:-}" ] && printf 'BAO_COURT_BOND_CHECK_CMD=%s\n' "$BAO_COURT_BOND_CHECK_CMD" >> "$env_file"
+    [ -n "${BAO_COURT_BOND_CLI:-}" ] && printf 'BAO_COURT_BOND_CLI=%s\n' "$BAO_COURT_BOND_CLI" >> "$env_file"
+    chmod 600 "$env_file"
+    echo "bond gate written to $env_file"
+  elif [ -f "$env_file" ]; then
+    echo "bond gate: using the existing $env_file"
+  else
+    echo "bond gate: NOT configured — bonded-* scenarios will record blocked (set BAO_COURT_BOND_CLI and re-install)"
+  fi
   systemctl --user daemon-reload
   systemctl --user enable --now "${UNIT_NAME}.timer"
   echo "installed ${UNIT_NAME}.timer from $REPO"
