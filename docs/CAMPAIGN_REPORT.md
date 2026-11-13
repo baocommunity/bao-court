@@ -148,11 +148,14 @@ until the public testnet runs them. **The bond rung is now proven on both
 priority rails, on public chains**: court-locked 2-of-2 bonds on testnet4 and on
 Liquid testnet, each verified by two independent sources and each spend-validated
 by a signed, unbroadcast slash. What that does *not* prove is the **release**
-step (host-mediated, PO-15), the **Liquid juror binding** (the covenant binds the
-case while the on-chain 2-of-2 binds the juror — LJ-1, a parallel round), or any
-form of decentralisation: the court key, the wallet and every box belong to one
-operator, and the testnet4 relay node has no wallet, so that deposit came from a
-human. Nothing in this report claims a *settlement* rail as proven. The paper's
+step (host-mediated, PO-15), or any form of decentralisation: the court key, the
+wallet and every box belong to one operator, and the testnet4 relay node has no
+wallet, so that deposit came from a human. The **Liquid juror binding** that this
+report listed as a parallel round (LJ-1) closed on 2026-11-13: the Liquid bond
+leaf now commits the juror's key (`<juror> OP_DROP <group> OP_CHECKSIG`) while the
+court keeps its unilateral slash, so a bond cannot be re-presented for another
+seat — at the price that a juror cannot veto a slash and is not protected from one
+(PO-15). Nothing in this report claims a *settlement* rail as proven. The paper's
 full statement is §11.8.
 
 ---
@@ -201,7 +204,7 @@ emphasises.
 |---|---|---|
 | `concede` is host-API-enforced (not machine-witnessed) | Named residual, `SPEC §9.2` | the first deployment that needs witness-level concession |
 | Bond ownership is not preempted (r40-3) | The witness is index-bound, not pubkey-bound | v0.14 machine API widening `challengerKeys` |
-| **The Liquid covenant binds the case, not the juror (LJ-1)** | The on-chain 2-of-2 commits to the juror key; the Liquid bond lock commits to the case | the parallel round that adds the juror key to the Liquid bond lock |
+| **A Liquid bond commits the juror, not protects it (LJ-1, closed v0.16.2)** | Closed on 2026-11-13: the Liquid leaf commits the juror key (`<juror> OP_DROP <group> OP_CHECKSIG`), so the same outpoint cannot be presented for another seat — but the court keeps its unilateral slash, so the juror can neither veto a slash nor be protected from one (PO-15) | the release-binding work (PO-15) that would protect the juror; the on-chain 2-of-2 takes the opposite trade and needs cooperation |
 | **A bond proves collateral at verification time, not future honesty** | A seat price, not a behaviour guarantee | inherent; the verdict's safety rests on the DKG/reveal gates and the threshold |
 | **Settlement release is host-mediated (PO-15)** | v1 has the cohort authorise and the host release | the spend-session binding + the `CHECKSIGFROMSTACK` leaf |
 | **The testnet4 relay node has no wallet** | So the bond deposit came from a human with an external wallet; no faucet this project controls | a funded, wallet-bearing public-testnet node |

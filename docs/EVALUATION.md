@@ -436,19 +436,40 @@ Until v0.16.0 the ceremony roster carried a bond **reference** and verified
 nothing: `CourtBondRef {rail, network, proofRef}` was parsed, echoed, recorded
 with `bondVerified:false`, and the juror was seated anyway. A well-formed
 reference to a bond nobody paid was a free seat. Three changes closed it, and
-each is a row in the paper's evidence table:
+each is a row in the paper's evidence table — and v0.16.2 added a fourth, because
+the same gate exposed that the Liquid lock committed the case but not the juror:
 
 | Step | Mechanism | Evidence |
 |---|---|---|
 | The gate | `bondCheckGate.ts`: one host command (`BAO_COURT_BOND_CHECK_CMD`), fixed validated argv, exactly one accepted output shape, typed refusal for every other outcome; enforced **after** key publication and **before** `roster.json` | `__tests__/bondCheckGate.test.ts` (argv contract, strict parser, every roster decision); three boxes × three bonds `PROVEN`, one group key, one **verified** signature; a genuinely spent bond → `ROSTER_BELOW_THRESHOLD`, no key, no signature |
 | Stable identities | `--juror-keys=<dir>`: pre-provisioned 0600 keys, never generated when the flag is present, never printed; missing ⇒ `JUROR_KEY_MISSING` (seat lost, exit 3); odd-Y refused (`BOND_KEY_NOT_XONLY_LIFTABLE`) because an x-only bond script cannot be spent by an odd-Y key | `scripts/court/provision-jurors.mjs`; measured `IDENTITY BLOCKED juror 3 → ROSTER BELOW THRESHOLD → no key, no signature` |
 | The rails | public **testnet4**: 3 × 100,000 sat court-locked 2-of-2 bonds from a real 0.00563475 tBTC deposit (block 161026), `BOND_RAIL_PROVEN`, `scriptBinding:"configured"`, `bitcoind` + `mempool.space/testnet4` agreeing, slash spend signed with both keys and validated (`testmempoolaccept allowed, vsize 137`) **not broadcast**; public **Liquid testnet**: 3 × 100,000 sat court-locked, `blockstream` + `liquid.network` agreeing, one `BOND_ORACLE_DISAGREEMENT` refusal before they agreed | the run artifacts and the host verifier's own output; the fail-closed disagreement is part of the record |
+| The juror commitment (v0.16.2, LJ-1 closed) | Liquid leaf `<juror_xonly> OP_DROP <group_xonly> OP_CHECKSIG`: the juror key is committed, `OP_DROP` discards it before `OP_CHECKSIG`, so the court still slashes with the group signature alone; the verifier derives the per-seat script from `(group key, request.jurorPubkey)` and refuses `BOND_JUROR_MISMATCH` / `BOND_JUROR_UNBOUND` / `BOND_PROOF_UNPARSEABLE` / `BOND_UNVERIFIABLE`; proofs carry `jurorBinding` + `bondScriptHex` | public **Liquid testnet**, 100,000 sat, two full Esploras agreeing: 3/3 `PROVEN` under their own jurors (`63342daa…:0`, `be0daf85…:0`, `0bb85a03…:0`), the same outpoints under another juror → `BOND_JUROR_MISMATCH` ×3, legacy `c2f11565…:0` → `BOND_JUROR_UNBOUND`, court spend validated (output key from leaf, NUMS control block, BIP-340 under the group key, leaf `PUSH32 OP_DROP PUSH32 OP_CHECKSIG → TRUE`) **not broadcast**, wrong-seat variants refused by builder and validator; ceremony 3/3 seats `PROVEN` (1.9–2.1 s, one verified signature) and a box presenting another seat's bond → `ROSTER_BELOW_THRESHOLD`, no key, no signature |
 
 What this does **not** establish is in §6 item 11: a bond proves collateral at
 verification time (never future honesty); one operator holds the court key, the
-wallet and the boxes; the Liquid covenant binds the *case* while the on-chain
-2-of-2 binds the *juror* (LJ-1, a parallel round); and the testnet4 relay node
-has no wallet at all, so that deposit came from a human with an external wallet.
+wallet and the boxes; and the testnet4 relay node has no wallet at all, so that
+deposit came from a human with an external wallet. The Liquid half of that list
+**changed in v0.16.2**: the Liquid bond lock no longer commits only to the case.
+Its leaf is `<juror_xonly> OP_DROP <group_xonly> OP_CHECKSIG`, so the juror key is
+**committed, not required** — `OP_DROP` discards it before `OP_CHECKSIG` and the
+court still spends with the FROST group signature alone, keeping the slash
+unilateral. Three 100,000 sat bonds were funded to per-seat locks on public
+Liquid testnet and each `PROVEN` under its own juror with two full Esplora
+sources agreeing (`jurorBinding:"committed"`, `63342daa…:0`, `be0daf85…:0`,
+`0bb85a03…:0`); the same outpoints under another juror answered
+`BOND_JUROR_MISMATCH` three times, the legacy court-only coin `c2f11565…:0`
+answered `BOND_JUROR_UNBOUND`, and a court spend was constructed and validated
+(output key recomputed from the leaf, 33-byte NUMS control block, BIP-340
+signature under the group key, leaf executing `PUSH32 OP_DROP PUSH32 OP_CHECKSIG
+→ TRUE`) without being broadcast. The ceremony consequence is measured in both
+directions: all three seats `PROVEN` (1.9–2.1 s, DKG + signing, one verified
+signature) and a box presenting another seat's bond excluded →
+`ROSTER_BELOW_THRESHOLD`, no key, no signature. LJ-1 is therefore **closed**;
+what it leaves is the trade-off, not a gap — the juror cannot veto a slash and is
+not protected from one (PO-15), and the on-chain 2-of-2 takes the opposite trade
+(protects the juror, needs cooperation). Host transcript:
+`docs/operations/RAIL_BACKED_BONDS.md` §3.1.1–3.1.2 in `bao.markets` (#2669).
 
 ### 3.6 The continuous programs — ~100 hours of rails and ceremony
 
@@ -745,10 +766,13 @@ results:
    sign the wrong outcome. Three further limits belong beside it rather than in
    a footnote: **one operator** holds the court key, the funding wallet and all
    the boxes, so the verifier's two sources are one person's choice of sources;
-   **the Liquid covenant binds the case, not the juror**, so until the parallel
-   round lands (LJ-1) the same outpoint could in principle be presented for a
-   different seat, while the on-chain 2-of-2 binds the juror key and refuses
-   that; and **the testnet4 relay node carries no wallet at all**, so that
+   **the commitment protects the court, not the juror** — the Liquid leaf
+   (`<juror> OP_DROP <group> OP_CHECKSIG`) and the on-chain 2-of-2 both stop the
+   same outpoint being presented for a different seat, but the Liquid court
+   still slashes unilaterally, so a juror cannot veto a slash and is not
+   protected from a malicious court (PO-15), while the 2-of-2 takes the
+   opposite trade and needs the juror's cooperation to move the bond at all;
+   and **the testnet4 relay node carries no wallet at all**, so that
    deposit came from a human with an external wallet — the funding is real but
    it is not an independent counterparty choosing to transact with us.
 
@@ -769,7 +793,7 @@ results:
 | §4.2 soak (one day) | `scripts/soak/court-soak.mts` + README (host repo) | bao.markets #2293, #2295 |
 | §4.3 soak (three days, faults) | `scripts/soak/court-soak.mts --days 3 --faults`, `docs/benchmarks/soak-3day.json` + `SOAK_3DAY.md` (host repo) | bao.markets #2414 |
 | §3.4 adversarial suites | `__tests__/adversarial*.test.ts`, `reviewRound{3..12}.test.ts`, `perRoundBond`/`ladderEconomics`/`penaltyAging`, `bondCheckGate.test.ts`, `replayEquivocation.test.ts`, `overStrictness.test.ts` | #36, #37, #41, #51, #95, #100, #128, #131, #135, #142, #147, #148, #149 |
-| §3.5 rail evidence (bonds) | `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate", §"Stable identities and funded bonds"; `bondCheckGate.ts`; `scripts/court/provision-jurors.mjs`; host `bao.markets` `scripts/court/verify-bond.mts` | #147, #149, #150; bao.markets #2553, #2556, #2597, #2616 |
+| §3.5 rail evidence (bonds) | `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate", §"Stable identities and funded bonds"; `bondCheckGate.ts`; `scripts/court/provision-jurors.mjs`; host `bao.markets` `scripts/court/verify-bond.mts` + `scripts/court/liquid-bond-juror-binding.mts`, `docs/operations/RAIL_BACKED_BONDS.md` §3.1.1–3.1.2 | #147, #149, #150; bao.markets #2553, #2556, #2597, #2616, **#2669** |
 | §3.6 continuous programs | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program"; `scripts/court/distributed-ceremony-soak.mjs`, `ceremony-soakctl.sh`, `scripts/court/systemd/`; host rail-soak series | #144, #145, #146; bao.markets #2506, #2508, #2539 |
 | §3.7 determinism | `docs/TEST_DETERMINISM.md`, `__tests__/helpers/watchdog.ts`, `__tests__/determinism.test.ts`, `vitest.config.ts` | #140, #143 |
 | §5 threat model + coverage | `docs/THREAT_MODEL.md`, `docs/CROSS_CHECK.md`, `scripts/cross-check.mjs` | #62, #63, #64 |

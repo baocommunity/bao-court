@@ -15,7 +15,7 @@ Companions: `docs/FROST_COURT_ORACLE_PAPER.md` (the paper),
 | Rail | Network | Court-locked | Juror-bound | Evidence |
 |---|---|---|---|---|
 | **On-chain** | **testnet4** | **yes** — 2-of-2 court⊕juror P2WSH, 100,000 sat ×3 | **yes** — the script commits the juror key | deposit `b2b393ae…d935b5` (0.00563475 tBTC, block **161026**); bonds `d4967edf…:1`, `14f88077…:1`, `9d9269ef…:1`; verified by first-party `bitcoind-tn4-relay` + `mempool.space/testnet4`; slash spend signed with both keys, `testmempoolaccept {allowed:true, vsize:137}` `0afc8922…`, **not broadcast** |
-| **Liquid** | **testnet** | **yes** — covenant lock, 100,000 sat ×3 | case-bound (juror binding in flight, LJ-1) | bond address `tex1p54n3s42ng7je5kwplpfz05qt3z5xk4lwwxup8ue5k43l2t69qvhs25et48`; faucet txs `04009ccd…:0`, `d6b1ea05…:0`, `c2f11565…:0`; `BOND_RAIL_PROVEN` with **blockstream + liquid.network + our own node** agreeing |
+| **Liquid** | **testnet** | **yes** — covenant lock, 100,000 sat ×3 | **yes (leaf)** — the lock's leaf commits the juror key, `OP_DROP`ped so the court still slashes unilaterally | per-seat bond addresses derived from `(group key, jurorPubkey)`; outpoints `63342daa…:0`, `be0daf85…:0`, `0bb85a03…:0`, `BOND_RAIL_PROVEN` with `jurorBinding:"committed"` and **blockstream + liquid.network** agreeing; the same outpoints under another juror → `BOND_JUROR_MISMATCH` ×3, the legacy court-only coin `c2f11565…:0` (lock `tex1p54n…`) → `BOND_JUROR_UNBOUND`; court spend constructed and validated (output key from the leaf, NUMS control block, BIP-340 under the group key, leaf `PUSH32 OP_DROP PUSH32 OP_CHECKSIG → TRUE`) **not broadcast**; a ceremony seated all three bonds (1.9–2.1 s, one verified signature) and excluded a box presenting another seat's bond (`ROSTER_BELOW_THRESHOLD`) |
 | **Cashu** | private signet | n/a — escrow swap | custody record per juror | mint Nutshell 0.18.2 `BAO-Testnet-Mint`; swap → custody, NUT-07 `UNSPENT×5` vs juror `SPENT×3`; slash melted 100 sat (treasury +90); reconciliation `custody + treasury + returned + atRisk + fee == bonded` as a DB CHECK |
 | **Lightning** | private signet (CLN) | n/a — held HTLC | payment hash per bond | **settle** `c7930f3f…` → court 16,200→66,200 / payer 183,800→133,800; **cancel** `385fd673…` → both restored; live `BOND_EXPIRED`; ends `{held:0,pending:0}` |
 
@@ -23,7 +23,10 @@ A bond that cannot be **proven** is refused (`BOND_UNVERIFIABLE`), never passed:
 one source down, two sources disagreeing, a spent or replaced output, a wrong
 asset or script, a wrong network, a bond for another case, an odd-Y key
 (`BOND_KEY_NOT_XONLY_LIFTABLE` — such a bond is unspendable), or a bond for
-another seat (`BOND_SCRIPT_MISMATCH`).
+another seat — `BOND_SCRIPT_MISMATCH` on-chain (the 2-of-2 *is* the binding) and,
+on Liquid, `BOND_JUROR_MISMATCH` (another seat's or court's per-seat lock),
+`BOND_JUROR_UNBOUND` (the pre-2026-11-13 court-only lock, which commits no juror
+and must be re-locked) or `BOND_PROOF_UNPARSEABLE` (no juror key to bind against).
 
 ## 2. The ceremony
 
@@ -87,7 +90,8 @@ Host-side rail checks are described in `docs/operations/RAIL_BACKED_BONDS.md`
 
 | Open | Why | Trigger that forces it |
 |---|---|---|
-| **Liquid bond ↔ juror binding** (LJ-1) | the covenant binds the case, not the juror; the on-chain 2-of-2 does both | in flight this round |
+| **A Liquid bond commits the juror but the juror cannot veto — or be protected from — the court's slash** | the leaf is `<juror> OP_DROP <group> OP_CHECKSIG`: the court slashes unilaterally (LJ-1's closure, §8.5), so a hostile juror cannot block a slash, and symmetrically a malicious court is not prevented from slashing an honest one | PO-15 (settlement/release binding); the on-chain 2-of-2 takes the opposite trade — it protects the juror, and needs the juror's cooperation to move the bond at all |
+| **The public dispute (filer) bond is still shape-only** | the juror *seat* bond is juror-bound on both public rails; the bond a trader posts when filing a dispute still pays the legacy court-only lock and is verified by shape (`formatOnlyBondVerifier`) | binding the filer bond to the filer's pubkey — same mechanism, one more caller (host-side) |
 | Testnet4 court-lock was **human-funded** | the relay node has **no wallet**, so the 49-BTC coinbase is not ours | a funded testnet4 wallet in the deployment |
 | Private-signet rails are not public evidence | Lightning and Cashu are not enabled on public testnet | public testnet enabling them |
 | One operator holds court key, wallet and boxes | test infrastructure | a second, independent operator |
@@ -98,7 +102,7 @@ Host-side rail checks are described in `docs/operations/RAIL_BACKED_BONDS.md`
 
 ## 7. Where the artifacts live
 
-- **Protocol**: `baocommunity/bao-court` — tags `v0.11.0 … v0.16.0`, each with a GitHub Release.
+- **Protocol**: `baocommunity/bao-court` — tags `v0.11.0 … v0.16.2`, each with a GitHub Release.
 - **Host**: `baocommunity/bao.markets` — `packages/lib/frost-court` byte-exact mirror, plus the rail verifiers and the soak programs.
 - **Client**: `2140wtf/2140wtf` — `court-core` mirror, pinned to the tag.
-- **Paper**: three byte-identical copies (`docs/architecture/frost-plan/`, `public/`, and the protocol repo), sha256 `e53c2452…`.
+- **Paper**: three byte-identical copies (`docs/architecture/frost-plan/`, `public/`, and the protocol repo), sha256 `35185563…`.
