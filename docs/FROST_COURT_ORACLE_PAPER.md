@@ -52,9 +52,14 @@ simulation harness that runs the entire pipeline — selection, DKG, voting,
 threshold signing, attestation validation, slashing, and both settlement rails
 — in one process with no network. Rail evidence is ranked by the environment
 that produced it: a result from the **public** testnet4 or signet-public chain
-outranks one from the **private signet** that BAO's hosts run. The private
-signet is used only where the public chains do not carry the rail today
-(Lightning, Cashu), and every result from it is labelled *private signet* so
+outranks one from the **private signet** that BAO's hosts run. Both priority
+rails now carry evidence from that stronger tier: **court-locked, juror-bound
+2-of-2 bonds on public testnet4 and on public Liquid testnet**, each verified by
+two independent sources and each *spend*-validated by a signed slash that was
+deliberately not broadcast (§9, §11.8) — a bond rail that executes and is
+slashable, not a settlement rail that is proven. The private signet is used only
+where the public chains do not carry the rail today (Lightning, Cashu), and
+every result from it is labelled *private signet* so
 that a reviewer can weigh it (§11.8). The evaluation methodology is itself part
 of
 the design: line-checked proofs of six core properties, exhaustive
@@ -65,17 +70,21 @@ invariant-pinned only) with **witness-aware** probing — 15 instances,
 accepted — in-house differential
 parity over every critical pure function, a regenerable performance baseline,
 statistical corpora of 1,187,000 seeded cases / 3,745,566 assertions, a
-three-day fault-injected soak of the host pipeline at 30,000 settlements, and a
-ceremony run across real OS processes (honestly scoped to one host), plus a
+three-day fault-injected soak of the host pipeline at 30,000 settlements, two
+continuous programs that ran the rails and the ceremony unattended for ~100 hours,
+and a ceremony run across real OS processes — first on one host, then across
+three separate hosts (all owned by one operator) — plus a
 round-by-round cryptographic literature audit. The program also turns on
 itself: every round attacks the fixes the round before shipped, and that
-re-attack — not an outside reviewer — found six of its own shipped defects
-(a bond-free escalation, a durable inbox a 65-relay delivery could brick, a
-ladder bond that priced *membership* rather than *consumption*, a `finalize`
-that minted a canonical verdict from a vote ledger it never re-derived, and —
-in the transport that carries a challenge onto the ladder — an identifier
-encoding that gave two different requests one digest, plus a mapping that bound
-none of the three claims it forwarded). §11.6 states that methodology and §13
+re-attack — not an outside reviewer — found seven of its own shipped defects
+(a bond-free escalation; a durable inbox a 65-relay delivery could brick; a
+ladder bond that priced *membership* rather than *consumption*; a `finalize`
+that minted a canonical verdict from a vote ledger it never re-derived; an
+identifier encoding, in the transport that carries a challenge onto the ladder,
+that gave two different requests one digest, plus a mapping that bound none of
+the three claims it forwarded; and a ceremony harness that accused an honest
+juror of equivocation for a byte-identical redelivery because it compared
+identities by reference). §11.6 states that methodology and §13
 labels what it does and does not establish.
 
 **Keywords:** threshold signatures, FROST, distributed key generation,
@@ -162,10 +171,22 @@ Schnorr constructions.
    (r30-1: the ladder bond was a membership test, so escalation was a free
    option), its own **wire-canonicalisation** hole (r8-1: one `TextEncoder`
    preimage, two distinct request hashes for what the host dedupes and audits),
-   and its own **stale evidence** (SOAK-F8: the soak had been silently
-   red on `main` for two protocol rounds). §11.6 names the method and its
+   its own **stale evidence** (SOAK-F8: the soak had been silently
+   red on `main` for two protocol rounds), and its own **false accusation**
+   (r54-1: a byte-identical redelivery was reported as equivocation and an
+   honest juror blamed, because the collapse compared parsed payloads by
+   reference — §11.6). §11.6 names the method and its
    limits; §13 keeps it in the evidence taxonomy rather than treating it as a
    verdict.
+8. **Bond-gated empanelment** — a seat is a *proven key plus a proven bond*.
+   A host-supplied check command (`BAO_COURT_BOND_CHECK_CMD`) is invoked once
+   per juror after key publication and before the roster is written, with typed
+   refusals for every non-proof; a juror that fails loses its seat, and a roster
+   that falls below threshold fails closed with no key and no signature (§8.5).
+   Identities are provisioned and never regenerated, because a bond is funded to
+   a public key — including the refusal of odd-Y keys, whose bond could never be
+   spent (§9.2). The rail half is proven on **public** testnet4 and Liquid
+   testnet; the private signet is labelled where it is used.
 
 ### 1.5 Related work
 
@@ -1081,6 +1102,87 @@ at every cycle (+26.0 % at 6-of-6), so idleness is *cheaper*, not free —
 participation. None of these is a protocol-safety finding; all are the
 incentive layer doing its job under measurement rather than assertion.
 
+### 8.5 Bond-gated empanelment — a seat is a proven key plus a proven bond
+
+The escrow ledger of §8.2 starts at `pending` and requires a `proofOk`. That
+proof has two halves, and until v0.16.0 the shipped ceremony checked only the
+first: a *signature* that the depositor controls the named outpoint (§8.1).
+Control is not collateral. A well-formed reference to a bond nobody ever paid
+was a free seat, and the roster recorded `bondVerified:false` while seating the
+juror anyway.
+
+**The contract.** `bondCheckGate.ts` makes the second half explicit and keeps
+this package free of chain clients. The host supplies one command
+(`BAO_COURT_BOND_CHECK_CMD`); the harness invokes it once per juror with a
+fixed, validated argv (`--rail`, `--network`, `--proof`, `--bond-sats`,
+`--juror-pubkey`) and counts exactly one outcome as a proof: exit 0 with a
+single JSON object `{"ok":true,"proofRef":…,"sources":[…]}` whose `proofRef`
+equals the roster's and whose `sources` are non-empty. Every other outcome is a
+typed exclusion — a non-zero exit (the command's own code, e.g. `BOND_SPENT`), a
+contradiction (`ok:true` on a non-zero exit), a malformed or missing answer, a
+timeout, a proof for a *different* outpoint, a check that never ran, or
+`rail:"none"` under strict mode. "I could not check" is never a pass.
+
+**The enforcement point is the property.** The gate runs *after* every box has
+published its key and *before* `roster.json` is written, so an excluded juror
+never joins a DKG. Survivors are re-seated at sequential indices with the key
+each generated on its own box; if they cannot reach the threshold the ceremony
+fails closed with `ROSTER_BELOW_THRESHOLD` — no roster, no key, no signature.
+
+**Stable identities are the precondition.** A bond is a UTXO locked to a
+2-of-2 court⊕juror P2WSH script, and the script commits to the juror's public
+key. A ceremony that generates a fresh key per run can therefore never satisfy
+the gate: the funded bond pays a script for a key nobody holds (unspendable —
+and un-slashable), and the check refuses the new key with
+`BOND_SCRIPT_MISMATCH`. Provisioned keys (`--juror-keys=<dir>`:
+`<dir>/juror-<idx>.sec`, 0600, outside the repo, on the juror's own box) are
+created **before** the money moves and are never regenerated. A missing file is
+a typed `IDENTITY_BLOCKED {"reason":"JUROR_KEY_MISSING"}` and a lost seat, never
+a silent replacement — because replacing the key would silently invalidate the
+bond and make "who was bonded for this verdict" unanswerable.
+
+**The odd-Y trap, as a rule.** BIP-340 commits 32 bytes per key and lifts
+x-only keys by the even-Y convention, so a bond script built from $x$ commits to
+the even-Y point. A key whose SEC form is `03‖x` is a *different* point: a bond
+funded to the lift of that key cannot be spent by it, and the failure appears at
+spend time as `NULLFAIL`, not at funding time. Both ends therefore refuse it
+(`BOND_KEY_NOT_XONLY_LIFTABLE`), at creation and at verification — a bond that
+cannot be spent cannot be slashed either.
+
+**What the gate does not do.** It does not slash: excluding a juror is a seat
+decision, and taking the bond stays the rail's own spender path. It does not
+prove future honesty — it prices a seat, and the safety of the verdict still
+rests on the DKG and reveal gates and on the threshold. It runs on the
+coordinator, so a coordinator that lies about a verdict is not detected by the
+ceremony (every command and verdict is recorded, and the host's admission path
+re-verifies independently). And the binding is only as strong as the script it
+was given: a check that binds the outpoint's *own* script proves existence,
+unspent-ness, asset, value and depth but **not** that the coin is court-locked
+or slashable by the covenant spender, which is why the artifact records
+`scriptBinding` (`chain` versus `configured`) and why production must configure
+the court script and refuse everything else.
+
+**The evidence, and its two rails.** On **public testnet4**, three 2-of-2
+court⊕juror bonds of 100,000 sat each were funded by a real 0.00563475 tBTC
+deposit (block 161026) and verified `BOND_RAIL_PROVEN` with
+`scriptBinding:"configured"`, first-party `bitcoind` and `mempool.space/testnet4`
+agreeing; a slash spend signed with **both** keys was validated
+(`testmempoolaccept allowed, vsize 137`) and deliberately **not broadcast**, so
+the bond stays live as evidence. On **public Liquid testnet**, a faucet-funded
+bond at `tex1p54n3s42ng7je5kwplpfz05qt3z5xk4lwwxup8ue5k43l2t69qvhs25et48`
+(3 × 100,000 sat) verified court-locked with `blockstream` and `liquid.network`
+agreeing — after one poll where the two sources disagreed and the verifier
+refused (`BOND_ORACLE_DISAGREEMENT`), which is the fail-closed behaviour the
+design asks for. The ceremony itself ran across three boxes with three bonds and
+produced **one** group key and **one** verified FROST signature; a genuinely
+*spent* bond lost its seat and the run ended `ROSTER_BELOW_THRESHOLD` with no key
+and no signature. Two honest contrasts belong here rather than in a footnote:
+the on-chain 2-of-2 binds the **juror key**, so a bond cannot be re-presented for
+another seat (`BOND_SCRIPT_MISMATCH`), while the **Liquid covenant binds the
+case**, not the juror — a gap being closed by a parallel round (residual LJ-1,
+App. A.3); and the testnet4 relay node carries no wallet, so that funding came
+from a human with an external wallet, not from a faucet this project controls.
+
 ---
 
 ## 9. Settlement rails
@@ -1095,16 +1197,21 @@ implement the `LnRail` / `LiquidRail` contracts privately.
 
 **The rail plan, in order, and its status.** Liquid on **testnet** is the
 primary bond and ceremony rail and is being proven first: the escrow and
-covenant path ships here and is test-covered, while the *Liquid bond
-verification* that would let a host arm `enforce` is in flight — the shipped
-`BondVerifier` is format-only, and the campaign report (App. A, S-25) §6
-records that residual with its trigger. On-chain **testnet4 / signet-public**
-is next.
+covenant path ships here and is test-covered, and the *Liquid bond
+verification* that lets a host arm `enforce` is now live host-side — a real
+faucet-funded bond on public Liquid testnet verifies court-locked against two
+independent sources (§8.5), while the shipped in-package `BondVerifier` remains
+format-only by design (the chain read is the host's). On-chain **testnet4 /
+signet-public** is next, and now also carries evidence: three court-locked
+2-of-2 bonds on public testnet4 with a validated, unbroadcast slash spend
+(§8.5). What is proven on both rails is the **bond** — collateral that exists,
+is court-locked, and can be spent by the slash path. What is *not* proven is
+settlement release, which remains host-mediated in v1 (§3.2, PO-15).
 **Lightning** and **Cashu** — the latter host-implemented and not specified
 here — run only on the *private signet* until the public testnet carries them.
-None of the three is claimed as proven in this text: §9.1–9.2 specify the
-constructions, and §11.8 states which environment would have to produce the
-evidence before a rail claim can be weighed.
+None of the three is claimed as a proven *settlement* rail in this text:
+§9.1–9.2 specify the constructions, and §11.8 states which environment would
+have to produce the evidence before a rail claim can be weighed.
 
 ### 9.1 Panel A — Lightning hold invoices
 
@@ -1159,6 +1266,11 @@ release step:
   attestation check (§3.2, settlement-binding note). `buildCourtJudgeLeaf`
   serializes this leaf and refuses a shared winner/judge key;
   `buildTaprootLeaves` remains the byte-compatible single-oracle builder.
+- **Bond scripts** use the same P2WSH shape in its 2-of-2 form —
+  `OP_2 <court> <juror> OP_2 OP_CHECKMULTISIG` — so the court can co-sign a
+  slash while the juror holds the only other key, and no third party can move
+  the coin. The x-only lift is BIP-340's even-Y convention, which is exactly why
+  an odd-Y juror key's bond is unspendable and is refused at both ends (§8.5).
 - BIP-173/BIP-350 address derivation (bech32 v0 / bech32m v1; the witness
   version is a 5-bit word prepended to program words — byte-concatenation
   would silently corrupt it, covered by tests), BIP-341 tweaked programs with
@@ -1387,6 +1499,36 @@ protocol: a codec that validates shape and forwards claims is a canonicaliser
 with no opinion about identity, and identity is exactly what a pubkey and a case
 id are.*
 
+**R. A bond that is not collateral, or collateral for the wrong seat.** Three
+failure modes, all closed at the gate rather than at the chain. (i) *A reference
+without a bond*: before v0.16.0 the roster carried a well-formed bond reference
+and verified nothing, so an unbonded juror took a seat (§8.5). (ii) *A bond for
+another seat*: the on-chain 2-of-2 commits to the juror's key, so re-presenting
+the same outpoint under a different key is refused `BOND_SCRIPT_MISMATCH`; on
+Liquid the covenant binds the **case** and not the juror, so that half of the
+guarantee is a parallel round away (residual LJ-1, App. A.3). (iii) *Funding an
+unspendable bond*: an odd-Y key's bond can never be spent, so it can never be
+slashed either — refused at creation and at verification
+(`BOND_KEY_NOT_XONLY_LIFTABLE`, §8.5). The residuals are stated with the
+mechanism: the check runs on the coordinator, and a bond proves collateral at
+verification time, not future honesty.
+
+**S. Replay read as equivocation — a false accusation.** A blame protocol has
+two failure directions, and only one of them is usually treated as a bug: real
+equivocation must be caught, *and* an honest signer must not be accused. In
+v0.15.x a byte-identical redelivery was reported as equivocation
+(`equivocatingJurors:[2]`, `duplicatesIgnored:0`) because the collapse compared
+parsed payloads **by reference** — false for two parses of one signed event — so
+the "identical duplicate" branch could never fire and every re-delivery fell
+through to blame. A false accusation in a blame protocol is a correctness bug,
+not a cosmetic one: it disqualifies an honest juror, and in a bonded deployment
+it is the input to a slash. Identity is now the **signed event id** (payload
+hash as fallback, never arrival position), collapsed per
+`(phase, round, jurorIdx)` before any blame reasoning, with unparseable records
+counted rather than blamed; the collapse lives in `courtCeremonyCore.ts` so the
+harness cannot re-implement it. Both directions are pinned by the captured
+failing trace and a constructed genuine equivocation (§11.6, App. A.3 r54-1).
+
 ### 10.3 Fail-closed invariants (implementation-level)
 
 - **Unanimous-roster DKG** — any disqualification aborts; subset keys are
@@ -1435,9 +1577,9 @@ public testnet — is §11.8's business; read it before weighing any rail claim.
 ### 11.1 Suite, simulation, and review record
 
 - **Suite:** the full test suite is green and the typecheck is clean (source,
-  scripts, and tests are all typechecked) — **1,804 passing, 1
-  environment-gated live test skipped, over 81 files**, re-measured on this head
-  (App. A.4; per-round record in App. A.1, S-12 §1). Coverage includes:
+  scripts, and tests are all typechecked) — **2,029 passing, 1
+  environment-gated live test skipped, over 95 files**, re-measured on this head
+  at v0.16.0 (App. A.4; per-round record in App. A.1, S-12 §1). Coverage includes:
   BIP-350 official address vectors, FROST round-trips and
   partial-signature rejection, DKG complaint binding (forged/unattributable
   complaints rejected, genuine grievances disqualify, false complaints
@@ -1451,7 +1593,12 @@ public testnet — is §11.8's business; read it before weighing any rail claim.
   strict refusal matrix, the required host binding), the finality re-derivation
   attacked along all four paths to `final`, the NIP-59 seal-layer and
   MLS-transport games, inbox/outbox
-  provenance bounds under a 10k-event flood, and the
+  provenance bounds under a 10k-event flood, the **bond gate's argv contract and
+  every roster decision** (proven, refused, missing verdict, proof mismatch,
+  `rail:"none"`, below-threshold, impossible input), the **replay-versus-
+  equivocation** pair in both directions, the **over-strictness matrix** that
+  keeps a lane projection legal, the static **determinism guard** that polices
+  every timeout in the suite, and the
   adversarial machine/relay/validator suites (§10.2). What the suite does and
   does not establish is §13's business, not this list's.
 - **Whole-court simulation:** deterministic, hermetic execution of the
@@ -1763,7 +1910,10 @@ delivery made unrestorable, i.e. every message lost on the next restart); an
 exists*, not that *this rung was paid for*, so one bond bought the whole ladder);
 and a **value-locking entry that reads a ledger no barrier covers** (r41-1: a
 verdict re-derived from votes the machine never validated, because the barrier
-for that ledger ran at a transition a restore skips).
+for that ledger ran at a transition a restore skips), and a **false accusation
+inside a blame protocol** (r54-1: an honest juror blamed for a byte-identical
+redelivery, because identity was compared by reference — the failure direction a
+blame protocol is least likely to be tested for).
 
 **The canonicalisation class, stated as a rule.** Three of this program's
 findings are now the same defect in three different fields: a lone-surrogate
@@ -1799,6 +1949,7 @@ being made here.
 | **r8-1** — one `TextEncoder` preimage, two different `caseId`s (`EXPLOITABLE`) | the wire codec hashed `caseId` through `TextEncoder`, which maps an unpaired UTF-16 surrogate to U+FFFD; two ids that are different strings, different wire documents and different *cases* produced one request hash — the r7 H-6 collision one field over, on the value the host dedupes and the auditor reads | `caseId` normalised once: canonical UTF-8 (no unpaired surrogate), `U+0000`-free, ≤ 256 bytes, so the encoding is injective over the accepted domain; pinned by the collision probe and a 2,000-id sweep (S-24) |
 | **r8-2** — the transport bound none of its three claims (`EXPLOITABLE`) | the mapper filled `challengerIdx` from the bond owner and then *forwarded* the wire's `challengerPubkey` without comparing them, deriving `roundIndex` from the case (so the wire's `round` was inert) and never comparing `caseId` with the case. Forwarding a claim is not binding it | `escalationRequestToMachineEvent` requires the host's `{caseId, authenticatedPubkey}` binding — the case it routed on and the key NIP-98 proved — and refuses a mismatch or `round ≠ ladderRound`; ambiguous bond ledgers refused rather than resolved (S-24) |
 | **r29-10** — a vacuous test ceiling | the budget helper was unpinned, so a mutant returning `Infinity` passed every budgeted assertion | the helper's default, junk fallback, override and ordering are asserted (3 tests) |
+| **r54-1** — a byte-identical replay blamed as equivocation | the collapse compared parsed payloads by **reference** (`existing.parsed.pok === parsed.pok`), which is false for two parses of one signed event, so the "identical duplicate" branch could never fire and every re-delivery fell through to blame — and the same block indexed a *filtered* parse list against an *unfiltered* record list, so blame could land on the wrong juror. The harness owned the comparison, so no protocol test could see it | `signedRecordIdentity` + `collapseSignedRecords` in `courtCeremonyCore.ts`: identity is the signed event id (payload hash as fallback, never arrival position), keyed by `(phase, round, jurorIdx)`, run before any blame reasoning; unparseable records counted, never blamed; both directions pinned on the captured failing trace (§10.2 S) |
 | **SOAK-F8** — the soak was red on `main` | nothing re-ran the soak on protocol changes; vendored v0.12.0 required an authority witness while the reference handler played an unwitnessed `escalate` | soak drives the real §9.2 path; unmodified `main` re-measured at 11/17 assertions, 289 stuck cases, 48,089 retries |
 
 **What it is not.** It is still self-review: the same authors choose the targets,
@@ -1895,12 +2046,66 @@ shrunk to a threshold subset); `SIGKILL` mid-signing still completes the DKG and
 then fails closed with `SIGN_MISSING_REVEAL` and no signature; a cross-round wire
 replay is detected as equivocation, the replayer is disqualified, and no
 signature is produced. **Scope, stated because it is the standing objection
-this harness answers:** it is still *localhost* — one kernel, one clock, no
-packet loss, partitions, clock skew or congestion; the relay is honest and
-always available; custody (HSMs, disk encryption, backup/restore) is not
-simulated; and Byzantine liveness is unchanged (one dead juror stalls the
-attempt). The *coordination* structure is real; the *distribution* gap remains
-PO-14 (App. A, S-19).
+this harness answers:** the harness itself is still *localhost* — one kernel,
+one clock, no packet loss, partitions, clock skew or congestion; the relay is
+honest and always available; custody (HSMs, disk encryption, backup/restore) is
+not simulated; and Byzantine liveness is unchanged (one dead juror stalls the
+attempt). The *coordination* structure is real, and the same ceremony was then
+run **across three separate hosts** — three kernels, three clocks, three network
+paths, one juror per box, a relay on a fourth and a coordinator on a fifth, with
+a real `SIGKILL` delivered over ssh mid-signing — which answers the "one
+machine" objection while leaving the *distribution* gap for **independent
+operators** open: every box, key and bond in that run belongs to one person
+(PO-14, App. A, S-19, S-26).
+
+**The continuous programs: ~100 hours of rails and ceremony.** A single run is
+a point; the property that matters is that the thing keeps working. Two
+unattended programs produce that evidence, both writing append-only JSONL and
+both accounting for downtime rather than hiding it. The **rail soak** runs every
+five minutes in a light mode, hourly in a full adversarial mode and every six
+hours in a deep mode, exercising the bond and settlement verification paths
+against multiple independent sources with per-source health and a quorum rule
+(an absent configured source can never satisfy quorum alone); it records a
+`gap` when the kernel boot id changes or the elapsed time exceeds the cadence,
+so a reboot is a hole in the series and never a failure. The **ceremony soak**
+runs the three-box ceremony every six hours, rotating `happy-k2`, `happy-kn`,
+`kill`, `replay` and `reorder` (with `silence` opt-in), and its status block
+reports the verified-signature rate for honest scenarios — which must be 100 % —
+and the signed rate for fault scenarios, which must be 0 %. The discipline that
+makes the series usable is a **classification rule**: every red run is either a
+*rail bug* or a *harness bug*, decided by evidence, and the two are counted
+separately. At the time of writing the running tally is **one genuine rail bug**
+(the verifier checked value readability *before* spend state, so a confidential
+Liquid output — which has no plaintext value — reported `VALUE_UNVERIFIABLE`
+where the correct answer was `SPENT`; fixed by checking spend state first, while
+an *unspent* confidential output still refuses) and **eight harness bugs**, each
+regression-locked (a cached depth snapshot, a source-layer refusal counted as a
+failure, a tip-skew comparison, a status block that reported arithmetic instead
+of the armed timer, and four of the same family). The rail soak was at 22.7 of
+100 hours when this text was assembled (371 cycles, ETA recorded in the series),
+so the number is a *running* tally rather than a completed programme — and the
+ceremony half is running on the same discipline: two back-to-back unattended
+runs at the time of writing, one `pass` with a verified signature and one `kill`
+with none.
+
+**Determinism of the harness itself.** A verification programme that reports
+flakes as findings has to be deterministic, and this one was not: the suite
+shipped no `vitest.config.ts`, so 1,383 tests inherited vitest's absolute 5 s
+default (49 more declared their own literals — 1,432 latency sites in total),
+three assertions compared elapsed time, and eight sites passed fixed subprocess
+deadlines. The evidence that this was a *measurement* defect and not a
+correctness one is that the failing set differed in every loaded run: 7 red,
+6 red, then green over 1,873 tests, sharing only two test ids. The fix is by
+construction rather than by budget — no test asserts a duration, the harness
+ceiling is derived from a load measurement taken on the box that runs the tests,
+and a static guard in `__tests__/determinism.test.ts` re-checks the rules on
+every run — with the result that the ten flaking targets went from up to 4/20
+to **0/20** (18 failing test-runs of 1,340 before, 0 of 1,280 after), and the
+one genuinely clock-dependent mechanism that remained (a juror child's absolute
+phase deadline) was fixed at the source: the deadline now bounds **silence**,
+not elapsed time, so a loaded box is no longer indistinguishable from an absent
+juror — the honest phase that used to abort as `DKG_MISSING_PARTICIPANT` while
+the juror was alive and working (App. A, S-27).
 
 ### 11.8 Which environment establishes what — the evidence hierarchy
 
@@ -1917,23 +2122,63 @@ paper says *private signet*; the two names are one environment, not two.
 
 **The hierarchy.** Rail evidence is ranked by who else could have produced it.
 
-1. **Public testnet4 / public signet (`signet-public`) — strongest.** A public
-   chain: external miners, an independent validator set, no BAO control of
-   block production, and a fee market and mempool we do not own. Evidence from
-   here is the evidence a reviewer should weigh first, and it is the only
-   evidence that speaks to liveness under parties who are not us. *No rail
-   result in this paper comes from either chain yet* — the rail plan in §9 says
-   which comes first and what it would establish.
+1. **Public testnet4 / public Liquid testnet / public signet (`signet-public`) —
+   strongest.** A public chain: external miners, an independent validator set, no
+   BAO control of block production, and a fee market and mempool we do not own.
+   Evidence from here is the evidence a reviewer should weigh first, and it is
+   the only evidence that speaks to liveness under parties who are not us.
+   **Both priority rails now have evidence at this tier.** On public **testnet4**,
+   three court-locked 2-of-2 court⊕juror bonds of 100,000 sat each were funded by
+   a real 0.00563475 tBTC deposit (block 161026), verified `BOND_RAIL_PROVEN`
+   with `scriptBinding:"configured"` — court-locked, not merely owned — by
+   **two independent sources**, the project's own `bitcoind` and the third-party
+   `mempool.space/testnet4`, agreeing on script, value, spent-ness and height;
+   and a slash spend signed with both keys passed `testmempoolaccept`
+   (`allowed`, vsize 137) and was deliberately not broadcast. On public **Liquid
+   testnet**, a faucet-funded bond
+   (`tex1p54n3s42ng7je5kwplpfz05qt3z5xk4lwwxup8ue5k43l2t69qvhs25et48`,
+   3 × 100,000 sat) verified court-locked with `blockstream` and
+   `liquid.network` agreeing — and refused once, when the two sources disagreed,
+   which is the fail-closed behaviour the design asks for. The ceremony that
+   spends a seat on those proofs ran across three separate boxes and produced one
+   group key and one verified signature; a genuinely spent bond lost its seat
+   with no key and no signature (§8.5, App. A, S-26).
 2. **Private signet — used only where the public testnet does not carry the
-   rail** (today: **Lightning** hold invoices and **Cashu** ecash). Every
-   result from it is labelled *private signet*, and a reviewer should read that
-   label as "executes and settles under real consensus rules, with no external
-   counterparty".
+   rail** (today: **Lightning** hold invoices and **Cashu** ecash). Every result
+   from it is labelled *private signet*, and a reviewer should read that label as
+   "executes and settles under real consensus rules, with no external
+   counterparty". The bond results this programme first obtained on the private
+   signet (three funded 2-of-2 bonds, one group key, one verified signature, a
+   spent bond losing its seat) are labelled that way and are now **superseded**
+   as evidence by the public-testnet runs above — they remain in the record
+   because they are what made the public runs cheap to attempt.
 3. **No chain at all.** Everything in §11.1–§11.7 that involves no network —
    the suite, the model checker, the differential, the corpora, the
    performance baseline, the soak, the multi-process ceremony — is property
    evidence about *this package's* code, labelled by what it is rather than by
    where it ran, and it is not upgraded or downgraded by the list above.
+
+**What the public-testnet bond evidence buys, and what it does not.** It buys
+three things the private signet cannot: **an independent verifier** (one of the
+two agreeing sources is a third party, so the result is not a self-report);
+**a mempool and fee market we do not operate** (the funding transaction, the
+bond outputs and the validated slash spend are visible to, and reproducible by,
+anyone); and **block production we do not control**, so depth and reorg
+assumptions are tested against someone else's miner. It does **not** buy the four
+things that would make a rail *claim*: (i) **settlement release** — what is proven
+is the bond, not the spend that pays a winner, which stays host-mediated (PO-15);
+(ii) **independent funding** — the testnet4 relay node carries no wallet at all,
+so that deposit came from a human with an external wallet, and the Liquid bond
+came from a public faucet: neither is a counterparty who chose to transact with
+us; (iii) **juror binding on Liquid** — the on-chain 2-of-2 commits to the juror
+key, while the Liquid covenant commits to the *case*, so the same outpoint could
+in principle be presented for a different seat until the parallel round lands
+(LJ-1, App. A.3); and (iv) **an adversary who is not us** — every box, key and
+bond in the ceremony belongs to one operator, so the ceremony evidence remains a
+coordination demonstration (PO-14). A public-testnet bond result therefore
+establishes that a court-locked bond *exists, is verifiable by a stranger, and is
+slashable*; it does not establish that the surrounding settlement system is
+decentralised or adversarially tested.
 
 **What the private signet buys, and what it does not.** It buys full control of
 block production and of the funded wallets; **real Bitcoin consensus rules** —
@@ -1962,7 +2207,9 @@ and verification (stake-weighted and zero-stake reputation modes); Pedersen
 DKG with possession-bound complaints; vote, signing, DKG, and
 universal-confirmation state machines with the multi-round ladder; monotonic
 clock ledgers; attestation formats (v1 frozen, v2 finality binding) and
-validation with the fail-closed dispatcher; bond ownership proofs; escrow
+validation with the fail-closed dispatcher; bond ownership proofs and the
+**bond gate** (host-supplied verification command, typed refusals, roster
+enforcement before the DKG); escrow
 ledger and slashing plan; LN and Liquid settlement-rail math; kind-39018
 batch attestations and epoch-cohort records; appeal
 coordinator/watcher/timing with host-injected transport; NIP-44/NIP-59
@@ -1973,16 +2220,21 @@ Remains **host-side or pre-production** (engineering, not design):
 1. Rail *execution* — real LN/Liquid node adapters that lock, settle,
    cancel, slash, and broadcast (private per the secrecy boundary). The rail
    order and the environment that can prove each rung are §9's; the ranking of
-   those environments' evidence is §11.8's, and no rung is claimed as proven
-   until its evidence comes from a public chain.
+   those environments' evidence is §11.8's. The **bond** rung is now proven on
+   public testnet4 and Liquid testnet (§8.5); the **release** rung is not, and no
+   rung is claimed as proven until its evidence comes from a public chain *and*
+   covers the spend that pays a winner.
 2. Cross-client ceremonies — DKG/signing across independent juror devices
    over encrypted channels (the package ships the machinery; production
-   consumers must run it distributed). The *coordination* half is now exercised
+   consumers must run it distributed). The *coordination* half is exercised
    across N = 3…7 real OS processes with independent identities, crash and
    replay fault injection, third-party message ordering and independent
-   verification (§11.7, App. A, S-19) — on one host. Network asynchrony, real
-   relay failure modes, key custody and machine-independent timing remain
-   PO-14, and the harness note says so in the same words.
+   verification (§11.7, App. A, S-19) — first on one host, then across three
+   separate hosts and a separate relay (App. A, S-26). What remains is the part
+   the boxes cannot supply: **independent operators**, network asynchrony, real
+   relay failure modes, key custody (every key in the run is a 0600 file on one
+   person's machine) and machine-independent timing — PO-14, stated in the same
+   words in the harness note.
 3. Contract-enforced phase deadlines on-chain (currently coordinator-level).
 4. ChillDKG suite upgrade (planned; `pedpop-v1-experimental` is the active
    suite and must never be *labelled* ChillDKG; ChillDKG shares must never
@@ -2061,12 +2313,13 @@ distinct question with a distinct answer, so the taxonomy has a fifth axis: the
 this paper actually relies on is that each round re-attacks the previous round's
 fixes with the reducer, the route or the env in hand, requires a failing-before
 test to call something `EXPLOITABLE`, and re-runs the whole battery on the new
-head. Six of this paper's own defects were found that way and not by a
+head. Seven of this paper's own defects were found that way and not by a
 reviewer: a bond-free escalation (r29-1), an inbox a 65-relay delivery could
 brick (T-1), a ladder bond that priced membership rather than consumption
 (r30-1), a verdict minted from an unvalidated vote ledger (r41-1), a wire
-identifier that gave two cases one digest (r8-1), and a transport that bound
-none of the claims it forwarded (r8-2) — plus a soak that was red on `main`
+identifier that gave two cases one digest (r8-1), a transport that bound
+none of the claims it forwarded (r8-2), and a ceremony harness that accused an
+honest juror of equivocation (r54-1) — plus a soak that was red on `main`
 without anyone noticing (SOAK-F8).
 The axis is listed here because it *earns* the labels above over time; it is
 also the weakest defence in the table by authorship, since the attacker and the
@@ -2080,16 +2333,18 @@ verified*.
 |---|---|---|---|---|
 | **Cryptographic security** — attestation unforgeability | No attestation validates under the pinned group key unless $\ge M$ distinct certified shares signed that exact message triple (session, outcome, round, signer set). | Schnorr EUF-CMA; FROST binding-factor soundness (KG20/RFC 9591, adaptive form under LDVR [19]); honest-key generation; the pinned library implements those semantics (probe- and differential-pinned, not verified from source — GAP-5a). | Theorem T5 (App. A.2), proved; the verification direction is conditional on the crypto premises; the pipeline direction (valid attestation ⇒ distinct partials) is unconditional. Who signed a given attestation is Theorem T6: the bare aggregate names no one, and the session journal is what attributes it (conditional on the certified-share pin P1 and authenticated entries P2). | **Proven** (conditional) + **open obligation** PO-13 (assumption watch), GAP-5a (dependency fidelity) and PO-18 (attribution is detective; the journal is host-side in v0.11) |
 | **Cryptographic security** — secrecy of the group key | Fewer than $M$ corrupted jurors learn nothing about $f(0)$, and the public ceremony transcript yields at most $m$ interpolation points to a coalition of size $m$ under possession-bound complaints. | Shamir perfect privacy [2]; honest majority $m+1 \le t$ for the complaint bound; the DKG never has a dealer. | Shamir privacy (§2.3) and the transcript-counting argument (§2.4), both with premises stated; the complaint-binding suite pins the mechanism the argument relies on. The transcript bound is *not* a line-checked theorem. | **Proven** (reduction to Shamir privacy + counting argument) + **empirically evaluated** (forged- and unattributable-complaint rejection) |
-| **Protocol safety** — state machines | Every reachable state of the vote, confirmation, signing and DKG machines satisfies the INV-* bundle; no illegal transition is accepted; no illegal escalation witness opens a round; no raw `TypeError`/`RangeError` escapes. | ECMAScript semantics (premise J1), canonical UTF-8/hex inputs, monotone host clock. | Theorem T4 (structural induction over event sequences, all roster sizes) plus exhaustive model checking of three machines (15 instances, 3.87M states, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws) within n ≤ 3–4 and reduced clocks; 158 stated invariants, each with an enforcement pointer. | **Proven** (T4) + **machine-checked** (three machines; DKG machine is invariant-pinned only, RS-1) |
+| **Protocol safety** — state machines | Every reachable state of the vote, confirmation, signing and DKG machines satisfies the INV-* bundle; no illegal transition is accepted; no illegal escalation witness opens a round; no raw `TypeError`/`RangeError` escapes; and — in the *opposite* direction — a legal host state is not refused. | ECMAScript semantics (premise J1), canonical UTF-8/hex inputs, monotone host clock. | Theorem T4 (structural induction over event sequences, all roster sizes) plus exhaustive model checking of three machines (15 instances, 3.87M states, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws) within n ≤ 3–4 and reduced clocks; 158 stated invariants, each with an enforcement pointer. The over-strictness direction is pinned by a shape × reader matrix over 12 legal host shapes plus a sweep that requires every exported barrier to accept a declared lane projection unless an allow-list names why not (r12-1: 42 of 185 host court tests were red before the fix; `docs/LANE-PROJECTION.md`). | **Proven** (T4) + **machine-checked** (three machines; DKG machine is invariant-pinned only, RS-1) + **empirically evaluated** (over-strictness matrix) |
 | **Protocol safety** — tally and encoding | The verdict is a function of the reveal multiset; the tie-break is a strict total order; canonical encodings are injective and prefix-free per schema, and **per field**: every attacker-controlled identifier is normalised into a domain on which its encoding is injective (canonical UTF-8, no unpaired surrogate, no separator, byte-bounded) before it enters a preimage. | J1; SHA-256 collision resistance for the hash bindings. | Theorems T1 and T3 (proved); exhaustive differential over small domains; the UTF-8-vs-UTF-16 divergence pinned; the per-field rule pinned by collision probes on the `caseId` (r8-1) and the round-bond slot (H-6). | **Proven** + **empirically evaluated** (in-house differential, §11.3); the per-field generalisation is an *engineering rule* with three instances of evidence, not a theorem over future fields |
 | **Protocol safety** — batch inclusion | Accepting an inclusion proof implies the recomputed leaf is in the committed set; domain separation blocks leaf/node confusion. | SHA-256 collision resistance; Schnorr EUF-CMA for the manifest signature. | Theorem T2 (proved; soundness conditional, completeness unconditional); exhaustive proof verification for n ≤ 128 plus the cap. | **Proven** (conditional) |
 | **Protocol safety** — finality | A stale artifact cannot satisfy current policy: v2 binds epoch, tier, threshold, signer-set root and batch root in-band, and v1-shaped events fail v2-only policy. Within a case, the verdict at `finalize` is re-derived from the deciding round's append-only history record and must agree with the re-validated vote ledger. | Consumers pin the expected group key — *caller pins, not the event* (an unpinned consumer accepts any group's signature); for the in-case verdict, a **consistent** forgery of votes + history + pending verdict is undetectable at this layer and must be excluded by the host's ballot admission check. | §7.3 design + adversarial validator reproduction suite; §6.1's three-ledger barrier, attacked along all four paths to `final`; T5 covers the signature, not the pinning duty. | **Machine-checked** (within the suite) + **open obligation**: the pinning duty is a trust assumption, not a mechanism (PO-10 for the unbounded v1 path); the consistent-forgery residual is host-owned (r41-2) |
 | **Protocol safety** — selection | The draw is publicly recomputable from the published seed and block hash, samples without replacement with probability ∝ $\sqrt{w}$ on the stake path, and fails closed on invalid weights. | Uniform 32-bit draws from SHA-256; the seed is unbiased at the required depth (A5). | Exponential-race proposition (§4.2, proof sketch); statistical differential (chi-square, moments, winner law over 100k draws); property tests for fail-closed behaviour. | **Empirically evaluated** + **open obligations** PO-2 (seed anchoring / grinding) and PO-17 (cross-engine ordering) |
-| **Operational resilience** | Up to $N-M$ jurors may be absent without preventing a signature; an unresponsive or censoring oracle cannot block the refund path; no wedged state exists in the three model-checked machines. | A2 (≥ M honest jurors participate); relay delivery liveness L1; absolute deadlines enforced (contract-level enforcement still open). | Model-checked no-dead-ends and termination (P3/P4) for three machines; refund path by construction; the end-to-end simulation; a three-day fault-injected soak at 30,000 settlements (32/32 assertions, faults: partitions, churn, restarts, witness storms, cursor rollback) on the host side; the ceremony across N = 3…7 real OS processes with crash/replay injection (§11.7). | **Machine-checked** (bounded) + **empirically evaluated** (soak, ceremony — single host, virtual clock) + **open obligations** PO-3 (partition/eclipse liveness — no availability proof) and the on-chain deadline gate (§12.3) |
-| **Operational resilience** — prototype gap | A single-process ceremony reveals all shares to whoever compromises the process. | — | Stated as a production gate (§12.2); the *coordination* half (separate processes, identities, ordering, independent verification) is exercised on one host (§11.7). | **Open obligation** PO-14 (cross-client deployment) |
+| **Operational resilience** | Up to $N-M$ jurors may be absent without preventing a signature; an unresponsive or censoring oracle cannot block the refund path; no wedged state exists in the three model-checked machines; and the ceremony and the rails keep working over time, not once. | A2 (≥ M honest jurors participate); relay delivery liveness L1; absolute deadlines enforced (contract-level enforcement still open); a bonded seat requires a host-verifiable bond. | Model-checked no-dead-ends and termination (P3/P4) for three machines; refund path by construction; the end-to-end simulation; a three-day fault-injected soak at 30,000 settlements (32/32 assertions, faults: partitions, churn, restarts, witness storms, cursor rollback) on the host side; the ceremony across N = 3…7 real OS processes with crash/replay injection, then across three separate hosts (§11.7); and two **continuous programs** — a rail soak (5-min light / hourly adversarial / 6-hourly deep, boot-gap accounting, per-source health, a running tally of **1 rail bug** to **8 harness bugs**, all regression-locked) and a 6-hourly ceremony soak whose honest-signature rate must stay 100 % and whose fault-scenario signed rate must stay 0 % (§11.7, App. A, S-28). | **Machine-checked** (bounded) + **empirically evaluated** (soak, ceremony, continuous programs — one operator, virtual clock or owned boxes) + **open obligations** PO-3 (partition/eclipse liveness — no availability proof) and the on-chain deadline gate (§12.3) |
+| **Operational resilience** — prototype gap | A single-process ceremony reveals all shares to whoever compromises the process. | — | Stated as a production gate (§12.2); the *coordination* half (separate processes, identities, ordering, independent verification) is exercised on one host and then across three separate hosts, all owned by one operator (§11.7). | **Open obligation** PO-14 (cross-client deployment; independent operators, network asynchrony, key custody) |
 | **Economic robustness** | Coherent jurors strictly prefer revealing; non-reveal and double-voting are dominated by honest play *given* coherent-majority focal behaviour, slashing exceeds any capturable bribe, escalation is priced per rung (a consumption test, not a membership test), and selection is unpredictable. | The Schelling-point focal strategy (Kleros model [9, 18]); a bribe market that prices below the slash; unpredictable selection (§4); per-round bond amounts posted by the host at `ΔC_R = 3^R b_0`. | Integer-exact redistribution with a conservation check; the 50/100% split; clawback idempotence; the per-round consumption invariant (INV-ESC-9) and its restored-snapshot re-derivation; the measured ladder arithmetic (free-option cost 363 $b_0$, deterrence −2.40 %→−1.86 % of $V$, venue/griefer 0.86×→54.1×, derived cap and flip round, churn 2.47× short, κ slack) — App. A, S-21. | **Empirically evaluated** (arithmetic, invariants, and a re-verified incentive model) + **open obligation** PO-1: the bribe equilibrium for a $\lceil 2N/3\rceil$-of-$N$ jury is *not* modelled; the composite-SLA residual (attendance vs coherence) is named in §7.4; the ladder *amounts* and the bond registry stay host duties (§12.8) |
 | **Economic robustness** — Lightning panel | Panel A orders settlement after the verdict, but does not enforce forfeiture. | Honest host behaviour + attributable release. | §9.1 analysis. | **Open obligation** PO-16 |
-| **Real-world validity** | The design's assumptions hold on live infrastructure: honest juror mass, encrypted channels between independent devices, relay liveness, Bitcoin seed freshness, and a release path that enforces the attestation. | A2, A3, A5, A6. | The protocol package is unit- and simulation-tested; the ceremony runs across real OS processes but on **one host** with an honest relay; the host pipeline has been soaked at 30,000 settlements with injected faults; *no* live multi-operator ceremony has been run at the scale the design targets, and the release path is host-mediated in v1. | **Open obligations** PO-14, PO-15, plus the §12 engineering gates (rail execution, cross-client, third-party audit) |
+| **Bond integrity** — a seat costs a proven bond | A juror keeps its seat only if a host-supplied check proves an unspent bond of at least the required value, bound to the key that will actually sit and — where configured — locked to the court script. Every other outcome excludes the juror, and a roster that falls below threshold produces no roster, no key and no signature. | The host's verifier is honest and reads the chain (this package holds no chain client); the bond is court-locked when `scriptBinding:"configured"`; the check runs on the coordinator, so a lying coordinator is not detected by the ceremony. | `bondCheckGate.ts` + `__tests__/bondCheckGate.test.ts` (the argv contract, the strict output parser, every roster decision); live runs across three boxes — three bonds `PROVEN`, one group key, one **verified** signature, and a genuinely spent bond → `ROSTER_BELOW_THRESHOLD` with no key and no signature; public testnet4 (3 × 100,000 sat court-locked, two agreeing sources, slash spend validated and not broadcast) and public Liquid testnet (3 × 100,000 sat court-locked, two agreeing sources) — §8.5, App. A, S-26. | **Empirically evaluated** (public testnet4 + Liquid testnet, and a live three-box ceremony) + **open obligations**: LJ-1 (the Liquid covenant binds the *case*, not the juror) and the stated limit that a bond proves collateral at verification time, never future honesty |
+| **Rail validity** — the bond rail | A court-locked bond exists on a **public** chain, is verifiable by a party who is not us, and is spendable by the slash path (court key ∧ juror key). | Two independent sources agree on script, value, spent-ness and depth; the court key is honest (and held by one operator); depth meets policy. | The two public-testnet runs (§8.5); the slash spend signed with both keys and accepted by `testmempoolaccept` (vsize 137) without broadcast; the negative cases that must refuse — `BOND_SCRIPT_MISMATCH`, `BOND_SPENT`, `BOND_KEY_NOT_XONLY_LIFTABLE`, `BOND_ORACLE_DISAGREEMENT`; and the rail soak's single genuine verifier bug (spend state must be checked *before* value readability, because confidential Liquid outputs carry no plaintext value) — §11.7, §11.8, App. A, S-26/S-28. | **Empirically evaluated** (public testnet4 and Liquid testnet) + **open obligations**: settlement *release* on those rails (PO-15), and the honest note that both fundings came from a human deposit and a public faucet, not from an independent counterparty |
+| **Real-world validity** | The design's assumptions hold on live infrastructure: honest juror mass, encrypted channels between independent devices, relay liveness, Bitcoin seed freshness, bonded seats that are real collateral, and a release path that enforces the attestation. | A2, A3, A5, A6. | The protocol package is unit- and simulation-tested; the ceremony runs across real OS processes, then across three separate hosts with a real bond gate armed; the host pipeline has been soaked at 30,000 settlements with injected faults; bonds are proven court-locked on public testnet4 and Liquid testnet; *no* live multi-operator ceremony has been run at the scale the design targets, the release path is host-mediated in v1, and every box, key and bond in the ceremony belongs to one operator. | **Open obligations** PO-14, PO-15, LJ-1, plus the §12 engineering gates (settlement release, independent operators, third-party audit) |
 
 Two readings of Table 2 matter. First, the rows marked **proven** are proofs
 *of the specified protocol* under stated premises — not proofs that the
@@ -2111,6 +2366,16 @@ to make and therefore the one worth publishing. None of that upgrades a status
 label. A fix that survived an attack is still a fix that only its authors have
 attacked.
 
+A fourth reading is the opposite direction, and it is new in this revision: two
+rows changed *tier* rather than wording. The bond rows are the first in this
+paper whose evidence comes from **public** chains — an independent verifier, a
+mempool we do not own, block production we do not control — and §11.8's
+hierarchy is what makes that a different kind of claim rather than a louder one.
+The same two rows say what the public tier still does not buy: the release step
+(PO-15), the Liquid juror binding (LJ-1), and a counterparty who is not the
+operator. That is the shape every rail claim in this text will have to take: a
+named environment, a named verifier, and a named gap.
+
 ---
 
 ## 14. Conclusion
@@ -2124,7 +2389,8 @@ proceed without one (PO-15) — and a verdict is a single ordinary Schnorr
 signature — or one signature covering an entire epoch's verdict cohort via
 a Merkle batch — that any observer can verify with an $O(\log n)$ inclusion
 proof. The economic layer (ownership proofs, escrow ledger, Kleros-style
-slashing, flip-flop clawbacks) and the dual-rail settlement specification
+slashing, flip-flop clawbacks, and a bond gate that makes a seat cost a proven
+bond) and the dual-rail settlement specification
 (Lightning hold invoices, Liquid script escrow) are deterministic and
 publicly recomputable; custody, execution, retention, and SLA policy stay
 with hosts. The design is backed by an evaluation methodology rather than an
@@ -2134,13 +2400,17 @@ instances (the DKG machine is invariant-pinned only) with 60,020,684 illegal
 escalation witnesses dispatched and none accepted, in-house
 differential parity, a regenerable performance baseline, statistical corpora of
 1,187,000 cases and 3,745,566 assertions, a three-day fault-injected soak at
-30,000 settlements, a ceremony across real OS processes on one host, and a
+30,000 settlements, a ceremony across real OS processes — on one host, then
+across three separate hosts — two continuous programs that ran the rails and the
+ceremony unattended for ~100 hours, and **court-locked bonds proven on public
+testnet4 and Liquid testnet**, and a
 literature-anchored audit record (§11), with §13 stating which claim rests on
 which kind of evidence — and §11.6 stating why the program's habit of attacking
 its own last release is the reason those numbers are worth citing at all. What
 remains is not only deployment
-engineering: the distributed ceremony (PO-14), the concession half of the
-escalation authority (§6.2), and the settlement-binding constructions
+engineering: the distributed ceremony with independent operators (PO-14), the
+concession half of the escalation authority (§6.2), the Liquid juror binding
+(LJ-1), and the settlement-binding constructions
 (§9.2, PO-15/PO-16) are protocol work, alongside the independent auditing and
 external replication this paper cannot supply. Three obligations are newly
 registered here (PO-16, PO-17, PO-18 — attribution is detective), and the
@@ -2150,7 +2420,11 @@ those attacks required (a challenger-bound bond, a bounded inbox provenance, a
 per-round consumption rule, a re-derived verdict, a canonical identifier and a
 transport that binds what it forwards), and they
 left their residuals where residuals belong — named, graded, and owned, in the
-round documents (App. A, S-17, S-18, S-21, S-23, S-24).
+round documents (App. A, S-17, S-18, S-21, S-23, S-24). The rounds after them
+followed the same rule: a bond gate, a stable identity, a replay that is no
+longer blamed as equivocation, and a harness that no longer decides verdicts by
+the clock — each shipped with the test that was red before it (App. A, S-26 to
+S-28).
 
 ---
 
@@ -2241,6 +2515,10 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-23 | Review round 7 — attacking v0.13.2 and the R41 host fixes (r41-1, r41-2, r41-T1-doc, H-1…H-7; the sign-rule grid, the legacy clamp's readers, the strict-policy upgrade order) | `docs/REVIEW_ROUND_7.md` |
 | S-24 | Review round 8 — attacking the v0.14.0 escalation transport and the r41-1 barrier (r8-1…r8-6; the wire-refusal matrix, the required host binding, the four paths to `final`, the consistent-forgery boundary) | `docs/REVIEW_ROUND_8.md` |
 | S-25 | Campaign report (what was run, found and shipped; the residuals with their owners and triggers) | `docs/CAMPAIGN_REPORT.md` |
+| S-26 | Bond gate, stable juror identities, and the funded-bond evidence (public testnet4 + Liquid testnet court-locked bonds, the validated unbroadcast slash, the spent-bond negative, the odd-Y rule, the distributed ceremony across three boxes) | `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate" and §"Stable identities and funded bonds"; `docs/DISTRIBUTED_CEREMONY.md`; `bondCheckGate.ts`; `__tests__/bondCheckGate.test.ts`; host `bao.markets` PRs #2553, #2556, #2597, #2616 and `scripts/court/verify-bond.mts` |
+| S-27 | Test determinism — load-insensitivity by construction (the inventory, the reproduction, the derived watchdog, the static guard, the measured before/after) | `docs/TEST_DETERMINISM.md`; `__tests__/helpers/watchdog.ts`, `__tests__/helpers/determinism.setup.ts`, `vitest.config.ts`, `__tests__/determinism.test.ts` |
+| S-28 | Continuous programs — the ~100-hour rail soak (cadence, boot-gap accounting, per-source health, the rail-bug/harness-bug tally) and the 6-hourly ceremony soak (JSONL series, scenario rotation, status rates) | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program (distributed soak)"; `scripts/court/distributed-ceremony-soak.mjs`, `ceremony-soakctl.sh`, `scripts/court/systemd/`; host repo `bao.markets` rail-soak series (`/etc/default/rail-soak`; PRs #2506/#2508/#2539) |
+| S-29 | Over-strictness in the round-counter barrier and the `projection:'lane'` fix (r12-1; the reader-aware rule, the shape × reader matrix, the host migration, the 42/185 → 189/189 measurement) | `docs/LANE-PROJECTION.md`; `__tests__/overStrictness.test.ts`; host `bao.markets` PR #2488 |
 
 ### A.2 Proofs and machine-checked artifacts
 
@@ -2300,6 +2578,10 @@ cluttering the argument.
 | r8-1 | `caseId` was encoded lossily: an unpaired UTF-16 surrogate and U+FFFD are different ids with one `TextEncoder` preimage, hence **one request hash for two requests** (H-6 one field over) | `caseId` canonicalised once — canonical UTF-8, NUL-free, ≤ 256 bytes — so the encoding is injective over the accepted domain; collision probe + 2,000-id sweep (§6.2; S-24) |
 | r8-2 | The transport **bound nothing**: an unverified `challengerPubkey` wrote a non-escalator into the append-only log, a stale wire `round` opened a rung nobody authorised, and a `caseId` crossed cases | `escalationRequestToMachineEvent` requires the host's `{caseId, authenticatedPubkey}` binding and `round === ladderRound`; ambiguous bond ledgers refused (§6.2; S-24) |
 | r8-6 | `resolve_round` appended onto a history that outran nothing, producing `[1,4]` — a history no later barrier accepts, so the case bricked with value locked | `onResolveRound` requires `outcomeHistory.length === ladder.round − 1`; a legal two-round ladder still resolves `[1,2]` (S-24) |
+| r12-1 | The round-counter barrier required `ladderRound = 0` whenever no `ladder` object was present. That is true of every state the machine produces and **false of the state a host persists**: the host's lane projection carries `ladderRound ≥ 1` with no `ladder`, so the barrier refused a legal host state — **42 of 185** host court tests red across 8 suites | Declared provenance instead of shape: `projection:'lane'` (absent ⇒ the machine produced it), an explicit reader argument on `assertRoundCountersAgree`, and a shape × reader matrix over 12 legal host shapes with a sweep that refuses a new barrier silently re-stricting a legal state — `docs/LANE-PROJECTION.md` (S-29); host 189/189 green |
+| r54-1 | A **byte-identical redelivery was reported as equivocation** and an honest juror blamed (`equivocatingJurors:[2]`, `duplicatesIgnored:0`): the collapse compared parsed payloads **by reference**, which is false for two parses of one signed event, so the identical-duplicate branch could never fire. A false accusation in a blame protocol is a correctness bug — in a bonded deployment it is the input to a slash | Identity is the **signed event id** (payload hash as fallback, never arrival position), collapsed per `(phase, round, jurorIdx)` in `courtCeremonyCore.ts` (`signedRecordIdentity`, `collapseSignedRecords`) before any blame reasoning; unparseable records are counted, never blamed; both directions pinned by the captured failing trace and a constructed genuine equivocation (§10.2 S, §11.6) |
+| LJ-1 | **The Liquid covenant binds the case, not the juror.** The on-chain 2-of-2 commits to the juror's key, so a bond cannot be re-presented for another seat; the Liquid bond lock commits to the case, so the same outpoint could in principle be presented under a different juror key | Registered, **host-owned**: a parallel round adds the juror key to the Liquid bond lock. Until it lands, a Liquid bond is case-bound only, and the artifact records which rail produced which guarantee (§8.5, §11.8) |
+| RAIL-1 | The rail soak found a genuine **verifier** bug: the Liquid bond verifier checked value readability **before** spend state, so a confidential output — which has no plaintext value (`value: None`, both sources agreeing it was spent) — reported `VALUE_UNVERIFIABLE` instead of `SPENT` | Spend state is checked first; an **unspent** confidential output still refuses `VALUE_UNVERIFIABLE`; the fix is the first genuine rail-side bug the ~100-hour soak caught (§11.7, S-28) |
 | H-1 | A gate priced at constant $\rho = \beta$ assesses a ladder whose rule needs the **realised** `bond/V`: a 5× growth in $V$ drifts the safe cap from 5 to 1 while the gate still blesses 4 | **Host fix**: re-price at escalation from the frozen bond over current exposure; expose $\rho$ as a stated assumption (§8.4; S-23) |
 | H-2 | `a_f = 1` (and $\rho+\beta$ overflow) yields an infinite bound, i.e. every depth is "safe" — legal in the package, refused by the host's env resolver | Documented + pinned in both layers; the host must keep `assumedAccuracy` off any env-sourced path (S-23) |
 | H-3 / H-5 | The legacy depth clamp is read by some consumers unclamped (a deeper row *raises* the derived cap), and the backfill **writes** the clamped depth so a transient env value freezes legacy rows permanently; $derivedCap = 0$ is floored to the most profitable rung instead of refusing the ladder | **Host fix**: route every reader through the clamped value, write the configured depth (or add a re-widening action), and make `derivedCap = 0` a refusal (§8.4; S-23) |
@@ -2319,7 +2601,13 @@ cluttering the argument.
 are the soak's; `r29-*`, `r30-*`, `r33-*`, `r38-*`, `r40-*`, `r41-*` and `r8-*`
 are review-round findings (each round numbers its own; round 8's namespace is
 `r8-*`, not a continuation of the campaign counter, and the two systems are
-never mixed inside a document); `H-n` is the **host-disposition** namespace and
+never mixed inside a document); `r12-*` is review round 12's and `r54-*` is the
+campaign round that produced the replay/equivocation fix (the campaign counter
+and the review-round counter are separate series, so `r54-1` is not "review round
+54"); `LJ-1` is a **cross-repository residual namespace** for the Liquid
+juror-binding gap, and `RAIL-1` is the rail soak's own verifier finding — a
+namespace that exists because a continuous program is a reviewer too; `H-n` is
+the **host-disposition** namespace and
 it is *per round* — `H-2` in round 4 is not `H-2` in round 7, a collision the
 index records rather than hides, and round 7 folded its predecessor's `H-2` into
 `H-1`; `T-1` is the transport
@@ -2345,13 +2633,19 @@ history itself is `CHANGELOG.md`.
 
 ### A.4 Artifact inventory and regeneration
 
-| Artifact | Command / location | Count (2026-11-11, at `bc28ff3`, v0.14.1) |
+| Artifact | Command / location | Count (2026-11-13, at v0.16.0) |
 |---|---|---|
-| Test suite | `npm test` | 1,804 passing, 1 environment-gated live test skipped, 81 files (re-measured at `bc28ff3`; the per-round pinned count is App. A.1, S-12 §1) |
+| Test suite | `npm test` | 2,029 passing, 1 environment-gated live test skipped, 95 files (re-measured at this head; the per-round pinned count is App. A.1, S-12 §1) |
 | Typecheck | `npm run typecheck` (`tsc --noEmit`, source + scripts + tests) | clean |
 | Model-check sweep | `npx tsx scripts/model-check.mjs` | 15 instances, 3,869,232 states, 60,020,684 illegal-witness probes (0 accepted), 0 raw throws |
 | Statistical corpora | `npm run campaign:full` | 9 campaigns, 1,187,000 units, 3,745,566 assertions, 0 failures (CI runs a fast subset) |
 | Multi-process ceremony | `npm run simulate:multiprocess` | N = 3…7 OS processes; happy path + 2 kill points + replay (gated in CI) |
+| Distributed ceremony (three boxes) | `npm run simulate:distributed`; artifacts in `docs/benchmarks/distributed-ceremony/` | three hosts + relay + coordinator; k = 2, k = 3, a real `SIGKILL` over ssh (S-26) |
+| Ceremony soak (unattended) | `npm run soak:distributed`, `npm run soak:status`; `scripts/court/ceremony-soakctl.sh install` | one JSONL record per run, 6-hourly systemd timer, gap accounting (S-28) |
+| Juror provisioning | `npm run jurors:provision`, `npm run jurors:check` | creates 0600 even-Y keys on each box; prints only x-only pubkeys |
+| Bond gate | `npx vitest run __tests__/bondCheckGate.test.ts` | argv contract, strict parser, every roster decision (S-26) |
+| Replay vs equivocation | `npx vitest run __tests__/replayEquivocation.test.ts` | captured failing trace + a genuine equivocation, both directions (r54-1) |
+| Determinism guard | `npx vitest run __tests__/determinism.test.ts` | the static half re-runs on every `npm test` (S-27) |
 | Differential parity | `npx vitest run __tests__/differentialParity.test.ts` | 5 areas, seeded |
 | Whole-court simulation | `npm run simulate:court` | deterministic, same-seed reproducible |
 | Benchmarks | `npm run bench` / `-- --json` | 29 timed rows; two-run reproducibility pair |
@@ -2368,6 +2662,7 @@ Counts are point-in-time and are re-recorded per round in `docs/CROSS_CHECK.md`
 | In-house audit and symposium rounds | AI agents working in this repository, directed by the project | The implementation and its documents; findings landed as fixes, specs, or registered obligations | `docs/FIXES-2026-08-15.md`, `docs/FIXES-2026-08-18.md`, `docs/FIXES-2026-08-21.md`, `docs/REVIEW_SIMULATION.md`, `docs/CROSS_CHECK.md`, `docs/DRESS_REHEARSAL.md`, `docs/proofs/` |
 | **Fix-and-re-attack rounds (review rounds 2–8; instrument rounds 29–37; 2026-11-11)** | AI agents working in this repository, attacking the *previous* round's shipped fixes with the reducer/route/env in hand | Escalation witness and its bond binding, per-round consumption, budget vacuity, transport provenance, inbox/seal/MLS games, the economic layer, the soak's own staleness, the finality derivation and the escalation wire codec | `docs/REVIEW_ROUND_3.md` (S-17), `docs/PER_ROUND_BOND.md` (S-18), `docs/MULTI_PROCESS_CEREMONY.md` (S-19), `docs/proofs/economics/06-expert-verify.tex.md` (S-21), `docs/REVIEW_ROUND_4.md`, `REVIEW_ROUND_5.md`, `REVIEW_ROUND_6.md`, `docs/REVIEW_ROUND_7.md` (S-23), `docs/REVIEW_ROUND_8.md` (S-24), §11.6 |
 | Multi-agent editorial audit, three rounds (2026-11-10) | Parallel review agents, each assigned a section | Assurance framing, related work, provenance hygiene, statement corrections, disclosure, scope | This document (§11.5) and App. A.3 |
+| **Continuous programs (~100 h, 2026-11-12 → )** | Unattended systemd timers on the operator's own boxes, reviewed by classification rule (rail bug vs harness bug) | The rail soak (bond/settlement verification against multiple sources) and the 6-hourly ceremony soak (three boxes, scenario rotation, crash and Byzantine *delivery*) | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program", host `bao.markets` rail-soak series (S-28); §11.7 |
 | External AI reviews (2026-11-10) | GPT, Claude, Gemini | **Paper text only** — no code access, no execution, no cryptographic analysis, no formal verification | Verdicts applied in this revision |
 | Independent human / third-party audit | — | Not performed | §12.5 remains open |
 

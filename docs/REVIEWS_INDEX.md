@@ -3,20 +3,22 @@
 **The single map of the self-verification campaign.** Every review, simulation,
 audit and campaign round this repository has run — in order, with what it
 attacked, what it found (by severity), where the fix landed, and how the
-residual was dispositioned. **Tracks `@bao/court` v0.15.3 · 2026-11-12.**
+residual was dispositioned. **Tracks `@bao/court` v0.16.0 · 2026-11-13.**
 
-**Current totals at `v0.15.3`** (each with its artifact): suite **2,008 passed /
-93 files** (1 env-gated live test skipped; v0.15.3 adds the 25-test
-over-strictness suite); mutant catalogue
-**101** across three campaigns (`docs/MUTATION_TESTING*.md`); scale campaign
-**1,587,000 units / 8,286,823 assertions / 0 failures**
+**Current totals at `v0.16.0`** (each with its artifact): suite **2,029 passed /
+95 files** (1 env-gated live test skipped; re-measured on this head); mutant
+catalogue **101** across three campaigns (`docs/MUTATION_TESTING*.md`); scale
+campaign **1,587,000 units / 8,286,823 assertions / 0 failures**
 (`docs/benchmarks/SCALE_CAMPAIGN_V2.md`); model checking **3,869,232 states /
 213,521,172 applications / 60,020,684 illegal-witness probes, 0 accepted**;
 mechanised proofs **42 Lean 4 declarations** (`proofs/lean4/`, no `sorry`) +
 Apalache exhaustive (`proofs/mechanized/`); independent wire differential
 **100,000 cases, 0 disagreements** (`docs/DIFFERENTIAL_WIRE.md`); three-day soak
-**32/32 assertions** (`docs/benchmarks/SOAK_3DAY.md`); cross-check **286 claims /
-521 refs / 95.1 %**. Rounds 1–12 and the v0.11.0 → v0.15.3 release ladder are
+**32/32 assertions** (`docs/benchmarks/SOAK_3DAY.md`); **two continuous programs**
+at ~100 hours (rail soak: 1 rail bug / 8 harness bugs, all regression-locked;
+6-hourly ceremony soak); **court-locked bonds proven on public testnet4 and
+Liquid testnet**; cross-check **286 claims / 521 refs / 95.1 %**. Rounds 1–12,
+the campaign rounds 29–37 and 51–54, and the v0.11.0 → v0.16.0 release ladder are
 mapped in the tables below; the narrative summary is
 `docs/CAMPAIGN_REPORT.md`.
 
@@ -75,7 +77,7 @@ crypto audit is not `F-2` in the formal audit).
 | **R10** | host round-10 suite (`bao.markets` #2293/#2294/#2295) | the *mechanism* layer: ack farming, redelivery griefing, cross-network epoch replay, dust starvation, weight gaming | composite SLA floor, 1+1 redelivery, ×0.8 non-participation, decay law — all host-side mechanisms | host repo | RS-9 (composite-SLA equilibrium) and the V-review C-2 finding come from here |
 | **R11** | paper §1.5, §13 | does the paper describe the shipped code? | related-work table (6 neighbours, 3 axes), five claim classes, statement corrections | #55/#56 | the "every row carries an open obligation" framing starts here |
 | **R12–R13** | — | no standalone artifact recorded in this tree | — | — | evidence only in the suite-count ledger |
-| **R14** | `THREAT_MODEL.md`, `CROSS_CHECK.md` | the security argument, claim by claim | threat model with ADV-* adversaries + 18 proof obligations (PO-1…PO-18); the claim→evidence index that today holds **285 claims / 516 evidence refs** | #62/#63/#64 | the claim→evidence index becomes a CI gate |
+| **R14** | `THREAT_MODEL.md`, `CROSS_CHECK.md` | the security argument, claim by claim | threat model with ADV-* adversaries + 18 proof obligations (PO-1…PO-18); the claim→evidence index that today holds **286 claims / 521 evidence refs** | #62/#63/#64 | the claim→evidence index becomes a CI gate |
 | **R15** | `EVALUATION.md` | the evaluation chapter as a standalone artifact | parity, model checking, benchmarks, audit programme, scope caveats (§6) | #65 | the "145 first-order invariants" wording survives until R16 downgrades it |
 | **R16** | `REVIEW_SIMULATION.md` | **adversarial external-review simulation**: 3 personas against paper + 4 verification artifacts + code | **31 rows / 30 distinct findings: 0 REJECT, 8 MAJOR, 7 MINOR, 14 QUESTION (attack failed, rebuttal recorded)**; 12 fixes shipped, RS-1…RS-10 registered | #70 | panel verdict: A accept-with-revisions, B accept-with-revisions, C accept |
 | **R17** | `DRESS_REHEARSAL.md`, `docs/presentation/` | the submission artifact end to end; the demo | full-contract verification record, sign-off checklist, figures F1–F6, 30-minute outline | #69/#71/#72 | suite re-baselined; presentation claims checked against artifacts |
@@ -94,7 +96,7 @@ The reviews themselves disclosed their limits (§11.5 of the paper: AI reviewers
 paper-only, no human cryptographer, no third-party audit) and the in-house
 reviewers' conflict of interest. That disclosure is why §1d exists.
 
-### 1d. Review rounds 2–8 — 2026-11-11 (self-verification)
+### 1d. Review rounds 2–12 — 2026-11-11 (self-verification)
 
 The fourth tier: round *n+1* attacks the artifacts round *n* shipped. The
 attacker is a caller — it holds the reducer, the HTTP route, or the env var.
@@ -108,6 +110,10 @@ attacker is a caller — it holds the reducer, the HTTP route, or the env var.
 | **6** | `REVIEW_ROUND_6.md` | the round-5 and round-37 fixes, at the entries that **spend a rung** | **2 EXPLOITABLE fixed** (r40-1: `escalate` re-derived the log but not the challenge pool it reads — and `open_ladder_round` ran no barrier at all; r40-2: a restored `ladder_pending` with its record deleted opened the rung); **1 PARTIAL in-package** (r40-3: the hash is unique but not **owned** — a derivable witness is preemptable); **2 PARTIAL host** (r40-4 composed predicate ≠ sign rule; r40-5 boot backfill bypasses the creation gate); docs drift fixed (r40-6) | #109, release **v0.13.2** (#110) | **490-state legal-state hunt: 0 refusals**; 6 closures red on #108 |
 | **7** | `REVIEW_ROUND_7.md` | the v0.13.2 surface: the sign-rule predicate, the legacy depth clamp, the three stated non-readers, the strict round-bond default | **1 EXPLOITABLE fixed** (r41-1: `finalize` minted a verdict from a vote ledger it never re-derived — `concede` was the route in; `upheld` was caller-supplied and absent from the hash); **1 doc defect fixed** (r41-T1-doc: the `a_f` monotonicity sentence pointed the wrong way); **6 host findings** (H-1 ρ/β ≠ the enforced cap, H-2 ρ unmeasurable, H-3/H-4/H-5 the clamp's readers, metric and permanence, H-6 the escalate body cannot carry the witness) | #112; release **v0.14.0** (#114), which also shipped the H-6 transport | 4 closures red on `1b33b2f`; 40/40 legal flows finalize unchanged |
 | **8** | `REVIEW_ROUND_8.md` | the v0.14.0 **escalation transport** and the r41-1 finality barrier, re-attacked from outside | **2 EXPLOITABLE fixed** (r8-1: `caseId` encoded lossily — unpaired surrogate and U+FFFD, two requests, **one digest**; r8-2: the transport **bound nothing** — an unverified `challengerPubkey` wrote a non-escalator into the append-only log, a stale `round` opened a rung nobody authorised, a `caseId` crossed cases); **4 PARTIAL fixed** (r8-3 `concession` coerced to false, r8-4 duplicate JSON keys silently resolved, r8-5 `build` validated A and returned B, r8-6 `resolve_round` bricked a case on a history that outran the ladder); the finality barrier **BLOCKED on all four paths to `finalize`** | this PR | 13 red on v0.14.0; the four r41-1 closures confirmed real (4 red on `1b33b2f`); consistent-forgery residual host-owned |
+| **9** | `REVIEW_ROUND_9.md` | the round-8 **fixes**: the canonical `caseId`, the host binding, the duplicate-key refusal, the history rule | **1 EXPLOITABLE fixed** (r9-1: the r8-1 fix was a *normalisation* — `trim()` folded `"court:X "`, `"court:X\t"`, `"court:X\u{3000}"` onto **one digest**, and the host binding folded symmetrically); **4 PARTIAL fixed** (r9-2 `bondTxid` never compared with the challenge it names, r9-3 signed concession hashed as escalation, r9-4 `ladder.round` vs `ladderRound` readers, r9-5 a lossy encoder passed the 2,000-id injectivity pin) | v0.14.2 (#119) | 8 of 27 red on `bc28ff3`; the "one digest, two ids" class survives its own fix |
+| **10** | `REVIEW_ROUND_10.md` | round 9's fixes: exact ids, the `bondTxid` binding, concession/escalation discrimination, the counter unification, the byte-differential pin | **3 EXPLOITABLE, 2 PARTIAL, all fixed**: the id guard held against the whole whitespace class but the **refusal path** echoed the id verbatim, so a newline forged a log line and U+202E reversed a rendered one (r10-1); a signed concession re-presented with `concession:false` produced an escalation nobody signed (r10-3); the barrier's own message was not escaped (r10-4) | v0.15.0 (#126) | 25/25 whitespace members refused *and* the exact id still maps — the over-strictness control beside every tightening |
+| **11** | `REVIEW_ROUND_11.md` | round 10's fixes and the v0.15.0 exact ladder bound | **3 EXPLOITABLE, 3 PARTIAL, 4 fixes shipped**: the escape class was right but **not total** — seven echo sites, not four, including two *snapshot* values the barriers themselves print (r11-1); the binder's shape gate and the clawback reader (r11-2/r11-3) | v0.15.1 (#129) | measured, not asserted: 387 output characters against a documented 64 |
+| **12** | `REVIEW_ROUND_12.md` | round 11's fixes **at the class level**: a mechanical sweep of every refusal interpolation, and the counter barrier's write domain | **1 EXPLOITABLE cluster (7 sites, fixed)** — a static sweep found **66** raw interpolations in 4 files where round 11 had measured the two it edited (r12-1), and a barrier whose invariant was `===` accepted two counters forged to the same non-integer; **1 PARTIAL fixed**, **2 BLOCKED**, **1 CLOSED-BY-DESIGN** | v0.15.2 (#132) | 9 of 20 red on `e489fe5`; the *sweep* is the fix, not the 66 edits |
 
 Between rounds 3 and 6 the campaign also ran the instrument rounds that produce
 the numbers in §3: **29** corpora extension (#96), **30** transport + ceremony
@@ -117,7 +123,33 @@ refresh (#101), **33** Byzantine-relay matrix (#102), **34** register sweep
 (#108). They are not review rounds of a fix, but every review round after 3
 quotes them, so they are part of the record this index maps.
 
-### 1e. Release map
+After round 12 the programme ran four more instrument rounds, each one a
+*measurement* rather than an attack on a fix:
+
+### 1e. Instrument rounds 51–54 — 2026-11-12
+
+| # | Record | What it established |
+|---|---|---|
+| **51** | `docs/TEST_DETERMINISM.md` (#140/#143) | the suite's verdict depended on the load of the box: 1,432 latency sites (1,383 implicit 5 s defaults, 49 literals, 8 fixed deadlines), three duration assertions, and a juror phase deadline that aborted an **honest** phase as `DKG_MISSING_PARTICIPANT`. Removed by construction; 18 failing test-runs / 1,340 → **0 / 1,280** |
+| **52** | `docs/REVIEW_ROUND_12.md` §4.4 + host sync | the round-counter barrier refused a **legal** host state (42/185 host court tests red); fixed in v0.15.3 by `projection:'lane'` + a reader-aware rule — `docs/LANE-PROJECTION.md` |
+| **53** | `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate" (#147) | a seat costs a **proven** bond: `bondCheckGate.ts`, enforced after key publication and before the roster; three boxes × three bonds → one key, one verified signature; a spent bond → `ROSTER_BELOW_THRESHOLD` with no key and no signature |
+| **54** | `CHANGELOG.md` round 54 (#148) | a byte-identical **replay was blamed as equivocation** (reference comparison, not identity): fixed in `courtCeremonyCore.ts` — identity is the signed event id, collapsed before any blame reasoning |
+
+### 1f. The continuous programs — 2026-11-12 → (running)
+
+Two unattended series, on the same classification discipline as the review
+rounds (a red run is a *rail bug* or a *harness bug*, decided by evidence):
+
+| Program | Cadence | Tally at this refresh |
+|---|---|---|
+| **Rail soak** (host `bao.markets`) | 5-min light · hourly full adversarial · 6-hourly deep; boot-gap accounting, per-source health | **1 genuine rail bug** (the Liquid bond verifier checked value readability before spend state, so a confidential output reported `VALUE_UNVERIFIABLE` instead of `SPENT`) and **8 harness bugs**, every one regression-locked; 371 cycles at 22.7 of 100 hours |
+| **Ceremony soak** (this repo) | 6-hourly systemd timer; `happy-k2`, `happy-kn`, `kill`, `replay`, `reorder`, `silence` opt-in | honest-signature rate must be **100 %**, fault-scenario signed rate must be **0 %**; two back-to-back unattended runs proven (one `pass` with a verified signature, one `kill` with none) |
+
+The bond evidence that landed beside them is on **public** chains (testnet4 and
+Liquid testnet, both court-locked, both spend-validated), which is the first rail
+evidence in this repository at the top tier of the paper's §11.8 hierarchy.
+
+### 1g. Release map
 
 | Release | PR | What it carried |
 |---|---|---|
@@ -129,13 +161,14 @@ quotes them, so they are part of the record this index maps.
 | v0.13.0 · v0.13.1 · v0.13.2 | #100 · #106 · #110 | per-round bond (r30-1); **r33 fixes**; **r38-1 + r40 fixes**, mutation campaign 2, strict round-bond default |
 | v0.14.0 · v0.14.1 | #114 · #116 | **r41-1** (the finality derivation) + the H-6 escalation-request transport (#113); **r8-1…r8-6** (canonical `caseId`, the required wire binding, the duplicate-key/concession/one-read fixes, `resolve_round`'s history bound) |
 | v0.15.0 · v0.15.1 · v0.15.2 | #128 · #131 · #135 | the exported ladder bound as the safe predicate (r52); **round-11** (a total `quoteWireValue`, the shape gate, the clawback reader); **round-12** (the escape path over all four files, the counters' write domain) |
-| v0.15.3 | this PR | **r12-1 over-strictness, found by the host sync** (bao.markets PR #2488): the counter barrier required `ladderRound = 0` with no `ladder`, which refused the host's whole G-4 lane projection (42/185 host court tests). Fixed by a declared `projection: 'lane'` + a required reader argument, with a standing over-strictness matrix — `docs/LANE-PROJECTION.md`, INV-CONF-37 |
+| v0.15.3 | #142 | **r12-1 over-strictness, found by the host sync** (bao.markets PR #2488): the counter barrier required `ladderRound = 0` with no `ladder`, which refused the host's whole G-4 lane projection (42/185 host court tests). Fixed by a declared `projection: 'lane'` + a required reader argument, with a standing over-strictness matrix — `docs/LANE-PROJECTION.md`, INV-CONF-37. Same release: the **determinism** work (#140/#143) |
+| v0.16.0 | #150 | **Bond-gated ceremony** (#147: `bondCheckGate.ts`, enforced before the roster), **stable juror identities** (#149: `--juror-keys`, odd-Y refused, `provision-jurors.mjs`), **replay is not equivocation** (#148: identity = signed event id, `courtCeremonyCore.ts`), plus the unattended ceremony soak (#144/#145/#146) |
 
 ---
 
 ## 2. The failure-mode taxonomy
 
-Nine classes. They are the campaign's actual output: the individual findings are
+Ten classes. They are the campaign's actual output: the individual findings are
 instances, the class is what a future reviewer should be able to recognise
 without re-deriving it.
 
@@ -150,6 +183,7 @@ without re-deriving it.
 | **7. Flood / eviction** | **T-1** (one wrap delivered by 65+ relays overflowed a per-record provenance list; `fromSnapshot` rejects > 64 relays, so *the entire durable inbox — every message — was unrestorable on the next restart*, no key required); C-3 (100k records × 256 KB ⇒ ≈25.6 GB in memory, plus a JSON-snapshot transient double, and nothing in the docs said so); client `2140wtf` #201 (**20 GB ingest** before validation) and the host indexer's FIFO caps that evict oldest-first with no provenance priority (`R41-IDX-POLL-VOTER-CAP-001`, `R45-POS-LOCK-UNCAPPED-001`); SOAK-F7 (a partition longer than the reconcile overlap walked the ack cursor past unserved acks — 8 of 184,620 silently lost); host F6 (ack-reconcile starvation at scale) | A cap is enforced by *count* (or by FIFO age) with no notion of which entries are load-bearing, so a hostile relay or a flood evicts exactly the entries that matter — or pushes the store past the restore path's own contract and turns availability into a brick. The failure is a self-DoS: no key, no exploit, just volume. | Provenance capped at the **first 64 distinct sources in delivery order** (deterministic), `lastSeen` keeps advancing, restore stays strict; byte-arithmetic sizing guidance in `courtInbox` (bound by *bytes*, snapshot incrementally); the ack watermark lags **one overlap** behind `now`; bounded fast corpus subset in CI so a flood regression is caught continuously rather than at release |
 | **8. Attribution** | **r29-1** (the escalation log recorded the *wrong* challenger against the *wrong* bond — the audit artifact hosts use to attribute misconduct and price fees named an innocent juror); r33-1/r38-1 (the payer of a rung logged as the wrong actor; one payment, unlimited standing); **r40-3** (preemption: the non-owner registers the payer's derivable witness first and holds the only escalation right); **r8-2a** (the transport forwarded an unverified `challengerPubkey` into the append-only log, so a bonded challenger could log a juror who never escalated); r29-5/r38-3 (`challengerPubkey` is caller-supplied; the state carries no idx→pubkey map); client `2140wtf` #201 (unpinned verification let **any keypair assert finality on screen**); PR #51 (ingest dedupe without NIP-01 id verification; uncertified outcome tag steering resolution) | The record of *who did it* is authored by the caller and then trusted, because the state has no registry to check it against. Uniqueness is mistaken for ownership, and a signature is mistaken for an identity (`T6`: the bare FROST aggregate is provably **unlinkable**). **Forwarding a claim is not binding it** — a mapper that fills one field from a proof and passes a neighbouring field through uncompared produces exactly the confusion the proof was meant to remove. | The signing-session journal (`docs/proofs/attribution.tex.md`, Theorem 6) decomposes an aggregate to per-index partials and names a failing one — **conditional on** the certified-share pin (P1) and an authenticated append-only log (P2), which is stated as the residual; one bond witness → one challenger's standing; the entry barriers re-derive `(idx, hash)` before a seat is spent; `accept_challenge` carrying the challenger pubkey is the **v0.14** snapshot change that closes r29-5/r38-3/r40-3 together; `escalationRequestToMachineEvent` **requires** the host binding `{caseId, authenticatedPubkey}` (r8-2); the host verifier must bind the witness to the **event author**, not merely prove a bond exists |
 | **9. Identifier canonicalisation** | **the pre-mainnet machine fuzz** (a lone UTF-16 surrogate let two distinct outcomes hash to one commitment — the first instance); **H-6** (the escalation request hash omitted the round-bond witness, so two different round bonds produced one request hash); **r8-1** (the wire codec's `caseId` went through `TextEncoder`, so an unpaired surrogate and U+FFFD — two different ids, two different wire documents, two different *cases* — produced **one digest**). Same class, three fields, three rounds. Related, cheaper instances: FIXES-08-18 delimiter-joined hashing (an embedding delimiter aliased a field) and the `concession: "true"` coercion (r8-3) | **Attacker-controlled identifier encodings must be canonicalised once, with an injectivity pin, per FIELD.** The defect is never "the hash lacked a field" and never "the parser was lenient": it is that a field's *encoding* was not injective over the domain the attacker may choose from, so two values shared one preimage. Each field independently needs a domain on which its encoding is injective — canonical UTF-8 with no unpaired surrogates, no separator character, a byte bound, a defined absence sentinel — plus a collision probe over that field and a domain tag in the preimage. A field that is only *validated* (a shape check, a hex regex, a type test) rather than *canonicalised* is still a member of this class, which is why the fixes are one field apart: each round canonicalised what it could see. The failure is silent by construction — the hash verifies, the signature is valid, and two meanings share one digest | The encoding layer owns it: `CanonicalWriter` (length-prefixed, domain-tagged) for every cross-party hash; `isCanonicalUtf8Text` + `MAX_ESCALATION_CASE_ID_BYTES` + NUL refusal for the wire `caseId`; the domain-v2 request hash with a `'-'` sentinel for absence; the duplicate-key scanner (`assertNoRepeatedWireFields`) so one body cannot carry two claims; a pinned known-answer digest per codec so two implementations cannot drift; collision probes (the surrogate pair, the 2 000-id sweep) as *tests*, not as prose. The rule is stated in paper §11.6 and, per field, in each codec's header |
+| **10. Measurement / instrument dependence** | **r54-1** (a byte-identical redelivery blamed as **equivocation** because the collapse compared parsed payloads by *reference* — a comparison that can never be true, so the "identical duplicate" branch never fired and blame always landed on an honest juror); the **5 s default** (no `vitest.config.ts`, so 1,383 tests inherited vitest's absolute ceiling — two false mutation "captures" M40/M47, an external reviewer reproducing a **docs-only** tree as 12 red, review-round-10's 15 timing flakes); the **absolute juror phase deadline** (`while (Date.now() < dkgDeadline)` made "the box is loaded" indistinguishable from "a juror is gone", so an honest phase aborted as `DKG_MISSING_PARTICIPANT`); SOAK-F8's mirror image (a soak red on `main` for two protocol rounds — the instrument aged) | The instrument's verdict depends on something other than the property being measured: the wall clock, the load of the box, or a comparison that cannot fire. It is invisible because the test passes on a quiet machine, and it is *dangerous* in one direction — in a blame protocol the wrong direction is an accusation against an honest participant, and in a bonded deployment that is the input to a slash. Raising a number (5 s → 30 s → 120 s → 180 s) hides the class rather than removing it | No test asserts a duration (three replaced by a work count and structural bounds); the harness ceiling is derived **per worker** from a measurement on the running box (`watchdog.ts`, `vitest.config.ts`); phase deadlines bound **silence**, reset by every accepted record; a static guard re-checks the rules on every `npm test`; identity is the signed event id, never object identity or arrival order (`signedRecordIdentity`, `collapseSignedRecords`); measured 18 failing test-runs / 1,340 → **0 / 1,280**, and the flaking targets from up to 4/20 → **0/20** |
 
 **How to use the taxonomy.** A future review should start by asking which class
 it is in, because the class determines where the fix goes: class 1 fixes are
@@ -160,7 +194,10 @@ are process (owner + trigger), not code; class 6 fixes are instrument-side and
 must be shown to fail before the fix; class 7 fixes are capacity-side and must
 name which entries are load-bearing; class 8 fixes are provenance-side and must
 derive the actor from proof, not from a field; class 9 fixes are encoding-side
-and go in the normaliser, not the caller.
+and go in the normaliser, not the caller; class 10 fixes are *measurement*-side
+and must **remove** the dependence — raising a budget, widening a timeout or
+re-running until green leaves the class intact, and a comparison that cannot
+fire is indistinguishable from a comparison that passes.
 
 ---
 
@@ -181,9 +218,13 @@ column *Reproduce* names the command or file.
 | **Quint (independent re-model)** | 1,626-line model, **42 scenario tests**, seeded simulation runs (10,000 samples/runner), **Apalache bounded symbolic check to depth 10** — a second model, not a proof | `proofs/mechanized/` (`run.sh`, `quint-run.log`) — needs Quint + Apalache |
 | **Differential parity** | independent reimplementations of the encoding writer, Merkle tree, tally, selection and hashes, pinned byte-for-byte and by oracle; 1 real divergence class found (UTF-16 vs UTF-8 tie-break) | `__tests__/reference/`, `__tests__/differentialParity` evidence in CROSS_CHECK |
 | **Three-day soak (host)** | **30,000 settlements** over 3 virtual days + a 38 h drain = **110 virtual hours**, **32/32 assertions green**, 5.7 min wall; zero lost deadlines, zero double-publishes, sat-exact ledger parity (150,180,128 sats); found **3 real defects incl. one about itself** (SOAK-F8: the soak had been red on `main` for two protocol rounds — 11/17 assertions, 289 stuck cases, 48,089 retries); scope: in-memory Postgres + virtual clock, so logic/ordering/volume, **not** real-PG serialization, fsync or relay RTT | host repo `docs/benchmarks/SOAK_3DAY.md`, `soak-3day.json` — not regenerable from this repository |
-| **Multi-process ceremony** | N = 3…7 real OS processes, separate PIDs/heaps/identities/cursors, honest loopback relay assigning total order; `SIGKILL` mid-DKG → every survivor fails closed with **no** group key; mid-signing → `SIGN_MISSING_REVEAL`, no signature; cross-round replay → equivocation, replayer disqualified; **Byzantine relay** matrix (reorder, drop, split-view, replay, silence) → `NO_EQUIVOCATION` by mechanism, 8 cases | `npm run simulate:multiprocess`, `npm run simulate:byzantine` |
-| **Claim ledger** | **285 claims / 516 evidence refs / every pointer resolves / 271 covered (95.1 %) / 14 open gaps by design**; 158 invariants, 156 with executable proof | `node scripts/cross-check.mjs` |
-| **Suite** | **1,804 passed / 1 skipped (81 files)** at v0.14.1; the per-round ledger (1,491 → 1,804) is recorded in CROSS_CHECK §1 | `npm test` |
+| **Multi-process ceremony** | N = 3…7 real OS processes, separate PIDs/heaps/identities/cursors, honest loopback relay assigning total order; `SIGKILL` mid-DKG → every survivor fails closed with **no** group key; mid-signing → `SIGN_MISSING_REVEAL`, no signature; cross-round replay → equivocation, replayer disqualified; **Byzantine relay** matrix (reorder, drop, split-view, replay, silence) → `NO_EQUIVOCATION` by mechanism, 8 cases. Then **three separate hosts** + relay + coordinator (k = 2, k = 3, a real `SIGKILL` over ssh) | `npm run simulate:multiprocess`, `npm run simulate:byzantine`, `npm run simulate:distributed`; `docs/DISTRIBUTED_CEREMONY.md` |
+| **Bond gate** | `bondCheckGate.ts`: argv contract, strict output parser, every roster decision (inert / proven / refused / missing verdict / proof mismatch / `rail:"none"` / below-threshold / impossible input); three boxes × three bonds → one key, one **verified** signature; a genuinely **spent** bond → `ROSTER_BELOW_THRESHOLD`, no key, no signature | `npx vitest run __tests__/bondCheckGate.test.ts`; `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate" |
+| **Bond rails (public)** | **testnet4**: 3 × 100,000 sat court-locked 2-of-2 bonds from a real 0.00563475 tBTC deposit (block 161026), `BOND_RAIL_PROVEN`, `scriptBinding:"configured"`, `bitcoind` + `mempool.space/testnet4` agreeing, slash spend signed with both keys and validated (`testmempoolaccept allowed, vsize 137`) **not broadcast**. **Liquid testnet**: 3 × 100,000 sat court-locked, `blockstream` + `liquid.network` agreeing (one fail-closed `BOND_ORACLE_DISAGREEMENT` first) | host `bao.markets` PRs #2616 (testnet4) and #2597 (Liquid), `scripts/court/verify-bond.mts` — public values only, re-checkable against the chains |
+| **Determinism** | 1,432 latency sites removed (1,383 implicit 5 s defaults, 49 literals, 8 fixed subprocess deadlines) + 3 duration assertions; harness ceiling derived per worker; **18 failing test-runs / 1,340 → 0 / 1,280**; the juror phase deadline now bounds silence | `docs/TEST_DETERMINISM.md`; `npx vitest run __tests__/determinism.test.ts` |
+| **Continuous programs** | rail soak 5-min / hourly / 6-hourly with boot-gap accounting and per-source health; 6-hourly ceremony soak with scenario rotation; **1 rail bug / 8 harness bugs**, all regression-locked; 371 cycles at 22.7 of 100 hours | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program"; `npm run soak:status`; host rail-soak series |
+| **Claim ledger** | **286 claims / 521 evidence refs / every pointer resolves / 272 covered (95.1 %) / 14 open gaps by design**; 159 invariants, 157 with executable proof | `node scripts/cross-check.mjs` |
+| **Suite** | **2,029 passed / 1 skipped (95 files)** at v0.16.0; the per-round ledger (1,491 → 2,029) is recorded in CROSS_CHECK §1 | `npm test` |
 | **Registered findings** | **112 rows** in the cross-repo sweep (the v0.13.1 sweep dispositioned 107: 6 fixed / 46 closed-by-design / 53 deferred-v0.14 with owner + trigger / 2 rejected) | host `docs/operations/REGISTERED_FINDINGS_SWEEP.md` |
 
 ### 3b. Finding counts by round
@@ -201,12 +242,19 @@ column *Reproduce* names the command or file.
 | Review round 6 | 16 attacks | **2** (r40-1, r40-2) | — | 3 | — | rest | 2 + 3 doc |
 | Review round 7 | 21 attacks | **1** (r41-1) | — | 1 | — | rest | 3 |
 | Review round 8 | 34 attacks | **2** (r8-1, r8-2) | — | 4 | — | rest | 6 + 1 doc |
+| Review round 9 | 27 tests | **1** (r9-1) | — | 4 | — | rest | 5 |
+| Review round 10 | 24 tests | **3** (r10-1, r10-3, r10-4) | — | 2 | — | rest | 5 |
+| Review round 11 | 21 tests | **3** (r11-1 cluster) | — | 3 | — | rest | 4 |
+| Review round 12 | 20 tests | **1 cluster / 7 sites** (r12-1) | — | 1 | — | 2 BLOCKED, 1 CLOSED-BY-DESIGN | 2 + the sweep |
 
 **Every exploitable finding in the review rounds was fixed in the round that
-found it**: r29-1, r33-1, r33-5, r33-6, r38-1, r40-1, r40-2, r41-1, r8-1, r8-2 —
-ten named closures, each with a test that is red on the pre-fix head (4 of 15 in
+found it**: r29-1, r33-1, r33-5, r33-6, r38-1, r40-1, r40-2, r41-1, r8-1, r8-2,
+r9-1, r10-1, r10-3, r10-4, r11-1, r12-1 — sixteen named closures, each with a
+test that is red on the pre-fix head (4 of 15 in
 round 3, 6 of 21 in round 4, 3 of 27 in round 5, 6 of 23 in round 6, 4 in round
-7, **13 red of 34 in round 8**). The one CRITICAL
+7, **13 red of 34 in round 8**, 8 of 27 in round 9, each of round 10's four
+fixes reverted in turn (2/1/2/1 red), **7 red of 21 in round 11**, **9 of 20 in
+round 12**). The one CRITICAL
 finding in the whole record is from the pre-mainnet August round (complaint
 protocol without possession binding → group-secret extraction), and no review
 round has ever found a REJECT-level defect in the paper.
@@ -222,9 +270,16 @@ r33-5, r38-1, plus r33-6 on the economics side); round 6's two are class 2
 probing; round 7's r41-1 is class 2 one ledger further (which **pool** each
 value-locking entry reads), and round 8's two are class 9 (r8-1) and class 8
 (r8-2), found by asking what the transport *binds* rather than what it carries.
-Class 6 is the instrument class: it produced the r37-1 finding by making
-a surviving mutant readable, and it is the class that keeps the other eight
-honest.
+Rounds 9–12 are the same classes one layer out: r9-1 is class 9 *inside* the fix
+for class 9 (a `trim()` one normalisation call away), r10-1 and r11-1 are class
+4 — a report that outlives the decision — reached through an echo path, and
+r12-1's **sweep** is class 6, an instrument that finds the class rather than the
+instance (it is why 66 sites fell to one mechanical rule after three rounds of
+hand-listing them). Class 6 is the instrument class: it produced the r37-1
+finding by making a surviving mutant readable, and it is the class that keeps the
+other nine honest. Class 10 is the newest and the cheapest to miss: it produced
+no security finding at all, only **wrong verdicts** — a replay blamed as
+equivocation, and a suite that decided by the clock.
 
 ---
 
@@ -232,12 +287,15 @@ honest.
 
 | Need | Go to |
 |---|---|
-| A round's authoritative statement | `REVIEW_ROUND_2..8.md`, `REVIEW_SIMULATION.md`, `READINESS_REVIEW.md`, `MUTATION_TESTING*.md`, `benchmarks/SCALE_CAMPAIGN.md`, `CRYPTO_AUDIT.md`, `docs/proofs/**` |
-| A claim → its executable proof | `CROSS_CHECK.md` (machine-verified; 285 claims / 516 refs) |
+| A round's authoritative statement | `REVIEW_ROUND_2..12.md`, `REVIEW_SIMULATION.md`, `READINESS_REVIEW.md`, `MUTATION_TESTING*.md`, `TEST_DETERMINISM.md`, `LANE-PROJECTION.md`, `benchmarks/SCALE_CAMPAIGN.md`, `CRYPTO_AUDIT.md`, `docs/proofs/**` |
+| A claim → its executable proof | `CROSS_CHECK.md` (machine-verified; 286 claims / 521 refs) |
 | An invariant → its guard → its test | `FORMAL_INVARIANTS.md` (158 `INV-*`) |
 | A residual → its owner and trigger | host `docs/operations/REGISTERED_FINDINGS_SWEEP.md` (112 rows) |
+| The bond gate and the funded-bond evidence | `MULTI_PROCESS_CEREMONY.md` §"The bond gate", §"Stable identities and funded bonds"; paper §8.5 |
+| The continuous programs and their tally | `MULTI_PROCESS_CEREMONY.md` §"The continuous program"; host rail-soak series |
+| Why the suite's verdict is load-insensitive | `TEST_DETERMINISM.md` |
 | The method and its limits | paper **§11.6** "The review verifies itself"; `READINESS_REVIEW.md` persona 1 on what §11.6 can and cannot carry |
-| Which environment a rail result came from | paper **§11.8** (public testnet4 / signet-public outrank the private signet; every private-signet result is labelled) |
+| Which environment a rail result came from | paper **§11.8** (public testnet4 / Liquid testnet / signet-public outrank the private signet; every private-signet result is labelled) |
 | The campaign's method as a reviewer should apply it | paper §13 (five claim classes, four status labels, every row carrying an open obligation) |
 | The proofs | `docs/proofs/README.md` (T1–T6, dependency graph, 6 lemma gaps) |
 | Reproducing any number | `REPRODUCIBILITY.md` + the *Reproduce* column in §3a |
@@ -257,11 +315,17 @@ honest.
   reviewer* thought of); the corpora are statistical sweeps, not exhaustive
   proofs; the model checker is exhaustive only within its abstraction; the soak
   validates logic, ordering and volume against a model of Postgres; the ceremony
-  is localhost; and 96.0 % here vs 86.8 % in campaign 1 measure different mutant
+  runs on three real hosts but all of them belong to **one operator**, so it
+  measures coordination rather than decentralisation; the bond evidence is on
+  public testnets, but a bond proves collateral at verification time rather than
+  future honesty (and the Liquid covenant binds the case, not the juror — LJ-1);
+  and 96.0 % here vs 86.8 % in campaign 1 measure different mutant
   sets on different code — compare per class, never per total.
-- **Not finished.** Review rounds 7 and 8 have landed and are indexed here, but
+- **Not finished.** Review rounds 9–12 and the instrument rounds 51–54 have
+  landed and are indexed here, but
   the deferred rows
-  (r29-5/r33-2/r38-3/r40-3, r33-3/r33-4, r33-7/r40-4/r40-5, r41-2, H-1…H-7) are open
+  (r29-5/r33-2/r38-3/r40-3, r33-3/r33-4, r33-7/r40-4/r40-5, r41-2, H-1…H-7,
+  LJ-1) are open
   with owners and triggers, and the independent human cryptographer / third-party
   audit the paper's §12.5 lists as absent is still absent.
 
