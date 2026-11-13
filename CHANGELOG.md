@@ -11,6 +11,39 @@ frozen.
 
 ## [Unreleased]
 
+### Added (the soak runs the bond gate ARMED — real funded bonds, every cycle)
+- **`bonded-*` scenarios in the ceremony soak rotation.**
+  `scripts/court/distributed-ceremony-soak.mjs` now interleaves five bond-gated
+  scenarios with the transport ones: `bonded-liquid-k2` (three seats on the
+  Liquid testnet juror-bound bonds, k=2), `bonded-onchain-kn` (all-of-N on the
+  Bitcoin testnet4 2-of-2 bonds), `bonded-wrongseat` (a bond presented for the
+  wrong seat on BOTH rails → `BOND_JUROR_MISMATCH` + `BOND_SCRIPT_MISMATCH`),
+  `bonded-unbound` (the legacy court-only Liquid lock → `BOND_JUROR_UNBOUND`) and
+  `bonded-timeout` (a check that never answers → `BOND_CHECK_TIMEOUT`). Each
+  writes the usual JSONL record plus `bondMode`, the per-seat bond refs,
+  `bondGate` and `assertions`. The bond references are the SAME funded outpoints
+  every run and are never spent: the scenarios prove the GATE, not fresh funding.
+- **`scripts/court/bond-plan.json`** — the public bond plan (outpoints, juror
+  pubkeys, group/asset/court keys, the legacy lock). Box order is seat order, so
+  a bond is always presented by the key it was funded to.
+- **`scripts/court/soakBondAssertions.ts`** (+ `__tests__`) — the scenarios'
+  expectations as pure functions, evaluated against the driver's artifact and
+  FAILING the run when violated: honest ⇒ `signatureVerified:true`, exactly one
+  signature, every admitted seat `bondVerified:true`; negative ⇒
+  `signatureVerified:false`, `groupKey:null`, no signature, the expected typed
+  code present, the expected exclusions, `ROSTER_BELOW_THRESHOLD`; every run ⇒
+  zero strays, no relay listener (boxes and coordinator), zero held HTLCs, and
+  the bond refs recorded verbatim.
+- **Gate configuration for the timer.** `BAO_COURT_BOND_CLI` (the host's
+  `verify-bond.mts`; the soak composes the plan's public config) or
+  `BAO_COURT_BOND_CHECK_CMD` (verbatim). `ceremony-soakctl.sh install` persists
+  either into `~/.config/bao-court/ceremony-soak.env`, read by the unit through
+  `EnvironmentFile=-`. With neither set, every `bonded-*` scenario records
+  `blocked: BOND_GATE_NOT_CONFIGURED` — never a silent `rail:"none"` pass.
+- **`docs/MULTI_PROCESS_CEREMONY.md`** — the bond-gated rotation, what each
+  scenario proves, the assertions, the artifacts, and the honest note that the
+  bonds are reused.
+
 ### Added (stable juror identities — a seat is a proven KEY plus a proven BOND)
 - **`--juror-keys=<dir>` (ceremony mode).** Each box loads a PRE-PROVISIONED
   juror key from `<dir>/juror-<idx>.sec` (0600, outside the repo, `$HOME`

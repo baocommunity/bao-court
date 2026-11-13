@@ -7,6 +7,12 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=@REPO@
+# The bond gate's command (the HOST's proof — see docs/MULTI_PROCESS_CEREMONY.md).
+# `-` = the file may be absent, in which case every `bonded-*` scenario records
+# `blocked: BOND_GATE_NOT_CONFIGURED` instead of silently running with the gate
+# inert. `ceremony-soakctl.sh install` writes it from the installing shell when
+# BAO_COURT_BOND_CHECK_CMD / BAO_COURT_BOND_CLI are set.
+EnvironmentFile=-%h/.config/bao-court/ceremony-soak.env
 # flock -n: a run that is still going (or stuck) must never overlap the next
 # timer tick. timeout is the outer hard bound; the runner has its own inner one.
 ExecStart=/usr/bin/flock -n %t/bao-court-ceremony-soak.lock /usr/bin/timeout --kill-after=60s 600s /usr/bin/node --import tsx @REPO@/scripts/court/distributed-ceremony-soak.mjs run

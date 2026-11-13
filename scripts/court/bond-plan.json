@@ -1,0 +1,73 @@
+{
+  "$comment": [
+    "PUBLIC DATA ONLY — no key, seed, nonce, token or RPC credential.",
+    "",
+    "The bond plan the ceremony soak runs against. Every outpoint below is a REAL,",
+    "FUNDED, UNSPENT public-testnet coin locked to the court; the juror pubkeys are",
+    "the pre-provisioned identities `provision-jurors.mjs --check` prints.",
+    "",
+    "THE SAME OUTPOINTS ARE REUSED ACROSS EVERY RUN AND ARE NEVER SPENT. The soak",
+    "therefore proves the GATE (a seat costs a bond the host can PROVE, and a bond",
+    "for another seat / another lock / a silent check is refused), NOT fresh",
+    "funding. Re-funding is a separate, manual operation.",
+    "",
+    "Box order IS the seat order: `boxes[i]` runs with `<jurorKeysDir>/juror-<i+1>.sec`,",
+    "and `seats[i]` names the bond funded to that key."
+  ],
+  "bondSats": 100000,
+  "jurorKeysDir": "/home/deploy/.bao-court/jurors",
+  "boxes": ["bao8gb", "vps16gb", "bao-testnet"],
+  "liquid": {
+    "network": "testnet",
+    "courtGroupPubkey": "ccabb21044676d058dc44c8241941c69f0663f449bb148889d5c68326198dc51",
+    "asset": "144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49",
+    "confirmations": 2,
+    "lockShape": "<juror_xonly> OP_DROP <group_xonly> OP_CHECKSIG (juror committed, not required)"
+  },
+  "onchain": {
+    "network": "testnet",
+    "courtPubkey": "7245899da3af4aee68a9237fef38c4bf08ce5b572bb99f2cc53cc9383dae84f3",
+    "bitcoindSsh": "bao8gb",
+    "confirmations": 1,
+    "lockShape": "P2WSH OP_2 <court> <juror> OP_2 OP_CHECKMULTISIG (2-of-2: the script IS the binding)"
+  },
+  "seats": [
+    {
+      "seat": 1,
+      "box": "bao8gb",
+      "jurorPubkey": "83afd76d1cc2a52933b35112ff3c61bead1f4e9b3db7b025bf0f512f1052d493",
+      "liquid": "63342daaba79074f0062990ddbd1d3c61f7888114096355bf1df39c19c1a73f2:0",
+      "onchain": "d4967edf70e57835891902830da7b6e558a8a5e10a62fba8484e99c1b9dcb267:1"
+    },
+    {
+      "seat": 2,
+      "box": "vps16gb",
+      "jurorPubkey": "94532943fe5c0d16d75ee5dbe03521d7e670ac013c002e79c6ed61183421d615",
+      "liquid": "be0daf8513c79ea5dcd2001f03e48a37ef938dd58f71a5a11164097d5548c7bb:0",
+      "onchain": "14f88077e6f2344e9343fe942883f08636529f1b6ab94c33ee81f89528b36100:1"
+    },
+    {
+      "seat": 3,
+      "box": "bao-testnet",
+      "jurorPubkey": "8fdb1e222e4460ebc77fc13147797d38eea66243bf07573a2f43a597f2bf84b0",
+      "liquid": "0bb85a03f412609be677963e1e14d4521732e9e78ffbb868e1ace146baa3bd4b:0",
+      "onchain": "9d9269efade40d19c8498822a02ee8645a752a68f4215cc875c8ef1d6cf9a22d:1"
+    }
+  ],
+  "legacyLiquid": {
+    "$comment": "The court-only lock funded 2026-11-13 (script 5120a567…45032f). Intact and unspent; commits no juror, so it answers BOND_JUROR_UNBOUND.",
+    "proofRef": "c2f115659cb4c5e715ba6d1ad8303c5cab4c59a71ca17e63b483c6a3fd9a6b10:0"
+  },
+  "expectedCodes": {
+    "liquid": [],
+    "onchain": [],
+    "wrongseat": ["BOND_JUROR_MISMATCH", "BOND_SCRIPT_MISMATCH"],
+    "unbound": ["BOND_JUROR_UNBOUND"],
+    "timeout": ["BOND_CHECK_TIMEOUT"]
+  },
+  "provenance": {
+    "liquidBonds": "funded 2026-11-13 by the liquidtestnet faucet to the per-seat juror-bound lock; proven by blockstream + liquid-network",
+    "onchainBonds": "funded 2026-11-13 from deposit b2b393ae8e7e58845fb0a1c37684ecd6719a87fad66ff0d992cd659d3ed935b5 (block 161026); proven by bitcoind-tn4-relay + mempool.space/testnet4",
+    "hostCli": "bao.markets scripts/court/verify-bond.mts (the ceremony's pluggable BAO_COURT_BOND_CHECK_CMD adapter)"
+  }
+}

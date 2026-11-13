@@ -373,21 +373,133 @@ whose rail half is the settlement soak.
 
 ### What runs, and in what order
 
-Rotation (one scenario per invocation, persisted in `state.json`):
+Rotation (one scenario per invocation, persisted in `state.json`). The
+`bonded-*` rows are BOND-GATED (a seat costs a funded bond the host proves
+before the DKG starts — see
+[the bond-gated rotation](#the-bond-gated-rotation--real-funded-bonds-every-cycle));
+they are interleaved with the transport rows so the gate is exercised every
+other invocation rather than once in ten:
 
 | # | scenario | what it exercises | expected |
 |---|---|---|---|
-| 1 | `happy-k2` | 3 boxes, threshold 2: DKG → commit → reveal → aggregate | one key, one **verified** signature |
-| 2 | `happy-kn` | 3 boxes, threshold 3 (all-of-N) | one key, one **verified** signature |
-| 3 | `kill` | SIGKILL a juror over ssh after its `frost-commit` reaches the relay | **no** signature, survivors `SIGN_MISSING_REVEAL` |
-| 4 | `replay` | relay duplicates a deterministic stride of records and re-delivers them late | one key, one **verified** signature, duplicates deduped |
-| 5 | `reorder` | relay releases each sender's records after a seeded rank × 90 ms (per-sender FIFO kept) | one key, one **verified** signature, different delivery orders |
-| 6 | `silence` (opt-in `--with-silence`) | relay withholds one juror's records from the others | **no** signature, typed missing-peer abort |
+| 1 | `bonded-liquid-k2` | 3 seats on the **Liquid testnet juror-bound bonds**, k=2 | gate PROVES all 3; one key, one **verified** signature |
+| 2 | `happy-k2` | 3 boxes, threshold 2: DKG → commit → reveal → aggregate | one key, one **verified** signature |
+| 3 | `bonded-onchain-kn` | all-of-N on the **Bitcoin testnet4 2-of-2 bonds** | gate PROVES all 3; one key, one **verified** signature |
+| 4 | `happy-kn` | 3 boxes, threshold 3 (all-of-N) | one key, one **verified** signature |
+| 5 | `bonded-wrongseat` | two bonds presented for the **wrong seat**, on **both rails** | `BOND_JUROR_MISMATCH` + `BOND_SCRIPT_MISMATCH`, 2 excluded, `ROSTER_BELOW_THRESHOLD`, **no key, no signature** |
+| 6 | `kill` | SIGKILL a juror over ssh after its `frost-commit` reaches the relay | **no** signature, survivors `SIGN_MISSING_REVEAL` |
+| 7 | `bonded-unbound` | the **legacy court-only Liquid lock** presented for seat 1 | `BOND_JUROR_UNBOUND`, 1 excluded, `ROSTER_BELOW_THRESHOLD`, **no key, no signature** |
+| 8 | `replay` | relay duplicates a deterministic stride of records and re-delivers them late | one key, one **verified** signature, duplicates deduped |
+| 9 | `bonded-timeout` | a bond check that **never answers** (1.2 s budget, sleeper command) | `BOND_CHECK_TIMEOUT` ×3, all excluded, `ROSTER_BELOW_THRESHOLD`, **no key, no signature** |
+| 10 | `reorder` | relay releases each sender's records after a seeded rank × 90 ms (per-sender FIFO kept) | one key, one **verified** signature, different delivery orders |
+| 11 | `silence` (opt-in `--with-silence`) | relay withholds one juror's records from the others | **no** signature, typed missing-peer abort |
 
 The relay may lie about **delivery** and never about **content**: every message
 on the wire is a signed Nostr event, so a duplicated or delayed record is
 byte-identical, and a censored one is simply absent. `replay` and `reorder` are
 therefore real idempotency/order tests over a real network, not injections.
+
+### The bond-gated rotation — real funded bonds, every cycle
+
+The transport rotation proves the ceremony *works*; it says nothing about
+whether a **seat costs anything**. Since v0.16.0 the ceremony enforces a bond
+gate (`BAO_COURT_BOND_CHECK_CMD`, see
+[The bond gate](#the-bond-gate--a-seat-costs-a-proven-bond-round-53)), and the
+soak now runs it ARMED against real, funded, court-locked bonds on every other
+invocation.
+
+**The plan is data, not code**: `scripts/court/bond-plan.json` — public only
+(outpoints, juror pubkeys, the group/asset/court keys, the legacy lock). Box
+order *is* seat order: `boxes[i]` runs `<jurorKeysDir>/juror-<i+1>.sec`, and
+`seats[i]` names the bond funded to that key. The soak passes that order to the
+driver, so a bond is always presented by the key it was funded to; passing the
+soak's own default order would seat each bond under another box's key, which the
+gate would (correctly) refuse — the scenario would be measuring a typo.
+
+| scenario | bonds presented (seat 1 / 2 / 3) | what it proves | artifact must show |
+|---|---|---|---|
+| `bonded-liquid-k2` | own Liquid testnet juror-bound bond ×3 | the Liquid leaf `<juror> OP_DROP <group> OP_CHECKSIG` is proven per seat, and a proven roster signs | `bondVerified:true` ×3, `signatureVerified:true`, **exactly one** signature, one group key |
+| `bonded-onchain-kn` | own testnet4 2-of-2 bond ×3 | the on-chain script `OP_2 <court> <juror> OP_2 OP_CHECKMULTISIG` binds the juror key, and all-of-N still signs | same, with `scriptBinding:"configured"` |
+| `bonded-wrongseat` | **seat 2's Liquid bond / seat 1's testnet4 bond** / own | a bond cannot be re-presented for another seat — on **either** rail | `BOND_JUROR_MISMATCH` **and** `BOND_SCRIPT_MISMATCH`, 2 excluded, `ROSTER_BELOW_THRESHOLD`, `signatureVerified:false`, `groupKey:null`, no signature |
+| `bonded-unbound` | **the legacy court-only lock** / own / own | a court-locked coin that commits **no juror** cannot back a seat | `BOND_JUROR_UNBOUND`, 1 excluded, typed stop, no key, no signature |
+| `bonded-timeout` | own Liquid bond ×3, check command never answers | the gate fails **closed** on a silent check (1.2 s budget) | `BOND_CHECK_TIMEOUT` ×3, all excluded, typed stop, no key, no signature |
+
+`bonded-wrongseat` deliberately presents **both** bindings in ONE run: seat 1
+claims seat 2's Liquid bond (`BOND_JUROR_MISMATCH`) and seat 2 claims seat 1's
+testnet4 bond (`BOND_SCRIPT_MISMATCH`), while seat 3 keeps its own so the stop is
+the *threshold* rather than a wipe-out. One code per run would leave the other
+rail's binding unproven by the soak; `state.bondLeadRail` alternates which rail
+is refused **first**, so the rotation also covers the order.
+
+#### Arming the gate
+
+The proof is the HOST's — this repository knows no chain. Two ways to give the
+timer the command:
+
+```bash
+# (a) the host CLI directly; the soak composes the plan's public config onto it
+export BAO_COURT_BOND_CLI=/path/to/bao.markets/scripts/court/verify-bond.mts
+
+# (b) the full command verbatim (the driver's own contract; wins over (a))
+export BAO_COURT_BOND_CHECK_CMD="npx tsx /path/to/verify-bond.mts \
+  --court-group-pubkey=<group x-only> --asset=<asset id> \
+  --court-pubkey=<court x-only> --bitcoind-ssh=bao8gb --confirmations=2"
+
+./scripts/court/ceremony-soakctl.sh install   # persists either one into
+                                             # ~/.config/bao-court/ceremony-soak.env
+```
+
+`ceremony-soakctl.sh install` writes that 0600 env file (systemd
+`EnvironmentFile=-%h/.config/bao-court/ceremony-soak.env`) when one of the two
+variables is set in the installing shell. **With neither set, every `bonded-*`
+scenario records `blocked: BOND_GATE_NOT_CONFIGURED`** — the rotation never
+silently degrades to `rail:"none"` evidence under a `bonded-*` name, because that
+would be the exact confusion the gate exists to prevent. `status` prints
+`bond gate: ARMED | NOT CONFIGURED`.
+
+#### Assertions — a scenario that cannot fail is not a scenario
+
+Every expectation is evaluated against the driver's artifact *before* the JSONL
+record is written, and a violation makes the run `fail`
+(`scripts/court/soakBondAssertions.ts`, covered by
+`__tests__/soakBondAssertions.test.ts`):
+
+| run | must hold |
+|---|---|
+| honest | `signatureVerified:true`; **exactly one** aggregate signature; a non-null group key; `bondGate.enforced:true`; every admitted seat `bondVerified:true` |
+| negative | `signatureVerified:false`; `groupKey:null`; **zero** signatures; the expected typed code **present in the artifact**; exactly the expected seats excluded; `ROSTER_BELOW_THRESHOLD` |
+| every run | zero stray processes on every box; nothing listening on the relay port (boxes **and** coordinator); zero held HTLCs on the Lightning node |
+| every run | the bond references recorded **verbatim** per seat (`liquid/testnet:<txid>:<vout>`), and each seat checked against exactly that `proofRef` |
+
+The held-HTLC probe is measured, not assumed: none of these bonds is a Lightning
+bond, so the expected count is zero, and a non-zero count fails the run (a held
+HTLC is money in flight). If the probe cannot answer it is recorded as
+`null` — unknown, never zero.
+
+#### Artifacts
+
+The JSONL line gains `bondMode`, `bonds` (one entry per seat: box, rail,
+network, `proofRef`), `bondGate` (what the gate *did*: admitted, excluded, the
+typed codes, how many admitted seats carried a verified bond), `assertions`
+(ok/failures, `heldHtlcs`, `coordinatorListening`) and `signatures` (a count).
+The per-run artifact (`runs/<runId>/<stamp>-<label>.json`) carries the full
+`bondGate.verdicts` — one entry per seat with rail, `proofRef`, code, sources and
+elapsed ms — plus `identities[].bondRef`/`bondVerified` and `bondExclusions`.
+Only public material: outpoints, scripts, values, heights, source names, keys'
+**public** x-only forms.
+
+#### The honest note — same bonds, every run
+
+**These are the same funded outpoints reused across every run, and they are
+never spent.** The soak therefore proves the **gate** — that a seat costs a bond
+the host can PROVE (unspent, court-locked, carrying the value, at depth), that
+another seat's bond cannot be re-presented, that the legacy court-only lock is
+refused, and that a silent check stops the ceremony. It does **not** prove fresh
+funding: no new bond is created per run, no faucet or wallet is exercised, and a
+bond that is eventually spent will surface as `BOND_SPENT` and a
+`ROSTER_BELOW_THRESHOLD` stop — the correct signal, and an operator re-fund, not
+a soak failure. A bond still proves collateral *at verification time*: it prices
+a seat, it does not buy honesty.
 
 ### One JSONL record per run
 
@@ -400,6 +512,20 @@ therefore real idempotency/order tests over a real network, not injections.
  "relayRttP50":3.05,"classification":"OK",
  "evidencePath":"runs/…/dist-…-summary.json", "relayMode":"honest",
  "relayRecords":18,"gap":null,"cleanup":{"straysBefore":[…],"after":[…],"prunedRuns":0}}
+```
+
+A bond-gated run carries the same record plus what the GATE did:
+
+```jsonc
+{"ts":"…","scenario":"bonded-liquid-k2","bondMode":"liquid","k":2,"n":3,
+ "outcome":"pass","signatureVerified":true,"signatures":1,
+ "bonds":[{"seat":1,"box":"bao8gb","rail":"liquid","network":"testnet",
+           "proofRef":"63342daa…:0"}, …],
+ "bondGate":{"enforced":true,"admitted":[1,2,3],"excluded":[],
+             "classification":null,"codes":["BOND_RAIL_PROVEN"],
+             "admittedBondsVerified":3},
+ "assertions":{"ok":true,"failures":[],"heldHtlcs":0,"coordinatorListening":false},
+ "classification":"OK","cleanup":{"straysBefore":[…],"after":[…],"prunedRuns":0}}
 ```
 
 `outcome` is `pass`, `fail`, `timeout`, `blocked` (a box was down or had no
@@ -467,11 +593,12 @@ Byzantine network.
   no packet loss, partition, eclipse, clock-skew attack or traffic analysis, and
   all four machines have one owner. A Byzantine *juror* is out of scope (that is
   the R30 replay suite plus the protocol's own gates).
-- **No real stake** (in the soak's default configuration). The rotation runs with
-  the bond gate INERT, so every roster bond reference is `rail:"none"`, nothing
-  is at risk and nothing can be slashed. The gate can be armed per invocation —
-  see [The bond gate](#the-bond-gate--a-seat-costs-a-proven-bond-round-53) —
-  but the soak timer does not set it, and a bond still proves collateral at
+- **Stake is real but REUSED.** The `bonded-*` scenarios run with the gate ARMED
+  against real, funded, court-locked bonds — the same outpoints every cycle,
+  never spent (see
+  [the bond-gated rotation](#the-bond-gated-rotation--real-funded-bonds-every-cycle)).
+  That proves the gate, not fresh funding: no new bond is created per run, and
+  the soak never exercises the fund/slash path. A bond also proves collateral at
   verification time, not future honesty.
 - **Custody is on disk.** Keys are 0600 files generated on each box, not HSMs or
   threshold devices.
