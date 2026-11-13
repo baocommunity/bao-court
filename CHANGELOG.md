@@ -633,6 +633,13 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.16.1] — 2026-11-13
+
+### Documentation — the delivery record
+- **`docs/DELIVERY.md`**: the scoreboard — what is proven, on which network, with the txids and artifacts, how to reproduce each claim, and an explicit table of what is deliberately **not** proven (Liquid juror binding, human-funded testnet4, private-signet rails, single operator, host-mediated release).
+- **Paper refreshed** with the post-v0.16.0 evidence: a new §8.5 (bond-gated empanelment), §10.2 vectors R (a bond for the wrong seat, odd-Y keys) and S (replay is not equivocation — a false accusation is a correctness bug), a rewritten §11.8 evidence hierarchy stating that **both priority rails now have public-testnet evidence**, §13 Table 2, and new appendix rows S-26…S-29 / r12-1 / r54-1 / LJ-1 / RAIL-1. `EVALUATION.md`, `CAMPAIGN_REPORT.md` and `REVIEWS_INDEX.md` (rounds 9–12, instrument rounds, continuous programs, taxonomy class 10) follow.
+- The paper is byte-identical across its three copies, sha256 `e53c245266901e9839d09b7eaada2651ecbdde84e30a9874785c284f2b23faf1`.
+
 ## [0.16.0] — 2026-11-12
 
 ### Added
