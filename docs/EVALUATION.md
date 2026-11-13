@@ -1,16 +1,20 @@
 # BAO Court — Evaluation
 
-**Version:** tracks `@bao/court` v0.15.2 · **Date:** 2026-11-11 · **Round:** 56
-(final totals refresh after review rounds 9–12)
+**Version:** tracks `@bao/court` v0.16.0 · **Date:** 2026-11-13 · **Round:** 57
+(bond-gated ceremony, stable juror identities, public-testnet bond evidence, the
+continuous programs, determinism)
 
-> **Final totals at `v0.15.2`.** Suite 1,953 tests / 90 files (clean-runner CI);
-> 101 mutants across three campaigns; 1,587,000 campaign units / 8,286,823
-> assertions / 0 failures; 3,869,232 states / 60,020,684 illegal-witness probes
-> with 0 accepted; 42 Lean 4 declarations with no `sorry` (axioms `propext`,
-> `Quot.sound`); 100,000-case independent wire differential with 0
-> disagreements; three-day soak 32/32; cross-check 285 claims / 516 refs /
-> 95.1 %. Tables below are the per-round measurements, each dated to the release
-> it was taken on.
+> **Final totals at `v0.16.0`.** Suite 2,029 tests / 95 files (1 environment-gated
+> live test skipped, re-measured on this head); 101 mutants across three
+> campaigns; 1,587,000 campaign units / 8,286,823 assertions / 0 failures;
+> 3,869,232 states / 60,020,684 illegal-witness probes with 0 accepted; 42 Lean 4
+> declarations with no `sorry` (axioms `propext`, `Quot.sound`); 100,000-case
+> independent wire differential with 0 disagreements; three-day soak 32/32; two
+> continuous programs at ~100 hours (rail soak 1 rail bug / 8 harness bugs, all
+> regression-locked; ceremony soak on a 6-hourly timer); court-locked bonds
+> proven on **public testnet4 and Liquid testnet**; cross-check 286 claims / 521
+> refs / 95.1 %. Tables below are the per-round measurements, each dated to the
+> release it was taken on.
 
 This is the paper's evaluation section as a standalone artifact. Every number
 below comes from **existing committed evidence** — a merged PR, a committed
@@ -34,20 +38,27 @@ The claims of the paper were not checked once; they are the output of a
 round-by-round program (paper §11.5) in which each round picks an attack
 surface or a verification technique, records what it finds, and lands the
 disposition — a shipped fix with pinned tests, a documented hold, or a spec'd
-follow-up. The evaluation evidence therefore has five layers: **exhaustive
+follow-up. The evaluation evidence therefore has six layers: **exhaustive
 model checking** of the ceremony machines, witness-aware since v0.12 (§2.1),
 **differential parity** against independent reimplementations (§2.2),
 **property-based sweeps** and a **formal-invariants audit** (§2.3–2.4),
-**statistical corpora** of 1.19 M seeded cases (§2.5), and a decade-compressed
-**adversarial audit record** — including the rounds that attacked its own
-fixes — plus a host-API pentest and two soaks (§3, §4). Performance is measured,
+**statistical corpora** of 1.59 M seeded cases (§2.5), a decade-compressed
+**adversarial audit record** — including the rounds that attacked its own fixes
+— plus a host-API pentest, two soaks and the rail/bond evidence (§3, §4), and
+**continuous programs**: two unattended series (~100 hours) that run the rails
+and the three-box ceremony on a timer, so the property measured is that the
+thing *keeps* working (§3.6). One rule runs through all six: **the instrument is
+not exempt from the evaluation** — a suite that decides by the clock is a
+measurement defect (fixed by construction, §3.7), and a soak that was silently
+red on `main` is a finding about the soak (SOAK-F8). Performance is measured,
 never assumed, including the optimizations that were *refused* with numbers
-(§4). The threat-model chapter closes the loop: 285 indexed claims, **95.1%**
+(§4). The threat-model chapter closes the loop: 286 indexed claims, **95.1%**
 backed by executable evidence (§5). What the numbers do **not** prove is stated
-in §6 — reviewers should read it, especially items 7–8, which are the new
-limits this refresh introduced rather than removed, and item 10, which ranks
-rail evidence by the environment that produced it (public testnet4 /
-signet-public above the private signet; paper §11.8).
+in §6 — reviewers should read it, especially items 7–8, which are the new limits
+this refresh introduced rather than removed, item 10, which ranks rail evidence
+by the environment that produced it (public testnet4 / Liquid testnet /
+signet-public above the private signet; paper §11.8), and item 11, which is the
+new bond row's honest perimeter.
 
 **Recorded verification state at v0.10.2 `main` (2026-11-10, PR #64):** full
 suite **1,491 passed / 1 skipped (61 files)**; `npm run typecheck` +
@@ -100,6 +111,12 @@ entries: 14 open, 4 closed). The +46 over round 7 are `reviewRound8.test.ts`
 head**, plus the four paths to `final`, re-attacked from outside) and
 `escalationRequestWire.test.ts` (12 — the transport's round-trip, strict
 refusal matrix and pinned known-answer digest). See `docs/REVIEW_ROUND_8.md`.)*
+*(Rounds 9–12 and 51–54, 2026-11-11 → 13 — the per-round ledger continues:
+**1,831** (round 9) → **1,855** (round 10) → **1,932** (round 11) → **1,953**
+(round 12 / v0.15.2) → **2,029 at v0.16.0** (this head: the bond gate, the
+replay/equivocation pair, the over-strictness matrix, the determinism guard and
+the ceremony-soak additions). Rounds 9–12 are indexed in
+`docs/REVIEWS_INDEX.md` §1d; the instrument rounds 51–54 in §1e.)*
 
 ---
 
@@ -406,8 +423,99 @@ never "expire":
 
 Any future change that reopens a closed finding fails a named test — the
 round-14 cross-check (PR #63/#64) additionally makes the *documentation* of
-those pins machine-verified (`node scripts/cross-check.mjs`, 516 refs, 0
+those pins machine-verified (`node scripts/cross-check.mjs`, 521 refs, 0
 dangling).
+
+### 3.5 Rail evidence — court-locked bonds on public testnets
+
+**Artifact:** `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate" and §"Stable
+identities and funded bonds" (paper §8.5, App. A, S-26); host `bao.markets`
+PRs #2553, #2556, #2597, #2616 and `scripts/court/verify-bond.mts`.
+
+Until v0.16.0 the ceremony roster carried a bond **reference** and verified
+nothing: `CourtBondRef {rail, network, proofRef}` was parsed, echoed, recorded
+with `bondVerified:false`, and the juror was seated anyway. A well-formed
+reference to a bond nobody paid was a free seat. Three changes closed it, and
+each is a row in the paper's evidence table:
+
+| Step | Mechanism | Evidence |
+|---|---|---|
+| The gate | `bondCheckGate.ts`: one host command (`BAO_COURT_BOND_CHECK_CMD`), fixed validated argv, exactly one accepted output shape, typed refusal for every other outcome; enforced **after** key publication and **before** `roster.json` | `__tests__/bondCheckGate.test.ts` (argv contract, strict parser, every roster decision); three boxes × three bonds `PROVEN`, one group key, one **verified** signature; a genuinely spent bond → `ROSTER_BELOW_THRESHOLD`, no key, no signature |
+| Stable identities | `--juror-keys=<dir>`: pre-provisioned 0600 keys, never generated when the flag is present, never printed; missing ⇒ `JUROR_KEY_MISSING` (seat lost, exit 3); odd-Y refused (`BOND_KEY_NOT_XONLY_LIFTABLE`) because an x-only bond script cannot be spent by an odd-Y key | `scripts/court/provision-jurors.mjs`; measured `IDENTITY BLOCKED juror 3 → ROSTER BELOW THRESHOLD → no key, no signature` |
+| The rails | public **testnet4**: 3 × 100,000 sat court-locked 2-of-2 bonds from a real 0.00563475 tBTC deposit (block 161026), `BOND_RAIL_PROVEN`, `scriptBinding:"configured"`, `bitcoind` + `mempool.space/testnet4` agreeing, slash spend signed with both keys and validated (`testmempoolaccept allowed, vsize 137`) **not broadcast**; public **Liquid testnet**: 3 × 100,000 sat court-locked, `blockstream` + `liquid.network` agreeing, one `BOND_ORACLE_DISAGREEMENT` refusal before they agreed | the run artifacts and the host verifier's own output; the fail-closed disagreement is part of the record |
+
+What this does **not** establish is in §6 item 11: a bond proves collateral at
+verification time (never future honesty); one operator holds the court key, the
+wallet and the boxes; the Liquid covenant binds the *case* while the on-chain
+2-of-2 binds the *juror* (LJ-1, a parallel round); and the testnet4 relay node
+has no wallet at all, so that deposit came from a human with an external wallet.
+
+### 3.6 The continuous programs — ~100 hours of rails and ceremony
+
+**Artifact:** `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program
+(distributed soak)"; `scripts/court/distributed-ceremony-soak.mjs`,
+`ceremony-soakctl.sh`, `scripts/court/systemd/`; host `bao.markets` rail-soak
+series (PRs #2506/#2508/#2539); paper §11.7, App. A, S-28.
+
+A single successful run is a point; the property that matters is that it keeps
+working across reboots, OS and Node updates and months of scheduler variance.
+Two unattended programs produce that evidence, both writing append-only JSONL,
+both treating downtime as data:
+
+| Program | Cadence | What it exercises | Accounting |
+|---|---|---|---|
+| **Rail soak** | 5-min light · hourly full adversarial · 6-hourly deep | bond/settlement verification against multiple sources, per-source health, quorum rule (an absent configured source can never satisfy quorum alone) | `gap` record on a changed kernel boot id or an elapse > 2.5 × cadence — a reboot is a hole in the series, never a failure |
+| **Ceremony soak** | 6-hourly (`OnBootSec=15min`, `Persistent=true`, `RandomizedDelaySec=5min`) | three-box ceremony, rotating `happy-k2`, `happy-kn`, `kill` (SIGKILL over ssh mid-signing), `replay`, `reorder`; `silence` opt-in | honest-signature rate **must be 100 %**; fault-scenario signed rate **must be 0 %**; `flock -n` + `timeout` so a stuck run never overlaps the next |
+
+The discipline that makes a series usable is a **classification rule**: every
+red run is either a *rail bug* or a *harness bug*, decided by evidence, and the
+two are counted separately. The running tally at the time of writing is **one
+genuine rail bug** — the Liquid bond verifier checked value readability before
+spend state, so a confidential output (which has no plaintext value; both
+sources agreed it was spent) reported `VALUE_UNVERIFIABLE` instead of `SPENT`;
+fixed by checking spend state first, with an unspent confidential output still
+refusing — and **eight harness bugs**, every one regression-locked (a cached
+depth snapshot, a source-layer refusal counted as `fail`, a tip-skew
+comparison, a status block reporting arithmetic instead of the armed timer, and
+four of the same family). The rail series was at 22.7 of 100 hours when this
+chapter was refreshed (371 cycles, ETA in the series), so the number is a
+*running* tally; the ceremony half had two back-to-back unattended runs, one
+`pass` with a verified signature and one `kill` with none.
+
+**What the series does not prove:** no adversarial network (the relay's lies are
+delivery policies — duplicates, reorder, silence — never forgeries), no real
+stake in the soak's default configuration (the bond gate is inert there), one
+operator, one geography, keys on disk rather than HSMs, and uptime is not the
+metric (`gap` records are expected).
+
+### 3.7 The instrument is not exempt — determinism by construction
+
+**Artifact:** `docs/TEST_DETERMINISM.md` (paper §11.7, App. A, S-27);
+`__tests__/helpers/watchdog.ts`, `__tests__/determinism.test.ts`,
+`vitest.config.ts`.
+
+Four rounds of evidence said the suite's verdict depended on the load of the
+box: two false mutation "captures" from a 5 s wall-clock gate, an external
+reviewer reproducing a docs-only tree as **12 red**, review-round-10's **15
+timing flakes** under parallel load, and two soak rounds finding load-dependent
+behaviour. Every previous answer raised a number (5 s → 30 s → 120 s → 180 s),
+which hides the class rather than removing it.
+
+| | Before | After |
+|---|---|---|
+| Duration assertions | 3 | **0** (replaced by a work count and by structural bounds — stronger statements) |
+| Implicit 5 s default (no `vitest.config.ts`) | 1,383 tests | **0** — every ceiling derived from a per-worker load measurement on the running box |
+| Declared literal timeouts | 49 | **0** (all via `wd(N)`) |
+| Fixed subprocess phase deadlines | 8 | **0** (derived; one became *silence*-bounded at the source) |
+| Flake rate, 20 runs each under a CPU hog | 18 failing test-runs / 1,340 (up to 4/20 on one target) | **0 / 1,280** |
+| Loaded full-suite runs | 7 red, 6 red, then green — a different failing set each time | green, with the static guard re-checking the rules on every `npm test` |
+
+The one real non-determinism *outside* the test files is the interesting one: a
+juror child bounded its phase by an absolute clock, so under load an **honest**
+phase overran and the juror was reported as `DKG_MISSING_PARTICIPANT` while it
+was alive and working. The deadline now bounds **silence**, not elapsed time —
+every accepted record resets it — because "the box is busy" and "a juror is
+gone" must not be the same observation.
 
 ---
 
@@ -524,11 +632,11 @@ virtual clock, so this measures logic, ordering, retention and event volume at
 | Formalized adversaries | **9** (relay, juror <t, juror ≥t, coordinator, proposer, economic ×2 sub-species, LLM advisor, key compromise, network eclipse) | THREAT_MODEL §2 |
 | Proof obligations (honest-gap register) | **18** (PO-1…PO-18, each with stage-acceptability + closure path) | THREAT_MODEL §6 |
 | MUST-pin trust boundaries | 12 (P1–P12, each unpinned consequence reproduced by a named adversarial test) | THREAT_MODEL §5 |
-| Claims indexed | **285** across the four claim sources (158 invariants included) | CROSS_CHECK §2 |
-| **Claim coverage** | **95.1%** (271/285) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
+| Claims indexed | **286** across the four claim sources (159 invariants included) | CROSS_CHECK §2 |
+| **Claim coverage** | **95.1%** (272/286) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
 
 The 95.1% number is itself machine-checked: `node scripts/cross-check.mjs`
-parses the index, verifies all **516** evidence refs resolve against the tree
+parses the index, verifies all **521** evidence refs resolve against the tree
 today, prints the open/closed split of the gap register, and exits non-zero on
 a dangling pointer — the coverage claim cannot drift silently.
 
@@ -600,37 +708,49 @@ results:
    correct, each one field short of the rule. All three were found by
    *attacking*, not by restating — and all are why no row here is labelled
    independently verified.
-8. **The multi-process ceremony is localhost.** N = 3…7 real OS processes, real
-   PIDs/identities/state dirs, signed events and relay-assigned ordering — on
-   one kernel and one clock, with an honest, always-available relay and no
-   packet loss, partitions, clock skew or custody (paper §11.7; PO-14 open).
-   It closes the *coordination* question, not the *distribution* one.
+8. **The ceremony is distributed across boxes, but not across operators.** N =
+   3…7 real OS processes, real PIDs/identities/state dirs, signed events and
+   relay-assigned ordering — first on one kernel and one clock, then across
+   **three separate hosts** with a relay on a fourth and a coordinator on a
+   fifth, with a real `SIGKILL` delivered over ssh (§3.5, §3.6). That closes
+   the *one machine* objection. It does not close the *distribution* one: every
+   box, key and bond belongs to one person, the relay is honest and always
+   available, and there is no packet loss, partition, clock skew or custody
+   story (paper §11.7; PO-14 open).
 9. **Evaluation numbers age.** Suite counts (1,656 at `c456fb4`, 1,677 at the
-   review-round-4 head, 1,758 at the review-round-7 head `4cd97f1`, **1,804 at
-   `bc28ff3` / v0.14.1**), coverage
+   review-round-4 head, 1,758 at the review-round-7 head `4cd97f1`, 1,804 at
+   `bc28ff3` / v0.14.1, **2,029 at v0.16.0**), coverage
    (95.1%), the model-check totals and the bench medians are per-round records
    tied to a commit. The cross-check script's exit-0 gate is the mechanism that
    makes stale numbers *visible*; `docs/REPRODUCIBILITY.md` specifies how a
    reviewer regenerates every number on this page from one command — and
    SOAK-F8 is what happens when a harness is allowed to age unobserved.
-10. **Rail evidence is environment-ranked, and the deployed chain is a private
-   signet.** The network BAO's hosts run is a **private signet** — Bitcoin
-   consensus rules, one operator, a faucet we control — and code keeps the
-   identifier `demo` for it (`/demo/*` routes, `COURT_ENVIRONMENTS`), so the
-   word appears in the implementation but is not a second chain (paper §11.8).
-   Evidence on a **public** chain (testnet4, `signet-public`) is *stronger* than
-   evidence on the private signet: it has external counterparties, an
-   independent validator set and a liveness adversary that is not us. The
-   private signet is therefore used **only** where the public testnet does not
-   carry the rail (today: Lightning, Cashu), and every result from it must be
-   labelled `private signet` so a reviewer can weigh it. What the private
-   signet buys is real: full control, real consensus rules, deterministic
-   funding — so a construction *executes and settles*; what it cannot buy is an
-   adversary who is not us. The rail plan follows the same ranking: **Liquid on
-   testnet** first (the bond/ceremony rail; Liquid bond verification is in
-   flight — `BondVerifier` is format-only until it is armed), then on-chain
-   **testnet4 / signet-public**, with Lightning and Cashu staying on the private
-   signet until the public testnet runs them.
+10. **Rail evidence is environment-ranked, and most of the deployed stack still
+   runs on a private signet.** The network BAO's hosts run is a **private
+   signet** — Bitcoin consensus rules, one operator, a faucet we control — and
+   code keeps the identifier `demo` for it (`/demo/*` routes,
+   `COURT_ENVIRONMENTS`), so the word appears in the implementation but is not a
+   second chain (paper §11.8). Evidence on a **public** chain (testnet4, Liquid
+   testnet, `signet-public`) is *stronger* than evidence on the private signet:
+   it has external counterparties, an independent validator set and a liveness
+   adversary that is not us. **Both priority rails now have public-testnet
+   evidence for the bond rung** (§3.5), so this item is narrower than it was:
+   the private signet is used only where the public testnet does not carry the
+   rail (today: Lightning, Cashu), and the earlier private-signet bond results
+   are labelled and superseded. What is still not public-chain evidence is the
+   *release* step, which remains host-mediated (PO-15).
+11. **A bond proves collateral at verification time — nothing more.** The bond
+   gate makes a seat expensive and a slash possible; it says nothing about how
+   the juror will vote, whether it can be bribed afterwards, or whether it will
+   sign the wrong outcome. Three further limits belong beside it rather than in
+   a footnote: **one operator** holds the court key, the funding wallet and all
+   the boxes, so the verifier's two sources are one person's choice of sources;
+   **the Liquid covenant binds the case, not the juror**, so until the parallel
+   round lands (LJ-1) the same outpoint could in principle be presented for a
+   different seat, while the on-chain 2-of-2 binds the juror key and refuses
+   that; and **the testnet4 relay node carries no wallet at all**, so that
+   deposit came from a human with an external wallet — the funding is real but
+   it is not an independent counterparty choosing to transact with us.
 
 ---
 
@@ -648,8 +768,12 @@ results:
 | §4.1 benchmarks + optimization | `docs/benchmarks/BASELINE.md`, `bench/court.bench.mjs` | #50, #54 |
 | §4.2 soak (one day) | `scripts/soak/court-soak.mts` + README (host repo) | bao.markets #2293, #2295 |
 | §4.3 soak (three days, faults) | `scripts/soak/court-soak.mts --days 3 --faults`, `docs/benchmarks/soak-3day.json` + `SOAK_3DAY.md` (host repo) | bao.markets #2414 |
+| §3.4 adversarial suites | `__tests__/adversarial*.test.ts`, `reviewRound{3..12}.test.ts`, `perRoundBond`/`ladderEconomics`/`penaltyAging`, `bondCheckGate.test.ts`, `replayEquivocation.test.ts`, `overStrictness.test.ts` | #36, #37, #41, #51, #95, #100, #128, #131, #135, #142, #147, #148, #149 |
+| §3.5 rail evidence (bonds) | `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate", §"Stable identities and funded bonds"; `bondCheckGate.ts`; `scripts/court/provision-jurors.mjs`; host `bao.markets` `scripts/court/verify-bond.mts` | #147, #149, #150; bao.markets #2553, #2556, #2597, #2616 |
+| §3.6 continuous programs | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program"; `scripts/court/distributed-ceremony-soak.mjs`, `ceremony-soakctl.sh`, `scripts/court/systemd/`; host rail-soak series | #144, #145, #146; bao.markets #2506, #2508, #2539 |
+| §3.7 determinism | `docs/TEST_DETERMINISM.md`, `__tests__/helpers/watchdog.ts`, `__tests__/determinism.test.ts`, `vitest.config.ts` | #140, #143 |
 | §5 threat model + coverage | `docs/THREAT_MODEL.md`, `docs/CROSS_CHECK.md`, `scripts/cross-check.mjs` | #62, #63, #64 |
-| §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats, `docs/MULTI_PROCESS_CEREMONY.md`; §6 item 10 (rail evidence ranking) is stated in paper **§11.8** and `docs/CAMPAIGN_REPORT.md` §4 | #53, #50, #98 |
+| §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats, `docs/MULTI_PROCESS_CEREMONY.md`; §6 item 10 (rail evidence ranking) is stated in paper **§11.8**, §6 item 11 (bond limits) in paper **§8.5**, and both in `docs/CAMPAIGN_REPORT.md` §4 | #53, #50, #98, #147/#149 |
 
 Every pointer above resolves on `main`; the doc-level check is
 `node scripts/cross-check.mjs` (exit 0) plus the one-command regeneration

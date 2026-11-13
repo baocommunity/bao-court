@@ -107,6 +107,17 @@ T1; T6 needs T5 (the aggregate) and T1 (the canonical journal hash).
 | **P1** | verification shares `Y_i` in a journal are the **certified** DKG shares | caller supplies `DkgRecord.verificationShares`; `identityPinned` is reported (Theorem 6 Lemma 6.3) | T6 (iii) |
 | **P2** | journal entries are authenticated per signer and append-only | ceremony events are NIP-01-signed by each juror; log design `docs/ATTRIBUTABLE_SIGNING.md` §3.4; per-participant entries are v0.11 | T6 (iii) |
 
+### 3.5 What the v0.16.0 evidence is *not* covered by these proofs
+
+Three results landed after this index was written. None is a theorem, and a
+reader should not infer coverage from adjacency:
+
+| Result | Why it is outside the proofs |
+|---|---|
+| **The bond gate** (paper §8.5; `bondCheckGate.ts`) | It is a *host-verified* predicate. This package proves nothing about a bond's on-chain existence; it proves that a juror whose host check does not return exactly `{"ok":true,"proofRef":…,"sources":[…]}` — matching the roster's ref — loses its seat, and that a roster below threshold produces no key and no signature. The script claims (a 2-of-2 commits to the juror key; an odd-Y key's x-only lift is a different point, so its bond is unspendable) are BIP-340 consequences stated in §8.5 and pinned by tests, not mechanised here |
+| **The replay/equivocation identity rule** (r54-1; `signedRecordIdentity`, `collapseSignedRecords`) | It is an identity rule over signed events — the signed event id, never arrival position or object identity — pinned in both directions by a captured failing trace and a constructed genuine equivocation. It sits outside T4 because the distributed-ceremony harness is not one of the four reducers T4 covers |
+| **The determinism rules** (paper §11.7; `docs/TEST_DETERMINISM.md`) | They are properties of the *instrument*. T4 assumes the machines are pure and synchronous (H-JS2); the determinism work makes the tests that check T4 reproducible on a loaded box, which is a precondition for trusting that evidence rather than a strengthening of the theorem |
+
 ## 4. Lemma-gap register (complete list)
 
 | ID | Where | Content |
