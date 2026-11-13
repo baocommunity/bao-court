@@ -454,8 +454,12 @@ export BAO_COURT_BOND_CHECK_CMD="npx tsx /path/to/verify-bond.mts \
 variables is set in the installing shell. **With neither set, every `bonded-*`
 scenario records `blocked: BOND_GATE_NOT_CONFIGURED`** — the rotation never
 silently degrades to `rail:"none"` evidence under a `bonded-*` name, because that
-would be the exact confusion the gate exists to prevent. `status` prints
-`bond gate: ARMED | NOT CONFIGURED`.
+would be the exact confusion the gate exists to prevent. `status` and
+`preflight` print `bond gate: ARMED (from <source>)` or `NOT CONFIGURED` — and
+because the TIMER is the authority, they read that same env file when the
+variables are unset (`--soak-env-file=` overrides the path), so a shell and the
+unit give the same answer instead of the shell reporting a gate the timer is
+in fact running.
 
 #### Assertions — a scenario that cannot fail is not a scenario
 
