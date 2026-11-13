@@ -318,15 +318,19 @@ equivocation, and a suite that decided by the clock.
   runs on three real hosts but all of them belong to **one operator**, so it
   measures coordination rather than decentralisation; the bond evidence is on
   public testnets, but a bond proves collateral at verification time rather than
-  future honesty (and the Liquid covenant binds the case, not the juror — LJ-1);
+  future honesty (and the Liquid lock, since v0.16.2, commits the juror's key so
+  the bond cannot be re-presented for another seat — LJ-1 closed; what that
+  closure leaves is the trade-off that a juror can neither veto a court's slash
+  nor be protected from one);
   and 96.0 % here vs 86.8 % in campaign 1 measure different mutant
   sets on different code — compare per class, never per total.
 - **Not finished.** Review rounds 9–12 and the instrument rounds 51–54 have
   landed and are indexed here, but
   the deferred rows
-  (r29-5/r33-2/r38-3/r40-3, r33-3/r33-4, r33-7/r40-4/r40-5, r41-2, H-1…H-7,
-  LJ-1) are open
-  with owners and triggers, and the independent human cryptographer / third-party
+  (r29-5/r33-2/r38-3/r40-3, r33-3/r33-4, r33-7/r40-4/r40-5, r41-2, H-1…H-7)
+  are open
+  with owners and triggers — LJ-1 has since closed (v0.16.2, App. A.3) and is
+  kept here for the record — and the independent human cryptographer / third-party
   audit the paper's §12.5 lists as absent is still absent.
 
 ---

@@ -633,6 +633,39 @@ the same seed reproduces the same dishonest relay record for record.
 - `__tests__/r33ByzantineRelay.test.ts` (8 cases, ≈20 s) gates the matrix
   properties; `npm run simulate:byzantine`.
 
+## [0.16.2] — 2026-11-13
+
+### Documentation — LJ-1 closed: the Liquid bond commits the juror (committed, not required)
+
+The host round that shipped the mechanism is `bao.markets` **#2669**
+(`35ebc38b2`); this release brings the protocol docs in line with it.
+
+- **`docs/FROST_COURT_ORACLE_PAPER.md`** — every LJ-1 site now reads **closed**,
+  with the mechanism and the trade-off: §8.5 gains *"A Liquid bond commits the
+  juror — committed, not required"* (leaf `<juror_xonly> OP_DROP <group_xonly>
+  OP_CHECKSIG`, so the court still slashes with the FROST group signature alone),
+  *"Why not a 2-of-2, and what the choice costs"* (a 2-of-2 would give a hostile
+  juror a veto over its own slashing; a pre-signed slash is impossible because
+  destination and txid are unknown at bond time), and *"The evidence for the
+  commitment"*; §9's rail plan, §10.2 vector R, §11.8's hierarchy, §13 Table 2
+  (*Bond integrity*, *Rail validity*, *Real-world validity*), §13's reading and
+  §14 now state the closed row instead of an open one; **App. A.3's LJ-1 row is a
+  closed row** (what it was, how it closed, the proof, and what it does **not**
+  buy). The abstract's Liquid claim is corrected: Liquid is not a 2-of-2.
+- **`docs/DELIVERY.md`** — the Liquid row is **juror-bound: yes (leaf)** with the
+  per-seat outpoints (`63342daa…:0`, `be0daf85…:0`, `0bb85a03…:0`) and the typed
+  refusals (`BOND_JUROR_MISMATCH`, `BOND_JUROR_UNBOUND`, `BOND_PROOF_UNPARSEABLE`,
+  `BOND_UNVERIFIABLE`); LJ-1 leaves the "not proven" table, replaced by the
+  residuals that remain (the juror cannot veto the court's slash and is not
+  protected from one — PO-15; the public filer bond is still shape-only).
+- **`docs/EVALUATION.md`** — §3.5 gains the juror-commitment row with the live
+  numbers (3/3 `PROVEN` under their own jurors, `BOND_JUROR_MISMATCH` ×3,
+  `BOND_JUROR_UNBOUND`, the validated unbroadcast court spend, the ceremony's
+  1.9–2.1 s and its `ROSTER_BELOW_THRESHOLD` negative) and §6 item 11 is
+  re-stated; `CAMPAIGN_REPORT.md` and `REVIEWS_INDEX.md` follow.
+- The paper is byte-identical across its three copies, sha256
+  `35185563476bbb62d776b706dbe72806703ab8f22e00172ff0d8d9ad88a9a627`.
+
 ## [0.16.1] — 2026-11-13
 
 ### Documentation — the delivery record
