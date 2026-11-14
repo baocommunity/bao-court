@@ -5,9 +5,10 @@
 **Status:** normative. Corrects a claim the paper carried through v0.10.2
 ("Path B: FROST attestation + winner signature" verified on-chain). The
 attested-spend builder (`buildCourtJudgeLeaf`) ships in this package; the
-CHECKSIGFROMSTACK variant is specified but deliberately **not** shipped (gates
-in §2.2); the v1 host-mediated lane is documented as the honest status quo
-(§2.3).
+CHECKSIGFROMSTACK variant is specified (§2.2) and **prototyped** — the
+`BaoCourtEscrow.simf` covenant, compiled and tested but **not deployed**
+(§2.2.1; host doc `docs/SETTLEMENT-BINDING-ONCHAIN.md`); the deployed
+host-mediated lane is documented as the honest status quo (§2.3).
 
 **Audience:** settlement-rail implementers (hosts), reviewers, auditors.
 
@@ -18,12 +19,17 @@ in §2.2); the v1 host-mediated lane is documented as the honest status quo
 A FROST signature over a Nostr attestation message is **not** a transaction
 signature, and no shipped script verifies one. Three bindings are achievable;
 they differ in *what the second signature is over*, and therefore in *who can
-release funds*.
+release funds*. The second of them — CHECKSIGFROMSTACK — now has a built form:
+the court-verdict release covenant (§2.2.1), compiled and tested on Liquid and
+**not deployed**. So the three constructions this note tracks are (i)
+attested-spend, (ii-b) the on-chain covenant, and (iii) host-mediated, which is
+what every deployed rail still runs.
 
 | # | Binding | Second signature is over | Verdict enforced by | Who can release | Shipped |
 |---|---|---|---|---|---|
 | i | **attested-spend** | the spend's taproot sighash | cohort signing policy + public audit trail | the cohort (M signers) **and** the winner | **yes** (`buildCourtJudgeLeaf`) |
 | ii | **CHECKSIGFROMSTACK** | the verdict (or a settlement message) | the script, on Liquid | the winner, given a cohort signature over the attested outcome | no — spec only (§2.2) |
+| **ii-b** | **court-verdict release covenant** (`BaoCourtEscrow.simf`) | `settle(d,o) = sha256(prefix_o ‖ DISPUTE_ID ‖ plan_root(o))` — the *dispute*, the *outcome* and the *payout plan*, the last two recomputed in-covenant | the script, on Liquid: `bip_0340_verify` under $P_{\mathrm{dispute}}$ | **the winner alone**, holding a FROST aggregate over the settlement message; the host cannot release, choose the outcome or redirect a payout | **prototype — compiled and tested, not deployed** (§2.2.1) |
 | iii | **host-mediated** (v1 status quo) | the spend's sighash, requested by the host | the host process | the host + winner; the cohort signs on request | deployed today |
 
 The honest one-line statement for v1: **the court decides the verdict, the
@@ -212,6 +218,64 @@ an observer learns the attested outcome from the spent leaf itself.
 
 Until all four are green, (ii-b) is a design, not a rail.
 
+### 2.2.1 (ii-b) built — the court-verdict release covenant (prototype, not deployed)
+
+**Artifact:** `BaoCourtEscrow.simf` + its builder and 9-case matrix live in the
+**host** repo, `bao.markets` (PR **#2710**, `df445db`), because they are rail
+execution and the IP boundary puts that outside this package (AGENTS.md §4).
+Full construction, branch table and residual list:
+`docs/SETTLEMENT-BINDING-ONCHAIN.md` there (paper App. A, **S-30**). This
+section records what it does to *this* note.
+
+**The assumption this note got wrong.** §2.2 above, and the paper's PO-15
+framing, implied CHECKSIGFROMSTACK was the blocker — that no shipped script
+could verify a program-chosen message. That is false.
+`BaoOracleEscrow`, `BaoOracleEscrowV2` and `BaoDepositEscrowV3` already use
+`bip_0340_verify((pk, msg), sig)`, **which is the CSFS primitive in Simplicity**,
+over a message the spender never supplies. The three real gaps were:
+
+1. the verifying key is a **single** key, never the per-dispute FROST group
+   $P_{\mathrm{dispute}}$;
+2. the message binds a **market**, never a **dispute**;
+3. no covenant **recomputes** the payout set — `BaoOracleEscrow` bakes a
+   `payout_root` that the script never checks against the winner arrays it
+   enforces, so the plan binding is a builder-time convention.
+
+**What the covenant verifies.** Two commitments, both program-side:
+
+```
+plan_root(o) = sha256( script_hash_0 ‖ amount_0_BE8 ‖ script_hash_1 ‖ amount_1_BE8 ‖ … )   over ACTIVE slots, in order
+settle(d, o) = sha256( prefix_o ‖ DISPUTE_ID ‖ plan_root(o) )
+```
+
+`VERDICT_A` / `VERDICT_B` require a FROST aggregate under $P_{\mathrm{dispute}}$
+over `settle(d, outcome)` and pin every winner, BAO's fee and the network-fee
+output by introspection; `REFUND` requires the funder's `sig_all_hash` plus
+`check_lock_height(TIMEOUT)`. **The spender supplies only a signature** — the
+`plan_root` in the signed message is produced by the same fold that enforces the
+payouts, so the signature commits to the plan the script actually pays. The
+timeout is a liveness escape hatch, not a revocation: a valid verdict stays
+spendable after `TIMEOUT`, and one-spend resolves the race.
+
+**The matrix — 9/9 with a real FROST 2-of-3.** A real Pedersen DKG produces the
+group; `frost.Lib.combine_partial_sigs` produces the aggregate. Accepted: a
+verdict on branch A and on branch B. Rejected: the *other* outcome's verdict, a
+**foreign group key**, a **different payout plan**, an all-zero signature, a
+**redirected winner**, a **replay against another dispute's covenant** (with a
+positive control on its own), and a **non-funder refund**. Also: refund accepted
+at `TIMEOUT` and rejected one block early, and a verdict accepted *after*
+`TIMEOUT`. Message-format vectors pin that the dispute id, the outcome, the plan
+and the plan **order** each change the digest.
+
+**What it closes** (on this rail, once funded): the host can no longer release
+unadjudicated, choose the outcome, redirect payouts, replay across disputes or
+plans, or freeze funds. **What remains** — all of it: no funding/PSET flow and
+no deployment; $P_{\mathrm{dispute}}$ is still **host-issued** and the covenant
+cannot verify the ceremony; the host still assembles and broadcasts; it is a
+**post-dispute** escrow (constants fixed at creation); confidentiality is
+forfeited; MAX 8 winners; and `pset run` is not a regtest consensus spend.
+Every deployed rail therefore still runs binding (iii).
+
 ### 2.3 (iii) Host-mediated — the honest v1 (deployed today)
 
 ```
@@ -364,13 +428,25 @@ The binding lives in the two signing sessions and the published audit record:
 ### 4.3 Then — (ii-b) for Liquid binary/escrow rails, once the four gates in
 §2.2 are green. Do not ship a CSFS leaf on script-serialization tests alone.
 
+**Where that stands (v0.17.0).** Gate 2 is answered by construction — the
+covenant caps at 8 winners and targets binary/escrow rails, not parimutuel.
+Gate 4 is respected — the cohort signs two distinct messages per settlement
+(the kind-39007 attestation and `settle(d,o)`), under the unchanged nonce
+discipline. Gate 3 is per-escrow: the rail and the binding are recorded with
+the escrow, and L1 keeps (i) because Bitcoin has no CSFS. Gate 1 is **not**
+green: the evidence is `hal-simplicity pset run` against a real PSET, which is
+stronger than a serialization test but is **not** an `elementsd` on
+elementsregtest accepting a transaction. §2.2.1 is therefore a prototype —
+compiled and tested, not deployed — and no value should be locked under it
+until a regtest spend confirms.
+
 ---
 
 ## 5. Residual risk register
 
 | Risk | Impact | Control today | Status |
 |---|---|---|---|
-| Host releases with no verdict | funds move on an unadjudicated market | none at the signer; post-hoc audit | **open** — §4.2.4 |
+| Host releases with no verdict | funds move on an unadjudicated market | none at the signer; post-hoc audit | **open on every deployed rail** — §4.2.4. The §2.2.1 covenant closes it by consensus on Liquid, but it is a **prototype**: not funded, not deployed |
 | Host picks a stale verdict among rounds | wrong payout | one attestation per `(market, round)`; round monotone; public trail | partial |
 | Cohort dies before settlement | market unsettleable | `resolveBy + slack ≤ endsAt` rule; CLTV refund | policy |
 | Verdict↔plan mismatch | payout to a wrong address | both signatures needed; plan reproducibility; publication | procedural |
@@ -385,7 +461,9 @@ The binding lives in the two signing sessions and the published audit record:
   host-mediated settlement.
 - Not that the attestation is redeemable on-chain on any rail.
 - Not that CSFS is available on the target chain until a consensus witness test
-  proves it (§2.2 gate 1).
+  proves it (§2.2 gate 1) — `pset run` is not that test.
+- Not that §2.2.1's covenant is a rail: it is compiled and tested, and nothing
+  on any chain locks value in it.
 - Not that the cohort outlives the market until §3.3 is checked per market.
 
 ## 7. How to re-verify this document

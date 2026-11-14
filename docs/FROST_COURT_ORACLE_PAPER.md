@@ -109,7 +109,7 @@ disputes. Both are single points of failure and compromise.
 | Property | Meaning |
 |----------|---------|
 | **Threshold attestation** | No single party — including the platform — can *produce* a dispute verdict: the verdict is a threshold signature over a group key born in DKG, never held in one place. |
-| **Settlement binding** | *Who can release funds once the threshold has spoken.* Three bindings exist and they are not equivalent; v1 is **host-mediated** (the cohort authorises, the host releases — a documented trust point, PO-15). On-chain verdict enforcement (CHECKSIGFROMSTACK on Liquid) is specified there and not yet shipped. |
+| **Settlement binding** | *Who can release funds once the threshold has spoken.* Three bindings exist and they are not equivalent; the deployed lane is **host-mediated** (the cohort authorises, the host releases — a documented trust point, PO-15). On-chain verdict enforcement (CHECKSIGFROMSTACK on Liquid) was specified there and is now **prototyped**: `BaoCourtEscrow.simf` verifies a FROST aggregate signature over a canonical settlement message by consensus, with a `TIMEOUT` refund — compiled and tested (9/9 matrix), **not deployed** (`docs/SETTLEMENT-BINDING-ONCHAIN.md`, host repo; App. A, S-30). |
 | **Self-custody** | Winners claim payouts with their own keys; the cohort's signature is never sufficient on its own. |
 | **Censorship resistance** | A timelock refund path exists if the dispute oracle stalls. |
 | **Privacy** | On the Taproot judge path, on-chain artifacts reveal no threshold structure: one x-only key and one ordinary signature. This does **not** hold for the legacy P2WSH `M`-of-`N` multisig escrow, which publishes `M`, `N` and every participating key by construction (§9.2). |
@@ -144,7 +144,9 @@ Schnorr constructions.
    with the host. The **settlement binding** between a threshold verdict and the
    spend that releases funds is analysed separately (the settlement-binding
    note, App. A, S-1): three achievable bindings, one shipped
-   (attested-spend), one specified and gated (CHECKSIGFROMSTACK), and the
+   (attested-spend), one specified and gated and now **prototyped for Liquid**
+   (CHECKSIGFROMSTACK, as the `BaoCourtEscrow` covenant — compiled and tested,
+   not deployed; App. A, S-30), and the
    cohort-lifetime constraint that decides whether the key in a judge leaf is
    still alive at resolution.
 4. A **reference implementation and whole-court simulation harness** with a
@@ -204,7 +206,7 @@ the neighbour has and BAO Court does not.
 
 | System | What it provides | What BAO Court adds | Where it is better than BAO Court |
 |---|---|---|---|
-| **Discreet Log Contracts** (Dryja [13]) | A Bitcoin-native oracle design: the oracle pre-commits a nonce, publishes one signature per outcome, and pre-signed contract-execution transactions are selected by that signature. No on-chain oracle footprint. | The *oracle authority itself* is threshold and ephemeral: an $M$-of-$N$ FROST group born in a per-dispute DKG, no party ever holding the key, with the signed message bound to a public tally commitment. The outcome is decided by a jury, not by a named oracle. | **On-chain verdict enforcement is native to DLC**: the chosen execution transaction is checked by script, so no release step is trusted. v1 here is host-mediated (PO-15). DLC tooling is more mature, and a DLC oracle learns nothing about the contract it serves. |
+| **Discreet Log Contracts** (Dryja [13]) | A Bitcoin-native oracle design: the oracle pre-commits a nonce, publishes one signature per outcome, and pre-signed contract-execution transactions are selected by that signature. No on-chain oracle footprint. | The *oracle authority itself* is threshold and ephemeral: an $M$-of-$N$ FROST group born in a per-dispute DKG, no party ever holding the key, with the signed message bound to a public tally commitment. The outcome is decided by a jury, not by a named oracle. | **On-chain verdict enforcement is native to DLC**: the chosen execution transaction is checked by script, so no release step is trusted. v1 here is host-mediated (PO-15), with a Liquid covenant prototype that enforces the verdict on-chain but is not deployed or funded (App. A, S-30). DLC tooling is more mature, and a DLC oracle learns nothing about the contract it serves. |
 | **UMA optimistic oracle** [14] | Bond-backed assertion + liveness window + escalation to a token-holder dispute vote. A cheap path for undisputed assertions, deployed in production. | Cryptographic finality: the verdict is one ordinary BIP-340 signature under a group key, verifiable by any Bitcoin/Liquid/Lightning stack, plus verifiable lottery selection of the deciding panel and a verdict commitment over the public vote ledger. | **No panel is needed at all** for an undisputed assertion — a liveness window suffices, so UMA has no ceremony-liveness requirement and no per-outcome signing cost. It is live, and its integration surface is far smaller. |
 | **Augur** [15] | Staking-based reporting with dispute rounds, and a fork as the ultimate social backstop. | A threshold signature as the verdict artifact (portable to non-Ethereum rails), deterministic and publicly recomputable escrow/slashing math, and a bounded escalation ladder instead of a global fork. | The **fork is a stronger backstop** than a bounded ladder: it cannot be captured by a minority that the ladder's final round happens to favour. Augur is also a full market stack, not only an oracle. |
 | **Chainlink OCR** [16] | Off-chain reporting for a node committee: threshold-signed reports, leader change, and production-level throughput engineering. | An **adversarial** selection and accountability layer around the committee: the panel is drawn per dispute by public lottery, and incoherent members are slashed. OCR's committee is permissioned and assumed honest-majority. | Engineering maturity and operational track record at feed scale; OCR is deployed, monitored, and benchmarked far beyond this work. |
@@ -344,9 +346,12 @@ Every market locks funds with three mutually exclusive paths:
   `(attestation, planHash, sighash, txid)` tuple is published so the binding is
   auditable. The platform therefore **is** a trust point for release (never for
   the verdict). On-chain verdict enforcement needs CHECKSIGFROMSTACK and a
-  creation-time settlement commitment; it is specified, gated, and not shipped.
-  See the settlement-binding note §2 (App. A, S-1) for all three bindings, side
-  by side.
+  creation-time settlement commitment. It is specified and gated in the
+  settlement-binding note §2.2 (App. A, S-1) and is now **prototyped** for this
+  rail — `BaoCourtEscrow.simf`, a post-dispute covenant (App. A, S-30) —
+  compiled and tested, **not deployed**; the deployed lane described above is
+  unchanged. See the settlement-binding note §2 for all three bindings, side by
+  side.
 - **Path C — refund.** After absolute timelock $T$, the funder reclaims.
 
 The conjunction in Path B still says something important — **the cohort cannot
@@ -1268,8 +1273,9 @@ signet-public** is next, and now also carries evidence: three court-locked
 2-of-2 bonds on public testnet4 with a validated, unbroadcast slash spend
 (§8.5). What is proven on both rails is the **bond** — collateral that exists,
 is court-locked, is juror-bound, and can be spent by the slash path. What is
-*not* proven is settlement release, which remains host-mediated in v1 (§3.2,
-PO-15).
+*not* proven is settlement release, which remains host-mediated on every
+deployed rail (§3.2, PO-15) — a Liquid release covenant now exists as a
+compiled, tested prototype (App. A, S-30), but it is not funded or deployed.
 **Lightning** and **Cashu** — the latter host-implemented and not specified
 here — run only on the *private signet* until the public testnet carries them.
 None of the three is claimed as a proven *settlement* rail in this text:
@@ -1345,9 +1351,10 @@ The script does not read the tally — the court's plan decides **which branch
 to sign**, and the public builders construct exactly the transaction that
 realizes the court's decision. Nor does it read the attestation: a Liquid
 `CHECKSIGFROMSTACK` leaf that would verify the verdict on-chain is specified in
-the settlement-binding note §2.2 and is **not** shipped (it needs a
-consensus-tested opcode, a creation-time settlement commitment, and one leaf
-per outcome).
+the settlement-binding note §2.2 and is **not** shipped on any rail. It is
+**prototyped** as `BaoCourtEscrow.simf` (App. A, S-30) — a post-dispute
+covenant whose `P_dispute` and dispute id are creation-time constants, compiled
+and tested against a 9-case matrix, not deployed.
 
 ### 9.3 End-to-end determinism
 
@@ -1384,7 +1391,8 @@ corruption sense $m+1 \le t$; (A5) the block-hash seed is unbiased at the
 required confirmation depth; **(A6) the settlement binding** — the release path
 either (a) runs a spend-signing session whose participants enforce the
 attestation and the plan (attested-spend, §3.2), or (b) verifies the verdict in
-script (CHECKSIGFROMSTACK, specified but not shipped), or (c) is a *named*
+script (CHECKSIGFROMSTACK — specified, and **prototyped** in `BaoCourtEscrow.simf`
+but not deployed; App. A, S-30), or (c) is a *named*
 trust point whose operator is inside the threat model. A6 is **not** discharged
 by the FROST signature itself: a threshold signature over an attestation
 message says nothing about what happens to the escrow (the settlement-binding
@@ -1497,7 +1505,8 @@ action, planId)` at the signer, and the published
 `(attestation, planHash, sighash, txid)` tuple that makes every release
 re-checkable after the fact. The fix is a signer that requires the attestation
 in the signature request (settlement-binding note §4.2), and — for Liquid
-binary/escrow rails — the CHECKSIGFROMSTACK leaf (§2.2).
+binary/escrow rails — the CHECKSIGFROMSTACK covenant (§2.2; prototyped as
+`BaoCourtEscrow.simf`, compiled and tested, not deployed).
 
 **N. Hostile relay data.** Kind confusion (filter drift), tag abuse
 (duplicate/nested tags, 100k-mention tags, MB-scale values), NIP-59 seal
@@ -2241,7 +2250,9 @@ key, and on Liquid the leaf commits it (`<juror> OP_DROP <group> OP_CHECKSIG`),
 so a bond presented under the wrong seat is refused rather than silently
 accepted (LJ-1, closed in v0.16.2; App. A.3). It does **not** buy the three
 things that would make a rail *claim*: (i) **settlement release** — what is proven
-is the bond, not the spend that pays a winner, which stays host-mediated (PO-15);
+is the bond, not the spend that pays a winner, which stays host-mediated on
+every deployed rail (PO-15; a Liquid release covenant is a compiled, tested
+prototype — App. A, S-30 — not funded, not deployed);
 (ii) **independent funding** — the testnet4 relay node carries no wallet at all,
 so that deposit came from a human with an external wallet, and the Liquid bond
 came from a public faucet: neither is a counterparty who chose to transact with
@@ -2319,16 +2330,28 @@ Remains **host-side or pre-production** (engineering, not design):
    cross-implementation FROST differential is the remaining half of this gate.
    The upgrade triggers that gate the pinned `@vbyte/frost` version are in the
    literature audit §6 (App. A, S-7).
-6. **Settlement binding (A6).** v1 is host-mediated: the cohort authorises,
-   the host releases. Two pieces are specified and not shipped — the
-   spend-session binding (the signing-session hash extended with
-   `marketId ‖ attestationDigest ‖ planHash ‖ sighash`, and a signer that
-   refuses a spend partial without a valid attestation) and, for Liquid
-   binary/escrow rails, the `CHECKSIGFROMSTACK` judge leaf. Both, plus the
-   market-creation coverage rule that a market must not outlive its cohort,
-   are in the settlement-binding note §2 and §4. Until they land, the
-   correct description of the rail is "threshold attestation + host-mediated
-   release", never "no single party can release".
+6. **Settlement binding (A6).** The deployed lane is host-mediated: the cohort
+   authorises, the host releases. Three pieces are open. Two are still
+   specified and not shipped — the spend-session binding (the signing-session
+   hash extended with `marketId ‖ attestationDigest ‖ planHash ‖ sighash`, and
+   a signer that refuses a spend partial without a valid attestation) and the
+   market-creation coverage rule that a market must not outlive its cohort —
+   and both, with the settlement-binding note's §2 and §4, are unchanged. The
+   third has moved: the `CHECKSIGFROMSTACK` judge leaf for Liquid
+   binary/escrow rails is **prototyped** as `BaoCourtEscrow.simf` (App. A,
+   S-30) — a real FROST 2-of-3 aggregate over a canonical settlement message is
+   verified by consensus over a payout plan the covenant itself recomputes, and
+   the 9-case matrix rejects the wrong outcome, a foreign group key, a
+   different plan, a malformed signature, a redirected winner, a replay against
+   another dispute's covenant, and a non-funder refund. It is **compiled and
+   tested, not deployed**: there is no funding or PSET flow, no post-dispute
+   transfer into the covenant, `P_dispute` is still issued by the host's DKG
+   (the script consumes the key, it cannot verify the ceremony), the host still
+   assembles and broadcasts, the constants are fixed at creation, settlement
+   under it is fully public, and its evidence is `pset run`, not a regtest
+   consensus spend. Until those land, the correct description of every deployed
+   rail is "threshold attestation + host-mediated release", never "no single
+   party can release".
 7. **Lightning forfeiture (PO-16).** Panel A's preimage is derivable by anyone
    (§9.1), so refusing to pay an incoherent juror is a host policy plus an
    attributable race, not a cryptographic forfeiture. Either a settlement
@@ -2416,7 +2439,8 @@ verified*.
 | **Economic robustness** — Lightning panel | Panel A orders settlement after the verdict, but does not enforce forfeiture. | Honest host behaviour + attributable release. | §9.1 analysis. | **Open obligation** PO-16 |
 | **Bond integrity** — a seat costs a proven bond | A juror keeps its seat only if a host-supplied check proves an unspent bond of at least the required value, bound to the key that will actually sit — on testnet4 by the 2-of-2's second key, on Liquid by a leaf that commits the juror's key — and locked to the court script. Every other outcome excludes the juror, and a roster that falls below threshold produces no roster, no key and no signature. | The host's verifier is honest and reads the chain (this package holds no chain client); the bond is court-locked when `scriptBinding:"configured"`; the check runs on the coordinator, so a lying coordinator is not detected by the ceremony. | `bondCheckGate.ts` + `__tests__/bondCheckGate.test.ts` (the argv contract, the strict output parser, every roster decision); live runs across three boxes — three bonds `PROVEN`, one group key, one **verified** signature, and a genuinely spent bond → `ROSTER_BELOW_THRESHOLD` with no key and no signature; public testnet4 (3 × 100,000 sat court-locked 2-of-2, two agreeing sources, slash spend validated and not broadcast) and public Liquid testnet (3 × 100,000 sat per-seat locks, `jurorBinding:"committed"`, two agreeing sources; the same outpoints under another juror → `BOND_JUROR_MISMATCH` ×3, the legacy coin → `BOND_JUROR_UNBOUND`, a court spend constructed and validated but not broadcast, a ceremony where one box presented another seat's bond → `ROSTER_BELOW_THRESHOLD`) — §8.5, App. A, S-26. | **Empirically evaluated** (public testnet4 + Liquid testnet, and a live three-box ceremony) + **closed**: LJ-1 (the Liquid lock now commits the juror key while the slash stays unilateral, App. A.3); **open limit**: a bond proves collateral at verification time, never future honesty, and the commitment protects the *court* from a re-presented bond, not the juror from a malicious court (PO-15) |
 | **Rail validity** — the bond rail | A court-locked bond exists on a **public** chain, is verifiable by a party who is not us, is bound to the seat that presents it, and is spendable by the slash path (testnet4: court key ∧ juror key; Liquid: the FROST group key alone, with the juror key committed in the leaf). | Two independent sources agree on script, value, spent-ness and depth; the court key is honest (and held by one operator); depth meets policy. | The two public-testnet runs (§8.5); the slash spends — testnet4 signed with both keys and accepted by `testmempoolaccept` (vsize 137), Liquid constructed and validated leaf-by-leaf (output key, NUMS control block, BIP-340 under the group key, `PUSH32 OP_DROP PUSH32 OP_CHECKSIG → TRUE`) — neither broadcast; the negative cases that must refuse — `BOND_SCRIPT_MISMATCH`, `BOND_JUROR_MISMATCH`, `BOND_JUROR_UNBOUND`, `BOND_PROOF_UNPARSEABLE`, `BOND_SPENT`, `BOND_KEY_NOT_XONLY_LIFTABLE`, `BOND_ORACLE_DISAGREEMENT`; and the rail soak's single genuine verifier bug (spend state must be checked *before* value readability, because confidential Liquid outputs carry no plaintext value) — §11.7, §11.8, App. A, S-26/S-28. | **Empirically evaluated** (public testnet4 and Liquid testnet) + **open obligations**: settlement *release* on those rails (PO-15), and the honest note that both fundings came from a human deposit and a public faucet, not from an independent counterparty |
-| **Real-world validity** | The design's assumptions hold on live infrastructure: honest juror mass, encrypted channels between independent devices, relay liveness, Bitcoin seed freshness, bonded seats that are real collateral, and a release path that enforces the attestation. | A2, A3, A5, A6. | The protocol package is unit- and simulation-tested; the ceremony runs across real OS processes, then across three separate hosts with a real bond gate armed; the host pipeline has been soaked at 30,000 settlements with injected faults; bonds are proven court-locked **and juror-bound** on public testnet4 and Liquid testnet; *no* live multi-operator ceremony has been run at the scale the design targets, the release path is host-mediated in v1, and every box, key and bond in the ceremony belongs to one operator. | **Open obligations** PO-14, PO-15, plus the §12 engineering gates (settlement release, independent operators, third-party audit); LJ-1 is closed (App. A.3) |
+| **Settlement binding** — on-chain verdict enforcement (Liquid, prototype) | Given a disputed value locked under the court-verdict release covenant, a release requires a FROST aggregate signature under the per-dispute group key $P_{\mathrm{dispute}}$ over `settle(d, o) = sha256(prefix_o ‖ DISPUTE_ID ‖ plan_root(o))`, where `plan_root(o)` is recomputed **in-covenant** from the same winner array the script enforces; the wrong outcome, a foreign group key, a different plan, a malformed signature, a redirected winner, a cross-dispute replay and a non-funder refund all fail; after `TIMEOUT` the funder reclaims unilaterally, and a valid verdict stays spendable (no revocation). | Schnorr EUF-CMA under $P_{\mathrm{dispute}}$; SHA-256 collision resistance; the Simplicity/Elements interpreter implements `bip_0340_verify` and introspection as documented; $P_{\mathrm{dispute}}$ is a genuine threshold group — the script cannot tell, so threshold-ness is a property of the ceremony and the published attestation, not of the covenant. | `BaoCourtEscrow.simf` + builder + the 9-case matrix (host `bao.markets` #2710, App. A, S-30): a **real Pedersen-DKG 2-of-3 FROST aggregate** over `settle(d,"A")` accepted by `pset run`; the other outcome's verdict, a foreign group key, a different payout plan, an all-zero signature, a redirected winner, a replay against **another dispute's** covenant (with a positive control on its own) and a non-funder refund rejected; refund accepted at `TIMEOUT` and rejected one block early; a verdict accepted *after* `TIMEOUT`; the message format pinned (dispute id, outcome, plan and plan **order** each change it). | **Prototype — compiled and tested, not deployed**; **open**: no funding/PSET flow, no post-dispute transfer into the covenant, $P_{\mathrm{dispute}}$ still host-issued (the ceremony is not verifiable in-script), the host still assembles and broadcasts, confidentiality forfeited, MAX 8 winners, `pset run` is not a regtest consensus spend, and the paper's other PO-15 surfaces (filer/dispute bond, appeal lane, L1 where no CHECKSIGFROMSTACK exists) are untouched |
+| **Real-world validity** | The design's assumptions hold on live infrastructure: honest juror mass, encrypted channels between independent devices, relay liveness, Bitcoin seed freshness, bonded seats that are real collateral, and a release path that enforces the attestation. | A2, A3, A5, A6. | The protocol package is unit- and simulation-tested; the ceremony runs across real OS processes, then across three separate hosts with a real bond gate armed; the host pipeline has been soaked at 30,000 settlements with injected faults; bonds are proven court-locked **and juror-bound** on public testnet4 and Liquid testnet; *no* live multi-operator ceremony has been run at the scale the design targets, the release path is host-mediated on every **deployed** rail (the Liquid covenant is a compiled, tested prototype, not deployed), and every box, key and bond in the ceremony belongs to one operator. | **Open obligations** PO-14, PO-15 (prototype landed; funding and deployment open), plus the §12 engineering gates (settlement release, independent operators, third-party audit); LJ-1 is closed (App. A.3) |
 
 Two readings of Table 2 matter. First, the rows marked **proven** are proofs
 *of the specified protocol* under stated premises — not proofs that the
@@ -2444,7 +2468,8 @@ paper whose evidence comes from **public** chains — an independent verifier, a
 mempool we do not own, block production we do not control — and §11.8's
 hierarchy is what makes that a different kind of claim rather than a louder one.
 The same two rows say what the public tier still does not buy: the release step
-(PO-15) and a counterparty who is not the operator. What they no longer carry is
+(PO-15) — the covenant row above is a prototype on no chain, so the deployed
+release step is still the host's — and a counterparty who is not the operator. What they no longer carry is
 the Liquid juror binding: v0.16.2 closed it (LJ-1, App. A.3) with a leaf that
 commits the juror key, and the residual that remains is the trade-off the closure
 chose — the juror cannot veto the court's slash and is not protected from one
@@ -2459,8 +2484,10 @@ BAO Court replaces the single-key dispute fallback with a just-in-time FROST
 threshold oracle — and, in its current form, with a *universal* one:
 juries form only when needed (or once per epoch for standing cohorts), no
 party ever holds the group secret, every verdict rests on panel evidence
-rather than the platform's word — though v1 release is host-mediated and can
-proceed without one (PO-15) — and a verdict is a single ordinary Schnorr
+rather than the platform's word — though release is host-mediated on every
+deployed rail and can proceed without one (PO-15), with the on-chain
+enforcement of the verdict now built as a compiled, tested Liquid covenant that
+is not yet deployed (App. A, S-30) — and a verdict is a single ordinary Schnorr
 signature — or one signature covering an entire epoch's verdict cohort via
 a Merkle batch — that any observer can verify with an $O(\log n)$ inclusion
 proof. The economic layer (ownership proofs, escrow ledger, Kleros-style
@@ -2489,7 +2516,10 @@ constructions
 (§9.2, PO-15/PO-16) are protocol work, alongside the independent auditing and
 external replication this paper cannot supply. Three obligations are newly
 registered here (PO-16, PO-17, PO-18 — attribution is detective), and the
-settlement binding that v1 leaves to the host is PO-15. Review rounds 2–8
+settlement binding that the deployed rails leave to the host is PO-15 — now
+part-built: a Liquid covenant that enforces the verdict by consensus is
+compiled and tested (App. A, S-30), with funding, deployment and a regtest
+consensus spend still open. Review rounds 2–8
 registered no new obligation codes: they re-attacked, they shipped the fixes
 those attacks required (a challenger-bound bond, a bounded inbox provenance, a
 per-round consumption rule, a re-derived verdict, a canonical identifier and a
@@ -2565,7 +2595,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 
 | ID | Document | Path |
 |---|---|---|
-| S-1 | Settlement binding (three bindings, cohort-lifetime rule) | `docs/SETTLEMENT-BINDING.md` |
+| S-1 | Settlement binding (three bindings, cohort-lifetime rule; §2.2's (ii-b) now has a compiled prototype, S-30) | `docs/SETTLEMENT-BINDING.md` |
 | S-2 | Complaint protocol (possession-bound, victim-authored) | `docs/COMPLAINT-PROTOCOL.md` |
 | S-3 | Universal-confirmation design proposal | host repository `bao.markets`: `docs/proposals/UNIVERSAL_JURY_CONFIRMATION.md` |
 | S-4 | Escrow and slashing | `docs/ESCROW-SLASHING.md` |
@@ -2594,6 +2624,7 @@ cites these entries as `(App. A, S-n)`, `T-n`, or `A.n`.
 | S-27 | Test determinism — load-insensitivity by construction (the inventory, the reproduction, the derived watchdog, the static guard, the measured before/after) | `docs/TEST_DETERMINISM.md`; `__tests__/helpers/watchdog.ts`, `__tests__/helpers/determinism.setup.ts`, `vitest.config.ts`, `__tests__/determinism.test.ts` |
 | S-28 | Continuous programs — the ~100-hour rail soak (cadence, boot-gap accounting, per-source health, the rail-bug/harness-bug tally) and the 6-hourly ceremony soak (JSONL series, scenario rotation, status rates) | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program (distributed soak)"; `scripts/court/distributed-ceremony-soak.mjs`, `ceremony-soakctl.sh`, `scripts/court/systemd/`; host repo `bao.markets` rail-soak series (`/etc/default/rail-soak`; PRs #2506/#2508/#2539) |
 | S-29 | Over-strictness in the round-counter barrier and the `projection:'lane'` fix (r12-1; the reader-aware rule, the shape × reader matrix, the host migration, the 42/185 → 189/189 measurement) | `docs/LANE-PROJECTION.md`; `__tests__/overStrictness.test.ts`; host `bao.markets` PR #2488 |
+| S-30 | On-chain settlement binding — the court-verdict release covenant (`BaoCourtEscrow.simf`): the two message commitments, the branch logic, the timeout trade-off, the 9-case matrix with a real FROST 2-of-3 aggregate, and the full residual list (PO-15, prototype) | host repository `bao.markets`: `docs/SETTLEMENT-BINDING-ONCHAIN.md`; `packages/markets/services/liquid/contracts/BaoCourtEscrow.simf`; `packages/markets/services/liquid/__tests__/BaoCourtEscrow.test.ts` (PR #2710) |
 
 ### A.2 Proofs and machine-checked artifacts
 
@@ -2632,6 +2663,7 @@ cluttering the argument.
 | F-3 | A restored confirmation/outcome ledger could direct clawbacks at arbitrary indices | Ledger barrier re-derived at `resolve_round` and `finalize` (§6.1); `docs/FORMAL_INVARIANTS.md` |
 | F-12 | Stale-timestamped events could be replayed into a restored snapshot | Monotonic clock ledger in all four machines (§6.4) |
 | F-13 | "No single party can release" did not describe the shipped host-mediated rail | Corrected statement of the binding (§1.2, §3.2, §12.6); `docs/SETTLEMENT-BINDING.md` |
+| F-14 | **The paper's premise for PO-15 was wrong in a way that flattered the gap.** It implied CHECKSIGFROMSTACK was the blocker, and that no shipped script verified a program-chosen message. In fact `BaoOracleEscrow`, `BaoOracleEscrowV2` and `BaoDepositEscrowV3` already use `bip_0340_verify((pk, msg), sig)` — which *is* the CSFS primitive — over a message the spender never supplies. The real gaps were three: a single key instead of the per-dispute FROST group $P_{\mathrm{dispute}}$; a message that binds a *market*, never a *dispute*; and no covenant that **recomputes** the payout set (`BaoOracleEscrow` bakes a `payout_root` the script never checks against the winner arrays it enforces) | Premise corrected here and in `docs/SETTLEMENT-BINDING.md` §2.2; the correct construction is built as `BaoCourtEscrow.simf` — `plan_root(o)` over active slots, `settle(d,o) = sha256(prefix_o ‖ DISPUTE_ID ‖ plan_root(o))`, both recomputed in-covenant — and proven by a 9-case matrix. **Prototype, not deployed** (App. A, S-30) |
 | A-1 | Signer-set freeze vs distinct commitment set in the signing machine | Invariant in the model-checked bundle (§11.2) |
 | C-2 | Composite-SLA consumption obligations (threshold above the 0.5 floor; participation definition) | Stated as host duties (§7.4) |
 | A-3 | "Formalized adversaries" family was described as exhaustive | Wording corrected in `docs/EVALUATION.md` |

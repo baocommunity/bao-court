@@ -62,7 +62,7 @@ finding code (`r29-*`, `r33-*`, `r38-*`, `r40-*`, `r41-*`, `r8-*`).
 |---|---|---|
 | Full suite | `npm test` | **1,804 passed / 1 skipped (81 files)** — re-measured at `bc28ff3` (v0.14.1); 1,758 at the review-round-7 head `4cd97f1` (+19: `reviewRound7.test.ts`); 1,739 at v0.13.2 `8bac1bc` (+23: `reviewRound6.test.ts`); 1,686 at `608e6dc` (round 34); 1,677 at the review-round-4 head `841b012` (the +9 are `r33ByzantineRelay.test.ts` ×8, merged as #102 after that count was taken, and the r29-11 timeout pin); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `bc28ff3`) |
-| Cross-check | `node scripts/cross-check.mjs` | OK — 285 claims, 516 evidence refs, every pointer resolves (re-verified at `bc28ff3`) |
+| Cross-check | `node scripts/cross-check.mjs` | OK — 288 claims, 524 evidence refs, every pointer resolves (re-measured on the v0.17.0 docs head; 286/521 before the two PO-15 covenant rows) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | witness-aware regeneration (2,525 s): **15 instances, 3,869,232 states, 213,521,172 event applications, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws, 3,000 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
 | Statistical corpora | `npx tsx scripts/campaign/run-campaign.mjs --full` | 9 campaigns — **1,187,000 units / 3,745,566 assertions / 0 failures** in 608.8 s (artifact `docs/benchmarks/campaign-2026-11-11.json`) |
 | Multi-process ceremony | `npm run simulate:multiprocess` | 4 scenarios green (N = 3…7 OS processes; kill mid-DKG, kill mid-signing, cross-round replay) |
@@ -77,15 +77,15 @@ breakdown).
 
 | Claim source | Claims | With executable proof | Coverage | Open gaps |
 |---|---|---|---|---|
-| `FORMAL_INVARIANTS.md` (158 INV-*) | 158 | 156 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
-| `FROST_COURT_ORACLE_PAPER.md` | 71 | 68 | 95.8% | 3 (host-side / spec'd protocol work) |
+| `FORMAL_INVARIANTS.md` (159 INV-*) | 159 | 157 | 98.7% | 2 (INV-VOTE-14 — defense-in-depth capacity guards, see F-10; INV-ATTRIB-3 — batch-signing duty, spec-level) |
+| `FROST_COURT_ORACLE_PAPER.md` | 73 | 70 | 95.9% | 3 (host-side / spec'd protocol work) |
 | `CRYPTO_AUDIT.md` §7 + §8 | 21 | 17 | 81.0% | 4 (spec'd S-1…S-4) |
 | Model-check meta-claims | 7 | 7 | 100% | 0 |
 | Bench claims (§11.4) | 7 | 7 | 100% | 0 |
 | Suite / simulation claims | 4 | 4 | 100% | 0 |
 | Error-taxonomy claims (§15) | 5 | 5 | 100% | 0 |
 | Findings (F-1…F-12 dispositions) | 12 | 7 | 58.3% | 5 (F-5, F-7, F-8, F-10, F-11 — documented conventions/holds) |
-| **Total** | **285** | **271** | **95.1%** | **14 open** |
+| **Total** | **288** | **274** | **95.1%** | **14 open** |
 
 Gaps **closed this round**: 4 — three with new pinning tests (the stale
 `AUDIT-4` pointer / binding-factor message dependence, the F-4 clawback-reason
@@ -427,6 +427,8 @@ proofs are `;`-separated in the evidence path. Parsed and verified by
 | PAPER-9.2-3 | paper | test | test:__tests__/liquidEscrow.test.ts#produces a bech32 address in the signet HRP with correct length; test:__tests__/liquidEscrow.test.ts#produces a bech32m taproot address with correct HRP and length; test:__tests__/liquidEscrow.test.ts#matches the BIP-141 example: script 0x51 → program 0x0020 |
 | PAPER-9.2-4 | paper | test | test:__tests__/liquidEscrow.test.ts#computes fee = in - out and enforces a minimum; test:__tests__/liquidEscrow.test.ts#rejects a below-minimum fee; test:__tests__/liquidEscrow.test.ts#encodes time-based locktimes (>= 0x80000000) as a positive 5-byte push |
 | PAPER-9.3-1 | paper | test | test:__tests__/settlementE2E.test.ts#runs the full pipeline for an upheld dispute (settle holds, judge path); test:__tests__/settlementE2E.test.ts#deterministically maps the same plan the same way (no drift between runs); test:__tests__/simulateCourt.test.ts#runs the whole pipeline green: selection → DKG → vote → sign → escrow → LN → Liquid |
+| PAPER-A6-COVENANT | paper | doc | doc:docs/SETTLEMENT-BINDING.md |
+| PAPER-A6-COVENANT-MATRIX | paper | doc | doc:docs/EVALUATION.md; doc:docs/DELIVERY.md |
 | PAPER-10.2-H | paper | test | test:__tests__/signing.test.ts#rejects signing with a reused nonce commitment; test:__tests__/regressions.test.ts#rejects reusing one commitment for two messages without an explicit guard; test:__tests__/cryptoLiteratureAudit.test.ts#the signing context over the SAME commitment set differs for different messages |
 | PAPER-10.2-K | paper | test | test:__tests__/hardening20260815.test.ts#rejects forged/unattributable complaints before they can disqualify anyone; test:__tests__/hardening20260815.test.ts#false complaint (revealed share verifies) exonerates the accused and never stalls the phase |
 | PAPER-10.2-L | paper | test | test:__tests__/propertiesValidator.test.ts#PV4: V2_ONLY_POLICY_FIELDS downgrade refusal; test:__tests__/attestationValidator.adversarial.test.ts#FINDING-1 repro: dispatcher silently drops v2 finality policy; test:__tests__/adversarialCrossModule.test.ts#an epoch-1 v2 attestation cannot satisfy epoch-2 finality policy (expectedEpoch pin) |
