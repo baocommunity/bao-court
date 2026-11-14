@@ -371,6 +371,40 @@ hours by `scripts/court/distributed-ceremony-soak.mjs`, on a systemd timer, for
 as long as the operator wants — the ceremony half of the ~100-hour test program
 whose rail half is the settlement soak.
 
+### Transient failures: bounded retry, and why `blocked` is not a failure
+
+The coordinator's only network dependency is the relay (health, log, stats) —
+everything else is ssh or a subprocess — and one dropped request used to end a
+whole run: `DRIVER ERROR: fetch failed` on the post-ceremony `GET /log` threw
+away a ceremony that had already produced a verified signature (three times on
+2026-11-13; a stale keep-alive socket, a DNS hiccup and a relay that was not
+listening yet are all this one class).
+
+- **Retried** (3 attempts, 200 ms → 600 ms → 1.8 s): `ECONNREFUSED`,
+  `ECONNRESET`, `ETIMEDOUT`, `EPIPE`, `EHOSTUNREACH`, `ENETUNREACH`,
+  `EAI_AGAIN`, `ENOTFOUND`, the `UND_ERR_*` socket/connect/header/body
+  timeouts, aborts, and HTTP **5xx / 429**. Bond checks are retried only for the
+  codes that mean *"the check could not look"* (`BOND_CHECK_FAILED`,
+  `BOND_CHECK_TIMEOUT`, `BOND_UNVERIFIABLE`) — retrying those can only give the
+  check another chance, never turn a refusal into a seat.
+- **Never retried**: any other 4xx (a decision), and every typed bond verdict —
+  `BOND_SPENT`, `BOND_SCRIPT_MISMATCH`, `BOND_PROOF_MISMATCH`,
+  `BOND_NOT_CLAIMED`, `BOND_VALUE_TOO_LOW`, `BOND_UNCONFIRMED`. Re-asking a
+  question that has already been answered is not resilience, it is noise.
+- **After the budget is spent the run is `blocked`, not `fail`**: the JSONL
+  record carries the failing site, the last code, the attempt history and
+  `retries`, and the status block **excludes blocked runs from the honest and
+  fault signature rates**. A blocked run says something about the link; it says
+  nothing about the protocol, so counting it as a failure would corrupt the
+  series and counting it as a pass would be a lie. The soak also re-runs the
+  same scenario next cycle instead of advancing the rotation.
+
+Proofs (2026-11-14): a run whose `relay-log` fetch failed twice completed after
+the retries (`retries: 2`, attempts `ECONNREFUSED, ECONNREFUSED, 200`); a
+genuinely killed relay ended `BLOCKED TRANSIENT_ECONNREFUSED at relay-log after
+3 attempt(s)` in ~2.6 s; and a typed `BOND_SCRIPT_MISMATCH` was refused on
+**attempt 1** (no retry) with the roster below threshold.
+
 ### What runs, and in what order
 
 Rotation (one scenario per invocation, persisted in `state.json`). The
