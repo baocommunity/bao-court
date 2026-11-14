@@ -1,8 +1,8 @@
 # BAO Court — Evaluation
 
-**Version:** tracks `@bao/court` v0.16.0 · **Date:** 2026-11-13 · **Round:** 57
+**Version:** tracks `@bao/court` v0.17.0 · **Date:** 2026-11-14 · **Round:** 58
 (bond-gated ceremony, stable juror identities, public-testnet bond evidence, the
-continuous programs, determinism)
+continuous programs, determinism, and the on-chain release covenant — prototype)
 
 > **Final totals at `v0.16.0`.** Suite 2,029 tests / 95 files (1 environment-gated
 > live test skipped, re-measured on this head); 101 mutants across three
@@ -538,6 +538,67 @@ was alive and working. The deadline now bounds **silence**, not elapsed time —
 every accepted record resets it — because "the box is busy" and "a juror is
 gone" must not be the same observation.
 
+### 3.8 The covenant — on-chain verdict enforcement, compiled and tested (prototype)
+
+**Artifact:** host `bao.markets` PR **#2710** (`df445db`):
+`packages/markets/services/liquid/contracts/BaoCourtEscrow.simf` + builder +
+`__tests__/BaoCourtEscrow.test.ts`; `docs/SETTLEMENT-BINDING-ONCHAIN.md` (paper
+App. A, **S-30**; spec §2.2.1). Not in this package: the IP boundary puts rail
+execution in the host repo (AGENTS.md §4).
+
+PO-15 has been called a CHECKSIGFROMSTACK problem since v0.10.2. It is not.
+`BaoOracleEscrow`, `BaoOracleEscrowV2` and `BaoDepositEscrowV3` already verify a
+program-chosen message with `bip_0340_verify` — the CSFS primitive — so the
+missing pieces were a **per-dispute FROST key** instead of a single oracle key, a
+message that binds a **dispute** instead of a market, and a covenant that
+**recomputes** the payout set instead of trusting a builder-supplied root. The
+covenant adds all three:
+
+```
+plan_root(o) = sha256(script_hash_0 ‖ amount_0_BE8 ‖ script_hash_1 ‖ amount_1_BE8 ‖ …)  over ACTIVE slots, in order
+settle(d, o) = sha256(prefix_o ‖ DISPUTE_ID ‖ plan_root(o))
+```
+
+The spender supplies **only a signature**: `plan_root` comes from the same
+`array_fold` that enforces the payouts, so the signature commits to the plan the
+script pays. `VERDICT_A/B` require the FROST aggregate under `P_dispute` over
+`settle(d,outcome)` with every winner, BAO's fee and the network-fee output
+pinned by introspection; `REFUND` needs the funder's `sig_all_hash` and
+`check_lock_height(TIMEOUT)`.
+
+| # | Case | Result |
+|---|---|---|
+| 1 | **real Pedersen-DKG 2-of-3 FROST aggregate** over `settle(d,"A")`, and the same for branch B | **accepted** |
+| 2 | the *other* outcome's verdict on this branch | rejected |
+| 3 | a verdict signed by a **foreign FROST group** (same message) | rejected |
+| 4 | a signature over a **different payout plan** | rejected |
+| 5 | an all-zero (malformed) signature | rejected |
+| 6 | a **redirected winner** output | rejected |
+| 7 | the same verdict **replayed against another dispute's** covenant (with a positive control on its own) | rejected / control accepted |
+| 8 | a refund to a **non-funder** destination; refund at `TIMEOUT` vs one block early | rejected; accepted / rejected |
+| 9 | a valid verdict **after** `TIMEOUT` (no revocation; one-spend resolves the race) | accepted |
+
+The aggregate is not a stand-in: `generateFrostKeys` runs a real Pedersen DKG and
+`frost.Lib.combine_partial_sigs` returns a standard 64-byte BIP-340 signature.
+
+**What it closes.** On this rail, once funded: the host cannot release on an
+unadjudicated market, choose the outcome, redirect payouts, replay a verdict
+across disputes or plans, or freeze funds (the `TIMEOUT` refund is unilateral for
+the funder).
+
+**The residual — all of it.** No funding or PSET flow and no deployment;
+`P_dispute` is still **host-issued** and the covenant cannot verify the ceremony
+(it consumes an x-only key and cannot tell a FROST group from any other);
+the host still assembles and broadcasts (it can refuse to build — bounded by
+`TIMEOUT`, not eliminated); it is a **post-dispute** escrow because `P_dispute`
+and the dispute id are creation-time constants, so the transfer *into* it is not
+built; confidentiality is forfeited (introspection needs explicit outputs); MAX
+8 winners (SimplicityHL 0.8 has no const generics), so no 256-outcome parimutuel;
+two signatures per settlement; and the evidence is `pset run`, which is **not** a
+regtest consensus spend. Every deployed rail still releases host-mediated, so
+this is a *prototype* on the paper's evidence ladder — above "specified", below
+"empirically evaluated".
+
 ---
 
 ## 4. Performance
@@ -759,7 +820,9 @@ results:
    the private signet is used only where the public testnet does not carry the
    rail (today: Lightning, Cashu), and the earlier private-signet bond results
    are labelled and superseded. What is still not public-chain evidence is the
-   *release* step, which remains host-mediated (PO-15).
+   *release* step, which remains host-mediated on every deployed rail (PO-15); a
+   Liquid release covenant now enforces the verdict by consensus, but it is a
+   compiled, tested prototype with no funding and no deployment (§3.8, S-30).
 11. **A bond proves collateral at verification time — nothing more.** The bond
    gate makes a seat expensive and a slash possible; it says nothing about how
    the juror will vote, whether it can be bribed afterwards, or whether it will
@@ -796,6 +859,7 @@ results:
 | §3.5 rail evidence (bonds) | `docs/MULTI_PROCESS_CEREMONY.md` §"The bond gate", §"Stable identities and funded bonds"; `bondCheckGate.ts`; `scripts/court/provision-jurors.mjs`; host `bao.markets` `scripts/court/verify-bond.mts` + `scripts/court/liquid-bond-juror-binding.mts`, `docs/operations/RAIL_BACKED_BONDS.md` §3.1.1–3.1.2 | #147, #149, #150; bao.markets #2553, #2556, #2597, #2616, **#2669** |
 | §3.6 continuous programs | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program"; `scripts/court/distributed-ceremony-soak.mjs`, `ceremony-soakctl.sh`, `scripts/court/systemd/`; host rail-soak series | #144, #145, #146; bao.markets #2506, #2508, #2539 |
 | §3.7 determinism | `docs/TEST_DETERMINISM.md`, `__tests__/helpers/watchdog.ts`, `__tests__/determinism.test.ts`, `vitest.config.ts` | #140, #143 |
+| §3.8 the covenant (prototype) | `docs/SETTLEMENT-BINDING.md` §2.2.1; host `bao.markets` `docs/SETTLEMENT-BINDING-ONCHAIN.md`, `packages/markets/services/liquid/contracts/BaoCourtEscrow.simf`, `packages/markets/services/liquid/__tests__/BaoCourtEscrow.test.ts` | bao.markets **#2710** |
 | §5 threat model + coverage | `docs/THREAT_MODEL.md`, `docs/CROSS_CHECK.md`, `scripts/cross-check.mjs` | #62, #63, #64 |
 | §6 validity methodology | `__tests__/modelCheckingCore.ts` header, BASELINE.md caveats, `docs/MULTI_PROCESS_CEREMONY.md`; §6 item 10 (rail evidence ranking) is stated in paper **§11.8**, §6 item 11 (bond limits) in paper **§8.5**, and both in `docs/CAMPAIGN_REPORT.md` §4 | #53, #50, #98, #147/#149 |
 

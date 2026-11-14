@@ -1,6 +1,6 @@
 # Delivery status — what is proven, where, and how to check it
 
-**As of 2026-11-13.** This page is the honest scoreboard: every claim below points
+**As of 2026-11-14.** This page is the honest scoreboard: every claim below points
 at a transaction, an artifact, a tag, or a command you can run. If a thing is not
 proven, it is in §6 rather than dressed up.
 
@@ -53,7 +53,7 @@ and must be re-locked) or `BOND_PROOF_UNPARSEABLE` (no juror key to bind against
 | Corpora | `docs/benchmarks/SCALE_CAMPAIGN_V2.md` | 1,587,000 units / **8,286,823 assertions** / 0 failures |
 | Soak | `docs/benchmarks/SOAK_3DAY.md` | 30,000 settlements, 3 epoch boundaries, 32/32 assertions with fault injection |
 | Contract | `scripts/reproduce.sh` | 13 stages, digit-exact fixture, `REPRODUCED` |
-| Cross-check | `scripts/cross-check.mjs` | 286 claims / 521 refs, dangling codes fail the build |
+| Cross-check | `scripts/cross-check.mjs` | 288 claims / 524 refs, dangling codes fail the build |
 
 ## 4. The continuous programs (running)
 
@@ -76,7 +76,7 @@ harness bugs**, 0 open.
 git checkout <tag>                  # bao-court
 bash scripts/reproduce.sh           # 13 stages → VERDICT
 npm test                            # 2,029 passing
-node scripts/cross-check.mjs        # 286 claims / 521 refs
+node scripts/cross-check.mjs        # 288 claims / 524 refs
 (cd proofs/lean4 && ./run.sh)       # 42 declarations, no sorry
 npm run campaign:full               # 1.59M units / 8.29M assertions
 (cd scripts/differential && node run.mjs --profile full)   # 100k, 0 disagreements
@@ -96,13 +96,13 @@ Host-side rail checks are described in `docs/operations/RAIL_BACKED_BONDS.md`
 | Private-signet rails are not public evidence | Lightning and Cashu are not enabled on public testnet | public testnet enabling them |
 | One operator holds court key, wallet and boxes | test infrastructure | a second, independent operator |
 | Bonds prove collateral **at verification time** | a bond prices the option, it does not remove it | — (by design) |
-| Release is host-mediated (PO-15) | v1 settlement binding | on-chain verdict enforcement |
+| **On-chain verdict enforcement (PO-15) is a prototype, not a rail** | the Liquid release covenant (`BaoCourtEscrow.simf`) enforces the verdict by consensus — a FROST aggregate under `P_dispute` over `settle(d,o) = sha256(prefix_o ‖ DISPUTE_ID ‖ plan_root(o))`, with `plan_root` recomputed by the same fold that pays — and passes a 9/9 matrix with a real Pedersen-DKG 2-of-3 aggregate (host `bao.markets` #2710; `docs/SETTLEMENT-BINDING-ONCHAIN.md`; paper App. A, S-30). But nothing on any chain locks value in it: no funding/PSET flow, no post-dispute transfer into the covenant, `P_dispute` still host-issued (the script cannot verify the ceremony), the host still assembles and broadcasts, confidentiality forfeited, MAX 8 winners, and the evidence is `pset run`, not a regtest consensus spend. **Every deployed rail still releases host-mediated** | funding + deployment of the covenant, and an `elementsd` regtest spend |
 | Majority collusion is κ-bounded | mechanism design | — |
 | No external replication | needs an unaffiliated evaluator | submission |
 
 ## 7. Where the artifacts live
 
-- **Protocol**: `baocommunity/bao-court` — tags `v0.11.0 … v0.16.2`, each with a GitHub Release.
+- **Protocol**: `baocommunity/bao-court` — tags `v0.11.0 … v0.17.0`, each with a GitHub Release.
 - **Host**: `baocommunity/bao.markets` — `packages/lib/frost-court` byte-exact mirror, plus the rail verifiers and the soak programs.
 - **Client**: `2140wtf/2140wtf` — `court-core` mirror, pinned to the tag.
-- **Paper**: three byte-identical copies (`docs/architecture/frost-plan/`, `public/`, and the protocol repo), sha256 `35185563…`.
+- **Paper**: three byte-identical copies (`docs/architecture/frost-plan/`, `public/`, and the protocol repo), sha256 `e7c45bbe…` (v0.17.0).

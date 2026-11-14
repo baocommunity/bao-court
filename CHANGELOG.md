@@ -9,7 +9,49 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
-## [Unreleased]
+## [0.17.0] — 2026-11-14
+
+### Documentation — PO-15 moves to "prototype compiled and tested, not deployed"
+- **The paper's premise for PO-15 was wrong, and correcting it is the substance
+  of this release.** The paper (and `docs/SETTLEMENT-BINDING.md` §2.2) implied
+  CHECKSIGFROMSTACK was the blocker for on-chain verdict enforcement. It is not:
+  `BaoOracleEscrow`, `BaoOracleEscrowV2` and `BaoDepositEscrowV3` already use
+  `bip_0340_verify((pk, msg), sig)`, which **is** the CSFS primitive in
+  Simplicity, over a message the spender never supplies. The three real gaps
+  were a single key instead of the per-dispute FROST group `P_dispute`; a
+  message that binds a *market*, never a *dispute*; and no covenant that
+  **recomputes** the payout set (`BaoOracleEscrow` bakes a `payout_root` the
+  script never checks against the winner arrays it enforces). Registered as
+  finding **F-14** (App. A.3) and corrected in §1.2, §3.2, §9.2, §10.1 (A6),
+  §12.6 and §13 Table 2.
+- **`BaoCourtEscrow.simf`** (host repo `bao.markets` #2710, `df445db`) closes
+  all three: `plan_root(o) = sha256(script_hash ‖ amount_BE8 …)` over active
+  slots in order, and `settle(d,o) = sha256(prefix_o ‖ DISPUTE_ID ‖
+  plan_root(o))`, with `plan_root` produced by the *same* fold that enforces the
+  payouts — so the spender supplies only a signature. `VERDICT_A/B` verify the
+  FROST aggregate under `P_dispute` with every winner, BAO's fee and the
+  network-fee output pinned by introspection; `REFUND` needs the funder's
+  `sig_all_hash` plus `check_lock_height(TIMEOUT)`, a liveness escape hatch that
+  does not revoke a verdict.
+- **Evidence: a 9/9 matrix with a real Pedersen-DKG 2-of-3 FROST aggregate** —
+  accepted on both branches; rejected for the other outcome's verdict, a foreign
+  group key, a different payout plan, an all-zero signature, a redirected
+  winner, a replay against another dispute's covenant (with a positive control)
+  and a non-funder refund; refund accepted at `TIMEOUT` and rejected one block
+  early; a verdict accepted *after* `TIMEOUT`. Recorded in
+  `docs/SETTLEMENT-BINDING.md` §2.2.1 and `docs/EVALUATION.md` §3.8, with the
+  construction, branch table and residuals in the host's
+  `docs/SETTLEMENT-BINDING-ONCHAIN.md` (new normative document **S-30**).
+- **What remains, stated in the same places:** no funding/PSET flow and no
+  deployment; `P_dispute` is still host-issued (the covenant consumes the key,
+  it cannot verify the ceremony); the host still assembles and broadcasts; it is
+  a post-dispute escrow because the constants are fixed at creation;
+  confidentiality is forfeited; MAX 8 winners; and `pset run` is not a regtest
+  consensus spend. **Every deployed rail still releases host-mediated**, so the
+  paper says so in §1.2, §9, §11.8, §12.6 and §13 Table 2.
+- `docs/DELIVERY.md` §6, `docs/EVALUATION.md` §3.8/§6/§7, `docs/THREAT_MODEL.md`
+  §6 (the PO-15 register row) and `docs/CROSS_CHECK.md` (two new index rows,
+  re-measured coverage) track the same status.
 
 ### Fixed (a transient network error no longer ends a 6-hourly run)
 - **Bounded retry at the coordinator's fetch layer.** Every coordinator→relay
