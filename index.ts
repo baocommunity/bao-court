@@ -441,9 +441,13 @@ export {
 
 export {
   BOND_CHECK_ENV,
+  BOND_CHECK_MAX_OUTPUT_BYTES,
+  bondIdentity,
+  normaliseBondProofRef,
   buildBondCheckArgs,
   parseBondCheckOutput,
   gateRosterOnBonds,
+  type BondCheckExpectation,
   type BondCheckRequest,
   type BondCheckVerdict,
   type BondGateRefusal,
