@@ -531,13 +531,17 @@ Only public material: outpoints, scripts, values, heights, source names, keys'
 **These are the same funded outpoints reused across every run, and they are
 never spent.** The soak therefore proves the **gate** — that a seat costs a bond
 the host can PROVE (unspent, court-locked, carrying the value, at depth), that
-another seat's bond cannot be re-presented, that the legacy court-only lock is
+another seat's bond cannot be re-presented (each `seats[i]` is a distinct
+outpoint, and since v0.17.1 the gate refuses one bond funding two seats in the
+same run with `BOND_REUSED_ACROSS_SEATS`), that the legacy court-only lock is
 refused, and that a silent check stops the ceremony. It does **not** prove fresh
 funding: no new bond is created per run, no faucet or wallet is exercised, and a
 bond that is eventually spent will surface as `BOND_SPENT` and a
 `ROSTER_BELOW_THRESHOLD` stop — the correct signal, and an operator re-fund, not
 a soak failure. A bond still proves collateral *at verification time*: it prices
-a seat, it does not buy honesty.
+a seat, it does not buy honesty. The dedupe itself is **per-run** state, so the
+rotation re-using the plan's outpoints every six hours is unaffected — that is
+the property that must keep working.
 
 ### One JSONL record per run
 
@@ -693,7 +697,11 @@ Any other exit is a refusal:
 {"ok":false,"code":"BOND_SPENT","detail":"the outpoint is not an unspent Liquid output (…)"}
 ```
 
-Strictness is deliberate, because every leniency here is a free seat:
+Strictness is deliberate, because every leniency here is a free seat. The gate
+— not the harness — compares the answer with the request it made
+(`parseBondCheckOutput(stdout, request)`), so a caller that forgets to compare
+still cannot seat the juror, and the answer must be exactly **one** JSON object,
+bounded before parsing.
 
 | observation | verdict |
 |---|---|
@@ -702,8 +710,11 @@ Strictness is deliberate, because every leniency here is a free seat:
 | exit 0 but body says `ok:false` | refusal (the same code path) |
 | exit non-zero but body says `ok:true` | `BOND_CHECK_FAILED` — a contradiction is never a pass |
 | no output, a log line, a JSON array, `{"ok":"yes"}`, `ok:true` without `proofRef`/`sources` | `BOND_CHECK_MALFORMED` |
+| more than `BOND_CHECK_MAX_OUTPUT_BYTES` (8 MiB — the runner's own spawn cap) of stdout | `BOND_CHECK_MALFORMED`, refused before parsing |
+| the answer echoes a `rail`/`network` other than the one requested | `BOND_RAIL_MISMATCH` |
 | no answer inside `--bond-check-timeout-ms` (default 60 s) | `BOND_CHECK_TIMEOUT` |
 | the command proves a **different** `proofRef` than the roster claims | `BOND_PROOF_MISMATCH` |
+| a **second** juror presents a bond an earlier seat already proved in this run (same rail + network + outpoint/hash, case- and space-insensitive) | `BOND_REUSED_ACROSS_SEATS` — the **first** claimant keeps the seat |
 | a juror whose check never ran (no verdict) | `BOND_CHECK_FAILED` |
 | `rail:"none"` under `--require-bonds` | `BOND_NOT_CLAIMED` |
 
@@ -711,6 +722,49 @@ The parser and the roster decision are the protocol's: `bondCheckGate.ts`
 (`buildBondCheckArgs`, `parseBondCheckOutput`, `gateRosterOnBonds`), exported
 from the package root and covered by `__tests__/bondCheckGate.test.ts`. The
 harness only spawns the process.
+
+### One bond, one seat (v0.17.1)
+
+A bond is collateral for **one seat**. Before v0.17.1 the gate judged every
+juror's bond in isolation, so the same funded outpoint presented by two jurors
+was admitted twice — one coin, two seats. That was review-round-13's
+`bondCheckGate` gap and it is closed in the gate itself, not in the harness.
+
+- **The identity is canonical**: `bondIdentity(bond)` =
+  `<rail>/<network>:<proofRef>` with the `proofRef` trimmed and case-folded
+  (`normaliseBondProofRef`). Case and surrounding whitespace are dropped because
+  a `proofRef` is an *identifier*, not a checksum: outpoint txids, payment
+  hashes and token ids are hex (case-insensitive) and bech32 is case-insensitive
+  by specification. `"0F11…:0 "` and `"0f11…:0"` are the same bond; a different
+  outpoint, rail or network is not.
+- **At most one seat per identity per run.** The second claimant is refused with
+  `BOND_REUSED_ACROSS_SEATS`, `duplicateOf` naming the seat that kept it. If that
+  drops the roster under `--threshold`, the run stops exactly like any other
+  exclusion: `ROSTER_BELOW_THRESHOLD`, no roster written, no juror launched, no
+  key, no signature.
+- **The first claimant wins, and that is deliberate.** `jurors` is walked in
+  roster order — the box/seat order the driver builds — so the winner is the
+  earliest seat, never an arbitrary one. A run is therefore reproducible from
+  its inputs; "some claimant keeps it" would make two runs of the same plan
+  produce different artifacts.
+- **An identity is consumed only by a PROVEN admission.** A juror whose check
+  refused (`BOND_SPENT`, `BOND_JUROR_MISMATCH`, a timeout…) never reserves the
+  bond, so the same outpoint may still back a later seat in that run — the
+  refusal that mattered is the one that *proved* it.
+- **The scope is ONE RUN — nothing is persisted.** The seat ledger is a `Map`
+  created inside each `gateRosterOnBonds` call: never module-global, never
+  written to disk. The same funded outpoints are legitimately re-presented in
+  the next ceremony, which is exactly what the 6-hourly soak does every cycle.
+  (A run that refuses a duplicate leaves no trace either: the next run starts
+  with an empty ledger.)
+
+Consequence for the recorded evidence: the 2026-11-12 "Run A" (three seats on
+ONE Liquid outpoint, because the faucet refused every address shape) is **not
+reproducible under v0.17.1 and must not be**: under this rule it is the
+duplicate-seat case and stops at `ROSTER_BELOW_THRESHOLD`. It proved the
+enforcement path, not three independent coins; a real deployment needs three
+distinct, court-locked bonds, and the soak's `bond-plan.json` already funds one
+bond per seat.
 
 ### The enforcement point
 
@@ -748,12 +802,21 @@ juror:
 "identities": [
   {"seat":1, "idx":1, "box":"vps16gb", "pubkey":"4775…",
    "bond":{"rail":"liquid","network":"testnet","proofRef":"0f11…:0"},
-   "bondRef":"liquid/testnet:0f11…:0", "bondVerified":true,
-   "sources":["blockstream","liquid-network"], "bondCode":null},
+   "bondRef":"liquid/testnet:0f11…:0",
+   "bondIdentity":"liquid/testnet:0f11…:0", "duplicateOf":null,
+   "bondVerified":true, "sources":["blockstream","liquid-network"],
+   "bondCode":null},
   …
 ],
-"bondExclusions": [{"idx":3, "bondRef":"liquid/testnet:cce0…:1", "refusal":
-  "BOND_CHECK_REFUSED", "code":"BOND_SPENT", "detail":"…", "sources":[]}],
+"bondExclusions": [{"idx":3, "bondRef":"liquid/testnet:cce0…:1",
+  "bondIdentity":"liquid/testnet:cce0…:1",
+  "refusal":"BOND_CHECK_REFUSED", "code":"BOND_SPENT", "detail":"…",
+  "duplicateOf":null, "sources":[]},
+  {"idx":4, "bondRef":"liquid/testnet:0f11…:0",
+  "bondIdentity":"liquid/testnet:0f11…:0",
+  "refusal":"BOND_REUSED_ACROSS_SEATS", "code":null,
+  "detail":"liquid/testnet:0f11…:0 already backs seat 1 in this run …",
+  "duplicateOf":1, "sources":["blockstream","liquid-network"]}],
 "bondGate": {"enforced":true, "requireBonds":true, "bondSats":1000,
              "threshold":3, "admitted":[1,2], "excluded":[3],
              "classification":"ROSTER_BELOW_THRESHOLD", "verdicts":[…]},
@@ -811,13 +874,15 @@ is not "bonded".
   the court, and therefore not that it is slashable by the covenant spender.
   Production must configure `--bond-script`/`--court-pubkey` and refuse everything
   else. The artifact says which binding applied, so the two can never be blurred.
-- **Run A's three seats share ONE outpoint.** The Liquid testnet faucet still
-  rejects every address shape we derive (`local variable 'data' referenced before
-  assignment`), so no fresh bond could be funded; the audited outpoint was
-  therefore proven three times. That demonstrates the enforcement path (three
-  independent checks, three independent keys, a quorum that indeed signed), not
-  three independent coins — a real deployment needs three distinct, court-locked
-  bonds.
+- **Run A's three seats share ONE outpoint — and v0.17.1 refuses that by
+  design.** The Liquid testnet faucet still rejects every address shape we
+  derive (`local variable 'data' referenced before assignment`), so no fresh
+  bond could be funded; the audited outpoint was therefore proven three times.
+  That demonstrated the enforcement path (three independent checks, three
+  independent keys, a quorum that indeed signed), not three independent coins.
+  Since the one-bond-one-seat rule the same plan stops at the second seat
+  (`BOND_REUSED_ACROSS_SEATS` → `ROSTER_BELOW_THRESHOLD`), which is the correct
+  answer: a real deployment needs three distinct, court-locked bonds.
 - **The check runs on the coordinator.** A coordinator that lies about the
   verdict is not detected by the ceremony; the boxes cannot check a chain. The
   artifact records the command and every verdict so the lie is at least on the

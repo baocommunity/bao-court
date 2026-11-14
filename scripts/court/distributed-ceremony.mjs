@@ -487,7 +487,10 @@ function runBondCheck(request) {
       stderr,
     };
   }
-  const verdict = parseBondCheckOutput(result.stdout ?? '');
+  // The request is passed so the gate refuses an answer that proves a
+  // DIFFERENT bond (or echoes another rail/network) itself — never the runner's
+  // job to notice.
+  const verdict = parseBondCheckOutput(result.stdout ?? '', request);
   if (verdict.ok && result.status !== 0) {
     return {
       verdict: {
@@ -1015,10 +1018,12 @@ touch "$D/done-$IDX"
               pubkey: claim.pubkey,
               bond: claim.bond,
               bondRef: formatCourtBondRef(claim.bond),
+              bondIdentity: verdict?.bondIdentity ?? null,
               bondVerified: verdict?.bondVerified ?? false,
               admitted: verdict?.admitted ?? false,
               refusal: verdict?.refusal ?? null,
               bondCode: verdict?.code ?? null,
+              duplicateOf: verdict?.duplicateOf ?? null,
               sources: verdict?.sources ?? [],
             };
           }),
@@ -1526,9 +1531,11 @@ touch "$D/done-$IDX"
         idx: v.idx,
         pubkey: v.pubkey,
         bondRef: v.bondRef,
+        bondIdentity: v.bondIdentity,
         refusal: v.refusal,
         code: v.code,
         detail: v.detail,
+        duplicateOf: v.duplicateOf,
         sources: v.sources,
       })),
       bondGate: {

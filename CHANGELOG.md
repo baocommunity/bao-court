@@ -9,6 +9,51 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.17.1] — 2026-11-14
+
+### Fixed — one bond can no longer admit two seats (review round 13)
+- **The gap:** `gateRosterOnBonds` judged each juror's bond in isolation, so the
+  same funded outpoint presented by two jurors was admitted **twice** — one
+  coin bought two seats. A bond is collateral for one seat; the gate now enforces
+  that itself.
+- **`BOND_REUSED_ACROSS_SEATS`** (new typed refusal, `BondGateRefusal`): within
+  one run a canonical **bond identity** — `bondIdentity(bond)` =
+  `rail/network:<proofRef>`, `proofRef` trimmed and case-folded
+  (`normaliseBondProofRef`) — may admit **at most one** seat. The second
+  claimant is refused, `duplicateOf` naming the seat that kept it, and
+  `JurorBondVerdict` now carries `bondIdentity` + `duplicateOf` so the artifact
+  says which seat holds which collateral.
+- **Deterministic, first-claimant rule:** `jurors` is walked in roster order —
+  the driver's box/seat order — so the earliest seat keeps the bond. Deliberate:
+  an arbitrary winner would make two runs of one plan produce different
+  artifacts.
+- **Per-run scope, never persisted:** the seat ledger is a `Map` created inside
+  each `gateRosterOnBonds` call (no module state, no disk). The same funded
+  outpoints are legitimately reusable in the next ceremony — the 6-hourly soak
+  re-presents them every cycle and is unaffected. An identity is consumed only
+  by a **proven** admission, so a juror whose check refused never reserves it.
+- **Gate-contract hardening:** `parseBondCheckOutput` now (a) refuses more than
+  `BOND_CHECK_MAX_OUTPUT_BYTES` (8 MiB, mirroring the runner's spawn cap) before
+  parsing, (b) requires exactly ONE JSON object, (c) requires an `ok:true`
+  `proofRef` to be 1..512 printable ASCII with no whitespace, and (d) when given
+  the request (`parseBondCheckOutput(stdout, request)` — the runner now passes
+  it) refuses an answer that proves a different bond identity
+  (`BOND_PROOF_MISMATCH`) or echoes another `rail`/`network`
+  (`BOND_RAIL_MISMATCH`). The roster decision re-checks the identity itself on
+  the canonical form, so a caller that forgets to compare still cannot seat a
+  juror.
+- **Consequence for recorded evidence:** the 2026-11-12 "Run A" (three seats on
+  one Liquid outpoint) is *not* reproducible under this rule and stops at
+  `ROSTER_BELOW_THRESHOLD` — correctly, since it proved the enforcement path,
+  not three independent coins. `docs/MULTI_PROCESS_CEREMONY.md` §"One bond, one
+  seat (v0.17.1)" records the rule, the scope, the ordering and the typed codes.
+- **Tests:** `__tests__/bondCheckGate.test.ts` — two jurors on one bond (second
+  refused, first seated, roster below k), two jurors on two bonds (both seated),
+  the same bond in two consecutive runs (both pass, per-run state), and
+  normalisation (upper-case hex / trailing space are the same bond; a one-digit
+  different outpoint is not), plus the bounded/one-object/request-cross-check
+  contract.
+
 ## [0.17.0] — 2026-11-14
 
 ### Documentation — PO-15 moves to "prototype compiled and tested, not deployed"
