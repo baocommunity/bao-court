@@ -106,6 +106,8 @@ const intervalHours = Number(arg('interval-hours', '6'));
 const deadlineMs = Number(arg('deadline-ms', '300000'));
 const keepRuns = Number(arg('keep-runs', '120'));
 const forcedScenario = arg('scenario', undefined);
+/** Extra argv passed straight to the driver (test seams, --keep, …). */
+const driverExtra = arg('driver-extra', '').trim().split(/\s+/).filter(Boolean);
 const withSilence = flag('with-silence');
 const sshDir = arg('ssh-dir', '/tmp/opencode/bao-dist-ssh');
 /** The Lightning node the held-HTLC probe asks, and the CLI it uses there. */
@@ -125,6 +127,7 @@ if (flag('help')) {
   --state-dir=  --boxes=  --relay-box=  --port=  --interval-hours=6
   --deadline-ms=300000  --keep-runs=120  --scenario=  --with-silence  --json
   --bond-plan=  --bond-cli=  --bond-check-cmd=  --soak-env-file=  --ln-box=  --ln-cli=
+  --driver-extra="<args>"   extra argv for the driver (e.g. --inject-transient=relay-log:2)
   env: BAO_COURT_BOND_CHECK_CMD (verbatim) | BAO_COURT_BOND_CLI (path to verify-bond.mts)`);
   process.exit(0);
 }
@@ -626,6 +629,7 @@ function runOne({ state, scenario, boot, gap }) {
     `--jurors=${runBoxes.length}`,
     `--artifacts=${evidenceDir}`,
     ...scenario.args,
+    ...driverExtra,
   ];
   if (bond) {
     args.push(
@@ -681,6 +685,13 @@ function runOne({ state, scenario, boot, gap }) {
     } catch { /* keep the summary entry */ }
   }
   const timedOut = result.signal === 'SIGTERM' || result.error?.code === 'ETIMEDOUT';
+  /**
+   * A `blocked` run never happened: the driver exhausted its bounded retries on
+   * a transient network class. It is NOT a failure (nothing about the protocol
+   * was measured) and NOT a pass. It also must not count against the honest /
+   * fault statistics, or a flaky link would look like a protocol regression.
+   */
+  const blocked = Boolean(run?.blocked ?? summary?.blocked);
 
   const perBoxWallMs = (run?.perBox ?? []).map((b) => b.wallMsOnBox ?? null);
   const classifications = (run?.classifications ?? []).map((c) => c.classification).filter(Boolean);
@@ -700,10 +711,12 @@ function runOne({ state, scenario, boot, gap }) {
     else assertionFailures.push(...assertBondRun(run, bond.expectation));
   }
   if (timedOut) assertionFailures.push('the run exceeded its deadline');
-  if (assertionFailures.length === 0 && !ok) assertionFailures.push('the driver reported failures');
+  // A block is not an assertion failure: the ceremony never ran.
+  if (!blocked && assertionFailures.length === 0 && !ok) assertionFailures.push('the driver reported failures');
 
   let outcome = 'fail';
   if (timedOut) outcome = 'timeout';
+  else if (blocked) outcome = 'blocked';
   else if (ok && assertionFailures.length === 0) outcome = 'pass';
 
   const entry = {
@@ -721,7 +734,15 @@ function runOne({ state, scenario, boot, gap }) {
     durationMs: Date.now() - startedAt,
     perBoxWallMs,
     relayRttP50: relayRttP50(run?.perBox ?? []),
-    classification: classifications.length > 0
+    /** Bounded-retry accounting: attempts spent, and what was retried. */
+    retries: Number(run?.retries ?? summary?.retries ?? 0),
+    attempts: run?.attempts ?? null,
+    blockedSite: blocked ? (run?.blockedSite ?? null) : null,
+    blockedReason: blocked ? (run?.blockedReason ?? null) : null,
+    fetchAttempts: blocked ? (run?.fetchAttempts ?? []) : [],
+    classification: blocked
+      ? (run?.blockedReason ?? 'BLOCKED_TRANSIENT')
+      : classifications.length > 0
       ? (new Set(classifications).size === 1 ? classifications[0] : classifications.join('+'))
       : (timedOut ? 'DEADLINE_EXCEEDED' : (ok ? 'OK' : 'DRIVER_ERROR')),
     evidencePath: runArtifactPath ? relative(stateDir, join(evidenceDir, runArtifactPath)) : null,
@@ -760,6 +781,7 @@ function runOne({ state, scenario, boot, gap }) {
   record({ ...entry, boot });
 
   console.log(`  ${outcome.toUpperCase()}  ${scenario.name}  ${entry.durationMs} ms  `
+    + `${entry.retries ? `retries=${entry.retries} ` : ''}`
     + `k=${entry.k}  sig=${signatureVerified}  cls=${entry.classification}  rtt=${entry.relayRttP50} ms`
     + `${entry.bondGate ? `  bonds admitted=${entry.bondGate.admitted.join(',') || '-'} excluded=${entry.bondGate.excluded.join(',') || '-'}` : ''}`);
   if (assertionFailures.length > 0) {
@@ -858,13 +880,17 @@ function statusBlock(records, state) {
       bondMode: scenario.bondMode ?? null,
     };
   }
-  const honest = runs.filter((r) => honestScenarios().has(r.scenario));
-  const fault = runs.filter((r) => faultScenarios().has(r.scenario));
+  // `blocked` runs are excluded from BOTH rates: the ceremony never ran, so
+  // they are evidence about the link, not about the protocol.
+  const honest = runs.filter((r) => honestScenarios().has(r.scenario) && r.outcome !== 'blocked');
+  const fault = runs.filter((r) => faultScenarios().has(r.scenario) && r.outcome !== 'blocked');
   const honestVerified = honest.filter((r) => r.signatureVerified).length;
   const faultSigned = fault.filter((r) => r.signatureVerified).length;
   const histogram = {};
   for (const r of runs) histogram[r.classification ?? 'unknown'] = (histogram[r.classification ?? 'unknown'] ?? 0) + 1;
-  const lastFailure = [...runs].reverse().find((r) => r.outcome === 'fail' || r.outcome === 'timeout' || r.outcome === 'blocked') ?? null;
+  const lastFailure = [...runs].reverse().find((r) => r.outcome === 'fail' || r.outcome === 'timeout') ?? null;
+  const lastBlocked = [...runs].reverse().find((r) => r.outcome === 'blocked') ?? null;
+  const retries = runs.reduce((sum, r) => sum + (Number(r.retries) || 0), 0);
   const last = runs[runs.length - 1] ?? null;
   const gaps = records.filter((r) => r.outcome === 'gap').length;
   const paused = existsSync(PAUSE);
@@ -896,12 +922,18 @@ function statusBlock(records, state) {
     lastFailure: lastFailure
       ? { ts: lastFailure.ts, scenario: lastFailure.scenario, outcome: lastFailure.outcome, classification: lastFailure.classification }
       : null,
+    lastBlocked: lastBlocked
+      ? { ts: lastBlocked.ts, scenario: lastBlocked.scenario, site: lastBlocked.blockedSite, reason: lastBlocked.blockedReason }
+      : null,
+    retriesObserved: retries,
     nextCadenceSlot: nextCadenceMs ? new Date(nextCadenceMs).toISOString() : null,
     nextRunAt: nextSystemd?.next ?? (nextCadenceMs ? new Date(nextCadenceMs).toISOString() : null),
     nextRunSource: nextSystemd ? 'systemd timer' : 'last run + cadence',
     consecutiveFailures: state.consecutiveFailures ?? 0,
     /** The honest line. Never drop it from the output. */
-    note: 'Four boxes owned by ONE operator on one network path: a continuous '
+    note: 'Blocked runs (transient network exhaustion) are excluded from the '
+      + 'signature rates: they measure the link, not the ceremony. '
+      + 'Four boxes owned by ONE operator on one network path: a continuous '
       + 'transport/DKG/signing programme, not a Byzantine network. Fault runs '
       + '(kill/silence/bonded-negative) assert fail-closed; they are not an adversary model.',
   };
@@ -928,6 +960,8 @@ function printStatus(block) {
   console.log(`  classifications: ${Object.entries(block.classificationHistogram).map(([k, v]) => `${k}:${v}`).join('  ') || '—'}`);
   console.log(`  last run: ${block.lastRun ? `${block.lastRun.ts} ${block.lastRun.scenario} ${block.lastRun.outcome}` : '—'}`);
   console.log(`  last failure: ${block.lastFailure ? `${block.lastFailure.ts} ${block.lastFailure.scenario} ${block.lastFailure.outcome} (${block.lastFailure.classification})` : 'none'}`);
+  console.log(`  last blocked: ${block.lastBlocked ? `${block.lastBlocked.ts} ${block.lastBlocked.scenario} at ${block.lastBlocked.site} (${block.lastBlocked.reason})` : 'none'}`
+    + `   retries observed: ${block.retriesObserved}`);
   console.log(`  next run: ${block.nextRunAt ?? (block.paused ? 'paused' : 'on timer')}  (${block.nextRunSource})`);
   console.log(`  NOTE: ${block.note}`);
 }

@@ -214,6 +214,87 @@ if (perJurorBonds && perJurorBonds.length !== boxes.length) {
 const bondForPosition = (position) => (perJurorBonds ? perJurorBonds[position - 1] : bondRef);
 /** Keep the boxes' run dirs (bundles, logs) for debugging instead of tearing down. */
 const keep = flag('keep');
+
+/**
+ * BOUNDED RETRY AT THE FETCH LAYER.
+ *
+ * A 6-hourly run that dies on one transient network error is a run that
+ * measured nothing. The coordinator's only network dependency is the relay
+ * (health, log, stats) — everything else is ssh or a subprocess — so every
+ * coordinator→relay request goes through `fetchJson`/`fetchStatus` with:
+ *
+ *   3 attempts, 200 ms → 600 ms → 1.8 s (x3 each), retried ONLY on the
+ *   transient classes below; a typed refusal is never retried.
+ *
+ * Observed in the wild (2026-11-13, three times): `DRIVER ERROR: fetch failed`
+ * on the post-ceremony `GET /log` — the ceremony had COMPLETED and the run was
+ * thrown away because one request hit a stale keep-alive socket.
+ */
+const fetchAttempts = Number(arg('fetch-attempts', '3'));
+const fetchBackoffMs = Number(arg('fetch-backoff-ms', '200'));
+/**
+ * TEST SEAM (`--inject-transient=<site>:<n>`): fail the first N attempts of one
+ * site with a synthetic transient code, without touching the network. It exists
+ * so the retry path can be proven deterministically; it never fabricates a
+ * success, and the record says `injected: true`.
+ */
+const injectTransient = (() => {
+  const raw = arg('inject-transient', '');
+  if (raw === '') return null;
+  const at = raw.lastIndexOf(':');
+  const site = raw.slice(0, at);
+  const count = Number(raw.slice(at + 1));
+  if (!site || !Number.isSafeInteger(count) || count < 1) {
+    throw new Error('--inject-transient must be <site>:<positive-int>');
+  }
+  return { site, count };
+})();
+
+/** Network-level failures that a retry can legitimately fix. */
+const TRANSIENT_ERROR_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH',
+  'EAI_AGAIN', 'ENOTFOUND', 'UND_ERR_SOCKET', 'UND_ERR_CLOSED', 'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT', 'ERR_STREAM_PREMATURE_CLOSE',
+  'ABORT_ERR', 'TimeoutError',
+]);
+/** HTTP statuses that are worth another attempt (5xx, 429). 4xx never is. */
+const transientStatus = (status) => status >= 500 || status === 429;
+
+/**
+ * The failure that ends a run as `blocked` (never `fail`): every attempt hit a
+ * transient class and the budget is spent. It carries the site, the attempt
+ * history and the last code so the record can say WHAT was unreachable.
+ */
+class TransientFetchError extends Error {
+  constructor(site, url, attempts, history) {
+    const last = history[history.length - 1] ?? {};
+    super(`${site}: ${last.code ?? last.status ?? 'transient'} after ${attempts} attempt(s)`);
+    this.name = 'TransientFetchError';
+    this.transient = true;
+    this.site = site;
+    this.url = url;
+    this.attempts = attempts;
+    this.code = last.code ?? null;
+    this.history = history;
+  }
+}
+
+/** Every attempt at every site, for the artifact (bounded, public). */
+const fetchAttemptLog = [];
+let fetchRetriesTotal = 0;
+
+function transientCodeOf(error) {
+  const cause = error && typeof error === 'object' ? error.cause : null;
+  const code = (cause && (cause.code ?? cause.errno)) ?? (error && error.code) ?? null;
+  if (typeof code === 'string' && TRANSIENT_ERROR_CODES.has(code)) return code;
+  if (error && error.name === 'TimeoutError') return 'TimeoutError';
+  // undici wraps some socket failures without a code; the message is all we get.
+  const message = String((error && error.message) ?? '');
+  if (/socket hang up|other side closed|fetch failed/i.test(message) && cause === null) return 'ECONNRESET';
+  return typeof code === 'string' ? code : null;
+}
+
+
 /**
  * PRE-PROVISIONED IDENTITIES (`--juror-keys=<dir>`).
  *
@@ -357,6 +438,15 @@ function shQuote(value) {
  * that agreed" is a refusal — a crash, a timeout, a log line instead of JSON,
  * a non-zero exit that still claims success.
  */
+/**
+ * Which bond-check verdicts may be RETRIED? Only the ones that mean "the check
+ * could not look" — never a decision. Retrying a transport failure can only
+ * ever give the check another chance to succeed, so fail-closed is preserved;
+ * retrying `BOND_SPENT` or `BOND_SCRIPT_MISMATCH` would be re-asking a question
+ * that has already been answered.
+ */
+const BOND_TRANSIENT_CODES = new Set(['BOND_CHECK_FAILED', 'BOND_CHECK_TIMEOUT', 'BOND_UNVERIFIABLE']);
+
 function runBondCheck(request) {
   const started = ms();
   const argv = buildBondCheckArgs(request);
@@ -425,6 +515,30 @@ function runBondCheck(request) {
   };
 }
 
+/**
+ * `runBondCheck` with the bounded retry, and the attempt history recorded.
+ * A typed refusal comes back on the FIRST attempt (`attempts: 1`) — that is the
+ * proof that decisions are not retried.
+ */
+async function runBondCheckWithRetry(request) {
+  const history = [];
+  let last = null;
+  for (let attempt = 1; attempt <= fetchAttempts; attempt += 1) {
+    last = runBondCheck(request);
+    history.push({
+      attempt,
+      ok: last.verdict.ok,
+      code: last.verdict.code,
+      elapsedMs: last.elapsedMs,
+    });
+    if (last.verdict.ok) break;
+    if (!BOND_TRANSIENT_CODES.has(String(last.verdict.code))) break; // a DECISION
+    if (attempt === fetchAttempts) break;
+    await sleep(fetchBackoffMs * 3 ** (attempt - 1));
+  }
+  return { ...last, attempts: history.length, history };
+}
+
 function pct(values, p) {
   if (!values || values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -451,15 +565,78 @@ function summariseTimings(jsonl) {
   };
 }
 
-async function fetchJson(url, { method = 'GET', headers = {}, body } = {}) {
-  const res = await fetch(url, {
-    method,
-    headers: { ...headers, ...(body ? { 'content-type': 'application/json' } : {}) },
-    body,
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) throw new Error(`${method} ${url} -> ${res.status}`);
+/**
+ * One request with bounded retries. Returns the Response on success (2xx), or
+ * throws:
+ *   - `TransientFetchError` after every attempt hit a transient class, or
+ *   - a plain `Error` on a NON-transient answer (4xx other than 429), which is
+ *     a decision, not a hiccup: retrying it would only waste the budget.
+ *
+ * `site` names the call for the record (`relay-log`, `relay-health`, …).
+ */
+async function fetchWithRetry(url, { site, method = 'GET', headers = {}, body, attempts = fetchAttempts, acceptStatus = null } = {}) {
+  const history = [];
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const startedAt = Date.now();
+    // TEST SEAM: a synthetic transient failure for the first N attempts.
+    if (injectTransient && injectTransient.site === site && attempt <= injectTransient.count) {
+      history.push({ site, attempt, code: 'ECONNREFUSED', status: null, ms: 0, injected: true });
+      fetchAttemptLog.push(history[history.length - 1]);
+      if (attempt < attempts) { fetchRetriesTotal += 1; await sleep(fetchBackoffMs * 3 ** (attempt - 1)); continue; }
+      throw new TransientFetchError(site, url, attempts, history);
+    }
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { ...headers, ...(body ? { 'content-type': 'application/json' } : {}) },
+        body,
+        signal: AbortSignal.timeout(8000),
+      });
+      // `acceptStatus` lets a caller treat a specific non-2xx answer as the
+      // ANSWER (the deliberate 401 probe) instead of an error.
+      if (res.ok || (acceptStatus && acceptStatus(res.status))) {
+        history.push({ site, attempt, code: null, status: res.status, ms: Date.now() - startedAt });
+        fetchAttemptLog.push(history[history.length - 1]);
+        return res;
+      }
+      const code = `HTTP_${res.status}`;
+      history.push({ site, attempt, code, status: res.status, ms: Date.now() - startedAt });
+      fetchAttemptLog.push(history[history.length - 1]);
+      if (!transientStatus(res.status) || attempt === attempts) {
+        // A 4xx (or the last attempt) is final: never retried.
+        throw new Error(`${method} ${url} -> ${res.status}`);
+      }
+    } catch (error) {
+      if (error instanceof Error && /-> \d{3}$/.test(error.message) && !(error instanceof TransientFetchError)) throw error;
+      const code = transientCodeOf(error);
+      const record = {
+        site, attempt, code: code ?? 'UNKNOWN', status: null, ms: Date.now() - startedAt,
+        message: String((error && error.message) ?? error).slice(0, 120),
+      };
+      history.push(record);
+      fetchAttemptLog.push(record);
+      if (code === null || !TRANSIENT_ERROR_CODES.has(code)) {
+        // Not a transient class: a retry cannot help, and hiding it would be a lie.
+        throw error;
+      }
+      if (attempt === attempts) throw new TransientFetchError(site, url, attempts, history);
+    }
+    fetchRetriesTotal += 1;
+    await sleep(fetchBackoffMs * 3 ** (attempt - 1)); // 200 → 600 → 1800 ms
+  }
+  // Unreachable: the loop either returns or throws.
+  throw new TransientFetchError(site, url, attempts, history);
+}
+
+async function fetchJson(url, { site = 'relay', ...options } = {}) {
+  const res = await fetchWithRetry(url, { site, ...options });
   return res.json();
+}
+
+/** A status-only probe (the deliberate 401 check): 401 is an ANSWER, not an error. */
+async function fetchStatus(url, { site = 'relay', ...options } = {}) {
+  const res = await fetchWithRetry(url, { site, acceptStatus: (status) => status === 401, ...options });
+  return res.status;
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +726,7 @@ async function startRelay({ runId, token, tokenLocal, relayIpForProbe }) {
     await sleep(100);
     try {
       const probe = await fetchJson(`http://${relayIpForProbe}:${port}/stats`, {
+        site: 'relay-start-probe',
         headers: { authorization: `Bearer ${token}` },
       });
       answeringPid = probe.pid ?? null;
@@ -595,7 +773,7 @@ async function runCeremony({ label, threshold, kill, policy, expectSignature, bu
   let relayLiveStats = null;
   let outcome = null;
   try {
-    const health = await fetchJson(`${relayUrl}/stats`, { headers: auth });
+    const health = await fetchJson(`${relayUrl}/stats`, { site: 'relay-health', headers: auth });
     check(`${label}: the coordinator reaches the relay over the public network`, health.port === port, health);
     check(
       `${label}: the answering relay is the process this run started, with an empty log`,
@@ -607,9 +785,9 @@ async function runCeremony({ label, threshold, kill, policy, expectSignature, bu
       health.mode === relayMode,
       { expected: relayMode, actual: health.mode ?? null },
     );
-    const unauth = await fetch(`${relayUrl}/stats`, { signal: AbortSignal.timeout(5000) });
-    check(`${label}: the relay refuses an unauthenticated observer (bearer token is enforced)`, unauth.status === 401, {
-      status: unauth.status,
+    const unauthStatus = await fetchStatus(`${relayUrl}/stats`, { site: 'relay-unauth-probe' });
+    check(`${label}: the relay refuses an unauthenticated observer (bearer token is enforced)`, unauthStatus === 401, {
+      status: unauthStatus,
     });
 
     // ── ship the juror binary + launcher ──────────────────────────────────
@@ -749,11 +927,13 @@ touch "$D/done-$IDX"
           bondSats,
           jurorPubkey: claim.pubkey,
         };
-        const run = runBondCheck(request);
+        const run = await runBondCheckWithRetry(request);
         verdicts.set(claim.idx, run.verdict);
         bondCheckRuns.push({
           idx: claim.idx,
           box: claim.box,
+          attempts: run.attempts,
+          attemptHistory: run.history,
           rail: claim.bond.rail,
           network: claim.bond.network,
           proofRef: claim.bond.proofRef,
@@ -769,6 +949,7 @@ touch "$D/done-$IDX"
         console.log(
           `  bond check juror ${claim.idx} (${claim.box}): ${run.verdict.ok ? 'PROVEN' : `REFUSED ${run.verdict.code}`}`
             + ` ${formatCourtBondRef(claim.bond)} in ${run.elapsedMs} ms`
+            + `${run.attempts > 1 ? ` (${run.attempts} attempts)` : ''}`
             + `${run.verdict.sources.length ? ` sources=${run.verdict.sources.join('+')}` : ''}`,
         );
       }
@@ -871,6 +1052,9 @@ touch "$D/done-$IDX"
         },
         bondGate: { ...gate, verdicts: bondCheckRuns },
         classification,
+        // Bounded-retry accounting travels with EVERY outcome, including a stop.
+        retries: fetchRetriesTotal,
+        fetchAttempts: fetchAttemptLog.slice(-100),
         signatures: [],
         signatureVerified: false,
         groupKey: null,
@@ -995,7 +1179,7 @@ touch "$D/done-$IDX"
       let target = null;
       while (ms() < deadline && !target) {
         try {
-          const log = await fetchJson(`${relayUrl}/log`, { headers: auth });
+          const log = await fetchJson(`${relayUrl}/log`, { site: 'relay-log-watch', headers: auth });
           target = log.records.find((r) => r.phase === 'frost-commit' && r.from === victimIdx) ?? null;
         } catch { /* relay momentarily busy */ }
         if (!target) await sleep(20);
@@ -1080,7 +1264,7 @@ touch "$D/done-$IDX"
     );
 
     // ── the relay's own receive log: the coordinator's audit trail ────────
-    const wire = await fetchJson(`${relayUrl}/log`, { headers: auth });
+    const wire = await fetchJson(`${relayUrl}/log`, { site: 'relay-log', headers: auth });
     const records = wire.records;
     /**
      * One commitment per juror, from the relay's log.
@@ -1246,7 +1430,7 @@ touch "$D/done-$IDX"
       );
     }
 
-    const live = await fetchJson(`${relayUrl}/stats`, { headers: auth });
+    const live = await fetchJson(`${relayUrl}/stats`, { site: 'relay-stats', headers: auth });
     if (policy === 'replay') {
       const dupes = perBox.reduce((sum, b) => sum + (b.report?.disclosure?.duplicatesSeen ?? 0), 0);
       check(`${label}: the relay genuinely duplicated records (the mode did something)`, live.stats.duplicated > 0, {
@@ -1376,6 +1560,9 @@ touch "$D/done-$IDX"
       policy: policy ?? null,
       expectSignature: Boolean(expectSignature),
       signatureVerified,
+      // Bounded-retry accounting: what was retried during THIS run.
+      retries: fetchRetriesTotal,
+      fetchAttempts: fetchAttemptLog.slice(-100),
       groupKey: groupKeyRecomputed,
       // Public identity of the group: the x-only key and a short hash of it.
       // No secret material is involved (the group key is published on chain).
@@ -1515,6 +1702,54 @@ let exitCode = 0;
       delete result.relayShutdownStats;
       runs.push(result);
     } catch (error) {
+      if (error && error.transient === true) {
+        // ── BLOCKED, not failed ────────────────────────────────────────────
+        // Every attempt at one site hit a transient class and the budget is
+        // spent. The ceremony did not run, so nothing about the protocol was
+        // measured: calling this a failure would corrupt the series, and
+        // calling it a pass would be a lie. It is recorded as `blocked` with
+        // the site, the last code and the attempt history, and it must not
+        // count against the honest/fault statistics.
+        const blocked = {
+          label: step.label,
+          runId,
+          blocked: true,
+          blockedSite: error.site ?? null,
+          blockedReason: `TRANSIENT_${error.code ?? 'FETCH'}`,
+          blockedDetail: String(error.message ?? '').slice(0, 300),
+          attempts: error.attempts ?? null,
+          retries: fetchRetriesTotal,
+          fetchAttempts: error.history ?? [],
+          threshold: step.threshold,
+          kill: Boolean(step.kill),
+          policy: step.policy ?? null,
+          expectSignature: step.expectSignature !== false,
+          signatureVerified: false,
+          signatures: [],
+          groupKey: null,
+          groupKeyFingerprint: null,
+          identities: [],
+          bondExclusions: [],
+          bondGate: null,
+          perBox: [],
+          classifications: [],
+          relayRecords: 0,
+          coordinatorWallMs: null,
+        };
+        runs.push(blocked);
+        failures.push({
+          name: `${step.label}: blocked (${blocked.blockedReason} at ${blocked.blockedSite})`,
+          ok: false,
+          blocked: true,
+          detail: { site: blocked.blockedSite, attempts: blocked.attempts, history: blocked.fetchAttempts },
+        });
+        console.error(
+          `  BLOCKED in ${step.label}: ${blocked.blockedReason} at ${blocked.blockedSite}`
+            + ` after ${blocked.attempts} attempt(s) — not a failure, the run did not happen`,
+        );
+        exitCode = 2;
+        continue;
+      }
       failures.push({ name: `${step.label}: driver error`, ok: false, detail: String(error && error.message ? error.message : error) });
       console.error(`  DRIVER ERROR in ${step.label}:`, error && error.message ? error.message : error);
       exitCode = 1;
@@ -1549,6 +1784,11 @@ let exitCode = 0;
       runs: runs.map((r) => ({
         label: r.label,
         scenario: r.label,
+        blocked: Boolean(r.blocked),
+        blockedSite: r.blockedSite ?? null,
+        blockedReason: r.blockedReason ?? null,
+        attempts: r.attempts ?? null,
+        retries: r.retries ?? null,
         threshold: r.threshold,
         n: jurorCount,
         kill: r.kill,
@@ -1595,10 +1835,31 @@ let exitCode = 0;
       })),
       failures,
       ok: failures.length === 0,
+      /** Any run that never happened (transient exhaustion) is a block, not a fail. */
+      blocked: runs.some((r) => r.blocked),
+      retries: fetchRetriesTotal,
+      fetchAttempts: fetchAttemptLog.slice(-200),
+      fetchPolicy: {
+        attempts: fetchAttempts,
+        backoffMs: `${fetchBackoffMs} → ${fetchBackoffMs * 3} → ${fetchBackoffMs * 9}`,
+        retriedOn: [...TRANSIENT_ERROR_CODES].sort(),
+        retriedStatuses: '5xx, 429',
+        neverRetried: 'any other 4xx (a decision), and every typed bond verdict except '
+          + 'BOND_CHECK_FAILED / BOND_CHECK_TIMEOUT / BOND_UNVERIFIABLE',
+        injected: injectTransient,
+      },
     }, null, 2),
   );
 
-  console.log(`\n${failures.length === 0 ? 'RESULT: PASS' : `RESULT: FAIL (${failures.length})`}`);
+  const blockedCount = failures.filter((f) => f.blocked).length;
+  const realFailures = failures.length - blockedCount;
+  console.log(
+    failures.length === 0
+      ? 'RESULT: PASS'
+      : `RESULT: ${blockedCount > 0 ? `BLOCKED (${blockedCount})` : ''}`
+        + `${blockedCount > 0 && realFailures > 0 ? ' + ' : ''}`
+        + `${realFailures > 0 ? `FAIL (${realFailures})` : ''}`,
+  );
   for (const f of failures) console.log(`  - ${f.name} ${JSON.stringify(f.detail)}`);
   // Remove the local secret-bearing work dir (token, identity files).
   spawnSync('rm', ['-rf', workDir]);

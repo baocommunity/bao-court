@@ -11,6 +11,31 @@ frozen.
 
 ## [Unreleased]
 
+### Fixed (a transient network error no longer ends a 6-hourly run)
+- **Bounded retry at the coordinator's fetch layer.** Every coordinator→relay
+  request (`relay-health`, `relay-log`, `relay-stats`, the start probe, the kill
+  watcher) now retries 3 times with 200 ms → 600 ms → 1.8 s backoff, and only on
+  the transient classes (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, `EPIPE`,
+  `EHOSTUNREACH`, `ENETUNREACH`, `EAI_AGAIN`, `ENOTFOUND`, the `UND_ERR_*`
+  socket timeouts, aborts) plus HTTP 5xx/429. A stale keep-alive socket on the
+  post-ceremony `GET /log` had thrown `DRIVER ERROR: fetch failed` three times on
+  2026-11-13, discarding ceremonies that had already produced a verified
+  signature.
+- **`blocked` is its own outcome.** When the retry budget is spent the run is
+  recorded as `blocked` (exit 2) with the failing site, the last code, the
+  attempt history and `retries` — never as `fail`. The soak's status block
+  excludes blocked runs from the honest/fault signature rates (they measure the
+  link, not the ceremony) and re-runs the same scenario next cycle.
+- **Bond checks retry only what cannot decide.** `BOND_CHECK_FAILED`,
+  `BOND_CHECK_TIMEOUT` and `BOND_UNVERIFIABLE` are retried; `BOND_SPENT`,
+  `BOND_SCRIPT_MISMATCH`, `BOND_PROOF_MISMATCH`, `BOND_NOT_CLAIMED`,
+  `BOND_VALUE_TOO_LOW` and `BOND_UNCONFIRMED` are decisions and are refused on
+  the first attempt (`attempts: 1`). Retrying a transport failure can only give
+  the check another chance, so fail-closed is preserved.
+- `--inject-transient=<site>:<n>` is a TEST SEAM that fails the first N attempts
+  of one site without touching the network, so the retry path is provable
+  deterministically; the record marks the injected attempts.
+
 ### Added (the soak runs the bond gate ARMED — real funded bonds, every cycle)
 - **`bonded-*` scenarios in the ceremony soak rotation.**
   `scripts/court/distributed-ceremony-soak.mjs` now interleaves five bond-gated
