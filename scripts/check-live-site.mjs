@@ -45,6 +45,18 @@ async function fetchOnce(path) {
   return { status: res.status, body };
 }
 
+/**
+ * Cloudflare's "Content Signals" / managed-robots feature REPLACES /robots.txt at
+ * the edge, so the host serves a generic policy instead of the one in site/.
+ * That is not drift a redeploy can fix: it is a zone setting. Classify it
+ * explicitly so the six-hourly job says what to change instead of "mismatch".
+ */
+function isCloudflareManagedRobots(body) {
+  return /^# As a condition of accessing this website, you agree to abide by the following/i.test(
+    body.trimStart(),
+  );
+}
+
 async function main() {
   const failures = [];
   let checked = 0;
@@ -64,6 +76,18 @@ async function main() {
           ok = true;
           break;
         }
+        if (path === '/robots.txt' && isCloudflareManagedRobots(body)) {
+          // Not drift a redeploy can fix: the zone replaces robots.txt at the edge.
+          if (process.env.COURT_ALLOW_CF_ROBOTS === '1') {
+            console.log(`[check-live-site] WARN ${path} is Cloudflare-managed (Content Signals); accepted via COURT_ALLOW_CF_ROBOTS=1`);
+            ok = true;
+            break;
+          }
+          last =
+            'served by CLOUDFLARE (Content Signals policy), not by this repo — ' +
+            'disable the zone\'s managed robots.txt, or set COURT_ALLOW_CF_ROBOTS=1 to accept the divergence';
+          break;
+        }
         last = `HTTP ${status}, sha256 ${got.slice(0, 12)}… (${body.length} B), expected ${want.slice(0, 12)}… (${expected.length} B)`;
       } catch (err) {
         last = err instanceof Error ? err.message : String(err);
@@ -79,6 +103,9 @@ async function main() {
     console.error(`[check-live-site] FAILED: ${ORIGIN} is not serving this repo's site/`);
     for (const line of failures) console.error(`  - ${line}`);
     console.error('Republish: .github/workflows/pages.yml deploys site/ to GitHub Pages on every push to main — check that run for the target commit, re-run it, then re-check.');
+    if (failures.some((f) => f.includes('CLOUDFLARE'))) {
+      console.error('Note: /robots.txt is replaced by Cloudflare\'s managed Content Signals policy — that is a zone setting, not a deploy.');
+    }
     process.exit(1);
   }
 
