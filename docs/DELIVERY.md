@@ -101,6 +101,31 @@ Host-side rail checks are described in `docs/operations/RAIL_BACKED_BONDS.md`
 | Majority collusion is κ-bounded | mechanism design | — |
 | No external replication | needs an unaffiliated evaluator | submission |
 
+## 6a. After the 100-hour program — **due 2026-11-16T04:18Z**
+
+The continuous programs end at `2026-11-16T04:18:12Z` (rail soak) with the ceremony soak continuing on its 6-hourly timer. The first thing to do **after** that window is the one test this package cannot run for itself:
+
+### An entity we do not control
+
+**Why.** Every box, juror key, bond, relay and court key in this package belongs to one operator. That is the strongest remaining criticism of the evidence: it shows the protocol works when one party runs everything, not that it survives a counterparty who does not share our assumptions.
+
+**What "independent" must mean, minimally:**
+- **their own** juror keys, generated on **their own** machines (not ours, not our repo);
+- **their own** funded bonds — Liquid testnet (faucet) and/or testnet4 — so the collateral is theirs, not ours;
+- they run the ceremony against a relay **they** can inspect, with the bond gate armed;
+- they publish a transcript signed with **their** key.
+
+**Steps.**
+1. Hand them `docs/MULTI_PROCESS_CEREMONY.md` (§ provisioning → fund bonds → run) and the host's `scripts/court/verify-bond.mts`; they install nothing of ours beyond the released package.
+2. They run **two** ceremonies: `happy-k2` with their bonds (expect one verified signature) and `bonded-wrongseat` (expect `BOND_JUROR_MISMATCH`/`BOND_SCRIPT_MISMATCH`, roster below threshold, no key, no signature).
+3. They publish: group-key fingerprint, the signature, their bond refs (outpoints), and the refusal codes — public data only.
+4. **We verify their transcript independently** (re-derive the key from their published commitments, verify the FROST signature, re-check their bonds on-chain), and they verify ours.
+5. They also run `bash scripts/reproduce.sh` on a fresh clone at the tag and report the `VERDICT` line.
+
+**Artifact:** `docs/benchmarks/independent-ceremony/` — both transcripts, the mutual verification results, and a short note on **what each side could and could not check**. If they find a discrepancy, it is a finding and goes in the same directory with the repro.
+
+**If no independent party is available**, say so explicitly in the paper's scope section rather than letting the single-operator limitation read as closed.
+
 ## 7. Where the artifacts live
 
 - **Protocol**: `baocommunity/bao-court` — tags `v0.11.0 … v0.17.0`, each with a GitHub Release.
