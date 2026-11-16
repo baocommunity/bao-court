@@ -1,29 +1,51 @@
 # robots.txt — ₿AO Court
 #   canonical: https://court.bao.network    mirror: https://bao.network/court/
 #
-# Two questions, two answers — the same split every BAO host carries:
+# MAXIMUM DISCOVERY. The point of this host is that an agent — or a person —
+# can find out what the ₿AO Court is and where the real material lives. So the
+# three discovery documents are readable by EVERY crawler, named or not, and
+# only the rest of the site is reserved.
+#
+# Two questions, two answers:
 #
 #   1. "May I copy this whole site to train a model?"        -> NO.
-#   2. "May I fetch /llms.txt because someone just asked me   -> YES.
-#       a question about the ₿AO Court?"
+#   2. "May I fetch /llms.txt because someone just asked me  -> YES, for any
+#       a question about the ₿AO Court?"                        agent, not just
+#                                                                the ones we
+#                                                                happened to list.
 #
-# This host serves one landing page plus the discovery documents beside it
-# (/llms.txt, /llms.md, /.well-known/llms.txt). The full protocol paper and
-# the source of truth live elsewhere and are linked from /llms.txt.
+# WHY ONE `User-agent: *` GROUP AND NOT A LIST OF NAMES.
+# RFC 9309 §2.2.1: when a crawler matches more than one group, the rules are
+# COMBINED, and §2.2.2 resolves conflicts by longest path (Allow wins a tie).
+# Enumerating agents meant a second party could inject its own group for the
+# same agent — which is exactly what happened when the CDN began prepending a
+# blanket `Disallow: /` for GPTBot/ClaudeBot, and the carve-out survived only
+# because a compliant parser merged the groups. One wildcard group with a
+# `Disallow: /` tail and explicit `Allow`s cannot be split that way: a
+# prepended group is then the *duplicate*, and the longest-match rule is what
+# protects the documents.
 #
-# RFC 9309 §2.2.2: the LONGEST matching path wins and `Allow` beats `Disallow`
-# at equal length, so each group can end in `Disallow: /` and still hand over
-# the paths below.
+# PARSER COMPATIBILITY: the discovery paths are deliberately UNANCHORED (no
+# `$`). Python's `urllib.robotparser` — and any parser without `$`-anchor
+# support — percent-encodes `$` to `%24`, so `Allow: /llms.txt$` never matches
+# and the group reads as a plain `Disallow: /`, silently breaking on-demand
+# retrieval. A bare path is a prefix match, so `Allow: /llms.txt` also matches
+# /llms.txt.bak; that widening is accepted because the origin publishes no such
+# neighbour files.
 #
-# PARSER COMPATIBILITY: the llms discovery paths are deliberately left
-# UNANCHORED (no `$`). Python's `urllib.robotparser` — and any parser without
-# `$`-anchor support — percent-encodes `$` to `%24`, so `Allow: /llms.txt`
-# never matches and the group reads as a plain `Disallow: /`: on-demand
-# retrieval would silently break for agents built on that parser. A bare path
-# is a prefix match, so `Allow: /llms.txt` also matches /llms.txt.bak; that
-# widening is accepted because the origin publishes no such neighbour files.
+# The rights reservation is kept in two forms: the `Disallow` on everything
+# except the documents, and the `Content-Signal` line (a Cloudflare-extension
+# directive that compliant agents honour and older parsers ignore harmlessly).
 
-# ── Search engines: fully allowed ─────────────────────────────────────────────
+# ── Everyone: the discovery documents, and nothing else ──────────────────────
+User-agent: *
+Content-Signal: search=yes, ai-train=no, use=reference
+Allow: /llms.txt
+Allow: /llms.md
+Allow: /.well-known/llms.txt
+Disallow: /
+
+# ── Search engines: the whole site (discovery for humans too) ────────────────
 User-agent: Googlebot
 Allow: /
 
@@ -33,99 +55,11 @@ Allow: /
 User-agent: DuckDuckBot
 Allow: /
 
-# ── On-demand retrieval agents: the discovery documents only ──────────────────
-# OpenAI: GPTBot is the bulk crawler; ChatGPT-User and OAI-SearchBot are
-# user-triggered retrieval. One narrow answer for all three.
-User-agent: GPTBot
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
+User-agent: Applebot
+Allow: /
 
-User-agent: ChatGPT-User
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-User-agent: OAI-SearchBot
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-# Anthropic: ClaudeBot and anthropic-ai are the bulk crawlers; Claude-Web and
-# Claude-User are user-triggered retrieval. One narrow answer for all of them.
-User-agent: ClaudeBot
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-User-agent: Claude-Web
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-User-agent: anthropic-ai
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-User-agent: Claude-User
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-User-agent: Claude-SearchBot
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-# Perplexity builds its index at user request, so retrieval is the product.
-User-agent: PerplexityBot
-Allow: /llms.txt
-Allow: /llms.md
-Allow: /.well-known/llms.txt
-Disallow: /
-
-# ── Bulk training crawlers: refused outright ──────────────────────────────────
-User-agent: CCBot
-Disallow: /
-
-User-agent: Google-Extended
-Disallow: /
-
-User-agent: Bytespider
-Disallow: /
-
-User-agent: Diffbot
-Disallow: /
-
-User-agent: ImagesiftBot
-Disallow: /
-
-User-agent: Omgilibot
-Disallow: /
-
-User-agent: YouBot
-Disallow: /
-
-User-agent: Amazonbot
-Disallow: /
-
-User-agent: Applebot-Extended
-Disallow: /
-
-User-agent: cohere-ai
-Disallow: /
-
-User-agent: FacebookBot
-Disallow: /
-
-User-agent: meta-externalagent
-Disallow: /
+# Bulk-training crawlers (GPTBot, ClaudeBot, CCBot, Google-Extended,
+# Bytespider, Diffbot, Amazonbot, …) intentionally have NO group of their own:
+# they fall under `*` above, which is the carve-out plus a reservation on the
+# rest. Adding a named group here would re-create the duplicate-group ambiguity
+# this file exists to avoid.
