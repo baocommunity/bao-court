@@ -9,6 +9,52 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.17.3] — 2026-11-17
+
+### Documentation — the five quoted figures now match their artifacts (bao-court #171)
+
+A byte-for-byte artifact sweep (`bao.markets` #3033,
+`docs/benchmarks/ARTIFACT_INTEGRITY_2026-11-17.md` §8) recorded five numbers
+that contradicted the artifact they describe and deliberately left them for the
+artifact owner. This release is the reconciliation: **docs only** — no code, no
+fixture, no behaviour. Each figure is re-derived from a command or a committed
+JSON, never chosen.
+
+- **Cross-check ledger** — 286 claims / 521 refs → **288 / 524** (274/288
+  covered, 95.1 %, 18 gap entries) in `EVALUATION.md`, `CAMPAIGN_REPORT.md`,
+  `REVIEWS_INDEX.md` and `CROSS_CHECK.md` §1. `DELIVERY.md` already had it.
+  Source: `node scripts/cross-check.mjs`, exit 0.
+- **Invariant count** — 158 → **159** (36 → **37** confirmation invariants:
+  `INV-CONF-37`, added in v0.15.3, was missing from §14's arithmetic) in
+  `FORMAL_INVARIANTS.md`, the paper (2 sites), `README.md`, `CROSS_CHECK.md`,
+  `EVALUATION.md` and `REVIEWS_INDEX.md`; "149 pinned by a named test" → **157**,
+  counted from the §12 matrix. Source: the matrix's own distinct `INV-*` ids
+  (`sort -u | wc -l` → 159, and 159 rows) and `cross-check.mjs`
+  (`"invariant":159`).
+- **Suite size** — 2,029 tests / 95 files (pinned at v0.16.0) → **2,150 passed /
+  1 skipped, 99 files**, tagged **v0.17.2** wherever the figure is stated as
+  current (`EVALUATION.md`, `REVIEWS_INDEX.md`, `DELIVERY.md`, `CROSS_CHECK.md`
+  §1, paper §11.1 and App. A.4). Source: `npm test` at `4124790` (exit 0) and
+  `git ls-tree -r --name-only origin/main __tests__ | grep -c '\.test\.ts$'`.
+- **Mutation chain** — "86.8 → 96.0 → 100 %" mixed as-found with post-closure.
+  Restated with both series labelled: **as found** 86.8 % (46/53) → 96.0 %
+  (24/25) → **82.6 %** (19/23; 78.3 % corrected); **post-closure** 100 %
+  (52/52 applicable, M40 equivalent) → 96.0 % (24/25, M66 equivalent) → 24/24
+  (catalogue 24 with M102): 101 mutants as found, **102 post-closure**. Source:
+  `scripts/mutation/pass{1,2}-*.json` summaries.
+- **Version stamps** — `EVALUATION.md` v0.17.0 → **v0.17.2**; `REVIEWS_INDEX.md`
+  v0.16.0 → **v0.17.2** with its release ladder extended to the tags it was
+  missing (v0.16.1/#153, v0.16.2/#154, v0.17.0/#158, v0.17.1/#159,
+  v0.17.2/#166); `CROSS_CHECK.md` v0.13.0 → **v0.17.2**. Per-round records
+  (`REVIEW_SIMULATION.md`, `ESCROW-SLASHING.md`, `CHANGELOG.md` entries) keep
+  their stamps — they are history, not current-state claims.
+- The paper is byte-identical across its three copies, sha256
+  `a4f2f2c4ae1070502b8fa6f2c17d9e5126570479e8c6ea40e0204e68e41c20a3`.
+
+Tagged so the vendored mirror in `bao.markets` can follow byte-for-byte: the
+host's `artifact-integrity --strict` run had 4 `numbers/*` warnings, and after
+this release plus the mirror sync it has none.
+
 ## [0.17.2] — 2026-11-17
 
 ### Security — the bond gate against a HOSTILE verifier (round 54)
