@@ -121,7 +121,7 @@ Each layer checks the one beneath it.
 | **Model checking** | `proofs/mechanized/` (Quint + Apalache) | 58 scenarios, exhaustive depth 10/8, no violation |
 | **State-space exploration** | model checker | 15 instances, 3,869,232 states, 213,521,172 applications, **60,020,684 illegal-witness probes with 0 accepted** |
 | **Independent implementation** | `scripts/differential/wire_ref.py` | Written from the spec; reproduced the known-answer digest on first run. 100 k cases → **0 disagreements**, 51,252 accepted requests byte-identical |
-| **Mutation testing** | `docs/MUTATION_TESTING*.md` | Campaign 1: 53 mutants / 18 classes. Campaign 2: +25 (v0.13 surface). Campaign 3: +23 (wire). Catches: 86.8 % → 96.0 % → 100 % post-closure |
+| **Mutation testing** | `docs/MUTATION_TESTING*.md`; `scripts/mutation/pass{1,2}-*.json` | Campaign 1: 53 mutants / 18 classes. Campaign 2: +25 (v0.13 surface). Campaign 3: +23 (wire) — **101 as found**. **As found:** 86.8 % (46/53) → 96.0 % (24/25) → **82.6 %** (19/23, 78.3 % on the corrected denominator). **Post-closure, separately:** 100 % (52/52 applicable, M40 adjudicated equivalent) → 96.0 % (24/25, M66 equivalent — unchanged, and claiming otherwise would be dishonest) → 100 % (24/24 on a catalogue that grew to 24 with M102, so **102** post-closure). The chain is *not* monotone: campaign 3's repository missed 4 of its 23 mutants where campaign 2's missed 1 of 25 — a fresher surface, not a regression |
 | **Corpora** | `docs/benchmarks/SCALE_CAMPAIGN_V2.md` | 1,587,000 units / 8,286,823 assertions / 0 failures |
 | **Fault soak** | `docs/benchmarks/SOAK_3DAY.md` | 30,000 settlements, 3 epoch boundaries, 32/32 assertions, with partitions, churn, restarts, witness storms, cursor rollbacks |
 | **Distributed ceremony** | `docs/MULTI_PROCESS_CEREMONY.md`, `docs/DISTRIBUTED_CEREMONY.md` | N real OS processes, real DKG + signing over a relay; **Byzantine relay NO_EQUIVOCATION** (split views starve both halves — mechanism, not luck); then three separate hosts + relay + coordinator, k = 2 / k = 3 / a real `SIGKILL` over ssh |
@@ -129,9 +129,9 @@ Each layer checks the one beneath it.
 | **Bond rails (public)** | host `bao.markets` #2616 (testnet4), #2597 (Liquid testnet), `scripts/court/verify-bond.mts` | **testnet4**: 3 × 100,000 sat court-locked 2-of-2 bonds from a real 0.00563475 tBTC deposit (block 161026), `BOND_RAIL_PROVEN`, `scriptBinding:"configured"`, two agreeing sources, slash spend validated (`testmempoolaccept allowed, vsize 137`) **not broadcast**. **Liquid testnet**: 3 × 100,000 sat court-locked, `blockstream` + `liquid.network` agreeing (one fail-closed `BOND_ORACLE_DISAGREEMENT` before they did) |
 | **Continuous programs** | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program"; host rail-soak series | rail soak 5-min / hourly / 6-hourly with boot-gap accounting and per-source health; 6-hourly ceremony soak with scenario rotation; running tally **1 rail bug / 8 harness bugs**, all regression-locked |
 | **Determinism** | `docs/TEST_DETERMINISM.md`, `__tests__/determinism.test.ts` | 1,432 latency sites removed (1,383 implicit 5 s defaults + 49 literals + 8 fixed deadlines); 18 failing test-runs / 1,340 → **0 / 1,280**; the harness ceiling derived from the running box; the juror phase deadline now bounds silence |
-| **Unit/integration** | suite | **2,029 passing / 1 skipped, 95 files** (v0.16.0) |
+| **Unit/integration** | suite | **2,029 passing / 1 skipped, 95 files** (measured at v0.16.0; **2,150 / 99 files** re-measured at `v0.17.2` — `docs/CROSS_CHECK.md` §1) |
 | **Contract** | `scripts/reproduce.sh` | 13 stages; `REPRODUCED` verdict; digit-exact model-check fixture |
-| **Cross-check** | `scripts/cross-check.mjs` | **286 claims / 521 refs / 95.1 %**; dangling codes fail the build |
+| **Cross-check** | `scripts/cross-check.mjs` | **288 claims / 524 refs / 95.1 %** (274/288 covered); dangling codes fail the build |
 
 **Environment ranking applies to every rail claim in this repository.** The
 network BAO's hosts run is a **private signet** (Bitcoin consensus rules, one
@@ -221,8 +221,8 @@ emphasises.
 ```bash
 git checkout v0.16.0
 bash scripts/reproduce.sh          # 13 stages, prints VERDICT
-npm test                           # 2,029 passing / 1 skipped, 95 files
-node scripts/cross-check.mjs       # 286 claims / 521 refs
+npm test                           # 2,029 passing / 1 skipped, 95 files (v0.16.0)
+node scripts/cross-check.mjs       # 288 claims / 524 refs
 npm run campaign:full                                          # 1.59 M units / 8.29 M assertions
 (cd scripts/differential && node run.mjs --profile full)       # 100 k cases, 0 disagreements
 python3 scripts/differential/wire_ref.py --selftest            # the independent reference

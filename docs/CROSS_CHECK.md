@@ -1,13 +1,13 @@
 # BAO Court — Cross-Check: every claim, verified in one place
 
-**Version:** tracks `@bao/court` v0.13.0 · **Date:** 2026-11-11 · **Round:** 14
-(symposium deep cross-check; §1 re-verified per round — latest at `608e6dc`,
-rounds 30–34)
+**Version:** tracks `@bao/court` v0.17.2 · **Date:** 2026-11-11 · **Round:** 14
+(symposium deep cross-check; §1 re-verified per round — latest at v0.17.2 /
+`4124790`, previously `608e6dc`, rounds 30–34)
 
 This is the single artifact a reviewer uses to verify any claim about the
 system. Every meaningful claim from the three claim sources —
 
-1. `docs/FORMAL_INVARIANTS.md` — all 158 `INV-*` invariants;
+1. `docs/FORMAL_INVARIANTS.md` — all 159 `INV-*` invariants;
 2. `docs/FROST_COURT_ORACLE_PAPER.md` — every technical claim (the §6–§7
    universal-confirmation / cohort / batch sections **and** the classic
    ceremony, escrow, and settlement-rail sections);
@@ -60,9 +60,9 @@ finding code (`r29-*`, `r33-*`, `r38-*`, `r40-*`, `r41-*`, `r8-*`).
 
 | Check | Command | Result |
 |---|---|---|
-| Full suite | `npm test` | **1,804 passed / 1 skipped (81 files)** — re-measured at `bc28ff3` (v0.14.1); 1,758 at the review-round-7 head `4cd97f1` (+19: `reviewRound7.test.ts`); 1,739 at v0.13.2 `8bac1bc` (+23: `reviewRound6.test.ts`); 1,686 at `608e6dc` (round 34); 1,677 at the review-round-4 head `841b012` (the +9 are `r33ByzantineRelay.test.ts` ×8, merged as #102 after that count was taken, and the r29-11 timeout pin); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
+| Full suite | `npm test` | **2,150 passed / 1 skipped (99 files: 98 passed + 1 skipped), exit 0** — measured at `v0.17.2` / `4124790` (2026-11-17, 281 s); 1,804 at `bc28ff3` (v0.14.1); 1,758 at the review-round-7 head `4cd97f1` (+19: `reviewRound7.test.ts`); 1,739 at v0.13.2 `8bac1bc` (+23: `reviewRound6.test.ts`); 1,686 at `608e6dc` (round 34); 1,677 at the review-round-4 head `841b012` (the +9 are `r33ByzantineRelay.test.ts` ×8, merged as #102 after that count was taken, and the r29-11 timeout pin); 1,656 at `c456fb4` (round-31 per-round bond, ladder economics, penalty ageing); 1,606 at round 30; 1,561 at review round 3; 1,546 at the v0.12.0 release; 1,534 at round 21; 1,520 at round 26; 1,492 at round 17; 1,491 at rounds 14–16 |
 | Typecheck | `npm run typecheck && npm run typecheck:tests` | clean (re-verified at `bc28ff3`) |
-| Cross-check | `node scripts/cross-check.mjs` | OK — 288 claims, 524 evidence refs, every pointer resolves (re-measured on the v0.17.0 docs head; 286/521 before the two PO-15 covenant rows) |
+| Cross-check | `node scripts/cross-check.mjs` | OK — 288 claims, 524 evidence refs, every pointer resolves (re-measured at `v0.17.2`; 286/521 before the two PO-15 covenant rows) |
 | Model check (full) | `npx tsx scripts/model-check.mjs` | witness-aware regeneration (2,525 s): **15 instances, 3,869,232 states, 213,521,172 event applications, 60,020,684 illegal-witness probes with 0 accepted, 0 raw throws, 3,000 determinism paths** — committed fixture updated; paper §11.2 refreshed to match |
 | Statistical corpora | `npx tsx scripts/campaign/run-campaign.mjs --full` | 9 campaigns — **1,187,000 units / 3,745,566 assertions / 0 failures** in 608.8 s (artifact `docs/benchmarks/campaign-2026-11-11.json`) |
 | Multi-process ceremony | `npm run simulate:multiprocess` | 4 scenarios green (N = 3…7 OS processes; kill mid-DKG, kill mid-signing, cross-round replay) |

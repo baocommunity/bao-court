@@ -50,7 +50,7 @@ and must be re-locked) or `BOND_PROOF_UNPARSEABLE` (no juror key to bind against
 | Model checking | `proofs/mechanized/` | Apalache exhaustive depth 10/8; 58 Quint scenarios |
 | State-space | model checker | 3,869,232 states · 213,521,172 applications · **60,020,684 illegal-witness probes, 0 accepted** |
 | Independent implementation | `scripts/differential/` | a Python wire reference written from the spec; 100,000 cases → **0 disagreements**, 51,252 accepted requests byte-identical |
-| Mutation | `docs/MUTATION_TESTING*.md` | 101 mutants across three campaigns; the survivors that mattered became spec holes, all closed |
+| Mutation | `docs/MUTATION_TESTING*.md`; `scripts/mutation/pass{1,2}-*.json` | **101 mutants as found** across three campaigns, **102 post-closure** (campaign 3 added M102); as found 86.8 % (46/53) → 96.0 % (24/25) → 82.6 % (19/23); post-closure, separately: 100 % of 52 applicable (M40 equivalent) → 96.0 % (M66 equivalent, unchanged) → 24/24. The survivors that mattered became spec holes, all closed |
 | Corpora | `docs/benchmarks/SCALE_CAMPAIGN_V2.md` | 1,587,000 units / **8,286,823 assertions** / 0 failures |
 | Soak | `docs/benchmarks/SOAK_3DAY.md` | 30,000 settlements, 3 epoch boundaries, 32/32 assertions with fault injection |
 | Contract | `scripts/reproduce.sh` | 13 stages, digit-exact fixture, `REPRODUCED` |
@@ -76,7 +76,7 @@ harness bugs**, 0 open.
 ```bash
 git checkout <tag>                  # bao-court
 bash scripts/reproduce.sh           # 13 stages → VERDICT
-npm test                            # 2,029 passing
+npm test                            # 2,150 passed / 1 skipped, 99 files (v0.17.2)
 node scripts/cross-check.mjs        # 288 claims / 524 refs
 (cd proofs/lean4 && ./run.sh)       # 42 declarations, no sorry
 npm run campaign:full               # 1.59M units / 8.29M assertions

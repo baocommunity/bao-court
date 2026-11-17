@@ -3,11 +3,12 @@
 **The single map of the self-verification campaign.** Every review, simulation,
 audit and campaign round this repository has run — in order, with what it
 attacked, what it found (by severity), where the fix landed, and how the
-residual was dispositioned. **Tracks `@bao/court` v0.16.0 · 2026-11-13.**
+residual was dispositioned. **Tracks `@bao/court` v0.17.2 · 2026-11-17.**
 
-**Current totals at `v0.16.0`** (each with its artifact): suite **2,029 passed /
-95 files** (1 env-gated live test skipped; re-measured on this head); mutant
-catalogue **101** across three campaigns (`docs/MUTATION_TESTING*.md`); scale
+**Current totals at `v0.17.2`** (each with its artifact): suite **2,150 passed /
+99 files** (1 env-gated live test skipped; measured at the `v0.17.2` tag); mutant
+catalogue **101 as found / 102 post-closure** across three campaigns
+(`docs/MUTATION_TESTING*.md`); scale
 campaign **1,587,000 units / 8,286,823 assertions / 0 failures**
 (`docs/benchmarks/SCALE_CAMPAIGN_V2.md`); model checking **3,869,232 states /
 213,521,172 applications / 60,020,684 illegal-witness probes, 0 accepted**;
@@ -17,8 +18,8 @@ Apalache exhaustive (`proofs/mechanized/`); independent wire differential
 **32/32 assertions** (`docs/benchmarks/SOAK_3DAY.md`); **two continuous programs**
 at ~100 hours (rail soak: 1 rail bug / 8 harness bugs, all regression-locked;
 6-hourly ceremony soak); **court-locked bonds proven on public testnet4 and
-Liquid testnet**; cross-check **286 claims / 521 refs / 95.1 %**. Rounds 1–12,
-the campaign rounds 29–37 and 51–54, and the v0.11.0 → v0.16.0 release ladder are
+Liquid testnet**; cross-check **288 claims / 524 refs / 95.1 %**. Rounds 1–12,
+the campaign rounds 29–37 and 51–54, and the v0.11.0 → v0.17.2 release ladder are
 mapped in the tables below; the narrative summary is
 `docs/CAMPAIGN_REPORT.md`.
 
@@ -63,13 +64,13 @@ crypto audit is not `F-2` in the formal audit).
 | **R1** | `FIXES-2026-08-15.md`, `FIXES-2026-08-18.md`; `bao.markets` `docs/proposals/COURT_SECURITY_AUDIT_2026-11-09.md` | validator + finality paths; ceremony machines under fuzz | **3** validator findings (1 **HIGH**: v2 scope pins declared but never enforced; 1 MED: dispatcher downgrade; 1 LOW); **5** machine-fuzz defects (lone-surrogate canonicalization collision, state-shape tampering, signing-binding re-derivation, freeze gaps, untyped unknown events) + 2 owner decisions | v0.8.2 (#36), v0.8.3 (#37) | fixed with regression tests; 2 reported-not-fixed as owner calls |
 | **R2** | `bao.markets` `docs/proposals/COURT_SECURITY_AUDIT_2026-11-09.md`, `CROSS_CHECK.md` | chained/cross-module sequences; supply chain | **3** fixed (batch-Merkle-root pin absent; **restored ledgers not re-verified**; docstring trust boundaries) + 1 documented-by-design (verdictHash dedup duty) | v0.8.5 (#41) | batch-root pin + `assertValidConfirmationLedger` — the first state-restore barrier |
 | **R3** | `__tests__/r3Findings.test.ts`; `bao.markets` `docs/proposals/COURT_SECURITY_AUDIT_2026-11-09.md` | property-based sweep, 570+ cases | **6** (r3-1…r3-6): restored-empty ledger finalized, raw `TypeError` escapes ×2, mid-ladder dead end, signer-set root typing | v0.9.0 (#43), v0.9.1 (#46) | fixed; roster ≥ 3 at creation is a design fix, not a patch |
-| **R4** | `FORMAL_INVARIANTS.md`, `CROSS_CHECK.md` | the whole guard surface, formally | **12** (F-1…F-12); **3 substantive** fixed: F-12 monotonic clock ledgers, **F-2 present-but-empty pin silently disarmed the check**, F-3 outcome-history barrier | v0.9.2 (#47/#48) | the falsy-pin class becomes fail-closed; 158 `INV-*` invariants extracted from the actual guards |
+| **R4** | `FORMAL_INVARIANTS.md`, `CROSS_CHECK.md` | the whole guard surface, formally | **12** (F-1…F-12); **3 substantive** fixed: F-12 monotonic clock ledgers, **F-2 present-but-empty pin silently disarmed the check**, F-3 outcome-history barrier | v0.9.2 (#47/#48) | the falsy-pin class becomes fail-closed; 158 `INV-*` invariants extracted from the actual guards at R4 (159 today) |
 
 ### 1b. Symposium rounds (R5–R21) — 2026-11-09 → 2026-11-10
 
 | # | Record | Attacked | Found | Fixed / landed | Disposition |
 |---|---|---|---|---|---|
-| **R5** | `FORMAL_INVARIANTS.md` | every guard, machine by machine | 158 invariants, each with an enforcement pointer; INV-VOTE-14 is the one with no executable pin (F-10) | #47 | traceability matrix is now machine-checked by `scripts/cross-check.mjs` |
+| **R5** | `FORMAL_INVARIANTS.md` | every guard, machine by machine | 158 invariants *at R5* (159 since `INV-CONF-37`, v0.15.3), each with an enforcement pointer; INV-VOTE-14 is the one with no executable pin (F-10) | #47 | traceability matrix is now machine-checked by `scripts/cross-check.mjs` |
 | **R6** | — | no standalone artifact recorded in this tree | — | — | recorded only through the suite-count ledger in `CROSS_CHECK.md` §1 |
 | **R7** | `CRYPTO_AUDIT.md` | cryptography *as used* against the FROST literature | **12 mechanisms**: 3 MED shipped (reveal-set == commitment-set guard; DKG PoK canonical challenge; dispute-key fixed-width), 4 spec'd (S-1…S-4), 5 verified-OK; `@vbyte/frost` pin verdict KEEP | v0.9.3 (#49) | S-1 (grinding/beacon) remains the load-bearing spec'd item |
 | **R8** | `__tests__/reference/` | differential parity against independent reimplementations | encoding writer, Merkle tree, tally, selection, hashes — in-house differential (the paper says so); **1 real divergence class** (UTF-8 vs UTF-16 tie-break) | #52 | parity oracle is the standing cross-check for every later refactor |
@@ -77,7 +78,7 @@ crypto audit is not `F-2` in the formal audit).
 | **R10** | host round-10 suite (`bao.markets` #2293/#2294/#2295) | the *mechanism* layer: ack farming, redelivery griefing, cross-network epoch replay, dust starvation, weight gaming | composite SLA floor, 1+1 redelivery, ×0.8 non-participation, decay law — all host-side mechanisms | host repo | RS-9 (composite-SLA equilibrium) and the V-review C-2 finding come from here |
 | **R11** | paper §1.5, §13 | does the paper describe the shipped code? | related-work table (6 neighbours, 3 axes), five claim classes, statement corrections | #55/#56 | the "every row carries an open obligation" framing starts here |
 | **R12–R13** | — | no standalone artifact recorded in this tree | — | — | evidence only in the suite-count ledger |
-| **R14** | `THREAT_MODEL.md`, `CROSS_CHECK.md` | the security argument, claim by claim | threat model with ADV-* adversaries + 18 proof obligations (PO-1…PO-18); the claim→evidence index that today holds **286 claims / 521 evidence refs** | #62/#63/#64 | the claim→evidence index becomes a CI gate |
+| **R14** | `THREAT_MODEL.md`, `CROSS_CHECK.md` | the security argument, claim by claim | threat model with ADV-* adversaries + 18 proof obligations (PO-1…PO-18); the claim→evidence index that today holds **288 claims / 524 evidence refs** | #62/#63/#64 | the claim→evidence index becomes a CI gate |
 | **R15** | `EVALUATION.md` | the evaluation chapter as a standalone artifact | parity, model checking, benchmarks, audit programme, scope caveats (§6) | #65 | the "145 first-order invariants" wording survives until R16 downgrades it |
 | **R16** | `REVIEW_SIMULATION.md` | **adversarial external-review simulation**: 3 personas against paper + 4 verification artifacts + code | **31 rows / 30 distinct findings: 0 REJECT, 8 MAJOR, 7 MINOR, 14 QUESTION (attack failed, rebuttal recorded)**; 12 fixes shipped, RS-1…RS-10 registered | #70 | panel verdict: A accept-with-revisions, B accept-with-revisions, C accept |
 | **R17** | `DRESS_REHEARSAL.md`, `docs/presentation/` | the submission artifact end to end; the demo | full-contract verification record, sign-off checklist, figures F1–F6, 30-minute outline | #69/#71/#72 | suite re-baselined; presentation claims checked against artifacts |
@@ -163,6 +164,8 @@ evidence in this repository at the top tier of the paper's §11.8 hierarchy.
 | v0.15.0 · v0.15.1 · v0.15.2 | #128 · #131 · #135 | the exported ladder bound as the safe predicate (r52); **round-11** (a total `quoteWireValue`, the shape gate, the clawback reader); **round-12** (the escape path over all four files, the counters' write domain) |
 | v0.15.3 | #142 | **r12-1 over-strictness, found by the host sync** (bao.markets PR #2488): the counter barrier required `ladderRound = 0` with no `ladder`, which refused the host's whole G-4 lane projection (42/185 host court tests). Fixed by a declared `projection: 'lane'` + a required reader argument, with a standing over-strictness matrix — `docs/LANE-PROJECTION.md`, INV-CONF-37. Same release: the **determinism** work (#140/#143) |
 | v0.16.0 | #150 | **Bond-gated ceremony** (#147: `bondCheckGate.ts`, enforced before the roster), **stable juror identities** (#149: `--juror-keys`, odd-Y refused, `provision-jurors.mjs`), **replay is not equivocation** (#148: identity = signed event id, `courtCeremonyCore.ts`), plus the unattended ceremony soak (#144/#145/#146) |
+| v0.16.1 · v0.16.2 | #153 · #154 | delivery record + paper refresh carrying the public-testnet bond evidence; **LJ-1 closed** — the Liquid bond lock commits the juror (committed, not required) |
+| v0.17.0 · v0.17.1 · v0.17.2 | #158 · #159 · #166 | **PO-15** re-stated as a compiled, tested prototype (not a spec); **one bond, one seat** (review round 13, `BOND_REUSED_ACROSS_SEATS` — a bond identity admits at most one seat per run); **the bond check is UNTRUSTED** — round 54 attacks the operator-pasted `BAO_COURT_BOND_CHECK_CMD` as its own adversary (bounded run, no orphans, no env leak) |
 
 ---
 
@@ -223,8 +226,8 @@ column *Reproduce* names the command or file.
 | **Bond rails (public)** | **testnet4**: 3 × 100,000 sat court-locked 2-of-2 bonds from a real 0.00563475 tBTC deposit (block 161026), `BOND_RAIL_PROVEN`, `scriptBinding:"configured"`, `bitcoind` + `mempool.space/testnet4` agreeing, slash spend signed with both keys and validated (`testmempoolaccept allowed, vsize 137`) **not broadcast**. **Liquid testnet**: 3 × 100,000 sat court-locked, `blockstream` + `liquid.network` agreeing (one fail-closed `BOND_ORACLE_DISAGREEMENT` first) | host `bao.markets` PRs #2616 (testnet4) and #2597 (Liquid), `scripts/court/verify-bond.mts` — public values only, re-checkable against the chains |
 | **Determinism** | 1,432 latency sites removed (1,383 implicit 5 s defaults, 49 literals, 8 fixed subprocess deadlines) + 3 duration assertions; harness ceiling derived per worker; **18 failing test-runs / 1,340 → 0 / 1,280**; the juror phase deadline now bounds silence | `docs/TEST_DETERMINISM.md`; `npx vitest run __tests__/determinism.test.ts` |
 | **Continuous programs** | rail soak 5-min / hourly / 6-hourly with boot-gap accounting and per-source health; 6-hourly ceremony soak with scenario rotation; **1 rail bug / 8 harness bugs**, all regression-locked; 371 cycles at 22.7 of 100 hours | `docs/MULTI_PROCESS_CEREMONY.md` §"The continuous program"; `npm run soak:status`; host rail-soak series |
-| **Claim ledger** | **286 claims / 521 evidence refs / every pointer resolves / 272 covered (95.1 %) / 14 open gaps by design**; 159 invariants, 157 with executable proof | `node scripts/cross-check.mjs` |
-| **Suite** | **2,029 passed / 1 skipped (95 files)** at v0.16.0; the per-round ledger (1,491 → 2,029) is recorded in CROSS_CHECK §1 | `npm test` |
+| **Claim ledger** | **288 claims / 524 evidence refs / every pointer resolves / 274 covered (95.1 %) / 14 open gaps by design**; 159 invariants, 157 with executable proof | `node scripts/cross-check.mjs` |
+| **Suite** | **2,150 passed / 1 skipped (99 files)** at v0.17.2 (2026-11-17); the per-round ledger (1,491 → 2,150) is recorded in CROSS_CHECK §1 | `npm test` |
 | **Registered findings** | **112 rows** in the cross-repo sweep (the v0.13.1 sweep dispositioned 107: 6 fixed / 46 closed-by-design / 53 deferred-v0.14 with owner + trigger / 2 rejected) | host `docs/operations/REGISTERED_FINDINGS_SWEEP.md` |
 
 ### 3b. Finding counts by round
@@ -288,8 +291,8 @@ equivocation, and a suite that decided by the clock.
 | Need | Go to |
 |---|---|
 | A round's authoritative statement | `REVIEW_ROUND_2..12.md`, `REVIEW_SIMULATION.md`, `READINESS_REVIEW.md`, `MUTATION_TESTING*.md`, `TEST_DETERMINISM.md`, `LANE-PROJECTION.md`, `benchmarks/SCALE_CAMPAIGN.md`, `CRYPTO_AUDIT.md`, `docs/proofs/**` |
-| A claim → its executable proof | `CROSS_CHECK.md` (machine-verified; 286 claims / 521 refs) |
-| An invariant → its guard → its test | `FORMAL_INVARIANTS.md` (158 `INV-*`) |
+| A claim → its executable proof | `CROSS_CHECK.md` (machine-verified; 288 claims / 524 refs) |
+| An invariant → its guard → its test | `FORMAL_INVARIANTS.md` (159 `INV-*`) |
 | A residual → its owner and trigger | host `docs/operations/REGISTERED_FINDINGS_SWEEP.md` (112 rows) |
 | The bond gate and the funded-bond evidence | `MULTI_PROCESS_CEREMONY.md` §"The bond gate", §"Stable identities and funded bonds"; paper §8.5 |
 | The continuous programs and their tally | `MULTI_PROCESS_CEREMONY.md` §"The continuous program"; host rail-soak series |
