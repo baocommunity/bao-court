@@ -133,6 +133,31 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
   The measurement, the before/after table and the two-command repro are in
   [`docs/SITE_ROUND5_PERFORMANCE.md`](docs/SITE_ROUND5_PERFORMANCE.md); the
   harness lives in `bao.markets/scripts/gui-redteam/round5/`.
+- **Delivery invariants (measured 2026-11-17, `docs/SITE_DELIVERY_AUDIT.md`).**
+  This host is the one BAO surface that stayed reachable while `bao.markets`
+  was answering 429, so its delivery is part of the contract:
+  1. **Content first.** Every `<script>` belongs *after* `</main>` and
+     `</footer>`; the only script allowed inside the content path is the
+     `#folio-date` one-liner between `</header>` and `<main>`, which exists to
+     kill CLS. The 90.6 kB of vendored `@noble/*` + NWC + `node-qrcode` must
+     never move above `<main>` — with script off or blocked, the page must
+     still be the page (8,964 of 8,987 characters, every link live).
+  2. **No subresources.** 0 `<script src>`, 0 stylesheet `<link>`, 0 `<img>`,
+     0 `@font-face`. That is *why* there is nothing to preload and nothing to
+     put SRI on, and why a first load is 2 requests. A third-party asset is a
+     decision, not an edit: it needs `integrity` and a paragraph here.
+  3. **Headers are the edge's job.** GitHub Pages sets `cache-control`
+     (600 s HTML, 4 h assets) and no file in this repo can change it —
+     `_headers`, `netlify.toml` and `<meta http-equiv>` are all ignored for
+     caching. Cache and serve-stale rules, plus what is still open, are in
+     `docs/SITE_DELIVERY_AUDIT.md` §7. The HTML is *not* cached at the
+     Cloudflare edge today (`cf-cache-status: DYNAMIC`), which is why a Pages
+     outage takes the page down.
+  4. **The no-JS contract.** With JavaScript off exactly two things differ: the
+     folio date reads `Today`, and Cloudflare's email obfuscation leaves
+     `[email protected]`. Accepting a third difference needs a doc update.
+  Verify: `node scripts/site-delivery-audit.mjs` (HTTP half, 1 req/s, fails on
+  regressions only) and the browser checks in `docs/SITE_DELIVERY_AUDIT.md` §2.
 
 ## Verify before tagging
 
