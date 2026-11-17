@@ -165,8 +165,35 @@ Axe (0 serious): run with `axe-core@4.10.2` in headless Chrome against `/` and
 markup; the new `404.html` had two (`landmark-one-main`, `region`) and was fixed
 by wrapping its content in `<main id="main" tabindex="-1">`.
 
+---
+
+## 3. Verified against the deployed host
+
+Merged in #168 (`53db5ab`); GitHub Pages deployed at 16:28Z. Probes below are
+read-only and paced, run *after* the deployment, against
+`https://court.bao.network`.
+
+| Check | Result |
+|---|---|
+| `node scripts/check-live-site.mjs` | **11/11 paths match** (bytes **and** content type) — was 4/4 |
+| `/sitemap.xml` | 200, `application/xml`, `cache-control: max-age=600` |
+| `/.well-known/security.txt` | 200, `text/plain; charset=utf-8` |
+| `/favicon.ico` | 200, `image/vnd.microsoft.icon` |
+| `/og.png` | 200, `image/png`, 63,889 B |
+| `/nonexistent-page-xyz` | **404**, body `<title>No such page - ₿AO Court</title>`, 5.2 kB, link home present |
+| canonical / `og:url` / `og:image` / JSON-LD | read out of the live DOM: `https://court.bao.network/`, `https://court.bao.network/`, `https://court.bao.network/og.png`, `["WebSite","Organization"]` — the headers survive Cloudflare's HTML rewrite |
+| `http://` → `https://` | still a single 301 |
+| axe, live `/` | 0 critical, 0 serious, **1 moderate `region` on `.skip-link`** — identical to the pre-change baseline, and structural: the skip link must be the first focusable element, so it precedes `<main>`. Left as is. |
+| axe, live `/404.html` | 0 violations |
+| weight | **51.6 kB brotli** for the document (50.2 kB before: +1.4 kB for the added head), 153.4 kB decoded, **2 requests**, 0 images, 0 fonts, 0 stylesheet links |
+
+The deferred `check-live-site` workflow is now meaningful: it fails if any of
+the eleven paths drifts, which is why the sitemap and `security.txt` are added
+to it rather than left to a scheduled curl nobody reads.
+
 ### Timestamps
 
 `security.txt` carries an `Expires` that the test suite refuses once it is past
 or more than a year out — so the file cannot sit here looking authoritative for
 years. Renew by editing that one line (next date: 2027-05-17).
+
