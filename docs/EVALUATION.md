@@ -1,18 +1,20 @@
 # BAO Court — Evaluation
 
-**Version:** tracks `@bao/court` v0.17.0 · **Date:** 2026-11-14 · **Round:** 58
+**Version:** tracks `@bao/court` v0.17.2 · **Date:** 2026-11-14 (suite re-measured
+2026-11-17 at the v0.17.2 tag) · **Round:** 58
 (bond-gated ceremony, stable juror identities, public-testnet bond evidence, the
 continuous programs, determinism, and the on-chain release covenant — prototype)
 
-> **Final totals at `v0.16.0`.** Suite 2,029 tests / 95 files (1 environment-gated
-> live test skipped, re-measured on this head); 101 mutants across three
-> campaigns; 1,587,000 campaign units / 8,286,823 assertions / 0 failures;
-> 3,869,232 states / 60,020,684 illegal-witness probes with 0 accepted; 42 Lean 4
-> declarations with no `sorry` (axioms `propext`, `Quot.sound`); 100,000-case
-> independent wire differential with 0 disagreements; three-day soak 32/32; two
+> **Final totals at `v0.17.2`.** Suite 2,150 tests / 99 files (1 environment-gated
+> live test skipped; measured at the `v0.17.2` tag, 2026-11-17); 101 mutants as
+> found / 102 post-closure across three campaigns; 1,587,000 campaign units /
+> 8,286,823 assertions / 0 failures; 3,869,232 states / 60,020,684 illegal-witness
+> probes with 0 accepted; 42 Lean 4 declarations with no `sorry` (axioms
+> `propext`, `Quot.sound`); 100,000-case independent wire differential with 0
+> disagreements; three-day soak 32/32; two
 > continuous programs at ~100 hours (rail soak 1 rail bug / 8 harness bugs, all
 > regression-locked; ceremony soak on a 6-hourly timer); court-locked bonds
-> proven on **public testnet4 and Liquid testnet**; cross-check 286 claims / 521
+> proven on **public testnet4 and Liquid testnet**; cross-check 288 claims / 524
 > refs / 95.1 %. Tables below are the per-round measurements, each dated to the
 > release it was taken on.
 
@@ -52,7 +54,7 @@ not exempt from the evaluation** — a suite that decides by the clock is a
 measurement defect (fixed by construction, §3.7), and a soak that was silently
 red on `main` is a finding about the soak (SOAK-F8). Performance is measured,
 never assumed, including the optimizations that were *refused* with numbers
-(§4). The threat-model chapter closes the loop: 286 indexed claims, **95.1%**
+(§4). The threat-model chapter closes the loop: 288 indexed claims, **95.1%**
 backed by executable evidence (§5). What the numbers do **not** prove is stated
 in §6 — reviewers should read it, especially items 7–8, which are the new limits
 this refresh introduced rather than removed, item 10, which ranks rail evidence
@@ -113,9 +115,10 @@ head**, plus the four paths to `final`, re-attacked from outside) and
 refusal matrix and pinned known-answer digest). See `docs/REVIEW_ROUND_8.md`.)*
 *(Rounds 9–12 and 51–54, 2026-11-11 → 13 — the per-round ledger continues:
 **1,831** (round 9) → **1,855** (round 10) → **1,932** (round 11) → **1,953**
-(round 12 / v0.15.2) → **2,029 at v0.16.0** (this head: the bond gate, the
+(round 12 / v0.15.2) → **2,029 at v0.16.0** (the bond gate, the
 replay/equivocation pair, the over-strictness matrix, the determinism guard and
-the ceremony-soak additions). Rounds 9–12 are indexed in
+the ceremony-soak additions) → **2,150 at `v0.17.2`** (this head: rounds 51–54,
+the bond gate against a hostile verifier). Rounds 9–12 are indexed in
 `docs/REVIEWS_INDEX.md` §1d; the instrument rounds 51–54 in §1e.)*
 
 ---
@@ -244,7 +247,7 @@ property suite earning its keep, not just passing.
 **Artifact:** `docs/FORMAL_INVARIANTS.md` · **PR #47** (v0.9.1), hardening of
 its findings in **PR #48** (v0.9.2).
 
-**158 invariants** (`INV-<machine>-<n>`), each extracted from the
+**159 invariants** (`INV-<machine>-<n>`), each extracted from the
 *actual guards* in source — an audit by another name — each carrying an
 enforcement pointer (`file:line`) and the pinning test. Precision note
 (round-16 external review, finding A-3): the family is *predominantly*
@@ -253,7 +256,7 @@ the invariant family is stated over, INV-SEL-3 is statistical by nature
 (pinned by a paired-derivation statistical differential), and INV-VOTE-14
 is pinned as defense-in-depth only (F-10). The
 invariant↔guard↔test traceability matrix (§12 of that doc) is machine-checked
-via docs/CROSS_CHECK.md: **156/158 (98.7%) carry executable proof**; the two
+via docs/CROSS_CHECK.md: **157/159 (98.7%) carry executable proof**; the two
 exceptions are named — INV-VOTE-14 (a defense-in-depth capacity guard,
 FINDING-F-10) and INV-ATTRIB-3 (the batch-signing duty, spec-level until the
 manifest hash enters the signed FROST message). The two newest are
@@ -423,7 +426,7 @@ never "expire":
 
 Any future change that reopens a closed finding fails a named test — the
 round-14 cross-check (PR #63/#64) additionally makes the *documentation* of
-those pins machine-verified (`node scripts/cross-check.mjs`, 521 refs, 0
+those pins machine-verified (`node scripts/cross-check.mjs`, 524 refs, 0
 dangling).
 
 ### 3.5 Rail evidence — court-locked bonds on public testnets
@@ -714,11 +717,11 @@ virtual clock, so this measures logic, ordering, retention and event volume at
 | Formalized adversaries | **9** (relay, juror <t, juror ≥t, coordinator, proposer, economic ×2 sub-species, LLM advisor, key compromise, network eclipse) | THREAT_MODEL §2 |
 | Proof obligations (honest-gap register) | **18** (PO-1…PO-18, each with stage-acceptability + closure path) | THREAT_MODEL §6 |
 | MUST-pin trust boundaries | 12 (P1–P12, each unpinned consequence reproduced by a named adversarial test) | THREAT_MODEL §5 |
-| Claims indexed | **286** across the four claim sources (159 invariants included) | CROSS_CHECK §2 |
-| **Claim coverage** | **95.1%** (272/286) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
+| Claims indexed | **288** across the four claim sources (159 invariants included) | CROSS_CHECK §2 |
+| **Claim coverage** | **95.1%** (274/288) covered by executable evidence; **14 open obligations** (every one registered with a planned proof), in a gap register of **18 entries** (14 open, 4 closed) — both numbers printed by `node scripts/cross-check.mjs` | CROSS_CHECK §2 + Gap register |
 
 The 95.1% number is itself machine-checked: `node scripts/cross-check.mjs`
-parses the index, verifies all **521** evidence refs resolve against the tree
+parses the index, verifies all **524** evidence refs resolve against the tree
 today, prints the open/closed split of the gap register, and exits non-zero on
 a dangling pointer — the coverage claim cannot drift silently.
 
@@ -801,7 +804,7 @@ results:
    story (paper §11.7; PO-14 open).
 9. **Evaluation numbers age.** Suite counts (1,656 at `c456fb4`, 1,677 at the
    review-round-4 head, 1,758 at the review-round-7 head `4cd97f1`, 1,804 at
-   `bc28ff3` / v0.14.1, **2,029 at v0.16.0**), coverage
+   `bc28ff3` / v0.14.1, 2,029 at v0.16.0, **2,150 at `v0.17.2`**), coverage
    (95.1%), the model-check totals and the bench medians are per-round records
    tied to a commit. The cross-check script's exit-0 gate is the mechanism that
    makes stale numbers *visible*; `docs/REPRODUCIBILITY.md` specifies how a

@@ -1739,15 +1739,18 @@ lack an enforcing test. Ordered by audit significance.
 - Full suite: `npm test` (vitest) — all green including
   `__tests__/invariantAssertions.test.ts` (27 always-on global assertions).
 - Typecheck: `npm run typecheck && npm run typecheck:tests`.
-- The invariant count: 8 core + 23 vote + 36 confirmation + **9 escalation
+- The invariant count: 8 core + 23 vote + 37 confirmation + **9 escalation
   (INV-ESC-1…9)** + 15 signing +
   12 DKG + 9 selection + 16 batch + 16 validator + 10 cross-machine +
-  3 attribution + INV-SETTLE-1 = **158 stated invariants**, each with an
-  enforcement pointer; 149 of them pinned by a named test, and the
-  cross-machine/global
-  set pinned by the 27 executable assertions of
-  `__tests__/invariantAssertions.test.ts` (INV-ATTRIB-3 is spec-level —
-  see §16). Twelve findings
+  3 attribution + INV-SETTLE-1 = **159 stated invariants**, each with an
+  enforcement pointer. The count is the §12 matrix's own — `grep -o
+  'INV-[A-Z]*-[0-9]*' docs/FORMAL_INVARIANTS.md | sort -u | wc -l` → 159, and
+  159 matrix rows; `INV-CONF-37` (added in v0.15.3) is the 37th confirmation
+  invariant the arithmetic above used to omit. 157 of them are pinned by a
+  named test (the two without executable evidence are INV-VOTE-14 and
+  INV-ATTRIB-3, below), and the cross-machine/global set pinned by the 27
+  executable assertions of `__tests__/invariantAssertions.test.ts` (INV-ATTRIB-3
+  is spec-level — see §16). Twelve findings
   (F-1…F-12) were recorded against v0.9.1; as of v0.9.2, F-2, F-3, F-9, and
   F-12 are CLOSED (enforced guards + regression tests), and F-10/F-11 remain
   documented-only (F-10 guards are unreachable defense-in-depth, F-11 is
