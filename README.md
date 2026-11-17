@@ -65,6 +65,7 @@ verdict, confirmation, cohort, keeper, fail-closed, purity — is defined in
 | [`ATTRIBUTABLE_SIGNING.md`](docs/ATTRIBUTABLE_SIGNING.md) | **the signing-session journal**: what makes a FROST aggregate attributable (record format, RFC 9162 log, the batch-signing duty, v0.11 wiring) |
 | [`COMPLAINT-PROTOCOL.md`](docs/COMPLAINT-PROTOCOL.md) | the DKG complaint/possession-binding contract |
 | [`FIXES-2026-08-15.md`](docs/FIXES-2026-08-15.md), [`FIXES-2026-08-18.md`](docs/FIXES-2026-08-18.md), [`FIXES-2026-08-21.md`](docs/FIXES-2026-08-21.md) | historical hardening memos (dated fix records) |
+| [`SITE_SECURITY_HEADERS.md`](docs/SITE_SECURITY_HEADERS.md) | the landing page's security policy: what the in-repo meta CSP/referrer can and cannot cover, the exact Cloudflare response-header rule for `court.bao.network` (copy-paste), and which findings stay open until the edge applies it |
 | `adr/` | architecture decision records |
 
 ---
