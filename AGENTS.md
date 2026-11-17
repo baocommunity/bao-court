@@ -74,6 +74,16 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
   by its scheduled `mirror-court.yml` workflow and renders at
   `https://bao.network/court/`. Edit it HERE only; the mirror copies
   `site/index.html` byte-for-byte.
+- **Accessibility invariants (measured, round 2 of the GUI red-team).** Keep
+  them if you touch the page: exactly one `<main>` (the skip-link target,
+  `id="main"`, `tabindex="-1"`), one `<h1>` (the nameplate) with no heading
+  level skips, a `.skip-link` as the first focusable element, and no text
+  below 4.5:1 or target below 24×24 px at 390 px wide. `--np-accent` is a
+  3.60:1 text colour on the `.note` tint — use `--np-accent-ink` for text on
+  that panel and `--np-accent` for rules, borders and fills. The footer link
+  row carries 44 px hit boxes via `min-height` (2.5.5); the rest of the footer
+  rhythm is unchanged. Verify from the `bao.markets` checkout:
+  `node scripts/gui-redteam/depth2/run.mjs --checks axe,keyboard,touch`.
 
 ## Verify before tagging
 

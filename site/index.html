@@ -67,6 +67,11 @@
             --np-muted: #6b6b6b;
             --np-rule: #c7c4bb;
             --np-accent: #c43a2f;
+            /* Text-on-tint variant of the accent. `--np-accent` itself is
+               3.60:1 on the .note panel (rgba(196,58,47,.18) over the cream
+               page = rgb(235,208,200)), which fails WCAG AA for small text;
+               this one is 5.01:1 on that same panel and 6.5:1 on the page. */
+            --np-accent-ink: #9e2e24;
             --np-accent-2: #8b5a2b;
             --np-on-accent: #fffdf5;
             --np-accent-dim: rgba(196, 58, 47, 0.18);
@@ -82,6 +87,27 @@
         html { scroll-behavior: smooth; }
         /* Author display rules (.btn etc.) must not defeat the hidden attribute. */
         [hidden] { display: none !important; }
+
+        /* ─── Skip link (WCAG 2.4.1) ───
+           First focusable element in the document, clipped to a 1px box until it
+           takes focus, then pinned to the top-left as a full-size control. */
+        .skip-link {
+            position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+            overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+            white-space: nowrap; border: 0;
+        }
+        .skip-link:focus {
+            position: fixed; top: 0.75rem; left: 0.75rem; z-index: 100;
+            width: auto; height: auto; margin: 0; overflow: visible;
+            clip: auto; clip-path: none;
+            display: inline-flex; align-items: center; min-height: 44px; padding: 0 1rem;
+            font-family: var(--np-font-mono); font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.18em; text-decoration: none;
+            color: var(--np-on-accent); background: var(--np-accent);
+            border: 1px solid var(--np-accent);
+        }
+        /* The skip target is a landmark, not a control: no ring around all of <main>. */
+        main:focus, main:focus-visible { outline: none; }
 
         body {
             background: var(--np-bg);
@@ -131,7 +157,7 @@
         }
         .tabs a:hover, .tabs a:focus { color: var(--np-accent); border-bottom-color: var(--np-accent); }
 
-        main { padding-bottom: 2rem; }
+        main { padding-bottom: 2rem; scroll-margin-top: 4.5rem; }
         section { scroll-margin-top: 4.5rem; }
 
         /* ─── Lead ─── */
@@ -230,7 +256,7 @@
         }
         .note strong {
             font-family: var(--np-font-mono); font-size: 10px; text-transform: uppercase;
-            letter-spacing: 0.15em; color: var(--np-accent); margin-right: 0.4rem;
+            letter-spacing: 0.15em; color: var(--np-accent-ink); margin-right: 0.4rem;
         }
         .quote {
             font-family: var(--np-font-serif); font-size: 1.05rem; line-height: 1.6;
@@ -259,9 +285,19 @@
             margin-top: 0.6rem;
         }
         .amount {
+            display: inline-flex; align-items: center; justify-content: center; min-height: 24px;
+            /* WCAG 2.5.8 wants 24 px; the row's rhythm is 21 px. The negative
+               margin cancels the extra 3 px so nothing below the row moves. */
+            margin: -1.5px 0;
             font-family: var(--np-font-mono); font-size: 10px; letter-spacing: 0.1em;
             border: 1px solid var(--np-rule); background: var(--np-bg);
             padding: 0.25rem 0.55rem; color: var(--np-muted); cursor: pointer;
+        }
+        /* The compact .btn variants inside the support panel (Copy, NWC, the zap
+           actions) sat at 23 px — under 2.5.8's 24 px. */
+        .support .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-height: 24px; margin: -0.5px 0;
         }
         .amount:hover { border-color: var(--np-accent); color: var(--np-accent); }
         .amount[disabled] { opacity: 0.55; cursor: wait; }
@@ -316,7 +352,14 @@
             margin-bottom: 1rem; font-family: var(--np-font-mono); font-size: 11px;
             text-transform: uppercase; letter-spacing: 0.18em;
         }
-        .eco-links a { color: var(--np-muted); text-decoration: none; }
+        /* 16.5 px tall as plain inline text — under WCAG 2.5.8's 24 px floor and
+           under the red-team's 40 px bar. The row keeps its type, tracking and
+           gaps; each link only gains a 44 px hit box (2.5.5) with the label
+           centred, so the row itself does not re-wrap at any width. */
+        .eco-links a {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-height: 44px; color: var(--np-muted); text-decoration: none;
+        }
         .eco-links a:hover { color: var(--np-accent); }
         .eco-links a.current { color: var(--np-accent-2); font-weight: 700; }
         .colophon {
@@ -330,6 +373,8 @@
     </style>
 </head>
 <body>
+
+<a class="skip-link" href="#main">Skip to content</a>
 
 <header class="masthead">
     <div class="wrap">
@@ -362,7 +407,7 @@
     </div>
 </nav>
 
-<main>
+<main id="main" tabindex="-1">
 
     <section class="lead">
         <div class="wrap">
@@ -626,7 +671,7 @@
                     <span id="court-addr">baocourt@rizful.com</span>
                     <button class="btn" id="copy-addr" type="button" style="padding:0.25rem 0.6rem;">Copy</button>
                 </div>
-                <div class="amounts" aria-label="Suggested amounts in sats">
+                <div class="amounts" role="group" aria-label="Suggested amounts in sats">
                     <button class="amount" data-amount="214" type="button">214</button>
                     <button class="amount" data-amount="1111" type="button">1,111</button>
                     <button class="amount" data-amount="2140" type="button">2,140</button>
