@@ -63,17 +63,46 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
   `main` touching it (`workflow_dispatch` enabled). The Pages custom domain
   is `court.bao.network`, HTTPS enforced; GitHub provisions/renews the cert
   (keep the DNS record DNS-only so renewal works).
-- `.github/workflows/check-live-site.yml` compares the live documents
-  (`/llms.txt`, `/llms.md`, `/.well-known/llms.txt`, `/robots.txt`) to `site/`
-  every six hours and on manual dispatch, and fails naming the path that
-  drifted. Run `node scripts/check-live-site.mjs` locally to check now. The
-  check skips `index.html`: Cloudflare rewrites it in flight (body anchor,
+- `.github/workflows/check-live-site.yml` compares the live documents and
+  assets (`/llms.txt`, `/llms.md`, `/.well-known/llms.txt`, `/robots.txt`,
+  `/sitemap.xml`, `/.well-known/security.txt`, `/og.png`, `/icon-512.png`,
+  `/apple-touch-icon.png`, `/favicon-32.png`, `/favicon.ico`) to `site/` every
+  six hours and on manual dispatch, and fails naming the path that drifted —
+  bytes AND content type, binaries included. Run
+  `node scripts/check-live-site.mjs` locally to check now. The check skips
+  `index.html` and `404.html`: Cloudflare rewrites HTML in flight (body anchor,
   `__cf_email__` obfuscation), so a byte comparison there would fail on a
-  perfectly current deployment.
+  perfectly current deployment; what those two files claim is asserted
+  structurally in `__tests__/siteDiscovery.test.ts` instead.
 - The same page is mirrored into the public `baocommunity/bao.network` repo
   by its scheduled `mirror-court.yml` workflow and renders at
   `https://bao.network/court/`. Edit it HERE only; the mirror copies
   `site/index.html` byte-for-byte.
+- **Discovery invariants (measured 2026-11-17, `docs/DISCOVERY_AUDIT.md`).**
+  This host exists to be found by a machine, so the head and the crawl files
+  are part of the contract, not decoration:
+  1. `<link rel="canonical" href="https://court.bao.network/">` and a matching
+     `og:url` **with the trailing slash** — `/` and `/index.html` both answer
+     200 with no redirect, and the `bao.network/court/` mirror serves the same
+     bytes, so four URLs compete for one document without the tag.
+  2. `og:image` / `twitter:image` must stay **absolute** and point at
+     `site/og.png` (1200×630). `twitter:card` is `summary_large_image`; a card
+     type with no image renders text-only.
+  3. `sitemap.xml`, `/.well-known/security.txt` and `404.html` ship from
+     `site/`; `robots.txt` keeps its `Sitemap:` pointer and the discovery
+     `Allow` carve-outs. `security.txt`'s `Expires` is asserted by the suite —
+     renew it rather than deleting the assertion.
+  4. The three copies of the brief (`llms.txt`, `llms.md`,
+     `/.well-known/llms.txt`) are **byte-identical** (asserted). Never put a
+     version number in the brief: it read v0.7.2 while the package was 0.17.2.
+  5. `bao.network` is the **legacy** network host — it still serves, but label
+     it as legacy in machine-facing documents; `court.bao.network` is canonical.
+  6. Keep the icon paths: `favicon.ico`, `favicon-32.png`,
+     `apple-touch-icon.png` exist because browsers and agents fetch the
+     conventional paths without parsing the head, and a miss costs a 9.4 KB
+     error page.
+  Verify: `node scripts/check-live-site.mjs` and
+  `npx vitest run __tests__/siteDiscovery.test.ts`.
 - **Accessibility invariants (measured, round 2 of the GUI red-team).** Keep
   them if you touch the page: exactly one `<main>` (the skip-link target,
   `id="main"`, `tabindex="-1"`), one `<h1>` (the nameplate) with no heading

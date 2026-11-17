@@ -1,0 +1,18 @@
+# security.txt — RFC 9116 vulnerability disclosure for court.bao.network.
+#
+# Served from /.well-known/security.txt, which is where RFC 9116 §3 says a
+# scanner looks first. The Contact line is the repository's private advisory
+# form rather than an address, because SECURITY.md asks reporters NOT to use a
+# public channel for an unfixed FROST signing or dispute bug — and there is no
+# published security mailbox to name. A URI is a valid Contact value.
+#
+# Expires is REQUIRED by the spec and must be less than a year out; this date
+# is asserted by __tests__/siteDiscovery.test.ts, which fails once it is in the
+# past so a stale file cannot sit here looking authoritative. Renew by editing
+# this one line.
+
+Contact: https://github.com/baocommunity/bao-court/security/advisories/new
+Expires: 2027-05-17T00:00:00.000Z
+Canonical: https://court.bao.network/.well-known/security.txt
+Policy: https://github.com/baocommunity/bao-court/blob/main/SECURITY.md
+Preferred-Languages: en

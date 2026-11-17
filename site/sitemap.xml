@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sitemap.xml — the indexable surface of court.bao.network.
+
+  Exactly one URL: `/` is the only HTML document this host serves. The
+  discovery documents (/llms.txt, /llms.md, /.well-known/llms.txt,
+  /robots.txt, /.well-known/security.txt, /sitemap.xml itself) are advertised
+  where agents actually look for them — the robots.txt Allow carve-outs, the
+  `rel="alternate"` link in the head, and each other — and listing text/plain
+  files here would add nothing a crawler needs.
+
+  No <lastmod>: this file is static and deployed by copy, so any date in it
+  would be a guess. An absent lastmod is valid and honest; a wrong one teaches
+  the crawler to distrust the field.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://court.bao.network/</loc>
+  </url>
+</urlset>
