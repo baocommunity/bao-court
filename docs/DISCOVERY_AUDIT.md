@@ -134,6 +134,14 @@ The single-file design (one HTML document, no build step) is why 37–39 hold.
 Splitting the bundles out would turn 2 requests into 4 and make the bytes
 cacheable — it is not worth it for a page read once.
 
+**Delivery is a separate measurement.** `docs/SITE_DELIVERY_AUDIT.md` (2026-11-17)
+covers what this table does not: protocol negotiation, per-encoding sizes,
+cache headers and validators, conditional requests, SRI, failure modes and the
+no-JS/Slow-3G rendering. One correction to item 35 above: the 50.2 kB figure is
+what curl gets with `Accept-Encoding: br`; a browser offers
+`gzip, deflate, br, zstd` and is answered with **zstd — 53,981 B (52.7 kB)**,
+2.9 kB more than gzip. Reproduce with `node scripts/site-delivery-audit.mjs`.
+
 ---
 
 ## 2. What changed in this PR
