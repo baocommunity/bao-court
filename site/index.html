@@ -187,6 +187,14 @@
             color: var(--np-ink); background: transparent; border: 1px solid var(--np-ink);
             cursor: pointer;
         }
+        /* CTA touch floor (GUI red-team round 5, finding 9): the two hero
+           buttons measured 166×36 and 175×36. `min-height` rather than a bigger
+           font or more padding, so the label size and the visual weight are
+           unchanged — only the hit area grows. Desktop (fine pointer, wide
+           viewport) keeps the original 36 px box exactly. */
+        @media (pointer: coarse), (max-width: 40rem) {
+            .lead .btn, .cta-row .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+        }
         .btn:hover { background: var(--np-ink); color: var(--np-paper); }
         .btn-accent { color: var(--np-accent); border-color: var(--np-accent); }
         .btn-accent:hover { background: var(--np-accent); color: var(--np-on-accent); }
@@ -406,6 +414,30 @@
         <a href="https://bao.network">bao.network</a>
     </div>
 </nav>
+
+<script>
+    /* The date is written HERE, during parse, before <main> exists — not from
+       the page script at the end of the body.
+       GUI red-team round 5, finding 3 (CLS 0.167 vs a 0.1 budget): the folio
+       line is a wrapping flex row. The placeholder is one word ("Today") and
+       the real date is three, so at phone width the row grew from two lines to
+       three about 400 ms after first paint, the masthead grew 23 px with it and
+       `main#main` was pushed down by exactly that (measured 402 ms, 0.1671).
+       Writing the final string during parse means the first layout is already
+       the settled layout, at every width: this is the reserve, without a magic
+       min-height that would leave dead space between 430 px and 600 px, where
+       the row settles at two lines, or at 640 px and up, where it is one.
+       Keep it adjacent to the masthead: the placeholder must never be laid out
+       at a width where the date wraps differently. */
+    (function () {
+        var dateEl = document.getElementById('folio-date');
+        if (dateEl) {
+            dateEl.textContent = new Date().toLocaleDateString(undefined, {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+            });
+        }
+    })();
+</script>
 
 <main id="main" tabindex="-1">
 
@@ -789,12 +821,8 @@ Minimum version required to store current data is: `+i+`.
 <script>
     (function () {
         var now = new Date();
-        var dateEl = document.getElementById('folio-date');
-        if (dateEl) {
-            dateEl.textContent = now.toLocaleDateString(undefined, {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-            });
-        }
+        // `#folio-date` is set during parse (see the script after </header>):
+        // rewriting it here is what moved `main` 23 px after first paint.
         var yearEl = document.getElementById('year');
         if (yearEl) yearEl.textContent = String(now.getFullYear());
 

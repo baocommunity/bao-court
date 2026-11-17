@@ -84,6 +84,26 @@ escrow), and the protocol paper (`docs/FROST_COURT_ORACLE_PAPER.md`).
   row carries 44 px hit boxes via `min-height` (2.5.5); the rest of the footer
   rhythm is unchanged. Verify from the `bao.markets` checkout:
   `node scripts/gui-redteam/depth2/run.mjs --checks axe,keyboard,touch`.
+- **Performance invariants (measured, round 5 of the GUI red-team).** CLS must
+  stay ≤ 0.1 and the hero CTAs ≥ 44 px at 390 px wide. Two things make that
+  hold and must not be undone:
+  1. **`#folio-date` is written during parse**, from the small script between
+     `</header>`/`</nav>` and `<main>` — never from the page script at the end
+     of the body. The folio is a wrapping flex row, so the one-word placeholder
+     laid out one row, and replacing it with the three-word date late grew the
+     masthead by 23 px and pushed `main` down by the same amount (CLS 0.1671 at
+     402 ms). Writing it during parse makes the first layout the settled one at
+     every width (the row is three lines ≤ 420 px, two at 430–600, one from
+     640 px — a `min-height` reservation cannot be right everywhere).
+  2. **`.lead .btn` / `.cta-row .btn` carry a 44 px `min-height` inside
+     `@media (pointer: coarse), (max-width: 40rem)`** — `min-height`, never a
+     bigger font, and scoped so the compact support-panel buttons keep their
+     24 px sizing. Desktop keeps the 36 px box exactly (all boxes at 1440×900
+     are identical before/after).
+
+  The measurement, the before/after table and the two-command repro are in
+  [`docs/SITE_ROUND5_PERFORMANCE.md`](docs/SITE_ROUND5_PERFORMANCE.md); the
+  harness lives in `bao.markets/scripts/gui-redteam/round5/`.
 
 ## Verify before tagging
 
