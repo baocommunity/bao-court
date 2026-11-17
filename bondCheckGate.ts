@@ -119,6 +119,13 @@ export interface BondCheckExpectation {
   readonly rail: CourtBondRef['rail'];
   readonly network: CourtBondRef['network'];
   readonly proofRef: string;
+  /**
+   * The bond the ceremony requires, in satoshis (0 = no floor). Residency is
+   * optional so a caller that only names the bond still gets the identity and
+   * echo checks; when it IS set, a `valueSats` the answer states is enforced
+   * against it (`BOND_VALUE_BELOW_REQUIRED`).
+   */
+  readonly bondSats?: number;
 }
 
 /** Why a juror did not keep its seat. */
@@ -162,6 +169,13 @@ export interface BondCheckVerdict {
   readonly proofRef: string | null;
   /** Independent sources that agreed, for the artifact. */
   readonly sources: readonly string[];
+  /**
+   * The bond's value in satoshis, when the answer states one. Optional because
+   * a refusal has nothing to report; `null` means "the command did not say",
+   * which the gate records rather than assumes (residual R1 in
+   * docs/BOND_GATE_THREAT_MODEL.md).
+   */
+  readonly valueSats?: number | null;
 }
 
 /** A roster entry plus the bond it claims. */
@@ -308,8 +322,22 @@ export function parseBondCheckOutput(
   const proofRef = typeof body.proofRef === 'string' && body.proofRef !== '' ? body.proofRef : null;
   const code = typeof body.code === 'string' && body.code !== '' ? body.code : null;
   const detail = typeof body.detail === 'string' && body.detail !== '' ? body.detail : null;
+  /**
+   * The bond's VALUE, when the answer states it. The gate cannot see a chain,
+   * so `--bond-sats` is only checkable against a value the command reports —
+   * and a reported value is checked HERE, never by the command. An attacker
+   * that reports `valueSats:1` for a 1,000-sat floor is refused; one that omits
+   * the field is not (see docs/BOND_GATE_THREAT_MODEL.md, residual R1: the
+   * floor is otherwise the checker's word).
+   */
+  const valueSats = typeof body.valueSats === 'number' ? body.valueSats : null;
+  if (body.valueSats !== undefined && body.valueSats !== null) {
+    if (valueSats === null || !Number.isSafeInteger(valueSats) || valueSats < 0) {
+      return malformed('`valueSats`, when stated, must be a non-negative safe integer');
+    }
+  }
   if (!body.ok) {
-    return { ok: false, code: code ?? 'BOND_CHECK_REFUSED', detail, proofRef, sources };
+    return { ok: false, code: code ?? 'BOND_CHECK_REFUSED', detail, proofRef, sources, valueSats };
   }
   if (proofRef === null) return malformed('an `ok:true` answer must carry the proven `proofRef`');
   if (!SAFE_PROOF_REF.test(proofRef)) {
@@ -317,6 +345,24 @@ export function parseBondCheckOutput(
   }
   if (sources.length === 0) return malformed('an `ok:true` answer must name the agreeing `sources`');
   if (expected) {
+    /**
+     * THE VALUE FLOOR, enforced by the gate on a stated value. `--bond-sats` is
+     * passed to the command, but the command is untrusted: a checker that
+     * reports a smaller bond than the ceremony requires is refusing its own
+     * request, and that is a DECISION (`BOND_VALUE_BELOW_REQUIRED`), not a
+     * transient failure to retry.
+     */
+    const floor = expected.bondSats ?? 0;
+    if (floor > 0 && valueSats !== null && valueSats < floor) {
+      return {
+        ok: false,
+        code: 'BOND_VALUE_BELOW_REQUIRED',
+        detail: `the bond check proved ${valueSats} sat but the ceremony requires ${floor} sat`,
+        proofRef,
+        sources,
+        valueSats,
+      };
+    }
     const proved = bondIdentity({ rail: expected.rail, network: expected.network, proofRef });
     const requested = bondIdentity({
       rail: expected.rail,
@@ -330,6 +376,7 @@ export function parseBondCheckOutput(
         detail: `the bond check proved ${proved} but ${requested} was requested`,
         proofRef,
         sources,
+        valueSats,
       };
     }
     const echoedRail = typeof body.rail === 'string' ? body.rail : null;
@@ -343,10 +390,11 @@ export function parseBondCheckOutput(
           + ` but ${expected.rail}/${expected.network} was requested`,
         proofRef,
         sources,
+        valueSats,
       };
     }
   }
-  return { ok: true, code: null, detail, proofRef, sources };
+  return { ok: true, code: null, detail, proofRef, sources, valueSats };
 }
 
 /**
