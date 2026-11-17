@@ -9,6 +9,62 @@ or consumer-visible API changes. `1.0.0` stays reserved until the
 trusted-dealer DKG is replaced with production Pedersen DKG and the API is
 frozen.
 
+## [0.17.2] — 2026-11-17
+
+### Security — the bond gate against a HOSTILE verifier (round 54)
+`BAO_COURT_BOND_CHECK_CMD` is a command line an operator pastes into an
+environment, and the thing it is supposed to prove (a coin on a chain) lives
+outside this repository. So the command is treated as UNTRUSTED — a compromised
+adapter is the attacker — and this round attacks the gate as its operator: lying
+`ok:true`, truncation and stream games, hangs, injection through the request,
+environment leakage, and replay.
+
+- **The run is now BOUNDED (fixed).** `--bond-check-timeout-ms` was enforced
+  with `spawnSync`, whose timeout kills only the direct child and then waits for
+  stdout to close. Measured: a 600 ms budget took **5,006 ms** against a
+  checker that ignores SIGTERM, and **never returned** (killed by a 12 s outer
+  probe) against `trap "" TERM; while true; do sleep 1; done`. The checker now
+  runs in its own **process group** (`detached`), the gate sends SIGTERM at the
+  deadline and SIGKILL 250 ms later, and the verdict settles **without waiting
+  for the process** — 237/308/607 ms for 200/300/600 ms budgets when the checker
+  dies on SIGTERM, ≈deadline + 250 ms when it ignores it.
+- **No orphans (fixed).** The group is killed when the verdict is in, so a
+  checker cannot keep acting after it answered (measured before: a backgrounded
+  grandchild wrote its file **after** the gate had returned), and a timed-out
+  check cannot keep scanning.
+- **Bounded output is a DECISION (fixed).** Over
+  `BOND_CHECK_MAX_OUTPUT_BYTES` the old path produced `ENOBUFS` →
+  `BOND_CHECK_FAILED` → a *transient* code **retried three times** against an
+  8 MiB stream. It is now `BOND_CHECK_MALFORMED` at the first excess byte: one
+  invocation, and the writer is killed.
+- **No ambient secrets (fixed).** The child inherited the coordinator's whole
+  environment, including `BAO_COURT_*` (the gate's own command line), relay
+  tokens and `*_PRIVKEY`/`*_MNEMONIC`. It now gets a **default-deny allowlist**
+  (`PATH HOME TMPDIR TMP TEMP LANG LC_* TZ SSH_AUTH_SOCK NODE_EXTRA_CA_CERTS
+  SSL_CERT_*`); a host names any extra variable it needs in
+  `BAO_COURT_BOND_CHECK_ENV=NAME,NAME`.
+- **An inexpressible request is a REFUSAL, not a crash (fixed).** A `proofRef`
+  with whitespace or a newline, a non-hex `--juror-pubkey`, or a 1 MiB
+  `proofRef` used to throw out of `runBondCheck` (harness down). It is now a
+  typed `BOND_CHECK_MALFORMED` **before anything is spawned**.
+- **`BOND_VALUE_BELOW_REQUIRED` (new typed code).** `parseBondCheckOutput` now
+  enforces `--bond-sats` itself when the answer states `valueSats`, instead of
+  trusting the command to have applied the floor. A stated-but-low value is a
+  decision, not a retry. **Residual R1** (documented, not fixed): a checker that
+  omits `valueSats` is admitted on its word — the gate cannot see a chain.
+- **`bondCheckRunner.mjs` (new, `scripts/court/`)**: the spawn/quote/timeout/
+  group-kill/output-cap/environment-scrub/retry code the harness runs, extracted
+  so the hostile tests exercise the real thing (the harness imports it).
+- **Docs:** `docs/BOND_GATE_THREAT_MODEL.md` — one-paragraph threat model, the
+  full attack table, the gate's guarantees, and the two honest residuals (R1
+  value floor, R2 a checker that calls `setsid` escapes the group kill: the gate
+  is not a sandbox — deploy it under a systemd unit with `KillMode=control-group`
+  and an unprivileged user). `docs/MULTI_PROCESS_CEREMONY.md` §"The checker is
+  untrusted" carries the contract change.
+- **Tests:** `__tests__/bondGateHostile.test.ts` (43) — every attack row,
+  including sentinel files that must never appear (`;id>SENTINEL`, `$(…)`,
+  backticks, `>SENTINEL`, a 1 MiB proofRef, a `--help` pubkey).
+
 ## [0.17.1] — 2026-11-14
 
 ### Fixed — one bond can no longer admit two seats (review round 13)

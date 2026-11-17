@@ -705,15 +705,18 @@ bounded before parsing.
 
 | observation | verdict |
 |---|---|
-| exit 0 + `ok:true` + `proofRef` equal to the roster's + non-empty `sources` | **proven** |
+| exit 0 + `ok:true` + `proofRef` equal to the roster's + non-empty `sources` (+ `valueSats` at or above `--bond-sats` when stated) | **proven** |
 | exit non-zero, typed body | `BOND_CHECK_REFUSED` with the command's own code (e.g. `BOND_SPENT`) |
 | exit 0 but body says `ok:false` | refusal (the same code path) |
-| exit non-zero but body says `ok:true` | `BOND_CHECK_FAILED` — a contradiction is never a pass |
-| no output, a log line, a JSON array, `{"ok":"yes"}`, `ok:true` without `proofRef`/`sources` | `BOND_CHECK_MALFORMED` |
-| more than `BOND_CHECK_MAX_OUTPUT_BYTES` (8 MiB — the runner's own spawn cap) of stdout | `BOND_CHECK_MALFORMED`, refused before parsing |
+| exit non-zero but body says `ok:true` (or the process is killed by a signal) | `BOND_CHECK_FAILED` — a contradiction is never a pass; **the exit code wins** |
+| no output, a log line, a JSON array, **two** objects, `{"ok":"yes"}`, `ok:true` without `proofRef`/`sources` | `BOND_CHECK_MALFORMED` |
+| the answer arrives on **stderr** | `BOND_CHECK_MALFORMED` — stdout is the only stream that is parsed |
+| more than `BOND_CHECK_MAX_OUTPUT_BYTES` (8 MiB) of stdout | `BOND_CHECK_MALFORMED` at the first excess byte: a **decision** (never retried), and the writer is killed |
 | the answer echoes a `rail`/`network` other than the one requested | `BOND_RAIL_MISMATCH` |
-| no answer inside `--bond-check-timeout-ms` (default 60 s) | `BOND_CHECK_TIMEOUT` |
+| the answer states a `valueSats` below `--bond-sats` (≥1) | `BOND_VALUE_BELOW_REQUIRED` |
+| no answer inside `--bond-check-timeout-ms` (default 60 s) | `BOND_CHECK_TIMEOUT` — a hard ceiling: the child's whole **process group** is signalled (SIGTERM, then SIGKILL after 250 ms) and the gate does NOT wait for a process that ignores SIGTERM |
 | the command proves a **different** `proofRef` than the roster claims | `BOND_PROOF_MISMATCH` |
+| the request cannot be made inert (whitespace or a newline in `proofRef`, a non-hex pubkey, more than 512 chars) | `BOND_CHECK_MALFORMED` **before spawning anything** — a refusal, never a harness crash |
 | a **second** juror presents a bond an earlier seat already proved in this run (same rail + network + outpoint/hash, case- and space-insensitive) | `BOND_REUSED_ACROSS_SEATS` — the **first** claimant keeps the seat |
 | a juror whose check never ran (no verdict) | `BOND_CHECK_FAILED` |
 | `rail:"none"` under `--require-bonds` | `BOND_NOT_CLAIMED` |
@@ -721,7 +724,38 @@ bounded before parsing.
 The parser and the roster decision are the protocol's: `bondCheckGate.ts`
 (`buildBondCheckArgs`, `parseBondCheckOutput`, `gateRosterOnBonds`), exported
 from the package root and covered by `__tests__/bondCheckGate.test.ts`. The
-harness only spawns the process.
+spawn / quoting / timeout / group-kill / environment code is
+`scripts/court/bondCheckRunner.mjs`, imported by the harness so the tests
+exercise the code the ceremony runs.
+
+### The checker is untrusted (round 54)
+
+The command is a host adapter, not a trusted party: a compromised one *is* the
+attacker. Every value the harness passes is validated and single-quoted for the
+`/bin/sh` the command line requires, the answer is bounded and must be exactly
+one object that agrees with the request, the run is bounded by
+`--bond-check-timeout-ms` on a dedicated **process group** (so a hung or
+SIGTERM-ignoring checker cannot hold the ceremony, and whatever it backgrounds
+dies with the verdict), and the child gets a **default-deny environment**:
+
+```
+PATH HOME TMPDIR TMP TEMP LANG LC_* TZ SSH_AUTH_SOCK NODE_EXTRA_CA_CERTS SSL_CERT_*
+```
+
+Nothing else: no `BAO_COURT_*` (not even the gate's own command line), no relay
+tokens, no juror key material. A host whose checker needs its own credentials
+names them explicitly:
+
+```bash
+export BAO_COURT_BOND_CHECK_ENV=BAO_LIQUID_ESPLORA_URL,BAO_BITCOIND_RPC_PASS
+```
+
+The full attack table (lying success, truncation games, hangs, injection with a
+filesystem sentinel, environment probes, replay) and the two honest residuals —
+the value floor is the checker's word when it omits `valueSats` (R1), and a
+checker that calls `setsid` escapes the group kill (R2) — are in
+[`BOND_GATE_THREAT_MODEL.md`](BOND_GATE_THREAT_MODEL.md), with
+`__tests__/bondGateHostile.test.ts` as the executable form of every row.
 
 ### One bond, one seat (v0.17.1)
 
@@ -822,6 +856,12 @@ juror:
              "classification":"ROSTER_BELOW_THRESHOLD", "verdicts":[…]},
 "classification": "ROSTER_BELOW_THRESHOLD"   // present only when it stopped
 ```
+
+Each `bondGate.verdicts[]` row also carries what the CHECKER did, so a hostile
+or flaky adapter is visible in the artifact rather than inferred after the fact:
+`attempts`/`attemptHistory` (a decision is `attempts:1`), `elapsedMs`,
+`exitCode`, `timedOut`, and `valueSats` — `null` there means the command never
+stated the bond's value, so no floor was verified (threat-model residual R1).
 
 Only public material is written: rails, outpoints, values, heights, source names.
 No key, seed, nonce, token or RPC credential.

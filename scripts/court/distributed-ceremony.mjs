@@ -59,12 +59,8 @@ import { parseDkgCommitmentEvent } from '../../eventsParse';
 import { verifyFinalSignature, buildAttestationMessage } from '../../crypto';
 import { collapseSignedRecords, signedRecordIdentity } from '../../courtCeremonyCore';
 import { UNBONDED, formatCourtBondRef, parseCourtBondRef } from '../../bondVerification';
-import {
-  BOND_CHECK_ENV,
-  buildBondCheckArgs,
-  gateRosterOnBonds,
-  parseBondCheckOutput,
-} from '../../bondCheckGate';
+import { BOND_CHECK_ENV, gateRosterOnBonds } from '../../bondCheckGate';
+import { runBondCheckWithRetry } from './bondCheckRunner.mjs';
 
 const Point = secp256k1.Point;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -427,120 +423,13 @@ const ms = () => Date.now();
 // The bond check (host-supplied command; see bondCheckGate.ts)
 // ---------------------------------------------------------------------------
 
-/** Single-quote for /bin/sh: a proofRef must never be able to add a flag. */
-function shQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`;
-}
-
 /**
- * Run the host's bond check for ONE juror and normalise whatever happens into a
- * verdict. Every path that is not "exit 0 and `{ok:true}`, with the sources
- * that agreed" is a refusal — a crash, a timeout, a log line instead of JSON,
- * a non-zero exit that still claims success.
+ * The check ITSELF is `./bondCheckRunner.mjs` — spawn, quoting, the bounded
+ * lifetime, the process-group kill, the environment scrub and the bounded
+ * retry live there so the hostile-verifier tests (`__tests__/bondGateHostile
+ * .test.ts`) exercise the code the ceremony actually runs. This file only
+ * decides what a verdict MEANS (see `bondCheckGate.ts`).
  */
-/**
- * Which bond-check verdicts may be RETRIED? Only the ones that mean "the check
- * could not look" — never a decision. Retrying a transport failure can only
- * ever give the check another chance to succeed, so fail-closed is preserved;
- * retrying `BOND_SPENT` or `BOND_SCRIPT_MISMATCH` would be re-asking a question
- * that has already been answered.
- */
-const BOND_TRANSIENT_CODES = new Set(['BOND_CHECK_FAILED', 'BOND_CHECK_TIMEOUT', 'BOND_UNVERIFIABLE']);
-
-function runBondCheck(request) {
-  const started = ms();
-  const argv = buildBondCheckArgs(request);
-  const result = spawnSync('/bin/sh', ['-c', `${bondCheckCmd} ${argv.map(shQuote).join(' ')}`], {
-    encoding: 'utf8',
-    timeout: bondCheckTimeoutMs,
-    maxBuffer: 8 * 1024 * 1024,
-  });
-  const elapsedMs = ms() - started;
-  const stderr = (result.stderr ?? '').trim().slice(0, 300);
-  if (result.error && result.error.code === 'ETIMEDOUT') {
-    return {
-      verdict: {
-        ok: false,
-        code: 'BOND_CHECK_TIMEOUT',
-        detail: `the bond check did not answer within ${bondCheckTimeoutMs} ms`,
-        proofRef: null,
-        sources: [],
-      },
-      exitCode: null,
-      signal: 'SIGTERM',
-      elapsedMs,
-      stderr,
-    };
-  }
-  if (result.error) {
-    return {
-      verdict: {
-        ok: false,
-        code: 'BOND_CHECK_FAILED',
-        detail: `the bond check could not be run: ${result.error.message}`,
-        proofRef: null,
-        sources: [],
-      },
-      exitCode: null,
-      signal: null,
-      elapsedMs,
-      stderr,
-    };
-  }
-  // The request is passed so the gate refuses an answer that proves a
-  // DIFFERENT bond (or echoes another rail/network) itself — never the runner's
-  // job to notice.
-  const verdict = parseBondCheckOutput(result.stdout ?? '', request);
-  if (verdict.ok && result.status !== 0) {
-    return {
-      verdict: {
-        ok: false,
-        code: 'BOND_CHECK_FAILED',
-        detail: `the bond check exited ${result.status} but claimed success${stderr ? ` — ${stderr}` : ''}`,
-        proofRef: verdict.proofRef,
-        sources: verdict.sources,
-      },
-      exitCode: result.status,
-      signal: result.signal ?? null,
-      elapsedMs,
-      stderr,
-    };
-  }
-  if (!verdict.ok && verdict.code === 'BOND_CHECK_MALFORMED' && stderr) {
-    verdict.detail = `${verdict.detail ?? 'malformed output'} — ${stderr}`;
-  }
-  return {
-    verdict,
-    exitCode: result.status,
-    signal: result.signal ?? null,
-    elapsedMs,
-    stderr,
-  };
-}
-
-/**
- * `runBondCheck` with the bounded retry, and the attempt history recorded.
- * A typed refusal comes back on the FIRST attempt (`attempts: 1`) — that is the
- * proof that decisions are not retried.
- */
-async function runBondCheckWithRetry(request) {
-  const history = [];
-  let last = null;
-  for (let attempt = 1; attempt <= fetchAttempts; attempt += 1) {
-    last = runBondCheck(request);
-    history.push({
-      attempt,
-      ok: last.verdict.ok,
-      code: last.verdict.code,
-      elapsedMs: last.elapsedMs,
-    });
-    if (last.verdict.ok) break;
-    if (!BOND_TRANSIENT_CODES.has(String(last.verdict.code))) break; // a DECISION
-    if (attempt === fetchAttempts) break;
-    await sleep(fetchBackoffMs * 3 ** (attempt - 1));
-  }
-  return { ...last, attempts: history.length, history };
-}
 
 function pct(values, p) {
   if (!values || values.length === 0) return null;
@@ -930,7 +819,14 @@ touch "$D/done-$IDX"
           bondSats,
           jurorPubkey: claim.pubkey,
         };
-        const run = await runBondCheckWithRetry(request);
+        const run = await runBondCheckWithRetry({
+          command: bondCheckCmd,
+          request,
+          timeoutMs: bondCheckTimeoutMs,
+          attempts: fetchAttempts,
+          backoffMs: fetchBackoffMs,
+          sleep,
+        });
         verdicts.set(claim.idx, run.verdict);
         bondCheckRuns.push({
           idx: claim.idx,
@@ -946,6 +842,8 @@ touch "$D/done-$IDX"
           code: run.verdict.code,
           detail: run.verdict.detail,
           sources: run.verdict.sources,
+          valueSats: run.verdict.valueSats ?? null,
+          timedOut: run.timedOut === true,
           exitCode: run.exitCode,
           elapsedMs: run.elapsedMs,
         });
