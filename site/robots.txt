@@ -3,8 +3,8 @@
 #
 # MAXIMUM DISCOVERY. The point of this host is that an agent — or a person —
 # can find out what the ₿AO Court is and where the real material lives. So the
-# three discovery documents are readable by EVERY crawler, named or not, and
-# only the rest of the site is reserved.
+# discovery documents are readable by EVERY crawler, named or not, and only the
+# rest of the site is reserved.
 #
 # Two questions, two answers:
 #
@@ -43,6 +43,8 @@ Content-Signal: search=yes, ai-train=no, use=reference
 Allow: /llms.txt
 Allow: /llms.md
 Allow: /.well-known/llms.txt
+Allow: /.well-known/security.txt
+Allow: /sitemap.xml
 Disallow: /
 
 # ── Search engines: the whole site (discovery for humans too) ────────────────
@@ -63,3 +65,7 @@ Allow: /
 # they fall under `*` above, which is the carve-out plus a reservation on the
 # rest. Adding a named group here would re-create the duplicate-group ambiguity
 # this file exists to avoid.
+
+# The sitemap is a pointer, not a permission: crawlers fetch it regardless of
+# the group they match, and search engines are allowed the whole host anyway.
+Sitemap: https://court.bao.network/sitemap.xml

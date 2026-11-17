@@ -48,16 +48,77 @@
          metadata only - no body prose telling agents where to look. -->
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="₿AO Court for AI agents" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>₿</text></svg>">
+    <!-- Plus the boring raster paths. The data: SVG above is crisp in every
+         browser that reads it, but `/favicon.ico` and `/apple-touch-icon.png`
+         are still fetched blind by older Safari, by iOS home-screen adds, and
+         by agents that probe the two conventional paths instead of parsing
+         the head. Both exist in `site/` (32x32 PNG wrapped in an ICO shell,
+         and a 180x180 opaque PNG — iOS composites transparency on black). -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <meta name="theme-color" content="#f4f1ea">
+
+    <!-- Canonical: the ONE URL this document wants to be. The same bytes are
+         reachable at four URLs — `/`, `/index.html` (GitHub Pages serves both
+         with 200, it does NOT redirect), the `*.github.io` origin, and the
+         `bao.network/court/` mirror that copies this file verbatim — so without
+         this tag the search engine picks, and the mirror competes with the
+         host it mirrors. Trailing slash on purpose: it is the form `/` is
+         served under, so the canonical equals the served URL byte for byte. -->
+    <link rel="canonical" href="https://court.bao.network/">
 
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://court.bao.network">
+    <meta property="og:url" content="https://court.bao.network/">
     <meta property="og:title" content="₿AO Court - Threshold Oracle for Dispute Resolution">
     <meta property="og:description" content="A randomly selected jury runs DKG, votes under commit/reveal, and signs a threshold Schnorr verdict any third party can verify.">
     <meta property="og:site_name" content="₿AO Court">
+    <!-- Preview image. 1200x630 is the size every consumer crops from; the card
+         is the masthead itself, so the share preview and the page agree. Must
+         stay ABSOLUTE — relative og:image URLs are resolved against the
+         *scraper's* origin, not ours. -->
+    <meta property="og:image" content="https://court.bao.network/og.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="₿AO Court masthead: It decides. It never holds funds.">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="₿AO Court - Threshold Oracle">
     <meta name="twitter:description" content="It decides. It never holds funds.">
+    <meta name="twitter:image" content="https://court.bao.network/og.png">
+    <meta name="twitter:image:alt" content="₿AO Court masthead: It decides. It never holds funds.">
+
+    <!-- Structured data. Two nodes only: what this site is, and who publishes
+         it. `@graph` + `@id` cross-references keep it one block instead of two
+         competing ones. Deliberately NOT an `Article`: this URL is a landing
+         page, not a copy of the paper — the paper is a separate document in
+         the repository, and claiming Article here would assert a duplicate
+         that does not exist. Every field below is checkable in this repo or on
+         the page; nothing is inferred. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://court.bao.network/#website",
+          "url": "https://court.bao.network/",
+          "name": "₿AO Court",
+          "description": "A FROST threshold oracle for dispute resolution: a randomly selected jury runs DKG, votes under commit/reveal, and signs a verifiable threshold Schnorr verdict. It decides - it never holds funds.",
+          "inLanguage": "en",
+          "publisher": { "@id": "https://court.bao.network/#publisher" }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://court.bao.network/#publisher",
+          "name": "₿AO Court",
+          "url": "https://court.bao.network/",
+          "logo": "https://court.bao.network/icon-512.png",
+          "sameAs": ["https://github.com/baocommunity/bao-court"]
+        }
+      ]
+    }
+    </script>
 
     <style>
         :root {
@@ -730,6 +791,11 @@
                         <div class="zap-actions">
                             <button class="btn btn-accent" id="zap-pay" type="button" hidden>Pay with browser wallet</button>
                             <button class="btn" id="zap-copy" type="button" hidden>Copy invoice</button>
+                            <!-- An anchor on purpose: the target is a
+                                 `lightning:` deep link, not a control. The `#`
+                                 href is a placeholder the script replaces
+                                 before unhiding, so it is never clickable as
+                                 a fragment jump. -->
                             <a class="btn" id="zap-open" href="#" hidden>Open in wallet</a>
                             <p class="zap-msg" id="zap-msg" aria-live="polite">Scan with any Lightning wallet.</p>
                         </div>
@@ -921,8 +987,12 @@ Minimum version required to store current data is: `+i+`.
                 invoice = pr;
                 renderQr(pr);
                 copyBtn.hidden = false;
-                openLink.hidden = false;
+                /* href first, then unhide: the anchor ships with a `#`
+                   placeholder (see the markup note), so setting the real
+                   `lightning:` URI before the element can be clicked means the
+                   placeholder is never the live target, not even for a frame. */
                 openLink.href = 'lightning:' + pr;
+                openLink.hidden = false;
                 if (weblnAvailable) payBtn.hidden = false;
                 setMsg(weblnAvailable
                     ? 'Scan the QR, or pay directly from your browser wallet.'

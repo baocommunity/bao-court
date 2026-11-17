@@ -10,6 +10,20 @@
  *   COURT_LIVE_ATTEMPTS=1 node scripts/check-live-site.mjs   # no retry
  *
  * Exit 1 lists every mismatch. No secrets, no auth: these are public pages.
+ *
+ * WHAT IS DELIBERATELY NOT COMPARED
+ *
+ * `index.html` and `404.html` are HTML, and Cloudflare rewrites HTML in flight
+ * (a hidden bot-management anchor, `__cf_email__` obfuscation, the email-decode
+ * script), so a byte comparison there would fail on a perfectly current
+ * deployment. What those two files *claim* — canonical, og:image, JSON-LD,
+ * sitemap coverage — is asserted structurally in
+ * `__tests__/siteDiscovery.test.ts` instead, against the repo copy AND the live
+ * copy, so weakening the head is still caught.
+ *
+ * EVERYTHING ELSE IS COMPARED, binaries included: the comparison reads Buffers
+ * on both sides (a utf8 read corrupts the OG/favicon bytes), which is why the
+ * asset paths can sit in the same table as the text documents.
  */
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -21,15 +35,25 @@ const TIMEOUT_MS = Number(process.env.COURT_LIVE_TIMEOUT_MS ?? 15000);
 
 // [file in this repo, path on the host]
 //
-// index.html is deliberately NOT compared: Cloudflare rewrites it in flight
-// (empty body anchor, __cf_email__ obfuscation, email-decode script), so a byte
-// comparison of the HTML would fail on a perfectly current deployment. The
-// documents below pass through untouched, and they are what agents read.
-const FILES = [
+// Exported so `__tests__/siteDiscovery.test.ts` can assert the same table: a
+// path that is published but not compared (or vice versa) is exactly the drift
+// this file exists to catch, and two hand-maintained lists would drift apart.
+export const FILES = [
+  // The three copies of the agent brief must stay byte-identical to each other
+  // AND to the host; all three are listed so a one-sided edit is caught.
   ['site/llms.txt', '/llms.txt'],
   ['site/llms.md', '/llms.md'],
   ['site/.well-known/llms.txt', '/.well-known/llms.txt'],
   ['site/robots.txt', '/robots.txt'],
+  ['site/sitemap.xml', '/sitemap.xml'],
+  ['site/.well-known/security.txt', '/.well-known/security.txt'],
+  // Preview/social and icon assets. Binary, compared as bytes.
+  ['site/og.png', '/og.png'],
+  ['site/icon-512.png', '/icon-512.png'],
+  ['site/apple-touch-icon.png', '/apple-touch-icon.png'],
+  ['site/favicon-32.png', '/favicon-32.png'],
+  // The conventional path agents and old Safari probe without reading the head.
+  ['site/favicon.ico', '/favicon.ico'],
 ];
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -41,54 +65,47 @@ async function fetchOnce(path) {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: { 'cache-control': 'no-cache' },
   });
-  const body = await res.text();
-  return { status: res.status, body };
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return { status: res.status, bytes, type: res.headers.get('content-type') ?? '' };
 }
 
-/**
- * Cloudflare's "Content Signals" / managed-robots feature REPLACES /robots.txt at
- * the edge, so the host serves a generic policy instead of the one in site/.
- * That is not drift a redeploy can fix: it is a zone setting. Classify it
- * explicitly so the six-hourly job says what to change instead of "mismatch".
- */
-function isCloudflareManagedRobots(body) {
-  return /^# As a condition of accessing this website, you agree to abide by the following/i.test(
-    body.trimStart(),
-  );
-}
+/** Content type each document must come back as; a text/plain 404 body would still hash-match nothing, but a wrong type breaks agents that sniff. */
+const EXPECTED_TYPE = [
+  [/^\/llms\.txt$/, /^text\/plain/],
+  [/^\/llms\.md$/, /^text\/(markdown|plain)/],
+  [/^\/\.well-known\/llms\.txt$/, /^text\/plain/],
+  [/^\/robots\.txt$/, /^text\/plain/],
+  [/^\/sitemap\.xml$/, /^(application|text)\/xml/],
+  [/^\/\.well-known\/security\.txt$/, /^text\/plain/],
+  [/^\/og\.png$/, /^image\/png/],
+  [/^\/icon-512\.png$/, /^image\/png/],
+  [/^\/apple-touch-icon\.png$/, /^image\/png/],
+  [/^\/favicon-32\.png$/, /^image\/png/],
+  [/^\/favicon\.ico$/, /^image\/(x-icon|vnd\.microsoft\.icon)/],
+];
 
-async function main() {
+export const expectType = (path, got) => EXPECTED_TYPE.filter(([p]) => p.test(path)).every(([, t]) => t.test(got));
+
+export async function main() {
   const failures = [];
   let checked = 0;
 
   for (const [file, path] of FILES) {
-    const expected = await readFile(file, 'utf8');
+    const expected = await readFile(file);
     const want = sha256(expected);
     let last = 'no attempt';
     let ok = false;
 
     for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
       try {
-        const { status, body } = await fetchOnce(path);
-        const got = sha256(body);
-        if (status === 200 && got === want) {
+        const { status, bytes, type } = await fetchOnce(path);
+        const got = sha256(bytes);
+        if (status === 200 && got === want && expectType(path, type)) {
           console.log(`[check-live-site] OK ${path} (${want.slice(0, 12)}…)`);
           ok = true;
           break;
         }
-        if (path === '/robots.txt' && isCloudflareManagedRobots(body)) {
-          // Not drift a redeploy can fix: the zone replaces robots.txt at the edge.
-          if (process.env.COURT_ALLOW_CF_ROBOTS === '1') {
-            console.log(`[check-live-site] WARN ${path} is Cloudflare-managed (Content Signals); accepted via COURT_ALLOW_CF_ROBOTS=1`);
-            ok = true;
-            break;
-          }
-          last =
-            'served by CLOUDFLARE (Content Signals policy), not by this repo — ' +
-            'disable the zone\'s managed robots.txt, or set COURT_ALLOW_CF_ROBOTS=1 to accept the divergence';
-          break;
-        }
-        last = `HTTP ${status}, sha256 ${got.slice(0, 12)}… (${body.length} B), expected ${want.slice(0, 12)}… (${expected.length} B)`;
+        last = `HTTP ${status}, content-type "${type}", sha256 ${got.slice(0, 12)}… (${bytes.length} B), expected ${want.slice(0, 12)}… (${expected.length} B)`;
       } catch (err) {
         last = err instanceof Error ? err.message : String(err);
       }
@@ -103,13 +120,12 @@ async function main() {
     console.error(`[check-live-site] FAILED: ${ORIGIN} is not serving this repo's site/`);
     for (const line of failures) console.error(`  - ${line}`);
     console.error('Republish: .github/workflows/pages.yml deploys site/ to GitHub Pages on every push to main — check that run for the target commit, re-run it, then re-check.');
-    if (failures.some((f) => f.includes('CLOUDFLARE'))) {
-      console.error('Note: /robots.txt is replaced by Cloudflare\'s managed Content Signals policy — that is a zone setting, not a deploy.');
-    }
     process.exit(1);
   }
 
   console.log(`[check-live-site] OK: ${checked} path(s) on ${ORIGIN} match this checkout`);
 }
 
-await main();
+// Run only when executed (`node scripts/check-live-site.mjs`), never on import:
+// the test suite imports FILES/expectType from this module.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) await main();

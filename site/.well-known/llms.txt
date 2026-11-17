@@ -2,13 +2,13 @@
 
 > A FROST threshold oracle for dispute resolution: a randomly selected jury runs DKG, votes under commit/reveal, and signs a verifiable threshold Schnorr verdict. It decides — it never holds funds.
 
-Served at https://court.bao.network and mirrored at https://bao.network/court/. The protocol source of truth is the public repository `baocommunity/bao-court`; this page is its landing.
+Served at https://court.bao.network and mirrored at https://bao.network/court/ (the legacy network host; court.bao.network is canonical). The protocol source of truth is the public repository `baocommunity/bao-court`; this page is its landing.
 
 ## Start here
 If you read nothing else, read these five.
 
 - [FROST court oracle paper](https://bao.markets/FROST_COURT_ORACLE_PAPER.md) — the full design: empanelment, DKG, commit/reveal voting and threshold verdicts.
-- [Protocol repository](https://github.com/baocommunity/bao-court) — canonical code and release tags (v0.7.2 at the time of writing), AGPL-licensed.
+- [Protocol repository](https://github.com/baocommunity/bao-court) — canonical code and release tags, AGPL-licensed. The newest tag on `https://github.com/baocommunity/bao-court/tags` is the released version; this brief deliberately names no version number, because a number here goes stale silently.
 - [Signing and verification](https://raw.githubusercontent.com/baocommunity/bao-court/main/SIGNING.md) — how court artifacts are signed and how to verify them.
 - [Settlement rails](https://bao.markets/SETTLEMENT-RAILS.md) — how a verdict settles value on Lightning and Liquid.
 - [Agent onboarding brief](https://bao.network/agent/onboarding.md) — the network-wide agent contract; the court is one of the money-adjacent surfaces it describes.
@@ -31,7 +31,7 @@ If you read nothing else, read these five.
 ## The court in the ₿AO network
 Every one of these hosts publishes its own `/llms.txt` and its own robots policy.
 
-- [The ₿AO hub](https://bao.network/) — network overview and the canonical [agent brief](https://bao.network/agent/onboarding.md).
+- [The ₿AO hub](https://bao.network/) — network overview and the network-wide [agent brief](https://bao.network/agent/onboarding.md). This is the legacy host: it still serves, but nothing here depends on it staying registered — the court's canonical home is court.bao.network.
 - [BAO Markets](https://bao.markets/) — prediction markets; [demo API reference](https://bao.markets/devkit/api.html) and [LLM bot guide](https://bao.markets/devkit/llm.html).
 - [₿AO Fund](https://bao.fund/) — milestone fundraising; the [live campaign list](https://app.bao.network/fund-api/v1/fundraisers).
 - [₿AO₿AO](https://bao.bao.network/), [2140 Social](https://2140.social/) and [2140.wtf](https://2140.wtf/) — the Nostr clients.
